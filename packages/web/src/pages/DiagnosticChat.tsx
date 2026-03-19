@@ -368,23 +368,18 @@ export default function DiagnosticChat() {
         },
       };
 
-      // Use real API when authenticated, fall back to mock for demo
-      if (authService.isAuthenticated()) {
-        // Build conversation history from prior messages (exclude the welcome message and the empty streaming message we just added)
-        const history = state.messages
-          .filter((m) => m.id !== 'welcome' && m.content.length > 0)
-          .map((m) => ({ role: m.role, content: m.content }));
+      // Build conversation history from prior messages (exclude the welcome message and the empty streaming message we just added)
+      const history = state.messages
+        .filter((m) => m.id !== 'welcome' && m.content.length > 0)
+        .map((m) => ({ role: m.role, content: m.content }));
 
-        abortRef.current = diagnosticService.sendMessage(
-          sessionIdRef.current,
-          text.trim(),
-          callbacks,
-          undefined,
-          history,
-        );
-      } else {
-        abortRef.current = mockStreamResponse(callbacks);
-      }
+      abortRef.current = diagnosticService.sendMessage(
+        sessionIdRef.current,
+        text.trim(),
+        callbacks,
+        undefined,
+        history,
+      );
     },
     [state.streaming],
   );

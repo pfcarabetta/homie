@@ -34,7 +34,7 @@ app.use(express.urlencoded({ extended: false }));
 
 app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/auth', authRouter);
-app.use('/api/v1/diagnostic', requireAuth, diagnosticRouter);
+app.use('/api/v1/diagnostic', diagnosticRouter);
 app.use('/api/v1/jobs', requireAuth, jobsRouter);
 app.use('/api/v1/bookings', requireAuth, bookingsRouter);
 // /providers/discover is public; /providers/:id/suppress requires auth
