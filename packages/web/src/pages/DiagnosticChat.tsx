@@ -1,21 +1,16 @@
-import { useReducer, useRef, useEffect, useCallback } from 'react';
-import HomieHeader from '@/components/HomieHeader';
-import ChatBubble from '@/components/ChatBubble';
-import DiagnosisCard from '@/components/DiagnosisCard';
-import TierSelector from '@/components/TierSelector';
+import { useReducer, useRef, useEffect, useCallback, useState } from 'react';
+import DiagnosisCard, { type DiagnosisData } from '@/components/DiagnosisCard';
 import OutreachProgress from '@/components/OutreachProgress';
 import ProviderCard from '@/components/ProviderCard';
 import ErrorState from '@/components/ErrorState';
 import { Spinner } from '@/components/Skeleton';
+import { HomieAvatar, HomieLogo } from '@/components/HomieAvatar';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   diagnosticService,
   authService,
   jobService,
-  connectJobSocket,
-  type JobSocket,
-  type JobSocketEvent,
 } from '@/services/api';
 import {
   mockStreamResponse,
@@ -24,16 +19,51 @@ import {
 } from '@/mocks/diagnostic';
 import type { DiagnosisPayload, JobTier, JobTiming, JobSummary } from '@/services/api';
 
+// ── Category icons ──────────────────────────────────────────────────────────
+
+const CAT_ICONS: Record<string, string> = {
+  plumbing: '🔧', electrical: '⚡', hvac: '❄️', appliance: '🔌',
+  structural: '🏗️', roofing: '🏠', pest: '🐛', landscaping: '🌿', general: '🛠️',
+  painting: '🎨', flooring: '🪵', handyman: '🛠️', pest_control: '🐛', cleaning: '🧹',
+};
+
+const SEV_LABELS: Record<string, { bg: string; text: string; label: string }> = {
+  low: { bg: 'bg-green-500/10', text: 'text-green-600', label: 'Low Severity' },
+  medium: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Medium' },
+  high: { bg: 'bg-orange-500/10', text: 'text-orange-600', label: 'High' },
+  urgent: { bg: 'bg-red-100', text: 'text-red-700', label: 'Urgent' },
+  unknown: { bg: 'bg-dark/5', text: 'text-dark/50', label: 'Assessing' },
+};
+
+const SUGGESTED_PROMPTS = [
+  { icon: '🚿', text: 'My faucet is leaking' },
+  { icon: '❄️', text: "AC isn't cooling properly" },
+  { icon: '💡', text: 'Light switch feels warm' },
+  { icon: '🚽', text: 'Toilet keeps running' },
+];
+
 // ── State ───────────────────────────────────────────────────────────────────
 
 type MatchStep = 'tier' | 'preferences' | 'outreach' | 'results';
+
+interface JobSummaryV2 {
+  title: string;
+  category: string;
+  description?: string;
+  severity_estimate: string;
+  details_gathered?: string[];
+  details_still_needed?: string[];
+  estimated_cost_pro?: string;
+}
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  hasDiagnosis?: boolean;
+  image?: string;
+  diagnosis?: DiagnosisData;
+  jobSummary?: JobSummaryV2;
 }
 
 /** Unified provider shape used in results and booking confirmation. */
@@ -59,8 +89,8 @@ interface State {
   messages: ChatMessage[];
   streaming: boolean;
   streamingMessageId: string | null;
-  diagnosis: DiagnosisPayload | null;
-  jobSummary: { title: string; category: string; severity: string; estimatedCost: { min: number; max: number } } | null;
+  diagnosis: DiagnosisData | null;
+  jobSummary: JobSummaryV2 | null;
   showBanner: boolean;
 
   // Match flow
@@ -90,14 +120,6 @@ interface State {
   streamError: string | null;
 }
 
-const WELCOME: ChatMessage = {
-  id: 'welcome',
-  role: 'assistant',
-  content:
-    "Hey there! 👋 I'm Homie, your home's best friend. What's going on at your place? Describe the issue and I'll help you figure out what's happening.",
-  timestamp: new Date(),
-};
-
 const EMPTY_CHANNELS: OutreachChannels = {
   voice: { attempted: 0, responded: 0 },
   sms: { attempted: 0, responded: 0 },
@@ -105,7 +127,7 @@ const EMPTY_CHANNELS: OutreachChannels = {
 };
 
 const initialState: State = {
-  messages: [WELCOME],
+  messages: [],
   streaming: false,
   streamingMessageId: null,
   diagnosis: null,
@@ -132,8 +154,8 @@ type Action =
   | { type: 'START_STREAMING'; messageId: string }
   | { type: 'APPEND_TOKEN'; token: string }
   | { type: 'FINISH_STREAMING' }
-  | { type: 'SET_DIAGNOSIS'; diagnosis: DiagnosisPayload }
-  | { type: 'SET_JOB_SUMMARY'; summary: State['jobSummary'] }
+  | { type: 'SET_DIAGNOSIS'; diagnosis: DiagnosisData }
+  | { type: 'SET_JOB_SUMMARY'; summary: JobSummaryV2 }
   | { type: 'OPEN_MATCH_FLOW' }
   | { type: 'SET_TIER'; tier: JobTier }
   | { type: 'SET_ZIP'; zip: string }
@@ -146,6 +168,7 @@ type Action =
   | { type: 'BOOKING_LOADING'; loading: boolean }
   | { type: 'MATCH_FLOW_ERROR'; error: string }
   | { type: 'MATCH_FLOW_LOADING'; loading: boolean }
+  | { type: 'CLOSE_MATCH_FLOW' }
   | { type: 'DISMISS_BANNER' }
   | { type: 'STREAM_ERROR'; error: string };
 
@@ -187,7 +210,7 @@ function reducer(state: State, action: Action): State {
         streamingMessageId: null,
         messages: state.messages.map((m) =>
           m.id === state.streamingMessageId
-            ? { ...m, hasDiagnosis: state.diagnosis !== null }
+            ? { ...m, diagnosis: state.diagnosis ?? undefined, jobSummary: state.jobSummary ?? undefined }
             : m,
         ),
       };
@@ -203,6 +226,9 @@ function reducer(state: State, action: Action): State {
 
     case 'OPEN_MATCH_FLOW':
       return { ...state, matchFlowActive: true, matchStep: 'tier', showBanner: false };
+
+    case 'CLOSE_MATCH_FLOW':
+      return { ...state, matchFlowActive: false };
 
     case 'SET_TIER':
       return { ...state, tier: action.tier };
@@ -271,25 +297,22 @@ function nextId(): string {
   return `assistant-${Date.now()}-${++messageCounter}`;
 }
 
-const SEVERITY_MAP: Record<string, 'low' | 'moderate' | 'high' | 'critical'> = {
-  low: 'low',
-  medium: 'moderate',
-  high: 'high',
-  emergency: 'critical',
-};
-
-function diagnosisToCardProps(d: DiagnosisPayload, summary: JobSummary | null) {
-  const cost = d.estimatedCost;
-  const isLowSeverity = d.severity === 'low' || d.severity === 'medium';
+/** Converts raw parsed diagnosis (which may come as DiagnosisPayload or DiagnosisData) into DiagnosisData. */
+function normalizeDiagnosis(raw: Record<string, unknown>): DiagnosisData {
+  // Handle the new richer format from the updated system prompt
   return {
-    title: summary?.title ?? d.category.charAt(0).toUpperCase() + d.category.slice(1) + ' Issue',
-    severity: SEVERITY_MAP[d.severity] ?? 'moderate',
-    confidence: 0.85, // Not provided by the API — use a reasonable default
-    summary: d.summary,
-    diyFeasible: isLowSeverity && d.recommendedActions.length > 0,
-    diySteps: isLowSeverity ? d.recommendedActions : undefined,
-    diyCostEstimate: cost ? `$${Math.round(cost.min * 0.1)}–$${Math.round(cost.max * 0.3)}` : undefined,
-    proCostEstimate: cost ? `$${cost.min}–$${cost.max}` : 'Contact for estimate',
+    issue: (raw.issue as string) ?? (raw.summary as string)?.slice(0, 60) ?? 'Home Issue',
+    category: (raw.category as string) ?? 'general',
+    severity: (raw.severity as string) ?? 'medium',
+    diy_feasible: raw.diy_feasible === true || raw.diy_feasible === 'true',
+    confidence: typeof raw.confidence === 'number' ? raw.confidence : 0.85,
+    estimated_cost_diy: (raw.estimated_cost_diy as string) ?? '$0',
+    estimated_cost_pro: (raw.estimated_cost_pro as string) ?? (raw.estimatedCost ? `$${(raw.estimatedCost as { min: number }).min}–$${(raw.estimatedCost as { max: number }).max}` : '$0'),
+    estimated_time_diy: (raw.estimated_time_diy as string) ?? undefined,
+    tools_needed: Array.isArray(raw.tools_needed) ? raw.tools_needed as string[] : undefined,
+    steps: Array.isArray(raw.steps) ? raw.steps as string[] : Array.isArray(raw.recommendedActions) ? raw.recommendedActions as string[] : undefined,
+    safety_warnings: Array.isArray(raw.safety_warnings) ? raw.safety_warnings as string[] : undefined,
+    when_to_call_pro: (raw.when_to_call_pro as string) ?? undefined,
   };
 }
 
@@ -332,8 +355,8 @@ export default function DiagnosticChat() {
 
       const callbacks = {
         onToken: (token: string) => dispatch({ type: 'APPEND_TOKEN', token }),
-        onDiagnosis: (d: DiagnosisPayload) => dispatch({ type: 'SET_DIAGNOSIS', diagnosis: d }),
-        onJobSummary: (s: JobSummary) => dispatch({ type: 'SET_JOB_SUMMARY', summary: s }),
+        onDiagnosis: (d: DiagnosisPayload) => dispatch({ type: 'SET_DIAGNOSIS', diagnosis: normalizeDiagnosis(d as unknown as Record<string, unknown>) }),
+        onJobSummary: (s: JobSummary) => dispatch({ type: 'SET_JOB_SUMMARY', summary: s as unknown as JobSummaryV2 }),
         onDone: () => dispatch({ type: 'FINISH_STREAMING' }),
         onError: (err: Error) => {
           console.error('[DiagnosticChat] stream error:', err);
@@ -343,10 +366,17 @@ export default function DiagnosticChat() {
 
       // Use real API when authenticated, fall back to mock for demo
       if (authService.isAuthenticated()) {
+        // Build conversation history from prior messages (exclude the welcome message and the empty streaming message we just added)
+        const history = state.messages
+          .filter((m) => m.id !== 'welcome' && m.content.length > 0)
+          .map((m) => ({ role: m.role, content: m.content }));
+
         abortRef.current = diagnosticService.sendMessage(
           sessionIdRef.current,
           text.trim(),
           callbacks,
+          undefined,
+          history,
         );
       } else {
         abortRef.current = mockStreamResponse(callbacks);
@@ -391,157 +421,76 @@ export default function DiagnosticChat() {
     setTimeout(() => matchFlowRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   }
 
-  const jobSocketRef = useRef<JobSocket | null>(null);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  function runMockOutreach() {
+    const tierMinutes = state.tier === 'emergency' ? 15 : state.tier === 'priority' ? 30 : 120;
+    const expiresAt = new Date(Date.now() + tierMinutes * 60 * 1000).toISOString();
+    dispatch({ type: 'JOB_CREATED', jobId: state.jobId ?? 'mock', expiresAt });
 
-  // Cleanup WebSocket and polling on unmount
-  useEffect(() => {
-    return () => {
-      jobSocketRef.current?.close();
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, []);
-
-  async function startOutreach() {
-    if (!state.diagnosis) return;
-
-    // Not authenticated → use mock simulation
-    if (!authService.isAuthenticated()) {
-      const tierMinutes = state.tier === 'emergency' ? 15 : state.tier === 'priority' ? 30 : 120;
-      const expiresAt = new Date(Date.now() + tierMinutes * 60 * 1000).toISOString();
-      dispatch({ type: 'JOB_CREATED', jobId: 'mock', expiresAt });
-
-      cleanupOutreachRef.current = simulateOutreach(state.tier, (mock: MockOutreachState) => {
-        dispatch({
-          type: 'UPDATE_OUTREACH',
-          outreach: { providersContacted: mock.providersContacted, channels: mock.channels, active: mock.active },
-        });
-        if (!mock.active && mock.respondedProviders.length > 0) {
-          dispatch({
-            type: 'SET_RESULTS',
-            providers: mock.respondedProviders.map((p) => ({
-              id: p.id,
-              responseId: p.responseId,
-              name: p.name,
-              googleRating: p.googleRating,
-              reviewCount: p.reviewCount,
-              quotedPrice: p.quotedPrice,
-              availability: p.availability,
-              message: p.message,
-              channel: p.channel,
-            })),
-          });
-        }
-      });
-      return;
-    }
-
-    // Real API flow
-    dispatch({ type: 'MATCH_FLOW_LOADING', loading: true });
-
-    try {
-      const cost = state.diagnosis.estimatedCost;
-      const budget = cost ? `$${cost.min}–$${cost.max}` : 'flexible';
-
-      const res = await jobService.createJob({
-        diagnosis: state.diagnosis,
-        timing: state.timing,
-        budget,
-        tier: state.tier,
-        zipCode: state.zipCode,
-      });
-
-      if (!res.data) {
-        dispatch({ type: 'MATCH_FLOW_ERROR', error: res.error ?? 'Failed to create job' });
-        return;
-      }
-
-      const { id: jobId, expires_at } = res.data;
-      dispatch({ type: 'JOB_CREATED', jobId, expiresAt: expires_at });
-
-      // Connect WebSocket for live updates
-      jobSocketRef.current = connectJobSocket(jobId, (event: JobSocketEvent) => {
-        handleSocketEvent(event);
-      });
-
-      // Poll job status + responses every 3s as a reliable fallback
-      pollIntervalRef.current = setInterval(() => pollJobStatus(jobId), 3000);
-    } catch (err) {
-      dispatch({ type: 'MATCH_FLOW_ERROR', error: (err as Error).message ?? 'Failed to create job' });
-    }
-  }
-
-  function handleSocketEvent(event: JobSocketEvent) {
-    switch (event.type) {
-      case 'outreach.started':
-      case 'outreach.response':
-      case 'outreach.voicemail':
-        // Socket gives us incremental signals — trigger a poll for full state
-        if (state.jobId) void pollJobStatus(state.jobId);
-        break;
-      case 'job.threshold_met':
-      case 'job.completed':
-        // Providers have responded — fetch results
-        if (state.jobId) void fetchResults(state.jobId);
-        break;
-      case 'job.expired':
-        dispatch({ type: 'UPDATE_OUTREACH', outreach: { ...state.outreach, active: false } });
-        if (state.jobId) void fetchResults(state.jobId);
-        break;
-    }
-  }
-
-  async function pollJobStatus(jobId: string) {
-    try {
-      const res = await jobService.getJob(jobId);
-      if (!res.data) return;
-
-      const { data: job } = res;
+    cleanupOutreachRef.current = simulateOutreach(state.tier, (mock: MockOutreachState) => {
       dispatch({
         type: 'UPDATE_OUTREACH',
-        outreach: {
-          providersContacted: job.providers_contacted,
-          channels: {
-            voice: { attempted: job.outreach_channels.voice.attempted, responded: job.outreach_channels.voice.connected },
-            sms: { attempted: job.outreach_channels.sms.attempted, responded: job.outreach_channels.sms.connected },
-            web: { attempted: job.outreach_channels.web.attempted, responded: job.outreach_channels.web.connected },
-          },
-          active: job.status === 'dispatching' || job.status === 'collecting',
-        },
+        outreach: { providersContacted: mock.providersContacted, channels: mock.channels, active: mock.active },
       });
-
-      // If job is done collecting, fetch final results
-      if (job.status === 'completed' || job.status === 'expired') {
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        jobSocketRef.current?.close();
-        void fetchResults(jobId);
+      if (!mock.active && mock.respondedProviders.length > 0) {
+        dispatch({
+          type: 'SET_RESULTS',
+          providers: mock.respondedProviders.map((p) => ({
+            id: p.id,
+            responseId: p.responseId,
+            name: p.name,
+            googleRating: p.googleRating,
+            reviewCount: p.reviewCount,
+            quotedPrice: p.quotedPrice,
+            availability: p.availability,
+            message: p.message,
+            channel: p.channel,
+          })),
+        });
       }
-    } catch { /* polling failure — next interval will retry */ }
+    });
   }
 
-  async function fetchResults(jobId: string) {
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    try {
-      const res = await jobService.getResponses(jobId);
-      if (!res.data) return;
+  async function startOutreach() {
+    // If authenticated and we have enough info, persist the job to the DB
+    if (authService.isAuthenticated() && (state.diagnosis || state.jobSummary)) {
+      dispatch({ type: 'MATCH_FLOW_LOADING', loading: true });
 
-      const providers: MatchedProvider[] = res.data.responses.map((r) => ({
-        id: r.provider.id,
-        responseId: r.id,
-        name: r.provider.name,
-        googleRating: parseFloat(r.provider.google_rating ?? '0'),
-        reviewCount: r.provider.review_count,
-        quotedPrice: r.quoted_price ?? '0',
-        availability: r.availability ?? 'TBD',
-        message: r.message ?? '',
-        channel: (r.channel === 'voice' || r.channel === 'sms' || r.channel === 'web' ? r.channel : 'web') as 'voice' | 'sms' | 'web',
-      }));
+      try {
+        const diag = state.diagnosis;
+        const summary = state.jobSummary;
+        const category = diag?.category ?? summary?.category ?? 'general';
+        const severity = diag?.severity ?? summary?.severity_estimate ?? 'medium';
+        const budget = diag?.estimated_cost_pro ?? summary?.estimated_cost_pro ?? 'flexible';
 
-      dispatch({ type: 'SET_RESULTS', providers });
-    } catch {
-      dispatch({ type: 'MATCH_FLOW_ERROR', error: 'Failed to load provider responses' });
+        const diagPayload: DiagnosisPayload = {
+          category,
+          severity: severity as DiagnosisPayload['severity'],
+          summary: diag?.issue ?? summary?.description ?? summary?.title ?? 'Home repair',
+          recommendedActions: diag?.steps ?? [],
+        };
+
+        await jobService.createJob({
+          diagnosis: diagPayload,
+          timing: state.timing,
+          budget,
+          tier: state.tier,
+          zipCode: state.zipCode,
+        });
+      } catch {
+        // Job creation failed — continue with mock anyway for demo purposes
+      }
+
+      dispatch({ type: 'MATCH_FLOW_LOADING', loading: false });
     }
+
+    // Use mock outreach simulation (no real providers in DB yet)
+    // Real provider outreach will replace this once providers are seeded
+    runMockOutreach();
   }
+
+  // NOTE: WebSocket/polling (connectJobSocket, pollJobStatus, fetchResults) removed temporarily.
+  // Mock outreach is used until real providers are seeded in the database.
+  // The wiring code is preserved in git history and in src/services/api.ts.
 
   async function handleBook(provider: MatchedProvider) {
     if (!state.jobId) return;
@@ -567,151 +516,183 @@ export default function DiagnosticChat() {
     }
   }
 
+  const [imgPreview, setImgPreview] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function onImgUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setImgPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function removeImg() {
+    setImgPreview(null);
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  const isEmpty = state.messages.length === 0;
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex flex-col bg-warm">
-      <HomieHeader />
-
-      {/* Banner */}
-      {state.showBanner && !state.matchFlowActive && (
-        <div className="bg-dark text-white px-4 py-2.5 flex items-center justify-center gap-3 animate-fade-in">
-          <span className="text-sm">Need help fast?</span>
-          <button
-            onClick={openMatchFlow}
-            className="text-sm font-semibold text-orange-500 hover:text-orange-400 transition-colors"
-          >
-            Find a Homie Pro →
-          </button>
-          <button
-            onClick={() => dispatch({ type: 'DISMISS_BANNER' })}
-            className="ml-2 text-white/40 hover:text-white/70 transition-colors text-lg leading-none"
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {/* Chat messages */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-          {state.messages.map((msg) => (
-            <div key={msg.id}>
-              <ChatBubble role={msg.role} content={msg.content} timestamp={msg.timestamp} />
-
-              {/* Inline diagnosis card after the message that contained it */}
-              {msg.hasDiagnosis && state.diagnosis && (
-                <div className="mt-4 animate-fade-in">
-                  <DiagnosisCard {...diagnosisToCardProps(state.diagnosis, state.jobSummary)} onFindPro={openMatchFlow} />
-                  <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                    <button className="flex-1 border-2 border-dark/20 text-dark font-semibold py-3 rounded-full hover:border-dark/40 transition-colors">
-                      Try fixing it yourself
-                    </button>
-                    <button
-                      onClick={openMatchFlow}
-                      className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-full transition-colors"
-                    >
-                      Find a Homie Pro
-                    </button>
-                  </div>
-                </div>
-              )}
+    <div className="min-h-screen flex flex-col bg-warm overflow-hidden" style={{ height: '100vh' }}>
+      {/* Header */}
+      <div className="bg-white border-b border-dark/10 px-4 shrink-0">
+        <div className="max-w-2xl mx-auto h-16 flex items-center gap-3">
+          <button onClick={() => dispatch({ type: 'CLOSE_MATCH_FLOW' })} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+            <HomieLogo size={40} />
+            <div className="text-left">
+              <div className="text-lg font-display font-black text-dark tracking-tight">Homie</div>
+              <div className="text-[11px] text-dark/40 font-semibold uppercase tracking-wider">Your home's best friend</div>
             </div>
-          ))}
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_0_3px] shadow-green-500/15" />
+              <span className="text-xs text-green-600 font-semibold">Online</span>
+            </div>
+            {authService.isAuthenticated() ? (
+              <button onClick={() => { authService.logout(); window.location.reload(); }} className="text-xs text-dark/40 hover:text-dark transition-colors">
+                Sign out
+              </button>
+            ) : (
+              <a href="/login" className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-4 py-1.5 rounded-full transition-colors">
+                Sign in
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
 
-          {/* Streaming indicator */}
-          {state.streaming && (
-            <div className="flex items-center gap-1.5 pl-2 text-dark/30">
-              <span className="w-1.5 h-1.5 bg-dark/30 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1.5 h-1.5 bg-dark/30 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 bg-dark/30 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+      {/* Messages area */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-4" style={{ minHeight: isEmpty ? '100%' : undefined }}>
+          {/* Welcome screen */}
+          {isEmpty && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+              <HomieLogo size={80} />
+              <h1 className="text-[30px] font-display font-black text-dark mt-5 mb-1 tracking-tight">Hey, I'm Homie</h1>
+              <p className="text-base text-dark/50 font-medium mb-2">Your home's best friend 🏠</p>
+              <p className="text-sm text-dark/40 max-w-[340px] leading-relaxed mb-8">
+                Tell me what's going on or snap a photo — I'll figure out the issue and help you fix it or find the right pro.
+              </p>
+              <div className="grid grid-cols-2 gap-2.5 w-full max-w-[360px]">
+                {SUGGESTED_PROMPTS.map((p) => (
+                  <button
+                    key={p.text}
+                    onClick={() => sendMessage(p.text)}
+                    className="bg-white border border-dark/10 rounded-xl px-4 py-3 text-left flex items-center gap-2 hover:border-orange-500 hover:bg-orange-500/[0.03] transition-all"
+                  >
+                    <span className="text-xl">{p.icon}</span>
+                    <span className="text-[13px] font-semibold text-dark">{p.text}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Chat messages */}
+          {state.messages.map((msg) => {
+            // Hide the empty streaming message — the typing indicator shows instead
+            if (msg.id === state.streamingMessageId && msg.content.length === 0) return null;
+            const isUser = msg.role === 'user';
+            return (
+              <div key={msg.id} className={`flex ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start gap-2.5 max-w-[85%] ${isUser ? 'self-end' : 'self-start'} animate-fade-in`}>
+                {!isUser && <HomieAvatar />}
+                <div className="min-w-0">
+                  {/* Image */}
+                  {msg.image && (
+                    <div className={`mb-2 rounded-2xl overflow-hidden max-w-[240px] border border-dark/10 ${isUser ? 'ml-auto' : ''}`}>
+                      <img src={msg.image} alt="Uploaded" className="w-full block" />
+                    </div>
+                  )}
+                  {/* Text bubble */}
+                  {msg.content && (
+                    <div
+                      className={`rounded-2xl px-[18px] py-3.5 text-[14.5px] leading-relaxed whitespace-pre-wrap ${
+                        isUser
+                          ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-br-sm shadow-md shadow-orange-500/20'
+                          : 'bg-white text-dark border border-dark/10 rounded-bl-sm'
+                      }`}
+                      dangerouslySetInnerHTML={{
+                        __html: msg.content
+                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                          .replace(/`(.+?)`/g, '<code class="bg-dark/10 px-1 rounded text-sm">$1</code>'),
+                      }}
+                    />
+                  )}
+                  {/* Diagnosis card */}
+                  {msg.diagnosis && (
+                    <DiagnosisCard diagnosis={msg.diagnosis} onFindPro={openMatchFlow} />
+                  )}
+                  {/* Job summary card (early match) */}
+                  {!msg.diagnosis && msg.jobSummary && (
+                    <EarlyMatchCard summary={msg.jobSummary} onRequestPro={openMatchFlow} />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Typing indicator — only show before first token arrives */}
+          {state.streaming && !state.messages.some((m) => m.id === state.streamingMessageId && m.content.length > 0) && (
+            <div className="flex items-center gap-2.5">
+              <HomieAvatar />
+              <div className="bg-white rounded-2xl rounded-bl-sm px-5 py-3.5 border border-dark/10 flex gap-1.5 items-center">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="w-[7px] h-[7px] rounded-full bg-orange-500 opacity-50 animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />
+                ))}
+              </div>
             </div>
           )}
 
           {/* Stream error */}
           {state.streamError && (
-            <div className="max-w-[85%] sm:max-w-[70%]">
-              <ErrorState
-                title="Couldn't get a response"
-                message={state.streamError}
-                onRetry={() => {
-                  dispatch({ type: 'STREAM_ERROR', error: '' }); // clear, re-inlined to avoid exposing dispatch
-                  // User can resend via the input
-                }}
-              />
+            <div className="max-w-[85%]">
+              <ErrorState title="Couldn't get a response" message={state.streamError} onRetry={() => dispatch({ type: 'STREAM_ERROR', error: '' })} />
             </div>
           )}
 
           <div ref={messagesEndRef} />
         </div>
-
-        {/* Match flow */}
-        {state.matchFlowActive && (
-          <div ref={matchFlowRef} className="border-t border-dark/10 bg-white">
-            <div className="max-w-2xl mx-auto px-4 py-8">
-              {state.matchFlowError && (
-                <div className="mb-6">
-                  <ErrorState
-                    title="Something went wrong"
-                    message={state.matchFlowError}
-                    onRetry={() => dispatch({ type: 'SET_MATCH_STEP', step: 'preferences' })}
-                  />
-                </div>
-              )}
-
-              {state.bookedProvider ? (
-                <BookingConfirmation provider={state.bookedProvider} />
-              ) : (
-                <>
-                  {state.matchStep === 'tier' && (
-                    <TierStep
-                      tier={state.tier}
-                      onSelect={(t) => dispatch({ type: 'SET_TIER', tier: t })}
-                      onNext={() => dispatch({ type: 'SET_MATCH_STEP', step: 'preferences' })}
-                    />
-                  )}
-                  {state.matchStep === 'preferences' && (
-                    <PreferencesStep
-                      zipCode={state.zipCode}
-                      timing={state.timing}
-                      summary={state.jobSummary}
-                      onZipChange={(z) => dispatch({ type: 'SET_ZIP', zip: z })}
-                      onTimingChange={(t) => dispatch({ type: 'SET_TIMING', timing: t })}
-                      onBack={() => dispatch({ type: 'SET_MATCH_STEP', step: 'tier' })}
-                      onSubmit={startOutreach}
-                      loading={state.matchFlowLoading}
-                    />
-                  )}
-                  {state.matchStep === 'outreach' && (
-                    <OutreachStep outreach={state.outreach} expiresAt={state.expiresAt} />
-                  )}
-                  {state.matchStep === 'results' && (
-                    <ResultsStep
-                      providers={state.respondedProviders}
-                      onBook={handleBook}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Input area — hidden when match flow is active and past chat */}
-      {!state.matchFlowActive && (
-        <div className="sticky bottom-0 bg-white border-t border-dark/10">
-          <div className="max-w-2xl mx-auto px-4 py-3 flex items-end gap-3">
-            <label className="cursor-pointer text-dark/40 hover:text-dark/60 transition-colors shrink-0 pb-2">
-              <input type="file" accept="image/*" multiple className="hidden" />
-              <CameraIcon />
-            </label>
+      {/* Provider modal */}
+      {state.matchFlowActive && (
+        <ProviderModal
+          state={state}
+          dispatch={dispatch}
+          startOutreach={startOutreach}
+          handleBook={handleBook}
+          onClose={() => dispatch({ type: 'CLOSE_MATCH_FLOW' })}
+        />
+      )}
+
+      {/* Image preview strip */}
+      {imgPreview && (
+        <div className="bg-white border-t border-dark/5 px-5 py-2 flex items-center gap-2.5 shrink-0">
+          <div className="relative">
+            <img src={imgPreview} alt="Preview" className="h-14 rounded-lg border border-dark/10" />
+            <button onClick={removeImg} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-dark text-white text-[11px] border-2 border-white flex items-center justify-center leading-none">✕</button>
+          </div>
+          <span className="text-xs text-dark/40">Image attached</span>
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="bg-white border-t border-dark/10 px-4 pb-5 pt-3 shrink-0">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-end gap-2 bg-warm rounded-2xl px-4 py-1.5 border border-dark/10 focus-within:border-orange-500/30 transition-colors">
+            <input type="file" ref={fileRef} onChange={onImgUpload} accept="image/*" className="hidden" />
+            <button onClick={() => fileRef.current?.click()} className="text-xl text-dark/40 hover:text-orange-500 transition-colors py-2 shrink-0">📷</button>
             <textarea
               ref={textareaRef}
               rows={1}
-              placeholder="Describe what's going on..."
-              className="flex-1 resize-none bg-warm rounded-2xl px-4 py-2.5 text-sm text-dark placeholder:text-dark/30 focus:outline-none focus:ring-2 focus:ring-orange-500/30 max-h-40"
+              placeholder="Hey Homie, what's wrong with my..."
+              className="flex-1 bg-transparent border-none outline-none resize-none text-[15px] text-dark placeholder:text-dark/30 py-2 leading-relaxed max-h-[120px]"
               onInput={handleTextareaInput}
               onKeyDown={handleKeyDown}
               disabled={state.streaming}
@@ -719,41 +700,147 @@ export default function DiagnosticChat() {
             <button
               onClick={handleSend}
               disabled={state.streaming}
-              className="shrink-0 w-10 h-10 flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-dark/20 text-white rounded-full transition-colors"
+              className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-500 to-orange-600 disabled:from-dark/15 disabled:to-dark/15 text-white text-lg transition-all"
             >
-              <SendIcon />
+              ↑
             </button>
           </div>
+          <p className="text-center text-[11px] text-dark/20 mt-2">
+            Homie provides guidance only — always verify with a licensed professional for safety-critical issues
+          </p>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+// ── Early match card ────────────────────────────────────────────────────────
+
+function EarlyMatchCard({ summary, onRequestPro }: { summary: JobSummaryV2; onRequestPro: () => void }) {
+  const icon = CAT_ICONS[summary.category] ?? '🛠️';
+  const sev = SEV_LABELS[summary.severity_estimate] ?? SEV_LABELS.unknown;
+
+  return (
+    <div className="mt-2.5 bg-white rounded-xl border border-dark/10 overflow-hidden w-[75vw] max-w-[320px]">
+      <div className="px-3.5 py-3 border-b border-dark/5">
+        <span className="text-2xl block mb-2">{icon}</span>
+        <p className="text-[13px] font-bold text-dark leading-snug">{summary.title}</p>
+        <p className="text-[11px] text-dark/40 capitalize mt-1">{summary.category}{summary.estimated_cost_pro ? ` · Est. ${summary.estimated_cost_pro}` : ''}</p>
+        {summary.severity_estimate && summary.severity_estimate !== 'unknown' && (
+          <span className={`${sev.bg} ${sev.text} text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide inline-block mt-2`}>{sev.label}</span>
+        )}
+      </div>
+      <button
+        onClick={onRequestPro}
+        className="w-full px-3.5 py-2.5 text-[12px] font-bold text-orange-500 hover:bg-orange-500/[0.04] transition-colors flex items-center justify-center gap-1.5"
+      >
+        <span>👷</span> Skip ahead — get a Homie Pro <span className="text-base">→</span>
+      </button>
+    </div>
+  );
+}
+
+// ── Provider modal ──────────────────────────────────────────────────────────
+
+function ProviderModal({
+  state,
+  dispatch,
+  startOutreach,
+  handleBook,
+  onClose,
+}: {
+  state: State;
+  dispatch: React.Dispatch<Action>;
+  startOutreach: () => void;
+  handleBook: (p: MatchedProvider) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-50" onClick={onClose}>
+      <div
+        className="bg-white rounded-t-3xl w-full max-w-[480px] max-h-[90vh] overflow-auto px-6 pt-7 pb-6 animate-fade-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex justify-between items-center mb-5">
+          <h3 className="text-xl font-extrabold text-dark">
+            {state.matchStep === 'tier' ? 'Find a Pro' : state.matchStep === 'preferences' ? 'Your Details' : state.matchStep === 'outreach' ? 'Homie is on it' : 'Pros Who Responded'}
+          </h3>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-warm flex items-center justify-center text-base">✕</button>
+        </div>
+
+        {/* Job summary mini card */}
+        {state.jobSummary && (
+          <div className="bg-warm rounded-xl px-4 py-3 mb-5 border border-dark/5 text-[13px] text-dark/60">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-base">{CAT_ICONS[state.jobSummary.category] ?? '🛠️'}</span>
+              <strong className="text-dark">{state.jobSummary.title}</strong>
+            </div>
+            {state.jobSummary.description && <p className="text-xs text-dark/40">{state.jobSummary.description}</p>}
+          </div>
+        )}
+
+        {state.matchFlowError && (
+          <div className="mb-5">
+            <ErrorState title="Something went wrong" message={state.matchFlowError} onRetry={() => dispatch({ type: 'SET_MATCH_STEP', step: 'preferences' })} />
+          </div>
+        )}
+
+        {state.bookedProvider ? (
+          <BookingConfirmation provider={state.bookedProvider} />
+        ) : (
+          <>
+            {state.matchStep === 'tier' && <TierStep state={state} dispatch={dispatch} />}
+            {state.matchStep === 'preferences' && <PreferencesStep state={state} dispatch={dispatch} startOutreach={startOutreach} />}
+            {state.matchStep === 'outreach' && (
+              <OutreachProgress providersContacted={state.outreach.providersContacted} channels={state.outreach.channels} active={state.outreach.active} expiresAt={state.expiresAt} />
+            )}
+            {state.matchStep === 'results' && <ResultsStep providers={state.respondedProviders} onBook={handleBook} />}
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
 // ── Match flow sub-components ───────────────────────────────────────────────
 
-function TierStep({
-  tier,
-  onSelect,
-  onNext,
-}: {
-  tier: JobTier;
-  onSelect: (t: JobTier) => void;
-  onNext: () => void;
-}) {
+function TierStep({ state, dispatch }: { state: State; dispatch: React.Dispatch<Action> }) {
+  const tiers = [
+    { id: 'standard' as JobTier, name: 'Standard', price: '$9.99', icon: '📱', desc: 'Homie contacts 5-8 local pros via text & web', time: 'Results in ~2 hours', providers: '5-8 pros contacted' },
+    { id: 'priority' as JobTier, name: 'Priority', price: '$19.99', icon: '⚡', desc: 'Homie calls & texts 10+ pros simultaneously', time: 'Results in ~30 min', providers: '10+ pros contacted', popular: true },
+    { id: 'emergency' as JobTier, name: 'Emergency', price: '$29.99', icon: '🚨', desc: 'Homie blitzes every available pro for same-day service', time: 'Results in ~15 min', providers: '15+ pros contacted' },
+  ];
+
   return (
-    <div className="animate-fade-in">
-      <h2 className="text-2xl font-bold text-center mb-2">Choose your plan</h2>
-      <p className="text-dark/50 text-center text-sm mb-6">
-        Pick the speed that works for you. Faster plans contact more providers.
+    <div>
+      <p className="text-sm text-dark/60 mb-4 leading-relaxed">
+        Homie's AI agent will call, text, and search the web to find available pros in your area. Choose your speed:
       </p>
-      <TierSelector selected={tier} onSelect={onSelect} />
-      <button
-        onClick={onNext}
-        className="mt-6 w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-full transition-colors"
-      >
-        Continue
-      </button>
+      <div className="flex flex-col gap-2.5">
+        {tiers.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => { dispatch({ type: 'SET_TIER', tier: t.id }); dispatch({ type: 'SET_MATCH_STEP', step: 'preferences' }); }}
+            className={`relative text-left border-2 rounded-xl px-[18px] py-4 transition-all hover:border-orange-500 ${state.tier === t.id ? 'border-orange-500' : 'border-dark/10'}`}
+          >
+            {t.popular && <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-bl-lg rounded-tr-[10px] uppercase tracking-wide">Most Popular</div>}
+            <div className="flex items-center gap-3">
+              <span className="text-[28px]">{t.icon}</span>
+              <div className="flex-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-base font-extrabold text-dark">{t.name}</span>
+                  <span className="text-lg font-extrabold text-orange-500">{t.price}</span>
+                </div>
+                <p className="text-[13px] text-dark/60 mt-0.5">{t.desc}</p>
+                <p className="text-xs text-dark/40 mt-0.5">{t.time} · {t.providers}</p>
+              </div>
+              <span className="text-xl text-dark/15">→</span>
+            </div>
+          </button>
+        ))}
+      </div>
+      <p className="text-center text-xs text-dark/40 mt-3.5">💳 You're only charged once results are delivered</p>
     </div>
   );
 }
@@ -765,166 +852,79 @@ const TIMINGS: { value: JobTiming; label: string }[] = [
   { value: 'flexible', label: 'Flexible' },
 ];
 
-function PreferencesStep({
-  zipCode,
-  timing,
-  summary,
-  onZipChange,
-  onTimingChange,
-  onBack,
-  onSubmit,
-  loading = false,
-}: {
-  zipCode: string;
-  timing: JobTiming;
-  summary: State['jobSummary'];
-  onZipChange: (z: string) => void;
-  onTimingChange: (t: JobTiming) => void;
-  onBack: () => void;
-  onSubmit: () => void;
-  loading?: boolean;
-}) {
-  const isValid = /^\d{5}$/.test(zipCode);
+const BUDGETS = ['Under $200', '$200-500', '$500-1000', 'No limit'];
+
+function PreferencesStep({ state, dispatch, startOutreach }: { state: State; dispatch: React.Dispatch<Action>; startOutreach: () => void }) {
+  const [budget, setBudget] = useState('');
+  const isValid = /^\d{5}$/.test(state.zipCode) && state.timing && budget;
 
   return (
-    <div className="animate-fade-in">
-      <h2 className="text-2xl font-bold text-center mb-6">A few quick details</h2>
-
-      {summary && (
-        <div className="bg-warm rounded-xl p-4 mb-6">
-          <p className="text-sm font-semibold text-dark">{summary.title}</p>
-          <p className="text-xs text-dark/50 mt-1">
-            {summary.category} · {summary.severity} severity · est. ${summary.estimatedCost.min}–${summary.estimatedCost.max}
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-5">
+    <div>
+      <p className="text-sm text-dark/60 mb-4 leading-relaxed">A few quick details so Homie can find the right pros:</p>
+      <div className="space-y-3">
         <div>
-          <label className="block text-sm font-semibold text-dark mb-2">Your zip code</label>
+          <label className="text-[13px] font-bold text-dark mb-1.5 block">Zip Code</label>
           <input
-            type="text"
-            inputMode="numeric"
-            maxLength={5}
-            value={zipCode}
-            onChange={(e) => onZipChange(e.target.value.replace(/\D/g, ''))}
-            placeholder="e.g. 90210"
-            className="w-full bg-warm rounded-xl px-4 py-3 text-sm text-dark placeholder:text-dark/30 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+            value={state.zipCode} onChange={(e) => dispatch({ type: 'SET_ZIP', zip: e.target.value.replace(/\D/g, '') })}
+            placeholder="e.g. 92103" maxLength={5} inputMode="numeric"
+            className="w-full px-3.5 py-3 rounded-lg border border-dark/10 bg-warm text-[15px] text-dark outline-none focus:border-orange-500/30"
           />
         </div>
-
         <div>
-          <label className="block text-sm font-semibold text-dark mb-2">When do you need this done?</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <label className="text-[13px] font-bold text-dark mb-1.5 block">When do you need this done?</label>
+          <div className="grid grid-cols-2 gap-2">
             {TIMINGS.map((t) => (
-              <button
-                key={t.value}
-                onClick={() => onTimingChange(t.value)}
-                className={`rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                  timing === t.value
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-warm text-dark/70 hover:bg-dark/5'
-                }`}
-              >
+              <button key={t.value} onClick={() => dispatch({ type: 'SET_TIMING', timing: t.value })}
+                className={`py-2.5 px-3 rounded-lg border-[1.5px] text-[13px] font-semibold transition-all ${state.timing === t.value ? 'border-orange-500 bg-orange-500/[0.06] text-orange-600' : 'border-dark/10 text-dark/60'}`}>
                 {t.label}
               </button>
             ))}
           </div>
         </div>
+        <div>
+          <label className="text-[13px] font-bold text-dark mb-1.5 block">Budget range</label>
+          <div className="grid grid-cols-2 gap-2">
+            {BUDGETS.map((b) => (
+              <button key={b} onClick={() => setBudget(b)}
+                className={`py-2.5 px-3 rounded-lg border-[1.5px] text-[13px] font-semibold transition-all ${budget === b ? 'border-orange-500 bg-orange-500/[0.06] text-orange-600' : 'border-dark/10 text-dark/60'}`}>
+                {b}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-
-      <div className="flex gap-3 mt-8">
-        <button
-          onClick={onBack}
-          className="flex-1 border-2 border-dark/15 text-dark font-semibold py-3 rounded-full hover:border-dark/30 transition-colors"
-        >
-          Back
-        </button>
-        <button
-          onClick={onSubmit}
-          disabled={!isValid || loading}
-          className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:bg-dark/20 text-white font-semibold py-3 rounded-full transition-colors flex items-center justify-center gap-2"
-        >
-          {loading && <Spinner size="sm" />}
-          {loading ? 'Creating job...' : 'Find providers'}
-        </button>
-      </div>
+      <button onClick={startOutreach} disabled={!isValid || state.matchFlowLoading}
+        className={`w-full mt-5 py-3.5 rounded-xl text-[15px] font-bold transition-all flex items-center justify-center gap-2 ${isValid && !state.matchFlowLoading ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white' : 'bg-dark/10 text-dark/30'}`}>
+        {state.matchFlowLoading && <Spinner size="sm" />}
+        {state.matchFlowLoading ? 'Creating job...' : `🚀 Launch Homie Agent — ${state.tier === 'emergency' ? '$29.99' : state.tier === 'priority' ? '$19.99' : '$9.99'}`}
+      </button>
+      <button onClick={() => dispatch({ type: 'SET_MATCH_STEP', step: 'tier' })} className="w-full mt-2 py-2.5 text-[13px] text-dark/40 hover:text-dark/60">
+        ← Back to pricing
+      </button>
     </div>
   );
 }
 
-function OutreachStep({
-  outreach,
-  expiresAt,
-}: {
-  outreach: State['outreach'];
-  expiresAt: string;
-}) {
-  return (
-    <div className="animate-fade-in">
-      <h2 className="text-2xl font-bold text-center mb-2">Finding your pros</h2>
-      <p className="text-dark/50 text-center text-sm mb-6">
-        Sit tight — we're reaching out to top-rated providers in your area.
-      </p>
-      <OutreachProgress
-        providersContacted={outreach.providersContacted}
-        channels={outreach.channels}
-        active={outreach.active}
-        expiresAt={expiresAt}
-      />
-    </div>
-  );
-}
-
-function ResultsStep({
-  providers,
-  onBook,
-}: {
-  providers: MatchedProvider[];
-  onBook: (p: MatchedProvider) => void;
-}) {
+function ResultsStep({ providers, onBook }: { providers: MatchedProvider[]; onBook: (p: MatchedProvider) => void }) {
   if (providers.length === 0) {
     return (
-      <div className="animate-fade-in text-center py-8">
+      <div className="text-center py-8">
         <p className="text-5xl mb-4">😔</p>
         <h2 className="text-2xl font-bold mb-2">No responses yet</h2>
-        <p className="text-dark/50 text-sm mb-6 max-w-sm mx-auto">
-          We weren't able to reach providers in time. Here are your options:
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-          <button className="flex-1 border-2 border-dark/15 text-dark font-semibold py-3 rounded-full hover:border-dark/30 transition-colors">
-            Extend search
-          </button>
-          <button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-full transition-colors">
-            Upgrade tier
-          </button>
-          <button className="flex-1 border-2 border-dark/15 text-dark/60 font-semibold py-3 rounded-full hover:border-dark/30 transition-colors">
-            Get a refund
-          </button>
-        </div>
+        <p className="text-dark/50 text-sm mb-6 max-w-sm mx-auto">We weren't able to reach providers in time.</p>
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in">
-      <h2 className="text-2xl font-bold text-center mb-2">Your matches are in!</h2>
-      <p className="text-dark/50 text-center text-sm mb-6">
-        {providers.length} provider{providers.length !== 1 ? 's' : ''} responded. Pick the one that works best for you.
-      </p>
-      <div className="space-y-4">
+    <div>
+      <div className="bg-green-500/10 rounded-lg px-3.5 py-2.5 mb-4 flex items-center gap-2">
+        <span className="text-lg">✅</span>
+        <span className="text-[13px] font-bold text-green-600">{providers.length} pro{providers.length !== 1 ? 's' : ''} responded</span>
+      </div>
+      <div className="space-y-3">
         {providers.map((p) => (
-          <ProviderCard
-            key={p.id}
-            name={p.name}
-            googleRating={p.googleRating}
-            reviewCount={p.reviewCount}
-            quotedPrice={p.quotedPrice}
-            availability={p.availability}
-            message={p.message}
-            channel={p.channel}
-            onBook={() => onBook(p)}
-          />
+          <ProviderCard key={p.id} name={p.name} googleRating={p.googleRating} reviewCount={p.reviewCount} quotedPrice={p.quotedPrice} availability={p.availability} message={p.message} channel={p.channel} onBook={() => onBook(p)} />
         ))}
       </div>
     </div>
@@ -933,7 +933,7 @@ function ResultsStep({
 
 function BookingConfirmation({ provider }: { provider: MatchedProvider }) {
   return (
-    <div className="animate-fade-in text-center py-8">
+    <div className="text-center py-8 animate-fade-in">
       <div className="w-16 h-16 bg-green-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
         <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
@@ -941,42 +941,13 @@ function BookingConfirmation({ provider }: { provider: MatchedProvider }) {
       </div>
       <h2 className="text-2xl font-bold mb-2">You're all set!</h2>
       <p className="text-dark/50 text-sm mb-6 max-w-sm mx-auto">
-        <strong className="text-dark">{provider.name}</strong> has been booked.
-        They'll be in touch to confirm the details.
+        <strong className="text-dark">{provider.name}</strong> has been booked. They'll be in touch to confirm the details.
       </p>
       <div className="bg-warm rounded-xl p-4 max-w-sm mx-auto text-left space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-dark/50">Quote</span>
-          <span className="font-semibold">${provider.quotedPrice}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-dark/50">When</span>
-          <span className="font-semibold">{provider.availability}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-dark/50">Rating</span>
-          <span className="font-semibold">⭐ {provider.googleRating}</span>
-        </div>
+        <div className="flex justify-between text-sm"><span className="text-dark/50">Quote</span><span className="font-semibold">${provider.quotedPrice}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-dark/50">When</span><span className="font-semibold">{provider.availability}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-dark/50">Rating</span><span className="font-semibold">⭐ {provider.googleRating}</span></div>
       </div>
     </div>
-  );
-}
-
-// ── Icons ───────────────────────────────────────────────────────────────────
-
-function CameraIcon() {
-  return (
-    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.04l-.821 1.315z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-    </svg>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-    </svg>
   );
 }

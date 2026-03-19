@@ -200,6 +200,7 @@ export const diagnosticService = {
     message: string,
     callbacks: DiagnosticStreamCallbacks,
     images?: string[],
+    history?: { role: 'user' | 'assistant'; content: string }[],
   ): AbortController {
     const controller = new AbortController();
 
@@ -215,6 +216,7 @@ export const diagnosticService = {
             session_id: sessionId,
             message,
             ...(images && images.length > 0 ? { images } : {}),
+            ...(history && history.length > 0 ? { history } : {}),
           }),
           signal: controller.signal,
         });
@@ -228,7 +230,58 @@ export const diagnosticService = {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        let fullText = '';
+
+        // Tag filtering state — suppress <diagnosis>...</diagnosis> and <job_summary>...</job_summary> from visible output
+        let insideTag = false;
+        let tagBuffer = '';
+        const TAG_OPEN_RE = /^<(diagnosis|job_summary)>/;
+        const TAG_CLOSE_RE = /<\/(diagnosis|job_summary)>/;
+
+        function processToken(token: string) {
+          // Character-by-character filtering to handle tags split across tokens
+          for (const ch of token) {
+            if (insideTag) {
+              tagBuffer += ch;
+              // Check if we've closed the tag
+              if (TAG_CLOSE_RE.test(tagBuffer)) {
+                // Parse the completed tag
+                parseStructuredTags(tagBuffer, callbacks);
+                insideTag = false;
+                tagBuffer = '';
+              }
+              continue;
+            }
+
+            // Detect tag opening — buffer '<' and check subsequent chars
+            if (ch === '<') {
+              tagBuffer = '<';
+              continue;
+            }
+
+            if (tagBuffer.length > 0) {
+              tagBuffer += ch;
+              // Once we have enough chars, check if it's a known tag
+              if (ch === '>') {
+                if (TAG_OPEN_RE.test(tagBuffer)) {
+                  // Entering a structured tag — suppress from visible output
+                  insideTag = true;
+                } else {
+                  // Not a known tag — flush the buffered text as visible
+                  callbacks.onToken(tagBuffer);
+                  tagBuffer = '';
+                }
+              }
+              // If buffer gets too long without closing '>', it's not a tag
+              if (tagBuffer.length > 15 && !tagBuffer.includes('>')) {
+                callbacks.onToken(tagBuffer);
+                tagBuffer = '';
+              }
+              continue;
+            }
+
+            callbacks.onToken(ch);
+          }
+        }
 
         for (;;) {
           const { done, value } = await reader.read();
@@ -236,7 +289,6 @@ export const diagnosticService = {
 
           buffer += decoder.decode(value, { stream: true });
 
-          // SSE format: lines of "data: ..." separated by double newlines
           const lines = buffer.split('\n');
           buffer = lines.pop() ?? '';
 
@@ -245,7 +297,10 @@ export const diagnosticService = {
             const payload = line.slice(6);
 
             if (payload === '[DONE]') {
-              parseStructuredTags(fullText, callbacks);
+              // Flush any remaining tag buffer as visible text if we never closed a tag
+              if (tagBuffer && !insideTag) {
+                callbacks.onToken(tagBuffer);
+              }
               callbacks.onDone();
               return;
             }
@@ -257,19 +312,18 @@ export const diagnosticService = {
                 return;
               }
               if (parsed.token) {
-                fullText += parsed.token;
-                callbacks.onToken(parsed.token);
+                processToken(parsed.token);
               }
             } catch {
-              // Non-JSON data line — treat as raw token
-              fullText += payload;
-              callbacks.onToken(payload);
+              processToken(payload);
             }
           }
         }
 
-        // Stream ended without [DONE] — still parse what we have
-        parseStructuredTags(fullText, callbacks);
+        // Stream ended without [DONE]
+        if (tagBuffer && !insideTag) {
+          callbacks.onToken(tagBuffer);
+        }
         callbacks.onDone();
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
