@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import healthRouter from './routes/health';
 import authRouter from './routes/auth';
+import diagnosticRouter from './routes/diagnostic';
 import jobsRouter from './routes/jobs';
 import bookingsRouter from './routes/bookings';
 import providersRouter from './routes/providers';
@@ -17,6 +18,7 @@ app.use(express.urlencoded({ extended: false }));
 
 app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/diagnostic', requireAuth, diagnosticRouter);
 app.use('/api/v1/jobs', requireAuth, jobsRouter);
 app.use('/api/v1/bookings', requireAuth, bookingsRouter);
 // /providers/discover is public; /providers/:id/suppress requires auth

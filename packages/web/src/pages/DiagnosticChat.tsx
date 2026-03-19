@@ -6,15 +6,23 @@ import TierSelector from '@/components/TierSelector';
 import OutreachProgress from '@/components/OutreachProgress';
 import ProviderCard from '@/components/ProviderCard';
 import ErrorState from '@/components/ErrorState';
+import { Spinner } from '@/components/Skeleton';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  diagnosticService,
+  authService,
+  jobService,
+  connectJobSocket,
+  type JobSocket,
+  type JobSocketEvent,
+} from '@/services/api';
 import {
   mockStreamResponse,
-  MOCK_DIAGNOSIS_CARD,
   simulateOutreach,
-  type OutreachState,
-  type MockProvider,
+  type OutreachState as MockOutreachState,
 } from '@/mocks/diagnostic';
-import type { DiagnosisPayload, JobTier, JobTiming } from '@/services/api';
+import type { DiagnosisPayload, JobTier, JobTiming, JobSummary } from '@/services/api';
 
 // ── State ───────────────────────────────────────────────────────────────────
 
@@ -26,6 +34,25 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   hasDiagnosis?: boolean;
+}
+
+/** Unified provider shape used in results and booking confirmation. */
+interface MatchedProvider {
+  id: string;
+  responseId: string;
+  name: string;
+  googleRating: number;
+  reviewCount: number;
+  quotedPrice: string;
+  availability: string;
+  message: string;
+  channel: 'voice' | 'sms' | 'web';
+}
+
+interface OutreachChannels {
+  voice: { attempted: number; responded: number };
+  sms: { attempted: number; responded: number };
+  web: { attempted: number; responded: number };
 }
 
 interface State {
@@ -43,13 +70,21 @@ interface State {
   zipCode: string;
   timing: JobTiming;
 
-  // Outreach
-  outreach: OutreachState;
+  // Job / outreach
+  jobId: string | null;
+  outreach: {
+    providersContacted: number;
+    channels: OutreachChannels;
+    active: boolean;
+  };
   expiresAt: string;
+  matchFlowError: string | null;
+  matchFlowLoading: boolean;
 
   // Results
-  respondedProviders: MockProvider[];
-  bookedProvider: MockProvider | null;
+  respondedProviders: MatchedProvider[];
+  bookedProvider: MatchedProvider | null;
+  bookingLoading: boolean;
 
   // Error
   streamError: string | null;
@@ -61,6 +96,12 @@ const WELCOME: ChatMessage = {
   content:
     "Hey there! 👋 I'm Homie, your home's best friend. What's going on at your place? Describe the issue and I'll help you figure out what's happening.",
   timestamp: new Date(),
+};
+
+const EMPTY_CHANNELS: OutreachChannels = {
+  voice: { attempted: 0, responded: 0 },
+  sms: { attempted: 0, responded: 0 },
+  web: { attempted: 0, responded: 0 },
 };
 
 const initialState: State = {
@@ -75,19 +116,14 @@ const initialState: State = {
   tier: 'priority',
   zipCode: '',
   timing: 'asap',
-  outreach: {
-    providersContacted: 0,
-    channels: {
-      voice: { attempted: 0, responded: 0 },
-      sms: { attempted: 0, responded: 0 },
-      web: { attempted: 0, responded: 0 },
-    },
-    active: false,
-    respondedProviders: [],
-  },
+  jobId: null,
+  outreach: { providersContacted: 0, channels: EMPTY_CHANNELS, active: false },
   expiresAt: '',
+  matchFlowError: null,
+  matchFlowLoading: false,
   respondedProviders: [],
   bookedProvider: null,
+  bookingLoading: false,
   streamError: null,
 };
 
@@ -103,9 +139,13 @@ type Action =
   | { type: 'SET_ZIP'; zip: string }
   | { type: 'SET_TIMING'; timing: JobTiming }
   | { type: 'SET_MATCH_STEP'; step: MatchStep }
-  | { type: 'UPDATE_OUTREACH'; outreach: OutreachState }
-  | { type: 'SET_EXPIRES'; expiresAt: string }
-  | { type: 'BOOK_PROVIDER'; provider: MockProvider }
+  | { type: 'JOB_CREATED'; jobId: string; expiresAt: string }
+  | { type: 'UPDATE_OUTREACH'; outreach: State['outreach'] }
+  | { type: 'SET_RESULTS'; providers: MatchedProvider[] }
+  | { type: 'BOOK_PROVIDER'; provider: MatchedProvider }
+  | { type: 'BOOKING_LOADING'; loading: boolean }
+  | { type: 'MATCH_FLOW_ERROR'; error: string }
+  | { type: 'MATCH_FLOW_LOADING'; loading: boolean }
   | { type: 'DISMISS_BANNER' }
   | { type: 'STREAM_ERROR'; error: string };
 
@@ -174,21 +214,40 @@ function reducer(state: State, action: Action): State {
       return { ...state, timing: action.timing };
 
     case 'SET_MATCH_STEP':
-      return { ...state, matchStep: action.step };
+      return { ...state, matchStep: action.step, matchFlowError: null };
 
-    case 'UPDATE_OUTREACH':
+    case 'JOB_CREATED':
       return {
         ...state,
-        outreach: action.outreach,
-        respondedProviders: action.outreach.respondedProviders,
-        matchStep: !action.outreach.active && action.outreach.respondedProviders.length > 0 ? 'results' : state.matchStep,
+        jobId: action.jobId,
+        expiresAt: action.expiresAt,
+        matchStep: 'outreach',
+        matchFlowLoading: false,
+        outreach: { ...state.outreach, active: true },
       };
 
-    case 'SET_EXPIRES':
-      return { ...state, expiresAt: action.expiresAt };
+    case 'UPDATE_OUTREACH':
+      return { ...state, outreach: action.outreach };
+
+    case 'SET_RESULTS':
+      return {
+        ...state,
+        respondedProviders: action.providers,
+        matchStep: 'results',
+        outreach: { ...state.outreach, active: false },
+      };
 
     case 'BOOK_PROVIDER':
-      return { ...state, bookedProvider: action.provider };
+      return { ...state, bookedProvider: action.provider, bookingLoading: false };
+
+    case 'BOOKING_LOADING':
+      return { ...state, bookingLoading: action.loading };
+
+    case 'MATCH_FLOW_ERROR':
+      return { ...state, matchFlowError: action.error, matchFlowLoading: false };
+
+    case 'MATCH_FLOW_LOADING':
+      return { ...state, matchFlowLoading: action.loading };
 
     case 'STREAM_ERROR':
       return {
@@ -212,15 +271,40 @@ function nextId(): string {
   return `assistant-${Date.now()}-${++messageCounter}`;
 }
 
+const SEVERITY_MAP: Record<string, 'low' | 'moderate' | 'high' | 'critical'> = {
+  low: 'low',
+  medium: 'moderate',
+  high: 'high',
+  emergency: 'critical',
+};
+
+function diagnosisToCardProps(d: DiagnosisPayload, summary: JobSummary | null) {
+  const cost = d.estimatedCost;
+  const isLowSeverity = d.severity === 'low' || d.severity === 'medium';
+  return {
+    title: summary?.title ?? d.category.charAt(0).toUpperCase() + d.category.slice(1) + ' Issue',
+    severity: SEVERITY_MAP[d.severity] ?? 'moderate',
+    confidence: 0.85, // Not provided by the API — use a reasonable default
+    summary: d.summary,
+    diyFeasible: isLowSeverity && d.recommendedActions.length > 0,
+    diySteps: isLowSeverity ? d.recommendedActions : undefined,
+    diyCostEstimate: cost ? `$${Math.round(cost.min * 0.1)}–$${Math.round(cost.max * 0.3)}` : undefined,
+    proCostEstimate: cost ? `$${cost.min}–$${cost.max}` : 'Contact for estimate',
+  };
+}
+
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function DiagnosticChat() {
   const [state, dispatch] = useReducer(reducer, initialState);
+  // useAuth() ensures AuthProvider context is available
+  useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const matchFlowRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const cleanupOutreachRef = useRef<(() => void) | null>(null);
+  const sessionIdRef = useRef(crypto.randomUUID());
 
   useDocumentTitle('Diagnostic Chat');
 
@@ -246,16 +330,27 @@ export default function DiagnosticChat() {
       const msgId = nextId();
       dispatch({ type: 'START_STREAMING', messageId: msgId });
 
-      abortRef.current = mockStreamResponse({
-        onToken: (token) => dispatch({ type: 'APPEND_TOKEN', token }),
-        onDiagnosis: (d) => dispatch({ type: 'SET_DIAGNOSIS', diagnosis: d }),
-        onJobSummary: (s) => dispatch({ type: 'SET_JOB_SUMMARY', summary: s }),
+      const callbacks = {
+        onToken: (token: string) => dispatch({ type: 'APPEND_TOKEN', token }),
+        onDiagnosis: (d: DiagnosisPayload) => dispatch({ type: 'SET_DIAGNOSIS', diagnosis: d }),
+        onJobSummary: (s: JobSummary) => dispatch({ type: 'SET_JOB_SUMMARY', summary: s }),
         onDone: () => dispatch({ type: 'FINISH_STREAMING' }),
-        onError: (err) => {
+        onError: (err: Error) => {
           console.error('[DiagnosticChat] stream error:', err);
           dispatch({ type: 'STREAM_ERROR', error: err.message || 'Failed to get a response. Please try again.' });
         },
-      });
+      };
+
+      // Use real API when authenticated, fall back to mock for demo
+      if (authService.isAuthenticated()) {
+        abortRef.current = diagnosticService.sendMessage(
+          sessionIdRef.current,
+          text.trim(),
+          callbacks,
+        );
+      } else {
+        abortRef.current = mockStreamResponse(callbacks);
+      }
     },
     [state.streaming],
   );
@@ -296,15 +391,180 @@ export default function DiagnosticChat() {
     setTimeout(() => matchFlowRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   }
 
-  function startOutreach() {
-    const tierMinutes = state.tier === 'emergency' ? 15 : state.tier === 'priority' ? 30 : 120;
-    const expiresAt = new Date(Date.now() + tierMinutes * 60 * 1000).toISOString();
-    dispatch({ type: 'SET_EXPIRES', expiresAt });
-    dispatch({ type: 'SET_MATCH_STEP', step: 'outreach' });
+  const jobSocketRef = useRef<JobSocket | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    cleanupOutreachRef.current = simulateOutreach(state.tier, (outreach) => {
-      dispatch({ type: 'UPDATE_OUTREACH', outreach });
-    });
+  // Cleanup WebSocket and polling on unmount
+  useEffect(() => {
+    return () => {
+      jobSocketRef.current?.close();
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
+  async function startOutreach() {
+    if (!state.diagnosis) return;
+
+    // Not authenticated → use mock simulation
+    if (!authService.isAuthenticated()) {
+      const tierMinutes = state.tier === 'emergency' ? 15 : state.tier === 'priority' ? 30 : 120;
+      const expiresAt = new Date(Date.now() + tierMinutes * 60 * 1000).toISOString();
+      dispatch({ type: 'JOB_CREATED', jobId: 'mock', expiresAt });
+
+      cleanupOutreachRef.current = simulateOutreach(state.tier, (mock: MockOutreachState) => {
+        dispatch({
+          type: 'UPDATE_OUTREACH',
+          outreach: { providersContacted: mock.providersContacted, channels: mock.channels, active: mock.active },
+        });
+        if (!mock.active && mock.respondedProviders.length > 0) {
+          dispatch({
+            type: 'SET_RESULTS',
+            providers: mock.respondedProviders.map((p) => ({
+              id: p.id,
+              responseId: p.responseId,
+              name: p.name,
+              googleRating: p.googleRating,
+              reviewCount: p.reviewCount,
+              quotedPrice: p.quotedPrice,
+              availability: p.availability,
+              message: p.message,
+              channel: p.channel,
+            })),
+          });
+        }
+      });
+      return;
+    }
+
+    // Real API flow
+    dispatch({ type: 'MATCH_FLOW_LOADING', loading: true });
+
+    try {
+      const cost = state.diagnosis.estimatedCost;
+      const budget = cost ? `$${cost.min}–$${cost.max}` : 'flexible';
+
+      const res = await jobService.createJob({
+        diagnosis: state.diagnosis,
+        timing: state.timing,
+        budget,
+        tier: state.tier,
+        zipCode: state.zipCode,
+      });
+
+      if (!res.data) {
+        dispatch({ type: 'MATCH_FLOW_ERROR', error: res.error ?? 'Failed to create job' });
+        return;
+      }
+
+      const { id: jobId, expires_at } = res.data;
+      dispatch({ type: 'JOB_CREATED', jobId, expiresAt: expires_at });
+
+      // Connect WebSocket for live updates
+      jobSocketRef.current = connectJobSocket(jobId, (event: JobSocketEvent) => {
+        handleSocketEvent(event);
+      });
+
+      // Poll job status + responses every 3s as a reliable fallback
+      pollIntervalRef.current = setInterval(() => pollJobStatus(jobId), 3000);
+    } catch (err) {
+      dispatch({ type: 'MATCH_FLOW_ERROR', error: (err as Error).message ?? 'Failed to create job' });
+    }
+  }
+
+  function handleSocketEvent(event: JobSocketEvent) {
+    switch (event.type) {
+      case 'outreach.started':
+      case 'outreach.response':
+      case 'outreach.voicemail':
+        // Socket gives us incremental signals — trigger a poll for full state
+        if (state.jobId) void pollJobStatus(state.jobId);
+        break;
+      case 'job.threshold_met':
+      case 'job.completed':
+        // Providers have responded — fetch results
+        if (state.jobId) void fetchResults(state.jobId);
+        break;
+      case 'job.expired':
+        dispatch({ type: 'UPDATE_OUTREACH', outreach: { ...state.outreach, active: false } });
+        if (state.jobId) void fetchResults(state.jobId);
+        break;
+    }
+  }
+
+  async function pollJobStatus(jobId: string) {
+    try {
+      const res = await jobService.getJob(jobId);
+      if (!res.data) return;
+
+      const { data: job } = res;
+      dispatch({
+        type: 'UPDATE_OUTREACH',
+        outreach: {
+          providersContacted: job.providers_contacted,
+          channels: {
+            voice: { attempted: job.outreach_channels.voice.attempted, responded: job.outreach_channels.voice.connected },
+            sms: { attempted: job.outreach_channels.sms.attempted, responded: job.outreach_channels.sms.connected },
+            web: { attempted: job.outreach_channels.web.attempted, responded: job.outreach_channels.web.connected },
+          },
+          active: job.status === 'dispatching' || job.status === 'collecting',
+        },
+      });
+
+      // If job is done collecting, fetch final results
+      if (job.status === 'completed' || job.status === 'expired') {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        jobSocketRef.current?.close();
+        void fetchResults(jobId);
+      }
+    } catch { /* polling failure — next interval will retry */ }
+  }
+
+  async function fetchResults(jobId: string) {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    try {
+      const res = await jobService.getResponses(jobId);
+      if (!res.data) return;
+
+      const providers: MatchedProvider[] = res.data.responses.map((r) => ({
+        id: r.provider.id,
+        responseId: r.id,
+        name: r.provider.name,
+        googleRating: parseFloat(r.provider.google_rating ?? '0'),
+        reviewCount: r.provider.review_count,
+        quotedPrice: r.quoted_price ?? '0',
+        availability: r.availability ?? 'TBD',
+        message: r.message ?? '',
+        channel: (r.channel === 'voice' || r.channel === 'sms' || r.channel === 'web' ? r.channel : 'web') as 'voice' | 'sms' | 'web',
+      }));
+
+      dispatch({ type: 'SET_RESULTS', providers });
+    } catch {
+      dispatch({ type: 'MATCH_FLOW_ERROR', error: 'Failed to load provider responses' });
+    }
+  }
+
+  async function handleBook(provider: MatchedProvider) {
+    if (!state.jobId) return;
+
+    // Mock mode — book instantly
+    if (!authService.isAuthenticated()) {
+      dispatch({ type: 'BOOK_PROVIDER', provider });
+      return;
+    }
+
+    dispatch({ type: 'BOOKING_LOADING', loading: true });
+    try {
+      const res = await jobService.bookProvider(state.jobId, provider.responseId, provider.id);
+      if (!res.data) {
+        dispatch({ type: 'MATCH_FLOW_ERROR', error: res.error ?? 'Booking failed' });
+        dispatch({ type: 'BOOKING_LOADING', loading: false });
+        return;
+      }
+      dispatch({ type: 'BOOK_PROVIDER', provider });
+    } catch (err) {
+      dispatch({ type: 'MATCH_FLOW_ERROR', error: (err as Error).message ?? 'Booking failed' });
+      dispatch({ type: 'BOOKING_LOADING', loading: false });
+    }
   }
 
   // ── Render ──────────────────────────────────────────────────────────────
@@ -343,7 +603,7 @@ export default function DiagnosticChat() {
               {/* Inline diagnosis card after the message that contained it */}
               {msg.hasDiagnosis && state.diagnosis && (
                 <div className="mt-4 animate-fade-in">
-                  <DiagnosisCard {...MOCK_DIAGNOSIS_CARD} onFindPro={openMatchFlow} />
+                  <DiagnosisCard {...diagnosisToCardProps(state.diagnosis, state.jobSummary)} onFindPro={openMatchFlow} />
                   <div className="flex flex-col sm:flex-row gap-3 mt-4">
                     <button className="flex-1 border-2 border-dark/20 text-dark font-semibold py-3 rounded-full hover:border-dark/40 transition-colors">
                       Try fixing it yourself
@@ -390,6 +650,16 @@ export default function DiagnosticChat() {
         {state.matchFlowActive && (
           <div ref={matchFlowRef} className="border-t border-dark/10 bg-white">
             <div className="max-w-2xl mx-auto px-4 py-8">
+              {state.matchFlowError && (
+                <div className="mb-6">
+                  <ErrorState
+                    title="Something went wrong"
+                    message={state.matchFlowError}
+                    onRetry={() => dispatch({ type: 'SET_MATCH_STEP', step: 'preferences' })}
+                  />
+                </div>
+              )}
+
               {state.bookedProvider ? (
                 <BookingConfirmation provider={state.bookedProvider} />
               ) : (
@@ -410,6 +680,7 @@ export default function DiagnosticChat() {
                       onTimingChange={(t) => dispatch({ type: 'SET_TIMING', timing: t })}
                       onBack={() => dispatch({ type: 'SET_MATCH_STEP', step: 'tier' })}
                       onSubmit={startOutreach}
+                      loading={state.matchFlowLoading}
                     />
                   )}
                   {state.matchStep === 'outreach' && (
@@ -418,7 +689,7 @@ export default function DiagnosticChat() {
                   {state.matchStep === 'results' && (
                     <ResultsStep
                       providers={state.respondedProviders}
-                      onBook={(p) => dispatch({ type: 'BOOK_PROVIDER', provider: p })}
+                      onBook={handleBook}
                     />
                   )}
                 </>
@@ -502,6 +773,7 @@ function PreferencesStep({
   onTimingChange,
   onBack,
   onSubmit,
+  loading = false,
 }: {
   zipCode: string;
   timing: JobTiming;
@@ -510,6 +782,7 @@ function PreferencesStep({
   onTimingChange: (t: JobTiming) => void;
   onBack: () => void;
   onSubmit: () => void;
+  loading?: boolean;
 }) {
   const isValid = /^\d{5}$/.test(zipCode);
 
@@ -569,10 +842,11 @@ function PreferencesStep({
         </button>
         <button
           onClick={onSubmit}
-          disabled={!isValid}
-          className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:bg-dark/20 text-white font-semibold py-3 rounded-full transition-colors"
+          disabled={!isValid || loading}
+          className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:bg-dark/20 text-white font-semibold py-3 rounded-full transition-colors flex items-center justify-center gap-2"
         >
-          Find providers
+          {loading && <Spinner size="sm" />}
+          {loading ? 'Creating job...' : 'Find providers'}
         </button>
       </div>
     </div>
@@ -583,7 +857,7 @@ function OutreachStep({
   outreach,
   expiresAt,
 }: {
-  outreach: OutreachState;
+  outreach: State['outreach'];
   expiresAt: string;
 }) {
   return (
@@ -606,8 +880,8 @@ function ResultsStep({
   providers,
   onBook,
 }: {
-  providers: MockProvider[];
-  onBook: (p: MockProvider) => void;
+  providers: MatchedProvider[];
+  onBook: (p: MatchedProvider) => void;
 }) {
   if (providers.length === 0) {
     return (
@@ -657,7 +931,7 @@ function ResultsStep({
   );
 }
 
-function BookingConfirmation({ provider }: { provider: MockProvider }) {
+function BookingConfirmation({ provider }: { provider: MatchedProvider }) {
   return (
     <div className="animate-fade-in text-center py-8">
       <div className="w-16 h-16 bg-green-500/15 rounded-full flex items-center justify-center mx-auto mb-4">

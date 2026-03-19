@@ -1,3 +1,8 @@
+import { validateEnv } from './env';
+
+// Validate env vars before importing modules that use them
+validateEnv();
+
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import app from './app';

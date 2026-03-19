@@ -302,6 +302,58 @@ function parseStructuredTags(
   }
 }
 
+// ── authService ─────────────────────────────────────────────────────────────
+
+export interface AuthHomeowner {
+  id: string;
+  email: string;
+  zip_code: string;
+  membership_tier: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  homeowner: AuthHomeowner;
+}
+
+export const authService = {
+  async register(params: {
+    email: string;
+    password: string;
+    zipCode: string;
+    phone?: string;
+  }): Promise<ApiResponse<AuthResponse>> {
+    const res = await fetchAPI<AuthResponse>('/api/v1/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: params.email,
+        password: params.password,
+        zip_code: params.zipCode,
+        ...(params.phone ? { phone: params.phone } : {}),
+      }),
+    });
+    if (res.data) setToken(res.data.token);
+    return res;
+  },
+
+  async login(email: string, password: string): Promise<ApiResponse<AuthResponse>> {
+    const res = await fetchAPI<AuthResponse>('/api/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.data) setToken(res.data.token);
+    return res;
+  },
+
+  logout(): void {
+    clearToken();
+  },
+
+  isAuthenticated(): boolean {
+    return getToken() !== null;
+  },
+};
+
 // ── jobService ──────────────────────────────────────────────────────────────
 
 export const jobService = {
