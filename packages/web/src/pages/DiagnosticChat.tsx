@@ -332,6 +332,8 @@ export default function DiagnosticChat() {
   const abortRef = useRef<AbortController | null>(null);
   const cleanupOutreachRef = useRef<(() => void) | null>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
+  const [imgPreview, setImgPreview] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useDocumentTitle('Diagnostic Chat');
 
@@ -349,7 +351,7 @@ export default function DiagnosticChat() {
   }, []);
 
   const sendMessage = useCallback(
-    (text: string) => {
+    (text: string, image?: string) => {
       if (!text.trim() || state.streaming) return;
 
       dispatch({ type: 'ADD_USER_MESSAGE', content: text.trim() });
@@ -377,7 +379,7 @@ export default function DiagnosticChat() {
         sessionIdRef.current,
         text.trim(),
         callbacks,
-        undefined,
+        image ? [image] : undefined,
         history,
       );
     },
@@ -387,10 +389,12 @@ export default function DiagnosticChat() {
   const handleSend = useCallback(() => {
     const text = textareaRef.current?.value ?? '';
     if (!text.trim()) return;
-    sendMessage(text);
+    sendMessage(text, imgPreview ?? undefined);
     if (textareaRef.current) textareaRef.current.value = '';
     resetTextareaHeight();
-  }, [sendMessage]);
+    setImgPreview(null);
+    if (fileRef.current) fileRef.current.value = '';
+  }, [sendMessage, imgPreview]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -514,9 +518,6 @@ export default function DiagnosticChat() {
       dispatch({ type: 'BOOKING_LOADING', loading: false });
     }
   }
-
-  const [imgPreview, setImgPreview] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   function onImgUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
