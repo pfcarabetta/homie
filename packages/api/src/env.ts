@@ -18,6 +18,9 @@ const ENV_VARS: EnvVar[] = [
   { name: 'PORT', required: false, description: 'API server port (default: 3001)' },
   { name: 'API_BASE_URL', required: false, description: 'Public base URL for webhooks (default: https://api.homie.app)' },
 
+  // CORS
+  { name: 'CORS_ORIGIN', required: false, description: 'Allowed CORS origins, comma-separated (default: http://localhost:3000)' },
+
   // Anthropic
   { name: 'ANTHROPIC_API_KEY', required: false, description: 'Anthropic API key for diagnostic chat' },
 

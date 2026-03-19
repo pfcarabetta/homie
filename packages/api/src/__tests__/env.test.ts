@@ -65,6 +65,7 @@ describe('validateEnv', () => {
     process.env.CALLBACK_PHONE = '+1800';
     process.env.PORT = '3001';
     process.env.API_BASE_URL = 'https://api.homie.app';
+    process.env.CORS_ORIGIN = 'https://homie.app';
 
     validateEnv();
     // Should only get the short JWT warning (since warn mock already captures)

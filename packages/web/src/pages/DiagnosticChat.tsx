@@ -169,6 +169,7 @@ type Action =
   | { type: 'MATCH_FLOW_ERROR'; error: string }
   | { type: 'MATCH_FLOW_LOADING'; loading: boolean }
   | { type: 'CLOSE_MATCH_FLOW' }
+  | { type: 'RESET_CHAT' }
   | { type: 'DISMISS_BANNER' }
   | { type: 'STREAM_ERROR'; error: string };
 
@@ -229,6 +230,9 @@ function reducer(state: State, action: Action): State {
 
     case 'CLOSE_MATCH_FLOW':
       return { ...state, matchFlowActive: false };
+
+    case 'RESET_CHAT':
+      return { ...initialState };
 
     case 'SET_TIER':
       return { ...state, tier: action.tier };
@@ -541,7 +545,7 @@ export default function DiagnosticChat() {
       {/* Header */}
       <div className="bg-white border-b border-dark/10 px-4 shrink-0">
         <div className="max-w-2xl mx-auto h-16 flex items-center gap-3">
-          <button onClick={() => dispatch({ type: 'CLOSE_MATCH_FLOW' })} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+          <button onClick={() => { dispatch({ type: 'RESET_CHAT' }); sessionIdRef.current = crypto.randomUUID(); abortRef.current?.abort(); cleanupOutreachRef.current?.(); }} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity">
             <HomieLogo size={40} />
             <div className="text-left">
               <div className="text-lg font-display font-black text-dark tracking-tight">Homie</div>

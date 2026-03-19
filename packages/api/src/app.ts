@@ -11,7 +11,23 @@ import { requireAuth } from './middleware/auth';
 
 const app = express();
 
-app.use(cors());
+const ALLOWED_ORIGINS = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : ['http://localhost:3000'];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, server-to-server)
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json());
 // Twilio sends webhooks as application/x-www-form-urlencoded
 app.use(express.urlencoded({ extended: false }));
