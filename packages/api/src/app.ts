@@ -28,7 +28,7 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 // Twilio sends webhooks as application/x-www-form-urlencoded
 app.use(express.urlencoded({ extended: false }));
 
