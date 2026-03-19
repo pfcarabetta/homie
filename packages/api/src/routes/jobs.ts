@@ -1,0 +1,426 @@
+import { Router, Request, Response } from 'express';
+import { eq, and, count, desc } from 'drizzle-orm';
+import { db } from '../db';
+import { jobs, outreachAttempts, providerResponses, providers, bookings } from '../db/schema';
+import { dispatchJob, sendBookingNotifications } from '../services/orchestration';
+import { recordHomeownerRating } from '../services/providers/scores';
+import {
+  CreateJobBody,
+  CreateJobResponse,
+  JobStatusResponse,
+  JobResponsesResponse,
+  BookJobBody,
+  BookJobResponse,
+  JobTier,
+  JobTiming,
+  ChannelStats,
+} from '../types/jobs';
+import { ApiResponse } from '../types/api';
+
+const router = Router();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VALID_TIERS: JobTier[] = ['standard', 'priority', 'emergency'];
+const VALID_TIMINGS: JobTiming[] = ['asap', 'this_week', 'this_month', 'flexible'];
+const RESPONDED_STATUSES = new Set(['responded', 'accepted', 'declined']);
+
+function estimatedResultsAt(tier: JobTier): Date {
+  const minutes = tier === 'emergency' ? 15 : tier === 'priority' ? 30 : 120;
+  return new Date(Date.now() + minutes * 60 * 1000);
+}
+
+// Returns the status payload used by both GET /jobs/:id and the WebSocket feed.
+export async function buildJobStatus(id: string): Promise<JobStatusResponse | null> {
+  const [job] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+  if (!job) return null;
+
+  const attempts = await db
+    .select()
+    .from(outreachAttempts)
+    .where(eq(outreachAttempts.jobId, id));
+
+  const [{ value: accepted }] = await db
+    .select({ value: count() })
+    .from(providerResponses)
+    .where(eq(providerResponses.jobId, id));
+
+  const channels: Record<'voice' | 'sms' | 'web', ChannelStats> = {
+    voice: { attempted: 0, connected: 0 },
+    sms: { attempted: 0, connected: 0 },
+    web: { attempted: 0, connected: 0 },
+  };
+
+  let responded = 0;
+  for (const a of attempts) {
+    const ch = a.channel as 'voice' | 'sms' | 'web';
+    if (ch in channels) {
+      channels[ch].attempted++;
+      if (RESPONDED_STATUSES.has(a.status)) {
+        channels[ch].connected++;
+        responded++;
+      }
+    }
+  }
+
+  return {
+    id: job.id,
+    status: job.status,
+    tier: job.tier,
+    providers_contacted: attempts.length,
+    providers_responded: responded,
+    providers_accepted: accepted,
+    outreach_channels: channels,
+    expires_at: job.expiresAt?.toISOString() ?? null,
+    created_at: job.createdAt.toISOString(),
+  };
+}
+
+// POST /api/v1/jobs
+router.post('/', async (req: Request, res: Response) => {
+  const body = req.body as Partial<CreateJobBody>;
+
+  if (!body.diagnosis || typeof body.diagnosis !== 'object') {
+    const out: ApiResponse<null> = { data: null, error: 'diagnosis is required', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+  if (!body.timing || !VALID_TIMINGS.includes(body.timing)) {
+    const out: ApiResponse<null> = {
+      data: null,
+      error: `timing must be one of: ${VALID_TIMINGS.join(', ')}`,
+      meta: {},
+    };
+    res.status(400).json(out);
+    return;
+  }
+  if (!body.budget) {
+    const out: ApiResponse<null> = { data: null, error: 'budget is required', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+  if (!body.tier || !VALID_TIERS.includes(body.tier)) {
+    const out: ApiResponse<null> = {
+      data: null,
+      error: `tier must be one of: ${VALID_TIERS.join(', ')}`,
+      meta: {},
+    };
+    res.status(400).json(out);
+    return;
+  }
+  if (!body.zip_code) {
+    const out: ApiResponse<null> = { data: null, error: 'zip_code is required', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+
+  try {
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const [job] = await db
+      .insert(jobs)
+      .values({
+        homeownerId: req.homeownerId,
+        diagnosis: body.diagnosis,
+        photoUrls: body.photo_urls,
+        preferredTiming: body.timing,
+        budget: body.budget,
+        tier: body.tier,
+        status: 'dispatching',
+        zipCode: body.zip_code,
+        expiresAt,
+      })
+      .returning();
+
+    // Fire-and-forget — orchestration engine picks it up asynchronously
+    void dispatchJob(job.id);
+
+    const out: ApiResponse<CreateJobResponse> = {
+      data: {
+        id: job.id,
+        status: 'dispatching',
+        tier: job.tier,
+        expires_at: expiresAt.toISOString(),
+        providers_contacted: 0,
+        estimated_results_at: estimatedResultsAt(body.tier).toISOString(),
+      },
+      error: null,
+      meta: {},
+    };
+    res.status(201).json(out);
+  } catch (err) {
+    console.error('[POST /jobs]', err);
+    const out: ApiResponse<null> = { data: null, error: 'Failed to create job', meta: {} };
+    res.status(500).json(out);
+  }
+});
+
+// GET /api/v1/jobs/:id
+router.get('/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!UUID_RE.test(id)) {
+    const out: ApiResponse<null> = { data: null, error: 'Invalid job ID', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+
+  try {
+    // Verify ownership before returning full status
+    const [ownership] = await db
+      .select({ homeownerId: jobs.homeownerId })
+      .from(jobs)
+      .where(eq(jobs.id, id))
+      .limit(1);
+
+    if (!ownership) {
+      const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+    if (ownership.homeownerId !== req.homeownerId) {
+      const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+
+    const status = await buildJobStatus(id);
+    if (!status) {
+      const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+    const out: ApiResponse<JobStatusResponse> = { data: status, error: null, meta: {} };
+    res.json(out);
+  } catch (err) {
+    console.error('[GET /jobs/:id]', err);
+    const out: ApiResponse<null> = { data: null, error: 'Failed to fetch job', meta: {} };
+    res.status(500).json(out);
+  }
+});
+
+// GET /api/v1/jobs/:id/responses
+router.get('/:id/responses', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!UUID_RE.test(id)) {
+    const out: ApiResponse<null> = { data: null, error: 'Invalid job ID', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+
+  try {
+    const [job] = await db
+      .select({ status: jobs.status, homeownerId: jobs.homeownerId })
+      .from(jobs)
+      .where(eq(jobs.id, id))
+      .limit(1);
+    if (!job) {
+      const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+    if (job.homeownerId !== req.homeownerId) {
+      const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+
+    const rows = await db
+      .select({ response: providerResponses, provider: providers })
+      .from(providerResponses)
+      .innerJoin(providers, eq(providerResponses.providerId, providers.id))
+      .where(eq(providerResponses.jobId, id))
+      .orderBy(desc(providerResponses.ratingAtTime), providerResponses.quotedPrice);
+
+    const [{ value: pendingCount }] = await db
+      .select({ value: count() })
+      .from(outreachAttempts)
+      .where(and(eq(outreachAttempts.jobId, id), eq(outreachAttempts.status, 'pending')));
+
+    const terminal = new Set(['completed', 'expired', 'refunded']);
+    const moreExpected = pendingCount > 0 && !terminal.has(job.status);
+
+    const out: ApiResponse<JobResponsesResponse> = {
+      data: {
+        responses: rows.map(({ response: r, provider: p }) => ({
+          id: r.id,
+          provider: {
+            id: p.id,
+            name: p.name,
+            phone: p.phone,
+            google_rating: p.googleRating,
+            review_count: p.reviewCount,
+            categories: p.categories,
+          },
+          channel: r.channel,
+          quoted_price: r.quotedPrice,
+          availability: r.availability,
+          message: r.message,
+          responded_at: r.createdAt.toISOString(),
+        })),
+        pending_count: pendingCount,
+        more_expected: moreExpected,
+      },
+      error: null,
+      meta: {},
+    };
+    res.json(out);
+  } catch (err) {
+    console.error('[GET /jobs/:id/responses]', err);
+    const out: ApiResponse<null> = { data: null, error: 'Failed to fetch responses', meta: {} };
+    res.status(500).json(out);
+  }
+});
+
+// POST /api/v1/jobs/:id/book
+router.post('/:id/book', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!UUID_RE.test(id)) {
+    const out: ApiResponse<null> = { data: null, error: 'Invalid job ID', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+
+  const body = req.body as Partial<BookJobBody>;
+  if (!body.response_id || !UUID_RE.test(body.response_id)) {
+    const out: ApiResponse<null> = { data: null, error: 'response_id must be a valid UUID', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+  if (!body.provider_id || !UUID_RE.test(body.provider_id)) {
+    const out: ApiResponse<null> = { data: null, error: 'provider_id must be a valid UUID', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+
+  try {
+    const [job] = await db
+      .select({ status: jobs.status, homeownerId: jobs.homeownerId })
+      .from(jobs)
+      .where(eq(jobs.id, id))
+      .limit(1);
+    if (!job) {
+      const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+    if (job.homeownerId !== req.homeownerId) {
+      const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+    if (job.status === 'completed') {
+      const out: ApiResponse<null> = { data: null, error: 'Job is already completed', meta: {} };
+      res.status(409).json(out);
+      return;
+    }
+    if (job.status === 'expired' || job.status === 'refunded') {
+      const out: ApiResponse<null> = { data: null, error: `Job is ${job.status}`, meta: {} };
+      res.status(409).json(out);
+      return;
+    }
+
+    const rows = await db
+      .select({ response: providerResponses, provider: providers })
+      .from(providerResponses)
+      .innerJoin(providers, eq(providerResponses.providerId, providers.id))
+      .where(
+        and(
+          eq(providerResponses.id, body.response_id),
+          eq(providerResponses.jobId, id),
+          eq(providerResponses.providerId, body.provider_id),
+        ),
+      )
+      .limit(1);
+
+    if (rows.length === 0) {
+      const out: ApiResponse<null> = { data: null, error: 'Response not found for this job and provider', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+
+    const { response: r, provider: p } = rows[0];
+
+    await db.update(jobs).set({ status: 'completed' }).where(eq(jobs.id, id));
+
+    const [booking] = await db
+      .insert(bookings)
+      .values({ jobId: id, homeownerId: req.homeownerId, providerId: p.id, responseId: r.id })
+      .returning();
+
+    void sendBookingNotifications(id, p.id, booking.id);
+
+    const out: ApiResponse<BookJobResponse> = {
+      data: {
+        booking_id: booking.id,
+        status: 'confirmed',
+        provider: { name: p.name, phone: p.phone },
+        scheduled: r.availability,
+        quoted_price: r.quotedPrice,
+      },
+      error: null,
+      meta: {},
+    };
+    res.json(out);
+  } catch (err) {
+    console.error('[POST /jobs/:id/book]', err);
+    const out: ApiResponse<null> = { data: null, error: 'Failed to book job', meta: {} };
+    res.status(500).json(out);
+  }
+});
+
+// POST /api/v1/jobs/:id/rate
+router.post('/:id/rate', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!UUID_RE.test(id)) {
+    const out: ApiResponse<null> = { data: null, error: 'Invalid job ID', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+
+  const body = req.body as { provider_id?: unknown; rating?: unknown };
+
+  if (!body.provider_id || !UUID_RE.test(body.provider_id as string)) {
+    const out: ApiResponse<null> = { data: null, error: 'provider_id must be a valid UUID', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+
+  const rating = Number(body.rating);
+  if (!body.rating || !Number.isFinite(rating) || rating < 1 || rating > 5) {
+    const out: ApiResponse<null> = { data: null, error: 'rating must be a number between 1 and 5', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+
+  try {
+    const [job] = await db
+      .select({ status: jobs.status, homeownerId: jobs.homeownerId })
+      .from(jobs)
+      .where(eq(jobs.id, id))
+      .limit(1);
+    if (!job) {
+      const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+    if (job.homeownerId !== req.homeownerId) {
+      const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
+      res.status(404).json(out);
+      return;
+    }
+    if (job.status !== 'completed') {
+      const out: ApiResponse<null> = { data: null, error: 'Job must be completed before rating', meta: {} };
+      res.status(409).json(out);
+      return;
+    }
+
+    await recordHomeownerRating(body.provider_id as string, rating);
+
+    const out: ApiResponse<{ recorded: true }> = { data: { recorded: true }, error: null, meta: {} };
+    res.status(201).json(out);
+  } catch (err) {
+    console.error('[POST /jobs/:id/rate]', err);
+    const out: ApiResponse<null> = { data: null, error: 'Failed to record rating', meta: {} };
+    res.status(500).json(out);
+  }
+});
+
+export default router;

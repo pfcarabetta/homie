@@ -1,0 +1,183 @@
+import Anthropic from '@anthropic-ai/sdk';
+import { ScriptBundle, ScriptTemplate, GenerateScriptsParams } from '../../types/scripts';
+
+// ── Client ───────────────────────────────────────────────────────────────────
+
+const client = new Anthropic();
+
+// ── Template cache ────────────────────────────────────────────────────────────
+
+interface CacheEntry {
+  template: ScriptTemplate;
+  expiresAt: number;
+}
+
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const templateCache = new Map<string, CacheEntry>();
+
+function getCacheKey(category: string, severity: string): string {
+  return `${category}:${severity}`;
+}
+
+function getCachedTemplate(key: string): ScriptTemplate | null {
+  const entry = templateCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    templateCache.delete(key);
+    return null;
+  }
+  return entry.template;
+}
+
+function setCachedTemplate(key: string, template: ScriptTemplate): void {
+  templateCache.set(key, { template, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+// ── Tool definition ───────────────────────────────────────────────────────────
+
+const GENERATE_SCRIPTS_TOOL: Anthropic.Tool = {
+  name: 'generate_scripts',
+  description:
+    'Generate outreach script templates for voice call, SMS, and web message channels. ' +
+    'Use {{placeholder}} syntax for job-specific values that will be interpolated at send time.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      voice: {
+        type: 'string',
+        description:
+          'Voice call script (30–60 seconds when read aloud). ' +
+          'Must include a greeting, brief job description, ask for the provider to accept/decline, and a callback number placeholder. ' +
+          'Use {{provider_name}}, {{category}}, {{summary}}, {{budget}}, {{zip_code}}, {{callback_number}}.',
+      },
+      sms: {
+        type: 'string',
+        description:
+          'SMS message (≤160 characters). Must be terse: job category, zip code, budget range, and a reply link placeholder. ' +
+          'Use {{category}}, {{zip_code}}, {{budget}}, {{accept_link}}.',
+      },
+      web: {
+        type: 'string',
+        description:
+          'Web/email message body (2–4 sentences). Professional tone. Summarize the job and invite the provider to view full details. ' +
+          'Use {{provider_name}}, {{category}}, {{summary}}, {{budget}}, {{zip_code}}, {{job_link}}.',
+      },
+    },
+    required: ['voice', 'sms', 'web'],
+  },
+};
+
+// ── Template generation via Claude ────────────────────────────────────────────
+
+async function generateTemplateFromClaude(
+  category: string,
+  severity: string,
+  summary: string,
+  recommendedActions: string[],
+): Promise<ScriptTemplate> {
+  const systemPrompt = `You are an expert at writing outreach scripts for home service providers.
+You write concise, professional scripts that clearly convey the job opportunity to service providers.
+Severity level "${severity}" indicates ${
+    severity === 'emergency'
+      ? 'an urgent situation requiring immediate attention'
+      : severity === 'high'
+        ? 'a significant issue that needs prompt resolution'
+        : severity === 'medium'
+          ? 'a moderate issue that should be addressed soon'
+          : 'a minor issue that can be scheduled at convenience'
+  }.`;
+
+  const userPrompt = `Generate outreach script templates for a ${severity}-severity ${category} job.
+
+Job summary: ${summary}
+Recommended actions: ${recommendedActions.join('; ')}
+
+Create templates for all three channels using the generate_scripts tool.
+Use {{placeholder}} syntax for dynamic values — do NOT hard-code specific names, dollar amounts, or zip codes.`;
+
+  const response = await client.messages.create({
+    model: 'claude-opus-4-6',
+    max_tokens: 1024,
+    thinking: { type: 'adaptive' },
+    system: systemPrompt,
+    tools: [GENERATE_SCRIPTS_TOOL],
+    tool_choice: { type: 'tool', name: 'generate_scripts' },
+    messages: [{ role: 'user', content: userPrompt }],
+  });
+
+  const toolUse = response.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'generate_scripts',
+  );
+
+  if (!toolUse) {
+    throw new Error('Claude did not call the generate_scripts tool');
+  }
+
+  const input = toolUse.input as { voice: string; sms: string; web: string };
+
+  if (!input.voice || !input.sms || !input.web) {
+    throw new Error('generate_scripts tool response is missing required fields');
+  }
+
+  return { voice: input.voice, sms: input.sms, web: input.web };
+}
+
+// ── Placeholder interpolation ─────────────────────────────────────────────────
+
+function interpolate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? `{{${key}}}`);
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+export async function generateScripts(params: GenerateScriptsParams): Promise<ScriptBundle> {
+  const {
+    jobId,
+    providerId,
+    providerName,
+    category,
+    severity,
+    summary,
+    recommendedActions,
+    budget,
+    zipCode,
+    timing,
+  } = params;
+
+  // Fetch or generate the template for this category+severity combination
+  const cacheKey = getCacheKey(category, severity);
+  let template = getCachedTemplate(cacheKey);
+
+  if (!template) {
+    template = await generateTemplateFromClaude(category, severity, summary, recommendedActions);
+    setCachedTemplate(cacheKey, template);
+  }
+
+  // Interpolate job-specific values into the cached template
+  const vars: Record<string, string> = {
+    provider_name: providerName,
+    category,
+    severity,
+    summary,
+    budget,
+    zip_code: zipCode,
+    timing,
+    callback_number: process.env.CALLBACK_PHONE ?? '+18005550100',
+    accept_link: `${process.env.API_BASE_URL ?? 'https://api.homie.app'}/providers/${providerId}/jobs/${jobId}/accept`,
+    job_link: `${process.env.API_BASE_URL ?? 'https://api.homie.app'}/providers/${providerId}/jobs/${jobId}`,
+  };
+
+  return {
+    job_id: jobId,
+    provider_id: providerId,
+    voice: interpolate(template.voice, vars),
+    sms: interpolate(template.sms, vars),
+    web: interpolate(template.web, vars),
+    generated_at: new Date().toISOString(),
+  };
+}
+
+/** Exposed for testing — clears the in-memory template cache. */
+export function clearTemplateCache(): void {
+  templateCache.clear();
+}
