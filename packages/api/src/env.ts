@@ -42,6 +42,9 @@ const ENV_VARS: EnvVar[] = [
   // Webhooks
   { name: 'WEBHOOK_SECRET', required: false, description: 'HMAC secret for verifying inbound webhooks' },
   { name: 'CALLBACK_PHONE', required: false, description: 'Callback phone number included in outreach scripts' },
+
+  // Admin
+  { name: 'ADMIN_SECRET', required: false, description: 'Shared secret for admin dashboard access' },
 ];
 
 export function validateEnv(): void {

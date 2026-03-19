@@ -5,6 +5,13 @@ import ProviderResults from '@/pages/ProviderResults';
 import ProviderPortal from '@/pages/ProviderPortal';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
+import AdminLogin from '@/pages/admin/AdminLogin';
+import AdminLayout from '@/pages/admin/AdminLayout';
+import AdminDashboard from '@/pages/admin/AdminDashboard';
+import AdminHomeowners from '@/pages/admin/AdminHomeowners';
+import AdminJobs from '@/pages/admin/AdminJobs';
+import AdminProviders from '@/pages/admin/AdminProviders';
+import AdminBookings from '@/pages/admin/AdminBookings';
 
 export default function App() {
   return (
@@ -16,6 +23,14 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
           <Route path="/portal" element={<ProviderPortal />} />
+          <Route path="/admin" element={<AdminLogin />} />
+          <Route element={<AdminLayout />}>
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/homeowners" element={<AdminHomeowners />} />
+            <Route path="/admin/jobs" element={<AdminJobs />} />
+            <Route path="/admin/providers" element={<AdminProviders />} />
+            <Route path="/admin/bookings" element={<AdminBookings />} />
+          </Route>
         </Routes>
       </BrowserRouter>
     </AuthProvider>

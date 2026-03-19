@@ -7,7 +7,9 @@ import jobsRouter from './routes/jobs';
 import bookingsRouter from './routes/bookings';
 import providersRouter from './routes/providers';
 import webhooksRouter from './routes/webhooks';
+import adminRouter from './routes/admin';
 import { requireAuth } from './middleware/auth';
+import { requireAdmin } from './middleware/admin';
 
 const app = express();
 
@@ -40,5 +42,6 @@ app.use('/api/v1/bookings', requireAuth, bookingsRouter);
 // /providers/discover is public; /providers/:id/suppress requires auth
 app.use('/api/v1/providers', providersRouter);
 app.use('/api/v1/webhooks', webhooksRouter);
+app.use('/api/v1/admin', requireAdmin, adminRouter);
 
 export default app;
