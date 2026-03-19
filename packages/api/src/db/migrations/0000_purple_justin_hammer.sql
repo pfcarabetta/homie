@@ -1,6 +1,7 @@
 CREATE TABLE "homeowners" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"email" text NOT NULL,
+	"password_hash" text NOT NULL,
 	"phone" text,
 	"zip_code" text NOT NULL,
 	"membership_tier" text DEFAULT 'free' NOT NULL,
@@ -33,7 +34,8 @@ CREATE TABLE "providers" (
 	"google_rating" numeric(3, 2),
 	"review_count" integer DEFAULT 0 NOT NULL,
 	"categories" text[],
-	"location" geography(Point, 4326),
+	"lat" numeric(10, 7),
+	"lng" numeric(10, 7),
 	"discovered_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "providers_google_place_id_unique" UNIQUE("google_place_id")
 );
@@ -84,6 +86,16 @@ CREATE TABLE "provider_scores" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "bookings" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"job_id" uuid NOT NULL,
+	"homeowner_id" uuid NOT NULL,
+	"provider_id" uuid NOT NULL,
+	"response_id" uuid,
+	"status" text DEFAULT 'confirmed' NOT NULL,
+	"confirmed_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 ALTER TABLE "jobs" ADD CONSTRAINT "jobs_homeowner_id_homeowners_id_fk" FOREIGN KEY ("homeowner_id") REFERENCES "public"."homeowners"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "outreach_attempts" ADD CONSTRAINT "outreach_attempts_job_id_jobs_id_fk" FOREIGN KEY ("job_id") REFERENCES "public"."jobs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "outreach_attempts" ADD CONSTRAINT "outreach_attempts_provider_id_providers_id_fk" FOREIGN KEY ("provider_id") REFERENCES "public"."providers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -92,8 +104,10 @@ ALTER TABLE "provider_responses" ADD CONSTRAINT "provider_responses_provider_id_
 ALTER TABLE "provider_responses" ADD CONSTRAINT "provider_responses_outreach_attempt_id_outreach_attempts_id_fk" FOREIGN KEY ("outreach_attempt_id") REFERENCES "public"."outreach_attempts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "suppression_list" ADD CONSTRAINT "suppression_list_provider_id_providers_id_fk" FOREIGN KEY ("provider_id") REFERENCES "public"."providers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "provider_scores" ADD CONSTRAINT "provider_scores_provider_id_providers_id_fk" FOREIGN KEY ("provider_id") REFERENCES "public"."providers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_job_id_jobs_id_fk" FOREIGN KEY ("job_id") REFERENCES "public"."jobs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_provider_id_providers_id_fk" FOREIGN KEY ("provider_id") REFERENCES "public"."providers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_response_id_provider_responses_id_fk" FOREIGN KEY ("response_id") REFERENCES "public"."provider_responses"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "jobs_homeowner_id_idx" ON "jobs" USING btree ("homeowner_id");--> statement-breakpoint
 CREATE INDEX "jobs_status_idx" ON "jobs" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "providers_location_gist_idx" ON "providers" USING gist ("location");--> statement-breakpoint
 CREATE INDEX "providers_categories_gin_idx" ON "providers" USING gin ("categories");--> statement-breakpoint
 CREATE UNIQUE INDEX "provider_scores_provider_id_idx" ON "provider_scores" USING btree ("provider_id");

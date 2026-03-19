@@ -67,7 +67,8 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
       googleRating: p.rating.toFixed(1),
       reviewCount: p.reviewCount,
       categories: [category],
-      location: sql`ST_SetSRID(ST_MakePoint(${p.lng}, ${p.lat}), 4326)::geography`,
+      lat: p.lat.toFixed(7),
+      lng: p.lng.toFixed(7),
     }));
 
     const inserted = await db
@@ -113,7 +114,8 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
       googleRating: b.rating.toFixed(1),
       reviewCount: b.reviewCount,
       categories: [category],
-      location: sql`ST_SetSRID(ST_MakePoint(${b.lng}, ${b.lat}), 4326)::geography`,
+      lat: b.lat.toFixed(7),
+      lng: b.lng.toFixed(7),
     }));
 
     // Plain inserts — no googlePlaceId, so no conflict possible

@@ -14,7 +14,8 @@ const BASE_PROVIDER: Provider = {
   googleRating: '4.5',
   reviewCount: 100,
   categories: ['plumbing'],
-  location: null,
+  lat: null,
+  lng: null,
   discoveredAt: new Date(),
 };
 

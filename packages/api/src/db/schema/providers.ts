@@ -1,10 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, numeric, customType, index } from 'drizzle-orm/pg-core';
-
-const geography = customType<{ data: string; driverData: string }>({
-  dataType() {
-    return 'geography(Point, 4326)';
-  },
-});
+import { pgTable, uuid, text, timestamp, integer, numeric, index } from 'drizzle-orm/pg-core';
 
 export const providers = pgTable(
   'providers',
@@ -18,11 +12,11 @@ export const providers = pgTable(
     googleRating: numeric('google_rating', { precision: 3, scale: 2 }),
     reviewCount: integer('review_count').notNull().default(0),
     categories: text('categories').array(),
-    location: geography('location'),
+    lat: numeric('lat', { precision: 10, scale: 7 }),
+    lng: numeric('lng', { precision: 10, scale: 7 }),
     discoveredAt: timestamp('discovered_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index('providers_location_gist_idx').using('gist', table.location),
     index('providers_categories_gin_idx').using('gin', table.categories),
   ],
 );
