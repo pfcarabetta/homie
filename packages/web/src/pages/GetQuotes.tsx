@@ -520,15 +520,32 @@ export default function GetQuotes() {
   };
 
   const handleAIResponse = (answer: string) => {
-    setData(d => ({ ...d, extra: answer }));
+    setData(d => ({ ...d, aiFollowUp: d.aiFollowUp, extra: answer }));
     addUser(answer);
+    setTimeout(() => {
+      addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
+      setPhase('extra');
+      scrollDown();
+    }, 500);
+  };
 
-    // Silently generate diagnosis summary (not shown in chat)
+  const handleExtraDetails = (text: string) => {
+    setData(d => ({ ...d, extra: (d.extra ? d.extra + '. ' : '') + text }));
+    addUser(text);
+    generateDiagnosis();
+  };
+
+  const handleSkipExtra = () => {
+    addUser("That's everything");
+    generateDiagnosis();
+  };
+
+  const generateDiagnosis = () => {
     const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
     const history: { role: 'user' | 'assistant'; content: string }[] = [
       { role: 'user', content: `I need ${cat?.label} help: ${data.a1}` },
       { role: 'assistant', content: data.aiFollowUp || '' },
-      { role: 'user', content: answer },
+      { role: 'user', content: data.extra || '' },
     ];
 
     setStreaming(true);
@@ -552,7 +569,7 @@ export default function GetQuotes() {
           },
           onError: () => {
             setStreaming(false);
-            setData(d => ({ ...d, aiDiagnosis: `${cat?.label}: ${data.a1}. ${answer}` }));
+            setData(d => ({ ...d, aiDiagnosis: `${cat?.label}: ${data.a1}. ${data.extra || ''}` }));
             setTimeout(() => {
               addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
               setPhase('zip');
@@ -574,14 +591,9 @@ export default function GetQuotes() {
 
   const handleSkipAI = () => {
     addUser("No, that covers it");
-
-    // Generate diagnosis from what we have
-    const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
-    setData(d => ({ ...d, aiDiagnosis: `${cat?.label}: ${data.a1}.` }));
-
     setTimeout(() => {
-      addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
-      setPhase('zip');
+      addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
+      setPhase('extra');
       scrollDown();
     }, 500);
   };
@@ -707,12 +719,23 @@ export default function GetQuotes() {
         {phase === 'ai_response' && !streaming && (
           <>
             <TextInput placeholder="Type your answer..." onSubmit={handleAIResponse} />
-            <PhotoUpload onUpload={handlePhoto} />
             <div style={{ marginLeft: 42, marginBottom: 16 }}>
               <button onClick={handleSkipAI} style={{
                 padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
                 color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
               }}>No, that covers it →</button>
+            </div>
+          </>
+        )}
+        {phase === 'extra' && !streaming && (
+          <>
+            <TextInput placeholder="Any other details..." onSubmit={handleExtraDetails} />
+            <PhotoUpload onUpload={handlePhoto} />
+            <div style={{ marginLeft: 42, marginBottom: 16 }}>
+              <button onClick={handleSkipExtra} style={{
+                padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
+                color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              }}>Skip — that's everything →</button>
             </div>
           </>
         )}
