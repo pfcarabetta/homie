@@ -411,7 +411,7 @@ export default function HomePage() {
           </h1>
 
           <p className="hp-sub">
-            Describe what you need help with. Our AI agent simultaneously calls, texts, and contacts local pros — and brings you back quotes and availability in minutes.
+            From emergency repairs to planned upgrades — just describe what your home needs. Our AI agent simultaneously calls, texts, and contacts local pros on your behalf, and brings you back quotes and availability in minutes.
           </p>
 
           <div className="hp-cta-buttons" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
