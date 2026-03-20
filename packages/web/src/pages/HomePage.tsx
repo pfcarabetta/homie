@@ -424,7 +424,7 @@ export default function HomePage() {
           </h1>
 
           <p className="hp-sub">
-            Describe your home issue. Our AI agent simultaneously calls, texts, and contacts local pros — and brings you back quotes and availability in minutes.
+            Describe what you need help with. Our AI agent simultaneously calls, texts, and contacts local pros — and brings you back quotes and availability in minutes.
           </p>
 
           <div className="hp-cta-buttons" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
