@@ -655,6 +655,8 @@ export default function GetQuotes() {
         @media (max-width: 480px) {
           .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; margin-left: 0 !important; }
           .gq-replies { margin-left: 0 !important; }
+          .gq-chat-area { padding-top: 12px !important; }
+          .gq-chat-area > div:first-child { scroll-margin-top: 80px; }
         }
       `}</style>
 
@@ -701,7 +703,7 @@ export default function GetQuotes() {
       })()}
 
       {/* Chat area */}
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px 16px 120px' }}>
+      <div className="gq-chat-area" style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
         {messages.map((m, i) => (
           m.role === 'assistant'
             ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1} />
