@@ -470,7 +470,7 @@ export default function HomePage() {
           </p>
         </div>
         <div className="hp-steps-grid">
-          <Step number={1} title="Describe the issue" description="Tell Homie what's wrong — in plain English. Upload photos if you have them. Our AI figures out the rest." accent={ORANGE} />
+          <Step number={1} title="Describe what you need" description="Tell Homie what you need help with — in plain English. Upload photos if you have them. Our AI figures out the rest." accent={ORANGE} />
           <Step number={2} title="AI contacts pros" description="Homie's agent simultaneously calls, texts, and fills out contact forms for local providers — all in real time." accent={DARK} />
           <Step number={3} title="Get quotes back" description="Providers respond with pricing and availability. You see everything in one place, ranked by fit." accent={GREEN} />
           <Step number={4} title="Book and relax" description="Pick the pro that works for you. They arrive already briefed on the issue. No explaining twice." accent={ORANGE} />
