@@ -587,9 +587,9 @@ export default function HomePage() {
               <span style={{ fontSize: 13, color: '#9B9490' }}>No account required</span>
             </div>
           </div>
-          <div className="hp-diy-preview" style={{ position: 'relative' }}>
+          <div className="hp-diy-preview" style={{ position: 'relative', minHeight: 500, overflow: 'hidden' }}>
             <BackgroundMosaic />
-            <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 500 }}>
               <DiagnosticPreview />
             </div>
           </div>
