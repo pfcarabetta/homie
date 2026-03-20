@@ -305,7 +305,7 @@ export default function HomePage() {
         <span onClick={() => navigate('/')} style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: ORANGE, cursor: 'pointer' }}>homie</span>
         <div className="hp-nav-links">
           <a href="#how" style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500 }}>How it works</a>
-          <a href="#diy" style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500 }}>Free diagnostic</a>
+          <a onClick={() => navigate('/chat')} style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500, cursor: 'pointer' }}>Free diagnostic</a>
           <a href="#pricing" style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500 }}>Pricing</a>
           <button onClick={() => navigate('/quote')} style={{
             background: ORANGE, color: 'white', border: 'none', borderRadius: 100,
@@ -317,7 +317,7 @@ export default function HomePage() {
       {menuOpen && (
         <div className="hp-mobile-menu">
           <a href="#how" onClick={() => setMenuOpen(false)}>How it works</a>
-          <a href="#diy" onClick={() => setMenuOpen(false)}>Free diagnostic</a>
+          <a onClick={() => { setMenuOpen(false); navigate('/chat'); }} style={{ cursor: 'pointer' }}>Free diagnostic</a>
           <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
           <button onClick={() => { setMenuOpen(false); navigate('/quote'); }}>Get quotes now</button>
         </div>
@@ -349,11 +349,11 @@ export default function HomePage() {
               padding: '16px 32px', fontSize: 17, fontWeight: 600, cursor: 'pointer',
               boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
             }}>Get quotes in minutes</button>
-            <a href="#diy" style={{
+            <button onClick={() => navigate('/chat')} style={{
               background: 'transparent', color: DARK, border: '2px solid rgba(0,0,0,0.12)', borderRadius: 100,
               padding: '14px 28px', fontSize: 17, fontWeight: 500, cursor: 'pointer',
-              textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
-            }}>Free DIY diagnostic &#8594;</a>
+              fontFamily: "'DM Sans', sans-serif",
+            }}>Free DIY diagnostic &#8594;</button>
           </div>
         </div>
 
