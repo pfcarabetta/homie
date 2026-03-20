@@ -646,8 +646,9 @@ export default function GetQuotes() {
   const serviceOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'service').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="gq-root" style={{ display: 'flex', flexDirection: 'column', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
+        .gq-root { height: 100vh; height: 100dvh; }
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
@@ -692,7 +693,7 @@ export default function GetQuotes() {
           <div style={{
             background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
             padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center',
+            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center', flexShrink: 0,
           }}>
             <span style={{ fontSize: 16, flexShrink: 0 }}>{'\uD83C\uDF19'}</span>
             <span>Some businesses may not be reachable outside business hours (8 AM – 6 PM). Quotes may take longer as a result.</span>
