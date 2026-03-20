@@ -333,7 +333,10 @@ function OutreachView() {
                 <span style={{ fontWeight: 700, fontSize: 16, color: D }}>{p.name}</span>
                 <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'\u2605'} {p.rating} ({p.reviews}) · {p.distance}</span>
               </div>
-              <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{p.quote}</span>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{p.quote}</span>
+                <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 500 }}>estimate</div>
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 14, color: D }}>{'\uD83D\uDCC5'} {p.availability}</span>
