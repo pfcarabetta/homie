@@ -540,3 +540,42 @@ export function connectJobSocket(
     },
   };
 }
+
+// ── accountService ─────────────────────────────────────────────────────────
+
+export interface AccountProfile {
+  id: string;
+  email: string;
+  phone: string | null;
+  zip_code: string;
+  membership_tier: string;
+  created_at: string;
+}
+
+export interface AccountJob {
+  id: string;
+  status: string;
+  tier: string;
+  zip_code: string;
+  diagnosis: DiagnosisPayload | null;
+  created_at: string;
+  expires_at: string | null;
+}
+
+export interface AccountBooking {
+  id: string;
+  job_id: string;
+  provider: { id: string; name: string; phone: string | null };
+  status: string;
+  confirmed_at: string;
+  quoted_price: string | null;
+  scheduled: string | null;
+}
+
+export const accountService = {
+  getProfile: () => fetchAPI<AccountProfile>('/api/v1/account'),
+  updateProfile: (data: Partial<{ email: string; phone: string; zip_code: string; current_password: string; new_password: string }>) =>
+    fetchAPI<AccountProfile>('/api/v1/account', { method: 'PATCH', body: JSON.stringify(data) }),
+  getJobs: () => fetchAPI<{ jobs: AccountJob[] }>('/api/v1/account/jobs'),
+  getBookings: () => fetchAPI<{ bookings: AccountBooking[] }>('/api/v1/account/bookings'),
+};

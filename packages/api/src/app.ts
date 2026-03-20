@@ -7,6 +7,7 @@ import jobsRouter from './routes/jobs';
 import bookingsRouter from './routes/bookings';
 import providersRouter from './routes/providers';
 import webhooksRouter from './routes/webhooks';
+import accountRouter from './routes/account';
 import adminRouter from './routes/admin';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
@@ -41,6 +42,7 @@ app.use('/api/v1/jobs', requireAuth, jobsRouter);
 app.use('/api/v1/bookings', requireAuth, bookingsRouter);
 // /providers/discover is public; /providers/:id/suppress requires auth
 app.use('/api/v1/providers', providersRouter);
+app.use('/api/v1/account', requireAuth, accountRouter);
 app.use('/api/v1/webhooks', webhooksRouter);
 app.use('/api/v1/admin', requireAdmin, adminRouter);
 

@@ -1,5 +1,6 @@
 import { useReducer, useRef, useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AvatarDropdown from '@/components/AvatarDropdown';
 import DiagnosisCard, { type DiagnosisData } from '@/components/DiagnosisCard';
 import OutreachProgress from '@/components/OutreachProgress';
 import ProviderCard from '@/components/ProviderCard';
@@ -660,19 +661,7 @@ export default function DiagnosticChat() {
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1B9E77', boxShadow: '0 0 0 3px rgba(27,158,119,0.15)' }} />
             <span style={{ fontSize: 13, color: '#1B9E77', fontWeight: 600 }}>Online</span>
           </div>
-          {authService.isAuthenticated() ? (
-            <button onClick={() => { authService.logout(); window.location.reload(); }} style={{
-              background: 'none', border: '1.5px solid rgba(0,0,0,0.1)', borderRadius: 100,
-              padding: '6px 16px', fontSize: 13, fontWeight: 500, color: '#9B9490', cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>Sign out</button>
-          ) : (
-            <button onClick={() => navigate('/login')} style={{
-              background: O, border: 'none', borderRadius: 100,
-              padding: '7px 18px', fontSize: 13, fontWeight: 600, color: 'white', cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>Sign in</button>
-          )}
+          <AvatarDropdown />
         </div>
       </nav>
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService, diagnosticService } from '@/services/api';
+import { diagnosticService } from '@/services/api';
+import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -666,19 +667,7 @@ export default function GetQuotes() {
               </div>
             );
           })()}
-          {authService.isAuthenticated() ? (
-            <button onClick={() => { authService.logout(); window.location.reload(); }} style={{
-              background: 'none', border: '1.5px solid rgba(0,0,0,0.1)', borderRadius: 100,
-              padding: '6px 16px', fontSize: 13, fontWeight: 500, color: '#9B9490', cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>Sign out</button>
-          ) : (
-            <button onClick={() => navigate('/login')} style={{
-              background: '#E8632B', border: 'none', borderRadius: 100,
-              padding: '7px 18px', fontSize: 13, fontWeight: 600, color: 'white', cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>Sign in</button>
-          )}
+          <AvatarDropdown />
         </div>
       </nav>
 

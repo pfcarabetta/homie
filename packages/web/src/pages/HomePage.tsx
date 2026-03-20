@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '@/services/api';
+import AvatarDropdown from '@/components/AvatarDropdown';
 
 const ORANGE = '#E8632B';
 const GREEN = '#1B9E77';
@@ -377,19 +378,7 @@ export default function HomePage() {
             background: ORANGE, color: 'white', border: 'none', borderRadius: 100,
             padding: '10px 24px', fontSize: 15, fontWeight: 600, cursor: 'pointer',
           }}>Get quotes now</button>
-          {authService.isAuthenticated() ? (
-            <button onClick={() => { authService.logout(); window.location.reload(); }} style={{
-              background: 'none', border: '1.5px solid rgba(0,0,0,0.1)', borderRadius: 100,
-              padding: '8px 20px', fontSize: 14, fontWeight: 500, color: '#9B9490', cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>Sign out</button>
-          ) : (
-            <button onClick={() => navigate('/login')} style={{
-              background: 'none', border: '1.5px solid rgba(0,0,0,0.1)', borderRadius: 100,
-              padding: '8px 20px', fontSize: 14, fontWeight: 500, color: DARK, cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>Sign in</button>
-          )}
+          <AvatarDropdown />
         </div>
         <button className="hp-nav-burger" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? '\u2715' : '\u2630'}</button>
       </nav>
@@ -399,11 +388,9 @@ export default function HomePage() {
           <a onClick={() => { setMenuOpen(false); navigate('/chat'); }} style={{ cursor: 'pointer' }}>Free diagnostic</a>
           <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
           <button onClick={() => { setMenuOpen(false); navigate('/quote'); }}>Get quotes now</button>
-          {authService.isAuthenticated() ? (
-            <button onClick={() => { authService.logout(); window.location.reload(); }}>Sign out</button>
-          ) : (
-            <button onClick={() => { setMenuOpen(false); navigate('/login'); }}>Sign in</button>
-          )}
+          <button onClick={() => { setMenuOpen(false); navigate(authService.isAuthenticated() ? '/account' : '/login'); }}>
+            {authService.isAuthenticated() ? 'My Account' : 'Sign in'}
+          </button>
         </div>
       )}
 
