@@ -3,6 +3,6 @@
   "outputDirectory": "packages/web/dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+    { "source": "/((?!assets/|og-image\\.png).*)", "destination": "/index.html" }
   ]
 }
