@@ -188,8 +188,9 @@ function UserMsg({ text }: { text: string }) {
 }
 
 function QuickReplies({ options, onSelect, columns }: { options: (string | CatOption)[]; onSelect: (opt: string | CatOption) => void; columns?: number }) {
+  const isCatGrid = columns && columns >= 4;
   return (
-    <div style={{
+    <div className={isCatGrid ? 'gq-cat-grid' : 'gq-replies'} style={{
       display: 'grid', gridTemplateColumns: columns ? `repeat(${columns}, 1fr)` : 'repeat(auto-fill, minmax(130px, 1fr))',
       gap: 8, marginBottom: 16, marginLeft: 42, animation: 'fadeSlide 0.3s ease',
     }}>
@@ -642,6 +643,10 @@ export default function GetQuotes() {
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
+        @media (max-width: 480px) {
+          .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; margin-left: 0 !important; }
+          .gq-replies { margin-left: 0 !important; }
+        }
       `}</style>
 
       {/* Header */}
