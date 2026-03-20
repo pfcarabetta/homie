@@ -1,4 +1,5 @@
 import { useReducer, useRef, useEffect, useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DiagnosisCard, { type DiagnosisData } from '@/components/DiagnosisCard';
 import OutreachProgress from '@/components/OutreachProgress';
 import ProviderCard from '@/components/ProviderCard';
@@ -418,6 +419,7 @@ function normalizeDiagnosis(raw: Record<string, unknown>): DiagnosisData {
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function DiagnosticChat() {
+  const navigate = useNavigate();
   const [state, dispatch] = useReducer(reducer, initialState);
   // useAuth() ensures AuthProvider context is available
   useAuth();
@@ -651,10 +653,8 @@ export default function DiagnosticChat() {
         padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
-        <button onClick={() => { dispatch({ type: 'RESET_CHAT' }); sessionIdRef.current = crypto.randomUUID(); abortRef.current?.abort(); cleanupOutreachRef.current?.(); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>homie</span>
-        </button>
+        <span onClick={() => navigate('/')}
+          style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
         <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>Free diagnostic</span>
       </nav>
 
