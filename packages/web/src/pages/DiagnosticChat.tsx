@@ -62,75 +62,61 @@ const ALL_ISSUES = [
   { icon: '🧺', text: 'Washer won\'t drain' },
 ];
 
-const MOSAIC_SLOTS = 8;
+// Split issues into 4 columns for scrolling credits
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 function IssueMosaic({ onSelect }: { onSelect: (text: string) => void }) {
-  const [tiles, setTiles] = useState<typeof ALL_ISSUES>([]);
-  const [fadingIdx, setFadingIdx] = useState<number | null>(null);
-  const usedRef = useRef(new Set<number>());
+  const [columns] = useState(() => {
+    const shuffled = shuffleArray(ALL_ISSUES);
+    const cols: (typeof ALL_ISSUES)[] = [[], [], [], []];
+    shuffled.forEach((item, i) => cols[i % 4].push(item));
+    // Duplicate each column so the scroll loops seamlessly
+    return cols.map(col => [...col, ...col]);
+  });
 
-  // Initialize with random tiles
-  useEffect(() => {
-    const indices: number[] = [];
-    while (indices.length < MOSAIC_SLOTS) {
-      const r = Math.floor(Math.random() * ALL_ISSUES.length);
-      if (!indices.includes(r)) indices.push(r);
-    }
-    usedRef.current = new Set(indices);
-    setTiles(indices.map(i => ALL_ISSUES[i]));
-  }, []);
-
-  // Rotate one tile every 2.5 seconds
-  useEffect(() => {
-    if (tiles.length === 0) return;
-    const interval = setInterval(() => {
-      const slotIdx = Math.floor(Math.random() * MOSAIC_SLOTS);
-      setFadingIdx(slotIdx);
-
-      setTimeout(() => {
-        // Pick a new issue not currently shown
-        let newIdx: number;
-        do {
-          newIdx = Math.floor(Math.random() * ALL_ISSUES.length);
-        } while (usedRef.current.has(newIdx));
-
-        // Find the old index for this slot and swap
-        const oldIssue = tiles[slotIdx];
-        const oldIdx = ALL_ISSUES.findIndex(i => i.text === oldIssue?.text);
-        usedRef.current.delete(oldIdx);
-        usedRef.current.add(newIdx);
-
-        setTiles(prev => prev.map((t, i) => i === slotIdx ? ALL_ISSUES[newIdx] : t));
-        setFadingIdx(null);
-      }, 300);
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [tiles]);
-
-  if (tiles.length === 0) return null;
+  // Stagger speeds so columns move at different rates
+  const durations = [28, 34, 24, 32];
 
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10,
-      width: '100%', maxWidth: 480,
+      width: '100%', maxWidth: 520, height: 340, overflow: 'hidden',
+      maskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)',
+      WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)',
     }}>
-      {tiles.map((tile, i) => (
-        <button
-          key={`${i}-${tile.text}`}
-          onClick={() => onSelect(tile.text)}
+      {columns.map((col, colIdx) => (
+        <div
+          key={colIdx}
           style={{
-            background: 'white', border: '2px solid rgba(0,0,0,0.06)', borderRadius: 14,
-            padding: '16px 10px', textAlign: 'center', cursor: 'pointer',
-            transition: 'all 0.3s ease', fontFamily: "'DM Sans', sans-serif",
-            opacity: fadingIdx === i ? 0 : 1,
-            transform: fadingIdx === i ? 'scale(0.9)' : 'scale(1)',
+            display: 'flex', flexDirection: 'column', gap: 10,
+            animation: `mosaicScroll ${durations[colIdx]}s linear infinite`,
           }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8632B'; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; e.currentTarget.style.transform = 'scale(1.04)'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)'; e.currentTarget.style.background = 'white'; e.currentTarget.style.transform = 'scale(1)'; }}
         >
-          <div style={{ fontSize: 26, marginBottom: 6 }}>{tile.icon}</div>
-          <div style={{ fontSize: 12, fontWeight: 500, color: '#2D2926', lineHeight: 1.3 }}>{tile.text}</div>
-        </button>
+          {col.map((tile, i) => (
+            <button
+              key={`${colIdx}-${i}-${tile.text}`}
+              onClick={() => onSelect(tile.text)}
+              style={{
+                background: 'white', border: '2px solid rgba(0,0,0,0.06)', borderRadius: 14,
+                padding: '16px 8px', textAlign: 'center', cursor: 'pointer',
+                transition: 'border-color 0.15s, background 0.15s, transform 0.15s',
+                fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8632B'; e.currentTarget.style.background = 'rgba(232,99,43,0.04)'; e.currentTarget.style.transform = 'scale(1.05)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)'; e.currentTarget.style.background = 'white'; e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              <div style={{ fontSize: 24, marginBottom: 4 }}>{tile.icon}</div>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#2D2926', lineHeight: 1.3 }}>{tile.text}</div>
+            </button>
+          ))}
+        </div>
       ))}
     </div>
   );
@@ -649,6 +635,7 @@ export default function DiagnosticChat() {
         @keyframes dcFadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes dcPulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
         @keyframes dcBounce { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
+        @keyframes mosaicScroll { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
       `}</style>
 
       {/* Header */}
@@ -671,8 +658,8 @@ export default function DiagnosticChat() {
           {/* Welcome screen */}
           {isEmpty && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 8px' }}>
-              <p style={{ fontSize: 15, color: '#9B9490', marginBottom: 6, fontWeight: 500 }}>What's going on at home?</p>
-              <p style={{ fontSize: 13, color: '#ccc', maxWidth: 300, lineHeight: 1.5, marginBottom: 28 }}>
+              <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 32, fontWeight: 700, color: D, marginBottom: 8 }}>How can Homie help?</h1>
+              <p style={{ fontSize: 17, color: '#9B9490', maxWidth: 340, lineHeight: 1.5, marginBottom: 32, fontWeight: 500 }}>
                 Tap an issue below or type your own
               </p>
               <IssueMosaic onSelect={(text) => sendMessage(text)} />
