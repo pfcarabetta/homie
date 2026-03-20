@@ -212,7 +212,7 @@ function DiagnosisSummary({ data }: { data: QuoteData }) {
         <span style={{ fontSize: 13, fontWeight: 600, color: G }}>AI diagnosis ready</span>
       </div>
       <div style={{ padding: '16px' }}>
-        <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>{cat?.icon} {data.a1} \u2014 {data.a2}</div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>{cat?.icon} {data.a1} — {data.a2}</div>
         <div style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 8 }}>
           {data.description || `${data.a2} in ${data.a1?.toLowerCase()}. ${data.a3}. ${data.extra ? `Additional info: ${data.extra}.` : ''}`}
         </div>
@@ -228,7 +228,7 @@ function DiagnosisSummary({ data }: { data: QuoteData }) {
           </div>
         </div>
         <p style={{ fontSize: 12, color: '#9B9490', marginTop: 12, lineHeight: 1.5 }}>
-          This diagnosis will be shared with providers so they can give you an accurate quote \u2014 no need to explain twice.
+          This diagnosis will be shared with providers so they can give you an accurate quote — no need to explain twice.
         </p>
       </div>
     </div>
@@ -251,7 +251,7 @@ function TierCards({ onSelect }: { onSelect: (t: typeof TIERS[number]) => void }
         >
           {t.popular && <div style={{ position: 'absolute', top: -9, right: 14, background: O, color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 100 }}>RECOMMENDED</div>}
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>\u00B7 {t.time}</span></div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>· {t.time}</span></div>
             <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
           </div>
           <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : D }}>{t.price}</div>
@@ -331,7 +331,7 @@ function OutreachView() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <div>
                 <span style={{ fontWeight: 700, fontSize: 16, color: D }}>{p.name}</span>
-                <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'\u2605'} {p.rating} ({p.reviews}) \u00B7 {p.distance}</span>
+                <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'\u2605'} {p.rating} ({p.reviews}) · {p.distance}</span>
               </div>
               <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{p.quote}</span>
             </div>
