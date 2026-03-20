@@ -342,6 +342,61 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* WHY HOMIE */}
+      <section style={{ padding: '100px 32px', background: DARK }}>
+        <div style={{ maxWidth: 900, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 56 }}>
+            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 40, fontWeight: 700, color: 'white', marginBottom: 12 }}>
+              Not your typical home services platform
+            </h2>
+            <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)', maxWidth: 520, margin: '0 auto' }}>
+              Angi and Thumbtack make you wait for bids from their network. Homie goes out and finds pros for you — anywhere.
+            </p>
+          </div>
+
+          <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'DM Sans', sans-serif" }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '16px 24px', textAlign: 'left', fontSize: 14, color: 'rgba(255,255,255,0.4)', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}></th>
+                  <th style={{ padding: '16px 24px', textAlign: 'center', fontSize: 14, color: 'rgba(255,255,255,0.4)', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}>Thumbtack / Angi</th>
+                  <th style={{ padding: '16px 24px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: ORANGE, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}>Homie</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { category: 'Diagnosis', them: 'None — you describe the problem yourself', us: 'AI diagnostic with photo analysis & confidence score', icon: '&#10007;', usIcon: '&#10003;' },
+                  { category: 'Finding pros', them: 'Post a job and wait for bids', us: 'AI agent actively calls, texts & contacts pros for you', icon: '&#10007;', usIcon: '&#10003;' },
+                  { category: 'Provider pool', them: 'Limited to their signed-up network', us: 'Any local pro — no signup required', icon: '&#10007;', usIcon: '&#10003;' },
+                  { category: 'Lead quality', them: 'Generic requests, high competition', us: 'Pre-qualified leads with full diagnosis & context', icon: '&#10007;', usIcon: '&#10003;' },
+                  { category: 'DIY support', them: 'None', us: 'Step-by-step guidance with tools & materials list', icon: '&#10007;', usIcon: '&#10003;' },
+                ].map((row, i) => (
+                  <tr key={i} style={{ borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                    <td style={{ padding: '18px 24px', fontSize: 15, fontWeight: 600, color: 'white' }}>{row.category}</td>
+                    <td style={{ padding: '18px 24px', textAlign: 'center', fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>
+                      <span style={{ color: '#FF6B6B', marginRight: 8 }} dangerouslySetInnerHTML={{ __html: row.icon }} />
+                      {row.them}
+                    </td>
+                    <td style={{ padding: '18px 24px', textAlign: 'center', fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: 500 }}>
+                      <span style={{ color: GREEN, marginRight: 8 }} dangerouslySetInnerHTML={{ __html: row.usIcon }} />
+                      {row.us}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: 40 }}>
+            <button onClick={() => navigate('/quote')} style={{
+              background: ORANGE, color: 'white', border: 'none', borderRadius: 100,
+              padding: '16px 36px', fontSize: 17, fontWeight: 600, cursor: 'pointer',
+              fontFamily: "'DM Sans', sans-serif", boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
+            }}>See the difference — get quotes now</button>
+          </div>
+        </div>
+      </section>
+
       {/* DIY DIAGNOSTIC */}
       <section id="diy" style={{ padding: '100px 32px', background: WARM }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 60, flexWrap: 'wrap' }}>
