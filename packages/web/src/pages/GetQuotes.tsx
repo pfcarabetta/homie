@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authService } from '@/services/api';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -490,9 +491,24 @@ export default function GetQuotes() {
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
         <span onClick={() => navigate('/')} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1B9E77', boxShadow: '0 0 0 3px rgba(27,158,119,0.15)' }} />
-          <span style={{ fontSize: 13, color: '#1B9E77', fontWeight: 600 }}>Online</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1B9E77', boxShadow: '0 0 0 3px rgba(27,158,119,0.15)' }} />
+            <span style={{ fontSize: 13, color: '#1B9E77', fontWeight: 600 }}>Online</span>
+          </div>
+          {authService.isAuthenticated() ? (
+            <button onClick={() => { authService.logout(); window.location.reload(); }} style={{
+              background: 'none', border: '1.5px solid rgba(0,0,0,0.1)', borderRadius: 100,
+              padding: '6px 16px', fontSize: 13, fontWeight: 500, color: '#9B9490', cursor: 'pointer',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>Sign out</button>
+          ) : (
+            <button onClick={() => navigate('/login')} style={{
+              background: '#E8632B', border: 'none', borderRadius: 100,
+              padding: '7px 18px', fontSize: 13, fontWeight: 600, color: 'white', cursor: 'pointer',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>Sign in</button>
+          )}
         </div>
       </nav>
 
