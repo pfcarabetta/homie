@@ -62,12 +62,8 @@ function LiveDemo() {
 
   useEffect(() => {
     if (!running) return;
-    const timers = OUTREACH_STEPS.map((s, i) =>
-      setTimeout(() => setStep(i), s.time)
-    );
-    const resultTimers = DEMO_PROVIDERS.map((p) =>
-      setTimeout(() => setResults(prev => [...prev, p]), p.delay)
-    );
+    const timers = OUTREACH_STEPS.map((s, i) => setTimeout(() => setStep(i), s.time));
+    const resultTimers = DEMO_PROVIDERS.map((p) => setTimeout(() => setResults(prev => [...prev, p]), p.delay));
     return () => { timers.forEach(clearTimeout); resultTimers.forEach(clearTimeout); };
   }, [running]);
 
@@ -75,69 +71,64 @@ function LiveDemo() {
   const pct = (current.contacted / Math.max(current.providers, 1)) * 100;
 
   return (
-    <div ref={ref} style={{ background: DARK, borderRadius: 20, overflow: 'hidden', maxWidth: 540, width: '100%', boxShadow: '0 24px 80px rgba(0,0,0,0.25)' }}>
-      <div style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#FF5F57' }} />
-        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#FEBC2E' }} />
-        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#28C840' }} />
-        <span style={{ marginLeft: 12, color: 'rgba(255,255,255,0.4)', fontSize: 13, fontFamily: "'DM Mono', monospace" }}>homie-agent</span>
+    <div ref={ref} className="hp-demo">
+      <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#FF5F57' }} />
+        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#FEBC2E' }} />
+        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#28C840' }} />
+        <span style={{ marginLeft: 8, color: 'rgba(255,255,255,0.4)', fontSize: 12, fontFamily: "'DM Mono', monospace" }}>homie-agent</span>
       </div>
-
-      <div style={{ padding: '24px 24px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+      <div style={{ padding: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           {running && step < OUTREACH_STEPS.length - 1 ? (
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: ORANGE, animation: 'pulse 1.2s infinite' }} />
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: ORANGE, animation: 'pulse 1.2s infinite', flexShrink: 0 }} />
           ) : results.length === 3 ? (
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: GREEN }} />
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: GREEN, flexShrink: 0 }} />
           ) : (
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }} />
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', flexShrink: 0 }} />
           )}
-          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}>
+          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
             {running ? current.text : 'Ready to find providers...'}
           </span>
         </div>
-
         {running && (
-          <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 6, height: 6, marginBottom: 20, overflow: 'hidden' }}>
+          <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 6, height: 5, marginBottom: 16, overflow: 'hidden' }}>
             <div style={{ height: '100%', background: `linear-gradient(90deg, ${ORANGE}, ${GREEN})`, borderRadius: 6, width: `${pct}%`, transition: 'width 0.6s ease' }} />
           </div>
         )}
-
         {running && current.contacted > 0 && (
-          <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             {[
               { label: 'Voice', icon: '\uD83D\uDCDE', count: Math.min(Math.floor(current.contacted * 0.4), 5) },
               { label: 'SMS', icon: '\uD83D\uDCAC', count: Math.min(Math.floor(current.contacted * 0.35), 4) },
               { label: 'Web', icon: '\uD83C\uDF10', count: Math.min(Math.floor(current.contacted * 0.25), 3) },
             ].map(ch => (
-              <div key={ch.label} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 18, marginBottom: 4 }}>{ch.icon}</div>
-                <div style={{ color: 'white', fontSize: 16, fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}>{ch.count}</div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>{ch.label}</div>
+              <div key={ch.label} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: '8px 6px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, marginBottom: 2 }}>{ch.icon}</div>
+                <div style={{ color: 'white', fontSize: 14, fontWeight: 600 }}>{ch.count}</div>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>{ch.label}</div>
               </div>
             ))}
           </div>
         )}
-
         {results.map((p, i) => (
           <div key={i} style={{
-            background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: '14px 16px', marginBottom: 10,
+            background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px', marginBottom: 8,
             border: '1px solid rgba(255,255,255,0.08)', animation: 'slideUp 0.4s ease',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <div>
-                <span style={{ color: 'white', fontWeight: 600, fontSize: 15, fontFamily: "'DM Sans', sans-serif" }}>{p.name}</span>
-                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginLeft: 8 }}>&#9733; {p.rating} ({p.reviews})</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ color: 'white', fontWeight: 600, fontSize: 13 }}>{p.name}</span>
+                <span className="hp-demo-meta" style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginLeft: 6 }}>&#9733; {p.rating}</span>
               </div>
-              <span style={{ color: ORANGE, fontWeight: 700, fontSize: 20, fontFamily: "'DM Sans', sans-serif" }}>{p.quote}</span>
+              <span style={{ color: ORANGE, fontWeight: 700, fontSize: 16, flexShrink: 0, marginLeft: 8 }}>{p.quote}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>{p.avail}</span>
-              <span style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', fontSize: 11, padding: '2px 8px', borderRadius: 20 }}>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>{p.avail}</span>
+              <span style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', fontSize: 10, padding: '1px 6px', borderRadius: 20 }}>
                 via {p.channel}
               </span>
             </div>
-            {p.note && <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, fontStyle: 'italic', marginTop: 6 }}>"{p.note}"</div>}
           </div>
         ))}
       </div>
@@ -155,12 +146,12 @@ function Step({ number, title, description, accent }: { number: number; title: s
       transition: 'all 0.6s ease', transitionDelay: `${number * 0.12}s`,
     }}>
       <div style={{
-        width: 48, height: 48, borderRadius: 14, background: accent, color: 'white',
+        width: 44, height: 44, borderRadius: 12, background: accent, color: 'white',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 20, fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: 16,
+        fontSize: 18, fontWeight: 700, marginBottom: 14,
       }}>{number}</div>
-      <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 600, color: DARK, marginBottom: 8 }}>{title}</h3>
-      <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, lineHeight: 1.65, color: '#6B6560' }}>{description}</p>
+      <h3 className="hp-step-title">{title}</h3>
+      <p style={{ fontSize: 15, lineHeight: 1.65, color: '#6B6560' }}>{description}</p>
     </div>
   );
 }
@@ -185,36 +176,34 @@ function DiagnosticPreview() {
 
   return (
     <div ref={ref} style={{
-      background: 'white', borderRadius: 20, maxWidth: 480, width: '100%',
+      background: 'white', borderRadius: 16, maxWidth: 480, width: '100%',
       boxShadow: '0 8px 40px rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.06)', overflow: 'hidden',
     }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: ORANGE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 16 }}>h</span>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 8, background: ORANGE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 14 }}>h</span>
         </div>
         <div>
-          <div style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 15, color: DARK }}>Homie AI</div>
-          <div style={{ fontSize: 12, color: '#9B9490' }}>Diagnosing...</div>
+          <div style={{ fontWeight: 600, fontSize: 14, color: DARK }}>Homie AI</div>
+          <div style={{ fontSize: 11, color: '#9B9490' }}>Diagnosing...</div>
         </div>
       </div>
-
-      <div style={{ padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
           <div style={{
-            background: ORANGE, color: 'white', padding: '10px 16px', borderRadius: '16px 16px 4px 16px',
-            maxWidth: '85%', fontSize: 14, lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif", minHeight: 40,
+            background: ORANGE, color: 'white', padding: '8px 14px', borderRadius: '14px 14px 4px 14px',
+            maxWidth: '85%', fontSize: 13, lineHeight: 1.5, minHeight: 36,
           }}>
             {typed}<span style={{ opacity: typed.length < fullText.length ? 1 : 0, animation: 'blink 0.8s infinite' }}>|</span>
           </div>
         </div>
-
         {typed.length >= fullText.length && (
           <div style={{ display: 'flex', justifyContent: 'flex-start', animation: 'fadeIn 0.5s ease' }}>
             <div style={{
-              background: WARM, padding: '10px 16px', borderRadius: '16px 16px 16px 4px',
-              maxWidth: '85%', fontSize: 14, lineHeight: 1.6, color: DARK, fontFamily: "'DM Sans', sans-serif",
+              background: WARM, padding: '8px 14px', borderRadius: '14px 14px 14px 4px',
+              maxWidth: '85%', fontSize: 13, lineHeight: 1.6, color: DARK,
             }}>
-              That sounds like a worn cartridge — super common on single-handle faucets. Can you tell me the brand? Look for a logo on the handle or base. Also, roughly how old is the faucet?
+              That sounds like a worn cartridge — super common on single-handle faucets. Can you tell me the brand? Look for a logo on the handle or base.
             </div>
           </div>
         )}
@@ -226,6 +215,7 @@ function DiagnosticPreview() {
 /* -- Main page -- */
 export default function HomePage() {
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: 'white', overflowX: 'hidden' }}>
@@ -234,107 +224,168 @@ export default function HomePage() {
         @keyframes slideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+
+        .hp-demo { background: ${DARK}; border-radius: 20px; overflow: hidden; max-width: 540px; width: 100%; box-shadow: 0 24px 80px rgba(0,0,0,0.25); }
+        .hp-nav-links { display: flex; align-items: center; gap: 28px; }
+        .hp-nav-burger { display: none; background: none; border: none; font-size: 24px; cursor: pointer; color: ${DARK}; }
+        .hp-mobile-menu { display: none; }
+        .hp-hero { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 100px 32px 60px; gap: 60px; flex-wrap: wrap; }
+        .hp-hero-text { max-width: 520px; flex: 1 1 400px; }
+        .hp-hero-demo { flex: 1 1 400px; display: flex; justify-content: center; }
+        .hp-hero h1 { font-family: 'Fraunces', serif; font-size: 52px; font-weight: 700; line-height: 1.12; color: ${DARK}; margin-bottom: 20px; letter-spacing: -0.02em; }
+        .hp-hero p.hp-sub { font-size: 20px; line-height: 1.65; color: #6B6560; margin-bottom: 36px; max-width: 460px; }
+        .hp-section { padding: 100px 32px; }
+        .hp-section-title { font-family: 'Fraunces', serif; font-size: 40px; font-weight: 700; margin-bottom: 12px; }
+        .hp-section-sub { font-size: 18px; color: #6B6560; }
+        .hp-step-title { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; color: ${DARK}; margin-bottom: 8px; }
+        .hp-steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 40px; }
+        .hp-compare-table { width: 100%; border-collapse: collapse; }
+        .hp-compare-table th, .hp-compare-table td { padding: 16px 20px; font-size: 14px; }
+        .hp-diy-section { display: flex; align-items: center; gap: 60px; flex-wrap: wrap; }
+        .hp-diy-text { flex: 1 1 400px; }
+        .hp-diy-preview { flex: 1 1 400px; display: flex; justify-content: center; }
+        .hp-diy-title { font-family: 'Fraunces', serif; font-size: 38px; font-weight: 700; color: ${DARK}; margin-bottom: 16px; line-height: 1.15; }
+        .hp-pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+        .hp-pricing-price { font-family: 'Fraunces', serif; font-size: 44px; font-weight: 700; margin-bottom: 4px; }
+        .hp-cta-title { font-family: 'Fraunces', serif; font-size: 40px; font-weight: 700; color: white; margin-bottom: 16px; }
+        .hp-social-bar { display: flex; align-items: center; justify-content: center; gap: 48px; flex-wrap: wrap; padding: 24px 32px; }
+        .hp-social-item { display: flex; align-items: center; gap: 8px; }
+
+        /* ── Mobile comparison cards (hidden on desktop) ── */
+        .hp-compare-cards { display: none; }
+
+        @media (max-width: 768px) {
+          .hp-nav-links { display: none; }
+          .hp-nav-burger { display: block; }
+          .hp-mobile-menu {
+            display: flex; flex-direction: column; gap: 0;
+            position: fixed; top: 56px; left: 0; right: 0; z-index: 99;
+            background: white; border-bottom: 1px solid rgba(0,0,0,0.08);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+          }
+          .hp-mobile-menu a, .hp-mobile-menu button {
+            padding: 16px 24px; text-decoration: none; color: ${DARK}; font-size: 16px; font-weight: 500;
+            border: none; background: none; text-align: left; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.05);
+            font-family: 'DM Sans', sans-serif;
+          }
+          .hp-mobile-menu button { color: ${ORANGE}; font-weight: 600; }
+          .hp-hero { min-height: auto; padding: 80px 20px 40px; gap: 32px; flex-direction: column; }
+          .hp-hero-text { flex: none; max-width: 100%; }
+          .hp-hero-demo { flex: none; width: 100%; }
+          .hp-hero h1 { font-size: 32px; }
+          .hp-hero p.hp-sub { font-size: 16px; margin-bottom: 24px; }
+          .hp-hero .hp-cta-buttons button, .hp-hero .hp-cta-buttons a { font-size: 15px; padding: 14px 24px; }
+          .hp-section { padding: 60px 20px; }
+          .hp-section-title { font-size: 28px; }
+          .hp-section-sub { font-size: 16px; }
+          .hp-steps-grid { grid-template-columns: 1fr 1fr; gap: 24px; }
+          .hp-compare-table { display: none; }
+          .hp-compare-cards { display: flex; flex-direction: column; gap: 12px; }
+          .hp-diy-section { flex-direction: column; gap: 32px; }
+          .hp-diy-text { flex: none; }
+          .hp-diy-preview { flex: none; width: 100%; }
+          .hp-diy-title { font-size: 28px; }
+          .hp-pricing-grid { grid-template-columns: 1fr; gap: 16px; }
+          .hp-pricing-price { font-size: 36px; }
+          .hp-cta-title { font-size: 28px; }
+          .hp-social-bar { gap: 16px; padding: 20px 16px; flex-direction: column; align-items: flex-start; }
+          .hp-social-item { gap: 6px; }
+          .hp-social-item span { font-size: 13px !important; }
+          .hp-demo { border-radius: 14px; }
+        }
       `}</style>
 
       {/* NAV */}
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
         background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)',
-        borderBottom: '1px solid rgba(0,0,0,0.05)', padding: '0 32px', height: 64,
+        borderBottom: '1px solid rgba(0,0,0,0.05)', padding: '0 20px', height: 56,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span onClick={() => navigate('/')} style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700, color: ORANGE, cursor: 'pointer' }}>homie</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+        <span onClick={() => navigate('/')} style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: ORANGE, cursor: 'pointer' }}>homie</span>
+        <div className="hp-nav-links">
           <a href="#how" style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500 }}>How it works</a>
           <a href="#diy" style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500 }}>Free diagnostic</a>
           <a href="#pricing" style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500 }}>Pricing</a>
           <button onClick={() => navigate('/quote')} style={{
             background: ORANGE, color: 'white', border: 'none', borderRadius: 100,
             padding: '10px 24px', fontSize: 15, fontWeight: 600, cursor: 'pointer',
-            fontFamily: "'DM Sans', sans-serif",
           }}>Get quotes now</button>
         </div>
+        <button className="hp-nav-burger" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? '\u2715' : '\u2630'}</button>
       </nav>
+      {menuOpen && (
+        <div className="hp-mobile-menu">
+          <a href="#how" onClick={() => setMenuOpen(false)}>How it works</a>
+          <a href="#diy" onClick={() => setMenuOpen(false)}>Free diagnostic</a>
+          <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
+          <button onClick={() => { setMenuOpen(false); navigate('/quote'); }}>Get quotes now</button>
+        </div>
+      )}
 
       {/* HERO */}
-      <section style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '100px 32px 60px', gap: 60, flexWrap: 'wrap',
-        background: `linear-gradient(180deg, white 0%, ${WARM} 100%)`,
-      }}>
-        <div style={{ maxWidth: 520, flex: '1 1 400px' }}>
+      <section className="hp-hero" style={{ background: `linear-gradient(180deg, white 0%, ${WARM} 100%)` }}>
+        <div className="hp-hero-text">
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(27,158,119,0.08)',
-            padding: '6px 14px', borderRadius: 100, marginBottom: 24,
+            padding: '6px 14px', borderRadius: 100, marginBottom: 20,
           }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: GREEN }} />
-            <span style={{ fontSize: 14, fontWeight: 500, color: GREEN }}>AI agent available 24/7</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: GREEN }}>AI agent available 24/7</span>
           </div>
 
-          <h1 style={{
-            fontFamily: "'Fraunces', serif", fontSize: 52, fontWeight: 700, lineHeight: 1.12,
-            color: DARK, marginBottom: 20, letterSpacing: '-0.02em',
-          }}>
+          <h1>
             Stop calling around.{' '}
             <span style={{ color: ORANGE }}>Let Homie do it.</span>
           </h1>
 
-          <p style={{
-            fontSize: 20, lineHeight: 1.65, color: '#6B6560', marginBottom: 36, maxWidth: 460,
-          }}>
+          <p className="hp-sub">
             Describe your home issue. Our AI agent simultaneously calls, texts, and contacts local pros — and brings you back quotes and availability in minutes.
           </p>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 32 }}>
+          <div className="hp-cta-buttons" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
             <button onClick={() => navigate('/quote')} style={{
               background: ORANGE, color: 'white', border: 'none', borderRadius: 100,
               padding: '16px 32px', fontSize: 17, fontWeight: 600, cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif", boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
+              boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
             }}>Get quotes in minutes</button>
             <a href="#diy" style={{
               background: 'transparent', color: DARK, border: '2px solid rgba(0,0,0,0.12)', borderRadius: 100,
               padding: '14px 28px', fontSize: 17, fontWeight: 500, cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif", textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
             }}>Free DIY diagnostic &#8594;</a>
           </div>
-
         </div>
 
-        <div style={{ flex: '1 1 400px', display: 'flex', justifyContent: 'center' }}>
+        <div className="hp-hero-demo">
           <LiveDemo />
         </div>
       </section>
 
       {/* SOCIAL PROOF BAR */}
-      <section style={{
-        background: DARK, padding: '24px 32px', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', gap: 48, flexWrap: 'wrap',
-      }}>
+      <section className="hp-social-bar" style={{ background: DARK }}>
         {[
           'No provider network required',
           'Works with any local pro',
           'AI calls, texts & fills forms simultaneously',
           'Pay only after you get results',
         ].map((t, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ color: GREEN, fontSize: 16 }}>&#10003;</div>
+          <div key={i} className="hp-social-item">
+            <div style={{ color: GREEN, fontSize: 14 }}>&#10003;</div>
             <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: 500 }}>{t}</span>
           </div>
         ))}
       </section>
 
       {/* HOW IT WORKS */}
-      <section id="how" style={{ padding: '100px 32px', maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 64 }}>
-          <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 40, fontWeight: 700, color: DARK, marginBottom: 12 }}>
-            Quotes in minutes, not days
-          </h2>
-          <p style={{ fontSize: 18, color: '#6B6560', maxWidth: 560, margin: '0 auto' }}>
+      <section id="how" className="hp-section" style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+          <h2 className="hp-section-title" style={{ color: DARK }}>Quotes in minutes, not days</h2>
+          <p className="hp-section-sub" style={{ maxWidth: 560, margin: '0 auto' }}>
             Our AI agent does the work that used to take you an entire afternoon of phone calls
           </p>
         </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 40 }}>
+        <div className="hp-steps-grid">
           <Step number={1} title="Describe the issue" description="Tell Homie what's wrong — in plain English. Upload photos if you have them. Our AI figures out the rest." accent={ORANGE} />
           <Step number={2} title="AI contacts pros" description="Homie's agent simultaneously calls, texts, and fills out contact forms for local providers — all in real time." accent={DARK} />
           <Step number={3} title="Get quotes back" description="Providers respond with pricing and availability. You see everything in one place, ranked by fit." accent={GREEN} />
@@ -343,43 +394,40 @@ export default function HomePage() {
       </section>
 
       {/* WHY HOMIE */}
-      <section style={{ padding: '100px 32px', background: DARK }}>
+      <section className="hp-section" style={{ background: DARK }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 56 }}>
-            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 40, fontWeight: 700, color: 'white', marginBottom: 12 }}>
-              Not your typical home services platform
-            </h2>
-            <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)', maxWidth: 520, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 48 }}>
+            <h2 className="hp-section-title" style={{ color: 'white' }}>Not your typical home services platform</h2>
+            <p className="hp-section-sub" style={{ color: 'rgba(255,255,255,0.5)', maxWidth: 520, margin: '0 auto' }}>
               Angi and Thumbtack make you wait for bids from their network. Homie goes out and finds pros for you — anywhere.
             </p>
           </div>
 
+          {/* Desktop table */}
           <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'DM Sans', sans-serif" }}>
+            <table className="hp-compare-table">
               <thead>
                 <tr>
-                  <th style={{ padding: '16px 24px', textAlign: 'left', fontSize: 14, color: 'rgba(255,255,255,0.4)', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}></th>
-                  <th style={{ padding: '16px 24px', textAlign: 'center', fontSize: 14, color: 'rgba(255,255,255,0.4)', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}>Thumbtack / Angi</th>
-                  <th style={{ padding: '16px 24px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: ORANGE, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}>Homie</th>
+                  <th style={{ textAlign: 'left', color: 'rgba(255,255,255,0.4)', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}></th>
+                  <th style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}>Thumbtack / Angi</th>
+                  <th style={{ textAlign: 'center', fontWeight: 700, color: ORANGE, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}>Homie</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  { category: 'Diagnosis', them: 'None — you describe the problem yourself', us: 'AI diagnostic with photo analysis & confidence score', icon: '&#10007;', usIcon: '&#10003;' },
-                  { category: 'Finding pros', them: 'Post a job and wait for bids', us: 'AI agent actively calls, texts & contacts pros for you', icon: '&#10007;', usIcon: '&#10003;' },
-                  { category: 'Provider pool', them: 'Limited to their signed-up network', us: 'Any local pro — no signup required', icon: '&#10007;', usIcon: '&#10003;' },
-                  { category: 'Lead quality', them: 'Generic requests, high competition', us: 'Pre-qualified leads with full diagnosis & context', icon: '&#10007;', usIcon: '&#10003;' },
-                  { category: 'DIY support', them: 'None', us: 'Step-by-step guidance with tools & materials list', icon: '&#10007;', usIcon: '&#10003;' },
+                  { category: 'Diagnosis', them: 'None — you describe the problem yourself', us: 'AI diagnostic with photo analysis & confidence score' },
+                  { category: 'Finding pros', them: 'Post a job and wait for bids', us: 'AI agent actively calls, texts & contacts pros for you' },
+                  { category: 'Provider pool', them: 'Limited to their signed-up network', us: 'Any local pro — no signup required' },
+                  { category: 'Lead quality', them: 'Generic requests, high competition', us: 'Pre-qualified leads with full diagnosis & context' },
+                  { category: 'DIY support', them: 'None', us: 'Step-by-step guidance with tools & materials list' },
                 ].map((row, i) => (
                   <tr key={i} style={{ borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-                    <td style={{ padding: '18px 24px', fontSize: 15, fontWeight: 600, color: 'white' }}>{row.category}</td>
-                    <td style={{ padding: '18px 24px', textAlign: 'center', fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>
-                      <span style={{ color: '#FF6B6B', marginRight: 8 }} dangerouslySetInnerHTML={{ __html: row.icon }} />
-                      {row.them}
+                    <td style={{ fontWeight: 600, color: 'white' }}>{row.category}</td>
+                    <td style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
+                      <span style={{ color: '#FF6B6B', marginRight: 6 }}>&#10007;</span>{row.them}
                     </td>
-                    <td style={{ padding: '18px 24px', textAlign: 'center', fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: 500 }}>
-                      <span style={{ color: GREEN, marginRight: 8 }} dangerouslySetInnerHTML={{ __html: row.usIcon }} />
-                      {row.us}
+                    <td style={{ textAlign: 'center', color: 'rgba(255,255,255,0.85)', fontWeight: 500 }}>
+                      <span style={{ color: GREEN, marginRight: 6 }}>&#10003;</span>{row.us}
                     </td>
                   </tr>
                 ))}
@@ -387,33 +435,56 @@ export default function HomePage() {
             </table>
           </div>
 
-          <div style={{ textAlign: 'center', marginTop: 40 }}>
+          {/* Mobile cards */}
+          <div className="hp-compare-cards">
+            {[
+              { category: 'Diagnosis', them: 'None', us: 'AI diagnostic with photo analysis' },
+              { category: 'Finding pros', them: 'Post and wait for bids', us: 'AI agent contacts pros for you' },
+              { category: 'Provider pool', them: 'Their network only', us: 'Any local pro' },
+              { category: 'Lead quality', them: 'Generic requests', us: 'Pre-qualified with diagnosis' },
+              { category: 'DIY support', them: 'None', us: 'Step-by-step guidance' },
+            ].map((row, i) => (
+              <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '16px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontWeight: 700, color: 'white', fontSize: 15, marginBottom: 10 }}>{row.category}</div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
+                  <span style={{ color: '#FF6B6B', flexShrink: 0 }}>&#10007;</span>
+                  <span><span style={{ fontWeight: 600, color: 'rgba(255,255,255,0.3)' }}>Others:</span> {row.them}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
+                  <span style={{ color: GREEN, flexShrink: 0 }}>&#10003;</span>
+                  <span><span style={{ fontWeight: 600, color: ORANGE }}>Homie:</span> {row.us}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: 36 }}>
             <button onClick={() => navigate('/quote')} style={{
               background: ORANGE, color: 'white', border: 'none', borderRadius: 100,
-              padding: '16px 36px', fontSize: 17, fontWeight: 600, cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif", boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
+              padding: '14px 32px', fontSize: 16, fontWeight: 600, cursor: 'pointer',
+              boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
             }}>See the difference — get quotes now</button>
           </div>
         </div>
       </section>
 
       {/* DIY DIAGNOSTIC */}
-      <section id="diy" style={{ padding: '100px 32px', background: WARM }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 60, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 400px' }}>
+      <section id="diy" className="hp-section" style={{ background: WARM }}>
+        <div className="hp-diy-section" style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div className="hp-diy-text">
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               background: 'rgba(232,99,43,0.08)', padding: '6px 14px', borderRadius: 100, marginBottom: 20,
             }}>
               <span style={{ fontSize: 14, fontWeight: 600, color: ORANGE }}>100% free</span>
             </div>
-            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 38, fontWeight: 700, color: DARK, marginBottom: 16, lineHeight: 1.15 }}>
+            <h2 className="hp-diy-title">
               Not sure what's wrong?<br />Ask Homie first.
             </h2>
-            <p style={{ fontSize: 18, lineHeight: 1.65, color: '#6B6560', marginBottom: 24, maxWidth: 440 }}>
+            <p style={{ fontSize: 16, lineHeight: 1.65, color: '#6B6560', marginBottom: 24, maxWidth: 440 }}>
               Chat with our AI diagnostic engine for free. Describe what's happening, upload a photo, and get an expert-level diagnosis with DIY steps, cost estimates, and severity assessment — in under 2 minutes.
             </p>
-            <ul style={{ listStyle: 'none', padding: 0, marginBottom: 32 }}>
+            <ul style={{ listStyle: 'none', padding: 0, marginBottom: 28 }}>
               {[
                 'Identifies issues across plumbing, electrical, HVAC, and more',
                 'Photo analysis spots problems you might miss',
@@ -421,73 +492,67 @@ export default function HomePage() {
                 'Know if it\'s a $20 fix or a $2,000 problem',
               ].map((item, i) => (
                 <li key={i} style={{
-                  display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12,
-                  fontSize: 15, color: '#6B6560', lineHeight: 1.5,
+                  display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10,
+                  fontSize: 14, color: '#6B6560', lineHeight: 1.5,
                 }}>
-                  <span style={{ color: GREEN, fontSize: 18, marginTop: -1, flexShrink: 0 }}>&#10003;</span>
+                  <span style={{ color: GREEN, fontSize: 16, flexShrink: 0 }}>&#10003;</span>
                   {item}
                 </li>
               ))}
             </ul>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <button onClick={() => navigate('/chat')} style={{
                 background: 'white', color: DARK, border: `2px solid ${DARK}`, borderRadius: 100,
-                padding: '14px 28px', fontSize: 16, fontWeight: 600, cursor: 'pointer',
-                fontFamily: "'DM Sans', sans-serif",
+                padding: '12px 24px', fontSize: 15, fontWeight: 600, cursor: 'pointer',
               }}>Try the free diagnostic</button>
-              <span style={{ fontSize: 14, color: '#9B9490' }}>No account required</span>
+              <span style={{ fontSize: 13, color: '#9B9490' }}>No account required</span>
             </div>
           </div>
-          <div style={{ flex: '1 1 400px', display: 'flex', justifyContent: 'center' }}>
+          <div className="hp-diy-preview">
             <DiagnosticPreview />
           </div>
         </div>
       </section>
 
       {/* PRICING */}
-      <section id="pricing" style={{ padding: '100px 32px', maxWidth: 1000, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 56 }}>
-          <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 40, fontWeight: 700, color: DARK, marginBottom: 12 }}>
-            Pay only when you get results
-          </h2>
-          <p style={{ fontSize: 18, color: '#6B6560' }}>
-            No subscription. No commitment. Zero cost if no providers respond.
-          </p>
+      <section id="pricing" className="hp-section" style={{ maxWidth: 1000, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+          <h2 className="hp-section-title" style={{ color: DARK }}>Pay only when you get results</h2>
+          <p className="hp-section-sub">No subscription. No commitment. Zero cost if no providers respond.</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
+        <div className="hp-pricing-grid">
           {[
             { tier: 'Standard', price: '$9.99', time: '~2 hours', providers: '5-8 contacted', channels: 'SMS + Web', popular: false },
             { tier: 'Priority', price: '$19.99', time: '~30 minutes', providers: '10+ contacted', channels: 'Voice + SMS + Web', popular: true },
             { tier: 'Emergency', price: '$29.99', time: '~15 minutes', providers: '15+ contacted', channels: 'All channels (blitz)', popular: false },
           ].map((t, i) => (
             <div key={i} style={{
-              background: t.popular ? DARK : 'white', borderRadius: 20, padding: '36px 28px',
+              background: t.popular ? DARK : 'white', borderRadius: 20, padding: '32px 24px',
               border: t.popular ? 'none' : '1px solid rgba(0,0,0,0.08)', position: 'relative',
               boxShadow: t.popular ? '0 16px 60px rgba(45,41,38,0.2)' : 'none',
-              transform: t.popular ? 'scale(1.04)' : 'none',
             }}>
               {t.popular && (
                 <div style={{
                   position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)',
-                  background: ORANGE, color: 'white', fontSize: 12, fontWeight: 700,
-                  padding: '4px 16px', borderRadius: 100, letterSpacing: '0.04em',
+                  background: ORANGE, color: 'white', fontSize: 11, fontWeight: 700,
+                  padding: '4px 14px', borderRadius: 100, letterSpacing: '0.04em',
                 }}>MOST POPULAR</div>
               )}
-              <div style={{ fontSize: 16, fontWeight: 600, color: t.popular ? 'rgba(255,255,255,0.6)' : '#9B9490', marginBottom: 8 }}>{t.tier}</div>
-              <div style={{ fontFamily: "'Fraunces', serif", fontSize: 44, fontWeight: 700, color: t.popular ? 'white' : DARK, marginBottom: 4 }}>{t.price}</div>
-              <div style={{ fontSize: 14, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490', marginBottom: 24 }}>per search</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: t.popular ? 'rgba(255,255,255,0.6)' : '#9B9490', marginBottom: 8 }}>{t.tier}</div>
+              <div className="hp-pricing-price" style={{ color: t.popular ? 'white' : DARK }}>{t.price}</div>
+              <div style={{ fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490', marginBottom: 20 }}>per search</div>
               {[t.time, t.providers, t.channels, 'Full diagnostic included', 'Money-back guarantee'].map((f, j) => (
                 <div key={j} style={{
-                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-                  fontSize: 14, color: t.popular ? 'rgba(255,255,255,0.75)' : '#6B6560',
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9,
+                  fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.75)' : '#6B6560',
                 }}>
                   <span style={{ color: GREEN }}>&#10003;</span> {f}
                 </div>
               ))}
               <button onClick={() => navigate('/quote')} style={{
-                width: '100%', marginTop: 20, padding: '14px 0', borderRadius: 100, fontSize: 16, fontWeight: 600,
-                cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", border: 'none',
+                width: '100%', marginTop: 16, padding: '13px 0', borderRadius: 100, fontSize: 15, fontWeight: 600,
+                cursor: 'pointer', border: 'none',
                 background: t.popular ? ORANGE : WARM, color: t.popular ? 'white' : DARK,
               }}>
                 {t.popular ? 'Get priority quotes' : `Choose ${t.tier.toLowerCase()}`}
@@ -498,31 +563,27 @@ export default function HomePage() {
       </section>
 
       {/* CTA */}
-      <section style={{ padding: '80px 32px', background: ORANGE, textAlign: 'center' }}>
-        <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 40, fontWeight: 700, color: 'white', marginBottom: 16 }}>
-          Every home needs a Homie.
-        </h2>
-        <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.8)', marginBottom: 32, maxWidth: 480, margin: '0 auto 32px' }}>
+      <section className="hp-section" style={{ background: ORANGE, textAlign: 'center' }}>
+        <h2 className="hp-cta-title">Every home needs a Homie.</h2>
+        <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.8)', marginBottom: 28, maxWidth: 440, margin: '0 auto 28px' }}>
           Stop spending hours calling around. Describe the problem, and Homie handles the rest.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => navigate('/quote')} style={{
             background: 'white', color: ORANGE, border: 'none', borderRadius: 100,
-            padding: '16px 36px', fontSize: 17, fontWeight: 700, cursor: 'pointer',
-            fontFamily: "'DM Sans', sans-serif",
+            padding: '14px 32px', fontSize: 16, fontWeight: 700, cursor: 'pointer',
           }}>Get quotes now</button>
           <button onClick={() => navigate('/chat')} style={{
             background: 'transparent', color: 'white', border: '2px solid rgba(255,255,255,0.4)', borderRadius: 100,
-            padding: '14px 32px', fontSize: 17, fontWeight: 500, cursor: 'pointer',
-            fontFamily: "'DM Sans', sans-serif",
+            padding: '12px 28px', fontSize: 16, fontWeight: 500, cursor: 'pointer',
           }}>Try free diagnostic</button>
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer style={{ padding: '40px 32px', background: DARK, textAlign: 'center' }}>
-        <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: ORANGE }}>homie</span>
-        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, marginTop: 8 }}>
+      <footer style={{ padding: '36px 20px', background: DARK, textAlign: 'center' }}>
+        <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: ORANGE }}>homie</span>
+        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, marginTop: 8 }}>
           Your home's best friend. &copy; {new Date().getFullYear()} Homie Technologies, Inc.
         </p>
       </footer>
