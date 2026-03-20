@@ -116,6 +116,9 @@ interface State {
   bookedProvider: MatchedProvider | null;
   bookingLoading: boolean;
 
+  // Screening
+  screeningAnswered: boolean;
+
   // Error
   streamError: string | null;
 }
@@ -146,6 +149,7 @@ const initialState: State = {
   respondedProviders: [],
   bookedProvider: null,
   bookingLoading: false,
+  screeningAnswered: false,
   streamError: null,
 };
 
@@ -171,6 +175,7 @@ type Action =
   | { type: 'CLOSE_MATCH_FLOW' }
   | { type: 'RESET_CHAT' }
   | { type: 'DISMISS_BANNER' }
+  | { type: 'SCREENING_ANSWERED' }
   | { type: 'STREAM_ERROR'; error: string };
 
 function reducer(state: State, action: Action): State {
@@ -224,6 +229,9 @@ function reducer(state: State, action: Action): State {
 
     case 'DISMISS_BANNER':
       return { ...state, showBanner: false };
+
+    case 'SCREENING_ANSWERED':
+      return { ...state, screeningAnswered: true };
 
     case 'OPEN_MATCH_FLOW':
       return { ...state, matchFlowActive: true, matchStep: 'tier', showBanner: false };
@@ -636,6 +644,35 @@ export default function DiagnosticChat() {
               </div>
             );
           })}
+
+          {/* Screening buttons — show after first assistant response */}
+          {!state.screeningAnswered && !state.streaming && state.messages.length >= 2 && state.messages.some((m) => m.role === 'assistant' && m.content.length > 0) && (
+            <div className="flex items-start gap-2.5 self-start animate-fade-in">
+              <HomieAvatar />
+              <div className="flex flex-col gap-2">
+                <p className="text-[13px] text-dark/50 font-medium">How would you like to handle this?</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: 'I\'ll tackle it myself', icon: '🔧', value: 'I want to try fixing this myself — walk me through it.' },
+                    { label: 'Match me with a pro', icon: '👷', value: 'I\'d rather have a professional handle this — please match me with a Homie Pro.' },
+                    { label: 'I\'m not sure yet', icon: '🤔', value: 'I\'m not sure yet — can you help me figure out which option makes more sense?' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.label}
+                      onClick={() => {
+                        dispatch({ type: 'SCREENING_ANSWERED' });
+                        sendMessage(opt.value);
+                      }}
+                      className="bg-white border border-dark/10 rounded-xl px-4 py-2.5 text-left flex items-center gap-2 hover:border-orange-500 hover:bg-orange-500/[0.03] transition-all"
+                    >
+                      <span className="text-lg">{opt.icon}</span>
+                      <span className="text-[13px] font-semibold text-dark">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Typing indicator — only show before first token arrives */}
           {state.streaming && !state.messages.some((m) => m.id === state.streamingMessageId && m.content.length > 0) && (
