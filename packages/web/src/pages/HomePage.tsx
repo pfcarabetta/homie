@@ -414,7 +414,7 @@ export default function HomePage() {
           </div>
 
           <h1>
-            Stop calling around.{' '}
+            Stop calling around.<br />
             <span style={{ color: ORANGE }}>Let Homie do it.</span>
           </h1>
 
