@@ -19,6 +19,8 @@ router.get('/', async (req: Request, res: Response) => {
     const [homeowner] = await db
       .select({
         id: homeowners.id,
+        firstName: homeowners.firstName,
+        lastName: homeowners.lastName,
         email: homeowners.email,
         phone: homeowners.phone,
         zipCode: homeowners.zipCode,
@@ -37,6 +39,8 @@ router.get('/', async (req: Request, res: Response) => {
     res.json({
       data: {
         id: homeowner.id,
+        first_name: homeowner.firstName,
+        last_name: homeowner.lastName,
         email: homeowner.email,
         phone: homeowner.phone,
         zip_code: homeowner.zipCode,
@@ -55,6 +59,8 @@ router.get('/', async (req: Request, res: Response) => {
 // PATCH /api/v1/account
 router.patch('/', async (req: Request, res: Response) => {
   const body = req.body as {
+    first_name?: string;
+    last_name?: string;
     email?: string;
     phone?: string;
     zip_code?: string;
@@ -63,6 +69,14 @@ router.patch('/', async (req: Request, res: Response) => {
   };
 
   const updates: Record<string, unknown> = {};
+
+  if (body.first_name !== undefined) {
+    updates.firstName = body.first_name.trim() || null;
+  }
+
+  if (body.last_name !== undefined) {
+    updates.lastName = body.last_name.trim() || null;
+  }
 
   if (body.email !== undefined) {
     if (!EMAIL_RE.test(body.email)) {
@@ -123,6 +137,8 @@ router.patch('/', async (req: Request, res: Response) => {
     res.json({
       data: {
         id: updated.id,
+        first_name: updated.firstName,
+        last_name: updated.lastName,
         email: updated.email,
         phone: updated.phone,
         zip_code: updated.zipCode,

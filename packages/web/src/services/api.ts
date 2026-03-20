@@ -360,6 +360,8 @@ function parseStructuredTags(
 
 export interface AuthHomeowner {
   id: string;
+  first_name: string | null;
+  last_name: string | null;
   email: string;
   zip_code: string;
   membership_tier: string;
@@ -372,6 +374,8 @@ export interface AuthResponse {
 
 export const authService = {
   async register(params: {
+    firstName: string;
+    lastName: string;
     email: string;
     password: string;
     zipCode: string;
@@ -380,6 +384,8 @@ export const authService = {
     const res = await fetchAPI<AuthResponse>('/api/v1/auth/register', {
       method: 'POST',
       body: JSON.stringify({
+        first_name: params.firstName,
+        last_name: params.lastName,
         email: params.email,
         password: params.password,
         zip_code: params.zipCode,
@@ -545,6 +551,8 @@ export function connectJobSocket(
 
 export interface AccountProfile {
   id: string;
+  first_name: string | null;
+  last_name: string | null;
   email: string;
   phone: string | null;
   zip_code: string;

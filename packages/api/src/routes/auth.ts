@@ -12,6 +12,8 @@ const BCRYPT_ROUNDS = 12;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface RegisterBody {
+  first_name?: unknown;
+  last_name?: unknown;
   email?: unknown;
   password?: unknown;
   zip_code?: unknown;
@@ -27,6 +29,8 @@ interface AuthResponse {
   token: string;
   homeowner: {
     id: string;
+    first_name: string | null;
+    last_name: string | null;
     email: string;
     zip_code: string;
     membership_tier: string;
@@ -60,6 +64,8 @@ router.post('/register', async (req: Request, res: Response) => {
     const [homeowner] = await db
       .insert(homeowners)
       .values({
+        firstName: typeof body.first_name === 'string' ? body.first_name.trim() : null,
+        lastName: typeof body.last_name === 'string' ? body.last_name.trim() : null,
         email: body.email.toLowerCase().trim(),
         passwordHash,
         zipCode: body.zip_code,
@@ -74,6 +80,8 @@ router.post('/register', async (req: Request, res: Response) => {
         token,
         homeowner: {
           id: homeowner.id,
+          first_name: homeowner.firstName,
+          last_name: homeowner.lastName,
           email: homeowner.email,
           zip_code: homeowner.zipCode,
           membership_tier: homeowner.membershipTier,
@@ -142,6 +150,8 @@ router.post('/login', async (req: Request, res: Response) => {
         token,
         homeowner: {
           id: homeowner.id,
+          first_name: homeowner.firstName,
+          last_name: homeowner.lastName,
           email: homeowner.email,
           zip_code: homeowner.zipCode,
           membership_tier: homeowner.membershipTier,

@@ -28,7 +28,8 @@ export default function AvatarDropdown() {
     );
   }
 
-  const initial = homeowner.email.charAt(0).toUpperCase();
+  const initial = (homeowner.first_name || homeowner.email).charAt(0).toUpperCase();
+  const displayName = homeowner.first_name ? `${homeowner.first_name}${homeowner.last_name ? ' ' + homeowner.last_name : ''}` : homeowner.email;
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -48,7 +49,8 @@ export default function AvatarDropdown() {
         }}>
           <style>{`@keyframes avatarDrop { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }`}</style>
           <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#2D2926' }}>{homeowner.email}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#2D2926' }}>{displayName}</div>
+            {homeowner.first_name && <div style={{ fontSize: 12, color: '#9B9490' }}>{homeowner.email}</div>}
             <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{homeowner.membership_tier} plan</div>
           </div>
           <button onClick={() => { setOpen(false); navigate('/account'); }} style={{

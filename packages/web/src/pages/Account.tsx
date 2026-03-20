@@ -34,6 +34,8 @@ function timeAgo(dateStr: string): string {
 /* -- Profile Tab -- */
 function ProfileTab() {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [zip, setZip] = useState('');
@@ -46,6 +48,8 @@ function ProfileTab() {
     accountService.getProfile().then(res => {
       if (res.data) {
         setProfile(res.data);
+        setFirstName(res.data.first_name || '');
+        setLastName(res.data.last_name || '');
         setEmail(res.data.email);
         setPhone(res.data.phone || '');
         setZip(res.data.zip_code);
@@ -58,6 +62,8 @@ function ProfileTab() {
     setSaving(true);
     try {
       const updates: Record<string, string> = {};
+      if (firstName !== (profile?.first_name || '')) updates.first_name = firstName;
+      if (lastName !== (profile?.last_name || '')) updates.last_name = lastName;
       if (email !== profile?.email) updates.email = email;
       if (phone !== (profile?.phone || '')) updates.phone = phone;
       if (zip !== profile?.zip_code) updates.zip_code = zip;
@@ -100,6 +106,16 @@ function ProfileTab() {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: D, marginBottom: 6, display: 'block' }}>First Name</label>
+            <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="First" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: D, marginBottom: 6, display: 'block' }}>Last Name</label>
+            <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Last" style={inputStyle} />
+          </div>
+        </div>
         <div>
           <label style={{ fontSize: 13, fontWeight: 600, color: D, marginBottom: 6, display: 'block' }}>Email</label>
           <input value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />

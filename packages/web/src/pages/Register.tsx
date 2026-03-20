@@ -9,6 +9,8 @@ export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
 
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [zipCode, setZipCode] = useState('');
@@ -20,6 +22,10 @@ export default function Register() {
     e.preventDefault();
     setError(null);
 
+    if (!firstName.trim() || !lastName.trim()) {
+      setError('First and last name are required');
+      return;
+    }
     if (password.length < 8) {
       setError('Password must be at least 8 characters');
       return;
@@ -30,7 +36,7 @@ export default function Register() {
     }
 
     setLoading(true);
-    const err = await register({ email, password, zipCode, phone: phone || undefined });
+    const err = await register({ firstName: firstName.trim(), lastName: lastName.trim(), email, password, zipCode, phone: phone || undefined });
     setLoading(false);
     if (err) {
       setError(err);
@@ -58,6 +64,35 @@ export default function Register() {
                 {error}
               </div>
             )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="firstName" className="block text-sm font-semibold text-dark mb-1.5">First name</label>
+                <input
+                  id="firstName"
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                  autoComplete="given-name"
+                  className="w-full bg-white border border-dark/15 rounded-xl px-4 py-3 text-sm text-dark placeholder:text-dark/30 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+                  placeholder="First"
+                />
+              </div>
+              <div>
+                <label htmlFor="lastName" className="block text-sm font-semibold text-dark mb-1.5">Last name</label>
+                <input
+                  id="lastName"
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                  autoComplete="family-name"
+                  className="w-full bg-white border border-dark/15 rounded-xl px-4 py-3 text-sm text-dark placeholder:text-dark/30 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+                  placeholder="Last"
+                />
+              </div>
+            </div>
 
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-dark mb-1.5">Email</label>
