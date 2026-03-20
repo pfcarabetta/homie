@@ -523,7 +523,7 @@ export default function GetQuotes() {
     setData(d => ({ ...d, extra: answer }));
     addUser(answer);
 
-    // Now ask AI to generate a brief diagnosis summary
+    // Silently generate diagnosis summary (not shown in chat)
     const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
     const history: { role: 'user' | 'assistant'; content: string }[] = [
       { role: 'user', content: `I need ${cat?.label} help: ${data.a1}` },
@@ -531,18 +531,37 @@ export default function GetQuotes() {
       { role: 'user', content: answer },
     ];
 
+    setStreaming(true);
+    let diagText = '';
     setTimeout(() => {
-      streamAI(
-        `Based on this conversation, write a 2-3 sentence summary of what the homeowner needs, suitable for briefing a service provider. Be specific and factual. Do not ask questions. Start with what the issue is.`,
-        history,
-        (diagText) => {
-          setData(d => ({ ...d, aiDiagnosis: diagText }));
-          setTimeout(() => {
-            addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
-            setPhase('zip');
-            scrollDown();
-          }, 500);
+      abortRef.current = diagnosticService.sendMessage(
+        sessionIdRef.current,
+        'Based on this conversation, write a 2-3 sentence summary of what the homeowner needs, suitable for briefing a service provider. Be specific and factual. Do not ask questions. Start with what the issue is.',
+        {
+          onToken: (token: string) => { diagText += token; },
+          onDiagnosis: () => {},
+          onJobSummary: () => {},
+          onDone: () => {
+            setStreaming(false);
+            setData(d => ({ ...d, aiDiagnosis: diagText }));
+            setTimeout(() => {
+              addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
+              setPhase('zip');
+              scrollDown();
+            }, 300);
+          },
+          onError: () => {
+            setStreaming(false);
+            setData(d => ({ ...d, aiDiagnosis: `${cat?.label}: ${data.a1}. ${answer}` }));
+            setTimeout(() => {
+              addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
+              setPhase('zip');
+              scrollDown();
+            }, 300);
+          },
         },
+        undefined,
+        history,
       );
     }, 300);
   };
@@ -555,6 +574,11 @@ export default function GetQuotes() {
 
   const handleSkipAI = () => {
     addUser("No, that covers it");
+
+    // Generate diagnosis from what we have
+    const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
+    setData(d => ({ ...d, aiDiagnosis: `${cat?.label}: ${data.a1}.` }));
+
     setTimeout(() => {
       addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
       setPhase('zip');
