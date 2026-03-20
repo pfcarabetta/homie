@@ -493,12 +493,14 @@ export default function GetQuotes() {
     const id = typeof cat === 'string' ? cat : cat.id;
     const c = CATEGORY_FLOWS[id];
     setData(d => ({ ...d, category: id }));
+    setPhase('waiting');
     addUser(c.label);
     setTimeout(() => { addAssistant(c.q1.text); setPhase('q1'); }, 500);
   };
 
   const handleQ1 = (answer: string) => {
     setData(d => ({ ...d, a1: answer }));
+    setPhase('waiting');
     addUser(answer);
 
     // Send context to AI for a smart follow-up question
@@ -523,6 +525,7 @@ export default function GetQuotes() {
 
   const handleAIResponse = (answer: string) => {
     setData(d => ({ ...d, aiFollowUp: d.aiFollowUp, extra: answer }));
+    setPhase('waiting');
     addUser(answer);
     setTimeout(() => {
       addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
@@ -533,11 +536,13 @@ export default function GetQuotes() {
 
   const handleExtraDetails = (text: string) => {
     setData(d => ({ ...d, extra: (d.extra ? d.extra + '. ' : '') + text }));
+    setPhase('waiting');
     addUser(text);
     generateDiagnosis();
   };
 
   const handleSkipExtra = () => {
+    setPhase('waiting');
     addUser("That's everything");
     generateDiagnosis();
   };
@@ -592,6 +597,7 @@ export default function GetQuotes() {
   };
 
   const handleSkipAI = () => {
+    setPhase('waiting');
     addUser("No, that covers it");
     setTimeout(() => {
       addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
@@ -602,12 +608,14 @@ export default function GetQuotes() {
 
   const handleZip = (zip: string) => {
     setData(d => ({ ...d, zip }));
+    setPhase('waiting');
     addUser(zip);
     setTimeout(() => { addAssistant('When do you need this done?'); setPhase('timing'); }, 500);
   };
 
   const handleTiming = (t: string) => {
     setData(d => ({ ...d, timing: t }));
+    setPhase('waiting');
     addUser(t);
     setTimeout(() => {
       addAssistant("Here's what I'll brief the providers on:");
@@ -625,6 +633,7 @@ export default function GetQuotes() {
 
   const handleTier = (t: typeof TIERS[number]) => {
     setData(d => ({ ...d, tier: t.id }));
+    setPhase('waiting');
     addUser(`${t.name} \u2014 ${t.price}`);
     setTimeout(() => {
       addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
