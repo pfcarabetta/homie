@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import HomePage from '@/pages/HomePage';
 import DiagnosticChat from '@/pages/DiagnosticChat';
+import GetQuotes from '@/pages/GetQuotes';
 import ProviderResults from '@/pages/ProviderResults';
 import ProviderPortal from '@/pages/ProviderPortal';
 import Login from '@/pages/Login';
@@ -21,6 +22,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/chat" element={<DiagnosticChat />} />
+          <Route path="/quote" element={<GetQuotes />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
