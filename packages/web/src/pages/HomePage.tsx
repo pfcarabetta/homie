@@ -351,6 +351,7 @@ export default function HomePage() {
           .hp-pricing-price { font-size: 22px !important; }
           .hp-pricing-features { display: none; }
           .hp-pricing-grid button { font-size: 12px !important; padding: 10px 0 !important; margin-top: 8px !important; }
+          .hp-popular-tag { font-size: 8px !important; padding: 2px 8px !important; top: -8px !important; }
           .hp-pricing-price { font-size: 36px; }
           .hp-cta-title { font-size: 28px; }
           .hp-social-bar { gap: 16px; padding: 20px 16px; flex-direction: column; align-items: flex-start; }
@@ -619,10 +620,10 @@ export default function HomePage() {
               boxShadow: t.popular ? '0 16px 60px rgba(45,41,38,0.2)' : 'none',
             }}>
               {t.popular && (
-                <div style={{
+                <div className="hp-popular-tag" style={{
                   position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)',
                   background: ORANGE, color: 'white', fontSize: 11, fontWeight: 700,
-                  padding: '4px 14px', borderRadius: 100, letterSpacing: '0.04em',
+                  padding: '4px 14px', borderRadius: 100, letterSpacing: '0.04em', whiteSpace: 'nowrap',
                 }}>MOST POPULAR</div>
               )}
               <div style={{ fontSize: 15, fontWeight: 600, color: t.popular ? 'rgba(255,255,255,0.6)' : '#9B9490', marginBottom: 8 }}>{t.tier}</div>
