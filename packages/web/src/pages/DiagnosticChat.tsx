@@ -831,7 +831,7 @@ export default function DiagnosticChat() {
               <textarea
                 ref={textareaRef}
                 rows={1}
-                placeholder="Describe what's going on..."
+                placeholder="Hey Homie, I need help with..."
                 style={{
                   flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
                   fontSize: 16, color: D, padding: '10px 0', lineHeight: 1.5, maxHeight: 120,
