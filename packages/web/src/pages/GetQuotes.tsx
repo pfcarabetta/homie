@@ -512,7 +512,7 @@ export default function GetQuotes() {
               <button onClick={handleSkip} style={{
                 padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
                 color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-              }}>Skip \u2014 let's go \u2192</button>
+              }}>Skip — let's go →</button>
             </div>
           </>
         )}
