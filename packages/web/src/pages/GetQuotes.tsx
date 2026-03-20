@@ -529,8 +529,8 @@ export default function GetQuotes() {
         return (hour < 8 || hour >= 18) ? (
           <div style={{
             background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
-            padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8,
-            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4,
+            padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center',
           }}>
             <span style={{ fontSize: 16, flexShrink: 0 }}>{'\uD83C\uDF19'}</span>
             <span>Some businesses may not be reachable outside business hours (8 AM – 6 PM). Quotes may take longer as a result.</span>
