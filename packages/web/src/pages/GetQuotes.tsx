@@ -646,7 +646,7 @@ export default function GetQuotes() {
   const serviceOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'service').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
 
   return (
-    <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
@@ -655,14 +655,12 @@ export default function GetQuotes() {
         @media (max-width: 480px) {
           .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; margin-left: 0 !important; }
           .gq-replies { margin-left: 0 !important; }
-          .gq-chat-area { padding-top: 12px !important; }
-          .gq-chat-area > div:first-child { scroll-margin-top: 80px; }
         }
       `}</style>
 
       {/* Header */}
       <nav style={{
-        position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
+        flexShrink: 0, zIndex: 50, background: 'white',
         padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
@@ -703,6 +701,7 @@ export default function GetQuotes() {
       })()}
 
       {/* Chat area */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
       <div className="gq-chat-area" style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
         {messages.map((m, i) => (
           m.role === 'assistant'
@@ -750,6 +749,7 @@ export default function GetQuotes() {
         {phase === 'outreach' && <OutreachView />}
 
         <div ref={bottomRef} />
+      </div>
       </div>
     </div>
   );
