@@ -544,57 +544,63 @@ export default function DiagnosticChat() {
 
   // ── Render ──────────────────────────────────────────────────────────────
 
+  const O = '#E8632B';
+  const D = '#2D2926';
+  const W = '#F9F5F2';
+
   return (
-    <div className="min-h-screen flex flex-col bg-warm overflow-hidden" style={{ height: '100vh' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @keyframes dcFadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes dcFadeIn { from { opacity:0; } to { opacity:1; } }
+        @keyframes dcPulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        @keyframes dcBounce { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
+      `}</style>
+
       {/* Header */}
-      <div className="bg-white border-b border-dark/10 px-4 shrink-0">
-        <div className="max-w-2xl mx-auto h-16 flex items-center gap-3">
-          <button onClick={() => { dispatch({ type: 'RESET_CHAT' }); sessionIdRef.current = crypto.randomUUID(); abortRef.current?.abort(); cleanupOutreachRef.current?.(); }} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity">
-            <HomieLogo size={40} />
-            <div className="text-left">
-              <div className="text-lg font-display font-black text-dark tracking-tight">Homie</div>
-              <div className="text-[11px] text-dark/40 font-semibold uppercase tracking-wider">Your home's best friend</div>
-            </div>
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_0_3px] shadow-green-500/15" />
-              <span className="text-xs text-green-600 font-semibold">Online</span>
-            </div>
-            {authService.isAuthenticated() ? (
-              <button onClick={() => { authService.logout(); window.location.reload(); }} className="text-xs text-dark/40 hover:text-dark transition-colors">
-                Sign out
-              </button>
-            ) : (
-              <a href="/login" className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-4 py-1.5 rounded-full transition-colors">
-                Sign in
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
+        padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: '1px solid rgba(0,0,0,0.05)',
+      }}>
+        <button onClick={() => { dispatch({ type: 'RESET_CHAT' }); sessionIdRef.current = crypto.randomUUID(); abortRef.current?.abort(); cleanupOutreachRef.current?.(); }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>homie</span>
+        </button>
+        <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>Free diagnostic</span>
+      </nav>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-4" style={{ minHeight: isEmpty ? '100%' : undefined }}>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px 16px 120px', display: 'flex', flexDirection: 'column', gap: 12, minHeight: isEmpty ? '100%' : undefined }}>
+
           {/* Welcome screen */}
           {isEmpty && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
-              <HomieLogo size={80} />
-              <h1 className="text-[30px] font-display font-black text-dark mt-5 mb-1 tracking-tight">Hey, I'm Homie</h1>
-              <p className="text-base text-dark/50 font-medium mb-2">Your home's best friend 🏠</p>
-              <p className="text-sm text-dark/40 max-w-[340px] leading-relaxed mb-8">
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 16px' }}>
+              <div style={{ width: 64, height: 64, borderRadius: 18, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 28 }}>h</span>
+              </div>
+              <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: D, marginBottom: 8 }}>Hey, I'm Homie</h1>
+              <p style={{ fontSize: 15, color: '#9B9490', marginBottom: 6 }}>Your home's best friend</p>
+              <p style={{ fontSize: 14, color: '#bbb', maxWidth: 340, lineHeight: 1.6, marginBottom: 32 }}>
                 Tell me what's going on or snap a photo — I'll figure out the issue and help you fix it or find the right pro.
               </p>
-              <div className="grid grid-cols-2 gap-2.5 w-full max-w-[360px]">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 360 }}>
                 {SUGGESTED_PROMPTS.map((p) => (
                   <button
                     key={p.text}
                     onClick={() => sendMessage(p.text)}
-                    className="bg-white border border-dark/10 rounded-xl px-4 py-3 text-left flex items-center gap-2 hover:border-orange-500 hover:bg-orange-500/[0.03] transition-all"
+                    style={{
+                      background: 'white', border: '2px solid rgba(0,0,0,0.07)', borderRadius: 12,
+                      padding: '12px 14px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+                      cursor: 'pointer', transition: 'all 0.15s', fontSize: 13, fontWeight: 500, color: D,
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                    onMouseEnter={e => { (e.currentTarget).style.borderColor = O; (e.currentTarget).style.background = 'rgba(232,99,43,0.03)'; }}
+                    onMouseLeave={e => { (e.currentTarget).style.borderColor = 'rgba(0,0,0,0.07)'; (e.currentTarget).style.background = 'white'; }}
                   >
-                    <span className="text-xl">{p.icon}</span>
-                    <span className="text-[13px] font-semibold text-dark">{p.text}</span>
+                    <span style={{ fontSize: 20 }}>{p.icon}</span>
+                    <span>{p.text}</span>
                   </button>
                 ))}
               </div>
@@ -603,92 +609,105 @@ export default function DiagnosticChat() {
 
           {/* Chat messages */}
           {state.messages.map((msg) => {
-            // Hide the empty streaming message — the typing indicator shows instead
             if (msg.id === state.streamingMessageId && msg.content.length === 0) return null;
             const isUser = msg.role === 'user';
-            return (
-              <div key={msg.id} className={`flex ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start gap-2.5 max-w-[85%] ${isUser ? 'self-end' : 'self-start'} animate-fade-in`}>
-                {!isUser && <HomieAvatar />}
-                <div className="min-w-0">
-                  {/* Image */}
-                  {msg.image && (
-                    <div className={`mb-2 rounded-2xl overflow-hidden max-w-[240px] border border-dark/10 ${isUser ? 'ml-auto' : ''}`}>
-                      <img src={msg.image} alt="Uploaded" className="w-full block" />
-                    </div>
-                  )}
-                  {/* Text bubble */}
-                  {msg.content && (
-                    <div
-                      className={`rounded-2xl px-[18px] py-3.5 text-[14.5px] leading-relaxed whitespace-pre-wrap ${
-                        isUser
-                          ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-br-sm shadow-md shadow-orange-500/20'
-                          : 'bg-white text-dark border border-dark/10 rounded-bl-sm'
-                      }`}
-                      dangerouslySetInnerHTML={{
-                        __html: msg.content
-                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                          .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                          .replace(/`(.+?)`/g, '<code class="bg-dark/10 px-1 rounded text-sm">$1</code>'),
+            return isUser ? (
+              <div key={msg.id} style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4, animation: 'dcFadeSlide 0.2s ease' }}>
+                <div style={{
+                  background: O, color: 'white', padding: '10px 18px', borderRadius: '16px 16px 4px 16px',
+                  maxWidth: '75%', fontSize: 15, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                }}
+                  dangerouslySetInnerHTML={{
+                    __html: msg.content
+                      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                      .replace(/\*(.+?)\*/g, '<em>$1</em>'),
+                  }}
+                />
+              </div>
+            ) : (
+              <div key={msg.id} style={{ animation: 'dcFadeSlide 0.3s ease' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 4 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    {msg.content && (
+                      <div style={{
+                        background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px',
+                        maxWidth: '100%', fontSize: 15, lineHeight: 1.6, color: D, whiteSpace: 'pre-wrap',
                       }}
-                    />
-                  )}
-                  {/* Diagnosis card */}
-                  {msg.diagnosis && (
-                    <DiagnosisCard diagnosis={msg.diagnosis} onFindPro={openMatchFlow} />
-                  )}
-                  {/* Job summary card (early match) */}
-                  {!msg.diagnosis && msg.jobSummary && (
-                    <EarlyMatchCard summary={msg.jobSummary} onRequestPro={openMatchFlow} />
-                  )}
+                        dangerouslySetInnerHTML={{
+                          __html: msg.content
+                            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                            .replace(/\*(.+?)\*/g, '<em>$1</em>'),
+                        }}
+                      />
+                    )}
+                    {msg.diagnosis && (
+                      <div style={{ marginTop: 8 }}>
+                        <DiagnosisCard diagnosis={msg.diagnosis} onFindPro={openMatchFlow} />
+                      </div>
+                    )}
+                    {!msg.diagnosis && msg.jobSummary && (
+                      <div style={{ marginTop: 8 }}>
+                        <EarlyMatchCard summary={msg.jobSummary} onRequestPro={openMatchFlow} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
 
-          {/* Screening buttons — show after first assistant response */}
+          {/* Screening buttons */}
           {!state.screeningAnswered && !state.streaming && state.messages.length >= 2 && state.messages.some((m) => m.role === 'assistant' && m.content.length > 0) && (
-            <div className="flex items-start gap-2.5 self-start animate-fade-in">
-              <HomieAvatar />
-              <div className="flex flex-col gap-2">
-                <p className="text-[13px] text-dark/50 font-medium">How would you like to handle this?</p>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: 'I\'ll tackle it myself', icon: '🔧', value: 'I want to try fixing this myself — walk me through it.' },
-                    { label: 'Match me with a pro', icon: '👷', value: 'I\'d rather have a professional handle this — please match me with a Homie Pro.' },
-                    { label: 'I\'m not sure yet', icon: '🤔', value: 'I\'m not sure yet — can you help me figure out which option makes more sense?' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.label}
-                      onClick={() => {
-                        dispatch({ type: 'SCREENING_ANSWERED' });
-                        sendMessage(opt.value);
-                      }}
-                      className="bg-white border border-dark/10 rounded-xl px-4 py-2.5 text-left flex items-center gap-2 hover:border-orange-500 hover:bg-orange-500/[0.03] transition-all"
-                    >
-                      <span className="text-lg">{opt.icon}</span>
-                      <span className="text-[13px] font-semibold text-dark">{opt.label}</span>
-                    </button>
+            <div style={{ marginLeft: 42, animation: 'dcFadeSlide 0.3s ease' }}>
+              <p style={{ fontSize: 13, color: '#9B9490', fontWeight: 500, marginBottom: 8 }}>How would you like to handle this?</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {[
+                  { label: 'I\'ll tackle it myself', icon: '🔧', value: 'I want to try fixing this myself — walk me through it.' },
+                  { label: 'Match me with a pro', icon: '👷', value: 'I\'d rather have a professional handle this — please match me with a Homie Pro.' },
+                  { label: 'I\'m not sure yet', icon: '🤔', value: 'I\'m not sure yet — can you help me figure out which option makes more sense?' },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    onClick={() => { dispatch({ type: 'SCREENING_ANSWERED' }); sendMessage(opt.value); }}
+                    style={{
+                      background: 'white', border: '2px solid rgba(0,0,0,0.07)', borderRadius: 12,
+                      padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8,
+                      cursor: 'pointer', transition: 'all 0.15s', fontSize: 13, fontWeight: 500, color: D,
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                  >
+                    <span style={{ fontSize: 18 }}>{opt.icon}</span>
+                    <span>{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Typing indicator */}
+          {state.streaming && !state.messages.some((m) => m.id === state.streamingMessageId && m.content.length > 0) && (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', animation: 'dcFadeIn 0.3s ease' }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
+              </div>
+              <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px' }}>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#ccc', animation: `dcPulse 1s infinite ${i * 0.2}s` }} />
                   ))}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Typing indicator — only show before first token arrives */}
-          {state.streaming && !state.messages.some((m) => m.id === state.streamingMessageId && m.content.length > 0) && (
-            <div className="flex items-center gap-2.5">
-              <HomieAvatar />
-              <div className="bg-white rounded-2xl rounded-bl-sm px-5 py-3.5 border border-dark/10 flex gap-1.5 items-center">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="w-[7px] h-[7px] rounded-full bg-orange-500 opacity-50 animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Stream error */}
           {state.streamError && (
-            <div className="max-w-[85%]">
+            <div style={{ maxWidth: '85%' }}>
               <ErrorState title="Couldn't get a response" message={state.streamError} onRetry={() => dispatch({ type: 'STREAM_ERROR', error: '' })} />
             </div>
           )}
@@ -710,39 +729,65 @@ export default function DiagnosticChat() {
 
       {/* Image preview strip */}
       {imgPreview && (
-        <div className="bg-white border-t border-dark/5 px-5 py-2 flex items-center gap-2.5 shrink-0">
-          <div className="relative">
-            <img src={imgPreview} alt="Preview" className="h-14 rounded-lg border border-dark/10" />
-            <button onClick={removeImg} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-dark text-white text-[11px] border-2 border-white flex items-center justify-center leading-none">✕</button>
+        <div style={{ background: 'white', borderTop: '1px solid rgba(0,0,0,0.05)', padding: '8px 20px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{ position: 'relative' }}>
+            <img src={imgPreview} alt="Preview" style={{ height: 56, borderRadius: 10, border: '1px solid rgba(0,0,0,0.08)' }} />
+            <button onClick={removeImg} style={{
+              position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%',
+              background: D, color: 'white', border: '2px solid white', fontSize: 11, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>✕</button>
           </div>
-          <span className="text-xs text-dark/40">Image attached</span>
+          <span style={{ fontSize: 12, color: '#9B9490' }}>Image attached</span>
         </div>
       )}
 
       {/* Input */}
-      <div className="bg-white border-t border-dark/10 px-4 pb-5 pt-3 shrink-0">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-end gap-2 bg-warm rounded-2xl px-4 py-1.5 border border-dark/10 focus-within:border-orange-500/30 transition-colors">
-            <input type="file" ref={fileRef} onChange={onImgUpload} accept="image/*" className="hidden" />
-            <button onClick={() => fileRef.current?.click()} className="text-xl text-dark/40 hover:text-orange-500 transition-colors py-2 shrink-0">📷</button>
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              placeholder="Hey Homie, what's wrong with my..."
-              className="flex-1 bg-transparent border-none outline-none resize-none text-[15px] text-dark placeholder:text-dark/30 py-2 leading-relaxed max-h-[120px]"
-              onInput={handleTextareaInput}
-              onKeyDown={handleKeyDown}
-              disabled={state.streaming}
-            />
-            <button
-              onClick={handleSend}
-              disabled={state.streaming}
-              className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-500 to-orange-600 disabled:from-dark/15 disabled:to-dark/15 text-white text-lg transition-all"
+      <div style={{ background: 'white', borderTop: '1px solid rgba(0,0,0,0.05)', padding: '12px 16px 20px', flexShrink: 0 }}>
+        <div style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <input type="file" ref={fileRef} onChange={onImgUpload} accept="image/*" style={{ display: 'none' }} />
+            <button onClick={() => fileRef.current?.click()} style={{
+              width: 48, height: 48, borderRadius: '50%', border: '2px solid rgba(0,0,0,0.08)',
+              background: 'white', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = O; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'; }}
+            >{'\uD83D\uDCF7'}</button>
+            <div style={{
+              flex: 1, display: 'flex', alignItems: 'flex-end',
+              border: '2px solid rgba(0,0,0,0.08)', borderRadius: 24,
+              background: W, padding: '4px 4px 4px 18px', transition: 'border-color 0.2s',
+            }}
+              onFocus={() => { }}
             >
-              ↑
-            </button>
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                placeholder="Describe what's going on..."
+                style={{
+                  flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
+                  fontSize: 16, color: D, padding: '10px 0', lineHeight: 1.5, maxHeight: 120,
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+                onInput={handleTextareaInput}
+                onKeyDown={handleKeyDown}
+                disabled={state.streaming}
+              />
+              <button
+                onClick={handleSend}
+                disabled={state.streaming}
+                style={{
+                  width: 44, height: 44, borderRadius: '50%', border: 'none', flexShrink: 0,
+                  background: state.streaming ? 'rgba(0,0,0,0.06)' : O,
+                  color: 'white', fontSize: 20, cursor: state.streaming ? 'default' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s',
+                }}
+              >{'\u2191'}</button>
+            </div>
           </div>
-          <p className="text-center text-[11px] text-dark/20 mt-2">
+          <p style={{ textAlign: 'center', fontSize: 11, color: '#ccc', marginTop: 8 }}>
             Homie provides guidance only — always verify with a licensed professional for safety-critical issues
           </p>
         </div>
