@@ -7,6 +7,7 @@ import ProviderResults from '@/pages/ProviderResults';
 import ProviderPortal from '@/pages/ProviderPortal';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
+import ResetPassword from '@/pages/ResetPassword';
 import AdminLogin from '@/pages/admin/AdminLogin';
 import AdminLayout from '@/pages/admin/AdminLayout';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/quote" element={<GetQuotes />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
           <Route path="/portal" element={<ProviderPortal />} />
           <Route path="/admin" element={<AdminLogin />} />
