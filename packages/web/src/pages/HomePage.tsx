@@ -213,6 +213,65 @@ function DiagnosticPreview() {
   );
 }
 
+/* -- Background scrolling mosaic (non-interactive) -- */
+const BG_ISSUES = [
+  { icon: '\uD83D\uDD27', text: 'Faucet leaking' },
+  { icon: '\u2744\uFE0F', text: 'AC not cooling' },
+  { icon: '\uD83D\uDCA1', text: 'Warm switch' },
+  { icon: '\uD83D\uDEBD', text: 'Toilet running' },
+  { icon: '\uD83D\uDD0C', text: 'Dead outlet' },
+  { icon: '\uD83C\uDFE0', text: 'Roof leak' },
+  { icon: '\uD83D\uDD28', text: 'Drywall crack' },
+  { icon: '\uD83D\uDEAA', text: 'Door stuck' },
+  { icon: '\uD83C\uDFA8', text: 'Paint peeling' },
+  { icon: '\uD83E\uDDCA', text: 'Fridge noise' },
+  { icon: '\uD83D\uDCA8', text: 'No heat' },
+  { icon: '\uD83E\uDE9F', text: 'Drafty window' },
+  { icon: '\u26A1', text: 'Breaker trips' },
+  { icon: '\uD83D\uDEB0', text: 'Slow drain' },
+  { icon: '\uD83D\uDD25', text: 'Oven broken' },
+  { icon: '\uD83E\uDEB5', text: 'Fence leaning' },
+  { icon: '\uD83D\uDCA7', text: 'Water stain' },
+  { icon: '\uD83C\uDFD7\uFE0F', text: 'Foundation' },
+  { icon: '\uD83C\uDF3F', text: 'Sprinkler' },
+  { icon: '\uD83E\uDDFA', text: 'Washer issue' },
+];
+
+function BackgroundMosaic() {
+  const columns = [[], [], [], []] as { icon: string; text: string }[][];
+  const shuffled = [...BG_ISSUES].sort(() => Math.random() - 0.5);
+  shuffled.forEach((item, i) => columns[i % 4].push(item));
+  // Duplicate for seamless loop
+  const cols = columns.map(col => [...col, ...col]);
+  const durations = [26, 32, 22, 30];
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8,
+      overflow: 'hidden', opacity: 0.35, pointerEvents: 'none',
+      maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
+      WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
+    }}>
+      {cols.map((col, colIdx) => (
+        <div key={colIdx} style={{
+          display: 'flex', flexDirection: 'column', gap: 8,
+          animation: `hpMosaicScroll ${durations[colIdx]}s linear infinite`,
+        }}>
+          {col.map((tile, i) => (
+            <div key={`${colIdx}-${i}`} style={{
+              background: 'white', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 12,
+              padding: '12px 6px', textAlign: 'center', flexShrink: 0,
+            }}>
+              <div style={{ fontSize: 20, marginBottom: 2 }}>{tile.icon}</div>
+              <div style={{ fontSize: 10, fontWeight: 500, color: '#2D2926', lineHeight: 1.2 }}>{tile.text}</div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* -- Main page -- */
 export default function HomePage() {
   const navigate = useNavigate();
@@ -225,6 +284,7 @@ export default function HomePage() {
         @keyframes slideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+        @keyframes hpMosaicScroll { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
 
         .hp-demo { background: ${DARK}; border-radius: 20px; overflow: hidden; max-width: 540px; width: 100%; box-shadow: 0 24px 80px rgba(0,0,0,0.25); }
         .hp-nav-links { display: flex; align-items: center; gap: 28px; }
@@ -527,8 +587,11 @@ export default function HomePage() {
               <span style={{ fontSize: 13, color: '#9B9490' }}>No account required</span>
             </div>
           </div>
-          <div className="hp-diy-preview">
-            <DiagnosticPreview />
+          <div className="hp-diy-preview" style={{ position: 'relative' }}>
+            <BackgroundMosaic />
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <DiagnosticPreview />
+            </div>
           </div>
         </div>
       </section>
