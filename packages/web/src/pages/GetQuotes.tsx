@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService } from '@/services/api';
+import { authService, diagnosticService } from '@/services/api';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -139,14 +139,13 @@ const OUTREACH_LOG = [
 interface QuoteData {
   category: string | null;
   a1: string | null;
-  a2: string | null;
-  a3: string | null;
+  aiFollowUp: string | null;
+  aiDiagnosis: string | null;
   extra: string | null;
   photo: string | null;
   zip: string;
   timing: string | null;
   tier: string | null;
-  description?: string;
 }
 
 interface CatOption { id: string; icon: string; label: string }
@@ -269,9 +268,9 @@ function DiagnosisSummary({ data }: { data: QuoteData }) {
         <span style={{ fontSize: 13, fontWeight: 600, color: G }}>AI diagnosis ready</span>
       </div>
       <div style={{ padding: '16px' }}>
-        <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>{cat?.icon} {data.a1} — {data.a2}</div>
-        <div style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 8 }}>
-          {data.description || `${data.a2} in ${data.a1?.toLowerCase()}. ${data.a3}. ${data.extra ? `Additional info: ${data.extra}.` : ''}`}
+        <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>{cat?.icon} {cat?.label} — {data.a1}</div>
+        <div style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 8, whiteSpace: 'pre-wrap' }}>
+          {data.aiDiagnosis || `${data.a1}. ${data.extra ? `Additional info: ${data.extra}.` : ''}`}
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
           <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
@@ -423,8 +422,11 @@ export default function GetQuotes() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [phase, setPhase] = useState('greeting');
-  const [data, setData] = useState<QuoteData>({ category: null, a1: null, a2: null, a3: null, extra: null, photo: null, zip: '', timing: null, tier: null });
+  const [data, setData] = useState<QuoteData>({ category: null, a1: null, aiFollowUp: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
+  const [streaming, setStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const sessionIdRef = useRef(crypto.randomUUID());
+  const abortRef = useRef<AbortController | null>(null);
 
   const scrollDown = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
 
@@ -438,6 +440,38 @@ export default function GetQuotes() {
     scrollDown();
   }, []);
 
+  // Stream an AI message and call onDone with the full text when complete
+  const streamAI = useCallback((userMsg: string, history: { role: 'user' | 'assistant'; content: string }[], onDone: (fullText: string) => void) => {
+    setStreaming(true);
+    const streamMsgId = `ai-${Date.now()}`;
+    setMessages(m => [...m, { role: 'assistant', text: '', id: streamMsgId } as { role: string; text: string }]);
+    scrollDown();
+
+    let fullText = '';
+    abortRef.current = diagnosticService.sendMessage(
+      sessionIdRef.current,
+      userMsg,
+      {
+        onToken: (token: string) => {
+          fullText += token;
+          setMessages(m => m.map(msg => ('id' in msg && (msg as { id?: string }).id === streamMsgId) ? { ...msg, text: fullText } : msg));
+          scrollDown();
+        },
+        onDiagnosis: () => {},
+        onJobSummary: () => {},
+        onDone: () => { setStreaming(false); onDone(fullText); },
+        onError: (err: Error) => {
+          setStreaming(false);
+          console.error('[GetQuotes AI]', err);
+          setMessages(m => m.map(msg => ('id' in msg && (msg as { id?: string }).id === streamMsgId) ? { ...msg, text: 'Sorry, I had trouble analyzing that. Let me continue with what I have.' } : msg));
+          onDone('');
+        },
+      },
+      undefined,
+      history,
+    );
+  }, []);
+
   // Greeting on mount
   useEffect(() => {
     const t = setTimeout(() => {
@@ -446,6 +480,10 @@ export default function GetQuotes() {
     }, 400);
     return () => clearTimeout(t);
   }, [addAssistant]);
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   const flow = data.category ? CATEGORY_FLOWS[data.category] : null;
 
@@ -460,25 +498,53 @@ export default function GetQuotes() {
   const handleQ1 = (answer: string) => {
     setData(d => ({ ...d, a1: answer }));
     addUser(answer);
-    setTimeout(() => { addAssistant(flow!.q2.text); setPhase('q2'); }, 500);
+
+    // Send context to AI for a smart follow-up question
+    const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
+    const context = `I need help with ${cat?.label}. Specifically: ${answer}.`;
+    const history: { role: 'user' | 'assistant'; content: string }[] = [
+      { role: 'user', content: context },
+    ];
+
+    setTimeout(() => {
+      streamAI(
+        `The homeowner needs ${cat?.label} help. They said: "${answer}". Ask ONE brief, specific follow-up question to better understand the issue so we can match them with the right pro. Keep it under 2 sentences. Do not offer to fix it — we are finding them a provider.`,
+        history,
+        (aiText) => {
+          setData(d => ({ ...d, aiFollowUp: aiText }));
+          setPhase('ai_response');
+          scrollDown();
+        },
+      );
+    }, 300);
   };
 
-  const handleQ2 = (answer: string) => {
-    setData(d => ({ ...d, a2: answer }));
+  const handleAIResponse = (answer: string) => {
+    setData(d => ({ ...d, extra: answer }));
     addUser(answer);
-    setTimeout(() => { addAssistant(flow!.q3.text); setPhase('q3'); }, 500);
-  };
 
-  const handleQ3 = (answer: string) => {
-    setData(d => ({ ...d, a3: answer }));
-    addUser(answer);
-    setTimeout(() => { addAssistant("Got it. Anything else you want the pro to know? You can also add a photo. Or just skip ahead."); setPhase('extra'); }, 500);
-  };
+    // Now ask AI to generate a brief diagnosis summary
+    const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
+    const history: { role: 'user' | 'assistant'; content: string }[] = [
+      { role: 'user', content: `I need ${cat?.label} help: ${data.a1}` },
+      { role: 'assistant', content: data.aiFollowUp || '' },
+      { role: 'user', content: answer },
+    ];
 
-  const handleExtra = (text: string) => {
-    setData(d => ({ ...d, extra: text }));
-    addUser(text);
-    goToZip();
+    setTimeout(() => {
+      streamAI(
+        `Based on this conversation, write a 2-3 sentence summary of what the homeowner needs, suitable for briefing a service provider. Be specific and factual. Do not ask questions. Start with what the issue is.`,
+        history,
+        (diagText) => {
+          setData(d => ({ ...d, aiDiagnosis: diagText }));
+          setTimeout(() => {
+            addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
+            setPhase('zip');
+            scrollDown();
+          }, 500);
+        },
+      );
+    }, 300);
   };
 
   const handlePhoto = (url: string) => {
@@ -487,8 +553,13 @@ export default function GetQuotes() {
     scrollDown();
   };
 
-  const goToZip = () => {
-    setTimeout(() => { addAssistant("Almost there \u2014 what's your zip code?"); setPhase('zip'); }, 500);
+  const handleSkipAI = () => {
+    addUser("No, that covers it");
+    setTimeout(() => {
+      addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
+      setPhase('zip');
+      scrollDown();
+    }, 500);
   };
 
   const handleZip = (zip: string) => {
@@ -501,7 +572,7 @@ export default function GetQuotes() {
     setData(d => ({ ...d, timing: t }));
     addUser(t);
     setTimeout(() => {
-      addAssistant("Nice \u2014 I've got a solid picture. Here's what I'll brief the providers on:");
+      addAssistant("Here's what I'll brief the providers on:");
       setTimeout(() => {
         setPhase('diagnosis');
         scrollDown();
@@ -522,11 +593,6 @@ export default function GetQuotes() {
       setPhase('outreach');
       scrollDown();
     }, 500);
-  };
-
-  const handleSkip = () => {
-    addUser("Skip \u2014 let's go");
-    goToZip();
   };
 
   const repairOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'repair').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
@@ -614,23 +680,21 @@ export default function GetQuotes() {
           </>
         )}
         {phase === 'q1' && flow && <QuickReplies options={flow.q1.options} onSelect={(opt) => handleQ1(opt as string)} />}
-        {phase === 'q2' && flow && <QuickReplies options={flow.q2.options} onSelect={(opt) => handleQ2(opt as string)} />}
-        {phase === 'q3' && flow && <QuickReplies options={flow.q3.options} onSelect={(opt) => handleQ3(opt as string)} />}
-        {phase === 'extra' && (
+        {phase === 'ai_response' && !streaming && (
           <>
-            <TextInput placeholder="Any other details..." onSubmit={handleExtra} />
+            <TextInput placeholder="Type your answer..." onSubmit={handleAIResponse} />
             <PhotoUpload onUpload={handlePhoto} />
             <div style={{ marginLeft: 42, marginBottom: 16 }}>
-              <button onClick={handleSkip} style={{
+              <button onClick={handleSkipAI} style={{
                 padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
                 color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-              }}>Skip — let's go →</button>
+              }}>No, that covers it →</button>
             </div>
           </>
         )}
-        {phase === 'zip' && <TextInput placeholder="Enter zip code..." onSubmit={handleZip} />}
-        {phase === 'timing' && <QuickReplies options={['ASAP', 'This week', 'This month', 'Flexible']} onSelect={(opt) => handleTiming(opt as string)} />}
-        {phase === 'tier' && <TierCards onSelect={handleTier} />}
+        {phase === 'zip' && !streaming && <TextInput placeholder="Enter zip code..." onSubmit={handleZip} />}
+        {phase === 'timing' && !streaming && <QuickReplies options={['ASAP', 'This week', 'This month', 'Flexible']} onSelect={(opt) => handleTiming(opt as string)} />}
+        {phase === 'tier' && !streaming && <TierCards onSelect={handleTier} />}
         {phase === 'outreach' && <OutreachView />}
 
         <div ref={bottomRef} />
