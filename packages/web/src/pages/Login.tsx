@@ -38,7 +38,7 @@ export default function Login() {
 
       <div className="flex-1 flex items-start justify-center px-4 pt-4">
         <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-bold text-center mb-1">Welcome back</h1>
+          <h1 className="text-2xl font-bold text-center mb-1">Your Homie missed you</h1>
           <p className="text-dark/50 text-sm text-center mb-8">Sign in to your Homie account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
