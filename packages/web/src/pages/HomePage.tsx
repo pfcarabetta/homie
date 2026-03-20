@@ -346,7 +346,11 @@ export default function HomePage() {
           .hp-diy-text { flex: none; }
           .hp-diy-preview { flex: none; width: 100%; }
           .hp-diy-title { font-size: 28px; }
-          .hp-pricing-grid { grid-template-columns: 1fr; gap: 16px; }
+          .hp-pricing-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+          .hp-pricing-grid > div { padding: 16px 10px !important; border-radius: 14px !important; }
+          .hp-pricing-price { font-size: 22px !important; }
+          .hp-pricing-features { display: none; }
+          .hp-pricing-grid button { font-size: 12px !important; padding: 10px 0 !important; margin-top: 8px !important; }
           .hp-pricing-price { font-size: 36px; }
           .hp-cta-title { font-size: 28px; }
           .hp-social-bar { gap: 16px; padding: 20px 16px; flex-direction: column; align-items: flex-start; }
@@ -624,14 +628,16 @@ export default function HomePage() {
               <div style={{ fontSize: 15, fontWeight: 600, color: t.popular ? 'rgba(255,255,255,0.6)' : '#9B9490', marginBottom: 8 }}>{t.tier}</div>
               <div className="hp-pricing-price" style={{ color: t.popular ? 'white' : DARK }}>{t.price}</div>
               <div style={{ fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490', marginBottom: 20 }}>per search</div>
-              {[t.time, t.providers, t.channels, 'Full diagnostic included', 'Money-back guarantee'].map((f, j) => (
-                <div key={j} style={{
-                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9,
-                  fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.75)' : '#6B6560',
-                }}>
-                  <span style={{ color: GREEN }}>&#10003;</span> {f}
-                </div>
-              ))}
+              <div className="hp-pricing-features">
+                {[t.time, t.providers, t.channels, 'Full diagnostic included', 'Money-back guarantee'].map((f, j) => (
+                  <div key={j} style={{
+                    display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9,
+                    fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.75)' : '#6B6560',
+                  }}>
+                    <span style={{ color: GREEN }}>&#10003;</span> {f}
+                  </div>
+                ))}
+              </div>
               <button onClick={() => navigate('/quote')} style={{
                 width: '100%', marginTop: 16, padding: '13px 0', borderRadius: 100, fontSize: 15, fontWeight: 600,
                 cursor: 'pointer', border: 'none',
