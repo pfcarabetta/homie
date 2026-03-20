@@ -247,7 +247,7 @@ export default function HomePage() {
         .hp-diy-preview { flex: 1 1 400px; display: flex; justify-content: center; }
         .hp-diy-title { font-family: 'Fraunces', serif; font-size: 38px; font-weight: 700; color: ${DARK}; margin-bottom: 16px; line-height: 1.15; }
         .hp-pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
-        .hp-pricing-price { font-family: 'Fraunces', serif; font-size: 44px; font-weight: 700; margin-bottom: 4px; }
+        .hp-pricing-price { font-family: 'DM Sans', sans-serif; font-size: 44px; font-weight: 700; margin-bottom: 4px; }
         .hp-cta-title { font-family: 'Fraunces', serif; font-size: 40px; font-weight: 700; color: white; margin-bottom: 16px; }
         .hp-social-bar { display: flex; align-items: center; justify-content: center; gap: 48px; flex-wrap: wrap; padding: 24px 32px; }
         .hp-social-item { display: flex; align-items: center; gap: 8px; }
