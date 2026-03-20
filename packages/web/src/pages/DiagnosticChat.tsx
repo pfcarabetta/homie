@@ -35,12 +35,106 @@ const SEV_LABELS: Record<string, { bg: string; text: string; label: string }> = 
   unknown: { bg: 'bg-dark/5', text: 'text-dark/50', label: 'Assessing' },
 };
 
-const SUGGESTED_PROMPTS = [
+const ALL_ISSUES = [
   { icon: '🚿', text: 'My faucet is leaking' },
-  { icon: '❄️', text: "AC isn't cooling properly" },
+  { icon: '❄️', text: "AC isn't cooling" },
   { icon: '💡', text: 'Light switch feels warm' },
   { icon: '🚽', text: 'Toilet keeps running' },
+  { icon: '🔌', text: 'Outlet stopped working' },
+  { icon: '🌊', text: 'Water heater issue' },
+  { icon: '🏠', text: 'Roof is leaking' },
+  { icon: '🔨', text: 'Drywall needs patching' },
+  { icon: '🚪', text: "Door won't close right" },
+  { icon: '🎨', text: 'Paint is peeling' },
+  { icon: '🧊', text: 'Fridge making noise' },
+  { icon: '💨', text: 'Furnace blowing cold' },
+  { icon: '🪟', text: 'Window is drafty' },
+  { icon: '🐛', text: 'Pest problem' },
+  { icon: '🔧', text: 'Garbage disposal jammed' },
+  { icon: '🧹', text: 'Gutter needs cleaning' },
+  { icon: '⚡', text: 'Breaker keeps tripping' },
+  { icon: '🚰', text: 'Drain is slow' },
+  { icon: '🔥', text: 'Oven not heating' },
+  { icon: '🪵', text: 'Fence is leaning' },
+  { icon: '💧', text: 'Ceiling has water stain' },
+  { icon: '🏗️', text: 'Foundation crack' },
+  { icon: '🌿', text: 'Sprinkler broken' },
+  { icon: '🧺', text: 'Washer won\'t drain' },
 ];
+
+const MOSAIC_SLOTS = 8;
+
+function IssueMosaic({ onSelect }: { onSelect: (text: string) => void }) {
+  const [tiles, setTiles] = useState<typeof ALL_ISSUES>([]);
+  const [fadingIdx, setFadingIdx] = useState<number | null>(null);
+  const usedRef = useRef(new Set<number>());
+
+  // Initialize with random tiles
+  useEffect(() => {
+    const indices: number[] = [];
+    while (indices.length < MOSAIC_SLOTS) {
+      const r = Math.floor(Math.random() * ALL_ISSUES.length);
+      if (!indices.includes(r)) indices.push(r);
+    }
+    usedRef.current = new Set(indices);
+    setTiles(indices.map(i => ALL_ISSUES[i]));
+  }, []);
+
+  // Rotate one tile every 2.5 seconds
+  useEffect(() => {
+    if (tiles.length === 0) return;
+    const interval = setInterval(() => {
+      const slotIdx = Math.floor(Math.random() * MOSAIC_SLOTS);
+      setFadingIdx(slotIdx);
+
+      setTimeout(() => {
+        // Pick a new issue not currently shown
+        let newIdx: number;
+        do {
+          newIdx = Math.floor(Math.random() * ALL_ISSUES.length);
+        } while (usedRef.current.has(newIdx));
+
+        // Find the old index for this slot and swap
+        const oldIssue = tiles[slotIdx];
+        const oldIdx = ALL_ISSUES.findIndex(i => i.text === oldIssue?.text);
+        usedRef.current.delete(oldIdx);
+        usedRef.current.add(newIdx);
+
+        setTiles(prev => prev.map((t, i) => i === slotIdx ? ALL_ISSUES[newIdx] : t));
+        setFadingIdx(null);
+      }, 300);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [tiles]);
+
+  if (tiles.length === 0) return null;
+
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10,
+      width: '100%', maxWidth: 480,
+    }}>
+      {tiles.map((tile, i) => (
+        <button
+          key={`${i}-${tile.text}`}
+          onClick={() => onSelect(tile.text)}
+          style={{
+            background: 'white', border: '2px solid rgba(0,0,0,0.06)', borderRadius: 14,
+            padding: '16px 10px', textAlign: 'center', cursor: 'pointer',
+            transition: 'all 0.3s ease', fontFamily: "'DM Sans', sans-serif",
+            opacity: fadingIdx === i ? 0 : 1,
+            transform: fadingIdx === i ? 'scale(0.9)' : 'scale(1)',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8632B'; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; e.currentTarget.style.transform = 'scale(1.04)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)'; e.currentTarget.style.background = 'white'; e.currentTarget.style.transform = 'scale(1)'; }}
+        >
+          <div style={{ fontSize: 26, marginBottom: 6 }}>{tile.icon}</div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: '#2D2926', lineHeight: 1.3 }}>{tile.text}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // ── State ───────────────────────────────────────────────────────────────────
 
@@ -576,34 +670,12 @@ export default function DiagnosticChat() {
 
           {/* Welcome screen */}
           {isEmpty && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 16px' }}>
-              <div style={{ width: 64, height: 64, borderRadius: 18, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 28 }}>h</span>
-              </div>
-              <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: D, marginBottom: 8 }}>Hey, I'm Homie</h1>
-              <p style={{ fontSize: 15, color: '#9B9490', marginBottom: 6 }}>Your home's best friend</p>
-              <p style={{ fontSize: 14, color: '#bbb', maxWidth: 340, lineHeight: 1.6, marginBottom: 32 }}>
-                Tell me what's going on or snap a photo — I'll figure out the issue and help you fix it or find the right pro.
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 8px' }}>
+              <p style={{ fontSize: 15, color: '#9B9490', marginBottom: 6, fontWeight: 500 }}>What's going on at home?</p>
+              <p style={{ fontSize: 13, color: '#ccc', maxWidth: 300, lineHeight: 1.5, marginBottom: 28 }}>
+                Tap an issue below or type your own
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 360 }}>
-                {SUGGESTED_PROMPTS.map((p) => (
-                  <button
-                    key={p.text}
-                    onClick={() => sendMessage(p.text)}
-                    style={{
-                      background: 'white', border: '2px solid rgba(0,0,0,0.07)', borderRadius: 12,
-                      padding: '12px 14px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-                      cursor: 'pointer', transition: 'all 0.15s', fontSize: 13, fontWeight: 500, color: D,
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}
-                    onMouseEnter={e => { (e.currentTarget).style.borderColor = O; (e.currentTarget).style.background = 'rgba(232,99,43,0.03)'; }}
-                    onMouseLeave={e => { (e.currentTarget).style.borderColor = 'rgba(0,0,0,0.07)'; (e.currentTarget).style.background = 'white'; }}
-                  >
-                    <span style={{ fontSize: 20 }}>{p.icon}</span>
-                    <span>{p.text}</span>
-                  </button>
-                ))}
-              </div>
+              <IssueMosaic onSelect={(text) => sendMessage(text)} />
             </div>
           )}
 
