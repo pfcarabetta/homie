@@ -490,7 +490,10 @@ export default function GetQuotes() {
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
         <span onClick={() => navigate('/')} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
-        <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>Get quotes</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1B9E77', boxShadow: '0 0 0 3px rgba(27,158,119,0.15)' }} />
+          <span style={{ fontSize: 13, color: '#1B9E77', fontWeight: 600 }}>Online</span>
+        </div>
       </nav>
 
       {/* Chat area */}
