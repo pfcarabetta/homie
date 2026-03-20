@@ -55,7 +55,7 @@ export default function Register() {
 
       <div className="flex-1 flex items-start justify-center px-4 pt-4">
         <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-bold text-center mb-1">Create your account</h1>
+          <h1 className="text-2xl font-bold text-center mb-1">Let's be homies!</h1>
           <p className="text-dark/50 text-sm text-center mb-8">Get started with Homie in seconds</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
