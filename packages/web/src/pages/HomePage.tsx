@@ -410,9 +410,9 @@ export default function HomePage() {
       {/* HERO */}
       <section className="hp-hero" style={{ background: `linear-gradient(180deg, white 0%, ${WARM} 100%)` }}>
         <div className="hp-hero-text">
-          <div style={{
+          <div onClick={() => navigate('/chat')} style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(27,158,119,0.08)',
-            padding: '6px 14px', borderRadius: 100, marginBottom: 20,
+            padding: '6px 14px', borderRadius: 100, marginBottom: 20, cursor: 'pointer',
           }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: GREEN }} />
             <span style={{ fontSize: 13, fontWeight: 500, color: GREEN }}>AI agent available 24/7</span>
