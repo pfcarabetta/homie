@@ -77,6 +77,12 @@ export default function Login() {
               />
             </div>
 
+            <div className="flex justify-end">
+              <Link to="/reset-password" className="text-xs text-orange-500 hover:text-orange-600 font-semibold transition-colors">
+                Forgot password?
+              </Link>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
