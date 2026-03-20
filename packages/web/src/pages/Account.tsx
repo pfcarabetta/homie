@@ -259,7 +259,7 @@ function PaymentTab() {
 /* -- Main Account Page -- */
 export default function Account() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, homeowner } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as Tab) || 'profile';
 
@@ -282,7 +282,9 @@ export default function Account() {
       </nav>
 
       <div style={{ maxWidth: 560, margin: '0 auto', padding: '24px 16px 80px' }}>
-        <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: D, marginBottom: 24 }}>My Account</h1>
+        <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: D, marginBottom: 24 }}>
+          Welcome back{homeowner?.first_name ? `, ${homeowner.first_name}` : ''}!
+        </h1>
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 28, borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: 0 }}>
