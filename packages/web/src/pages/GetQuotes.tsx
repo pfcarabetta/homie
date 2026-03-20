@@ -430,7 +430,13 @@ export default function GetQuotes() {
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
 
-  const scrollDown = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollDown = () => setTimeout(() => {
+    const el = scrollRef.current;
+    if (el && el.scrollHeight > el.clientHeight) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, 100);
 
   const addAssistant = useCallback((text: string) => {
     setMessages(m => [...m, { role: 'assistant', text }]);
@@ -702,7 +708,7 @@ export default function GetQuotes() {
       })()}
 
       {/* Chat area */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
       <div className="gq-chat-area" style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
         {messages.map((m, i) => (
           m.role === 'assistant'
