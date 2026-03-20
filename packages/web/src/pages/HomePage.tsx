@@ -298,20 +298,6 @@ export default function HomePage() {
             }}>Free DIY diagnostic &#8594;</a>
           </div>
 
-          <div style={{ display: 'flex', gap: 32 }}>
-            {[
-              { val: '3', unit: 'min', label: 'avg. time to quotes' },
-              { val: '12', unit: '+', label: 'providers contacted' },
-              { val: '90', unit: '%', label: 'gross margin' },
-            ].map((s, i) => (
-              <div key={i}>
-                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, fontWeight: 700, color: DARK }}>
-                  {s.val}<span style={{ color: ORANGE }}>{s.unit}</span>
-                </div>
-                <div style={{ fontSize: 13, color: '#9B9490' }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
 
         <div style={{ flex: '1 1 400px', display: 'flex', justifyContent: 'center' }}>
