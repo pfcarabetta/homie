@@ -60,6 +60,13 @@ const ALL_ISSUES = [
   { icon: '🏗️', text: 'Foundation crack' },
   { icon: '🌿', text: 'Sprinkler broken' },
   { icon: '🧺', text: 'Washer won\'t drain' },
+  { icon: '🛁', text: 'Tub won\'t drain' },
+  { icon: '🔔', text: 'Doorbell not working' },
+  { icon: '🪤', text: 'Mouse in the house' },
+  { icon: '💡', text: 'Dimmer switch buzzing' },
+  { icon: '🌡️', text: 'Thermostat won\'t respond' },
+  { icon: '🪠', text: 'Toilet is clogged' },
+  { icon: '🏚️', text: 'Siding is damaged' },
 ];
 
 // Split issues into 4 columns for scrolling credits
@@ -87,7 +94,7 @@ function IssueMosaic({ onSelect }: { onSelect: (text: string) => void }) {
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10,
-      width: '100%', maxWidth: 520, height: 340, overflow: 'hidden',
+      width: '100%', maxWidth: 520, height: 460, overflow: 'hidden',
       maskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)',
       WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)',
     }}>
