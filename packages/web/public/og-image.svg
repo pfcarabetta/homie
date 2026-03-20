@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#2D2926"/>
+  <rect x="0" y="580" width="1200" height="50" fill="#E8632B"/>
+  <text x="600" y="260" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="72" fill="#E8632B">homie</text>
+  <text x="600" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="36" fill="white">Your home's best friend</text>
+  <text x="600" y="420" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="400" font-size="24" fill="rgba(255,255,255,0.5)">AI-powered home repair quotes in minutes</text>
+  <circle cx="568" cy="490" r="6" fill="#1B9E77"/>
+  <text x="600" y="497" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="500" font-size="18" fill="#1B9E77">  Available 24/7</text>
+</svg>
