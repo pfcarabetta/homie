@@ -6,46 +6,102 @@ const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
 /* -- Category-specific follow-up questions -- */
 const CATEGORY_FLOWS: Record<string, {
-  icon: string; label: string;
+  icon: string; label: string; group: 'repair' | 'service';
   q1: { text: string; options: string[] };
   q2: { text: string; options: string[] };
   q3: { text: string; options: string[] };
 }> = {
+  // ── Repair ──
   plumbing: {
-    icon: '\uD83D\uDD27', label: 'Plumbing',
+    icon: '\uD83D\uDD27', label: 'Plumbing', group: 'repair',
     q1: { text: "Where's the issue?", options: ['Kitchen', 'Bathroom', 'Laundry', 'Water heater', 'Outdoor', 'Other'] },
     q2: { text: "What's happening?", options: ['Leaking/dripping', 'Clogged/slow drain', 'No hot water', 'Running toilet', 'Low pressure', 'Burst/flooding'] },
     q3: { text: 'How urgent is this?', options: ['Water is actively leaking', "It works but something's wrong", 'Just noticed it', 'Been like this a while'] },
   },
   electrical: {
-    icon: '\u26A1', label: 'Electrical',
+    icon: '\u26A1', label: 'Electrical', group: 'repair',
     q1: { text: "What's the problem?", options: ['Outlet not working', 'Lights flickering', 'Breaker tripping', 'Sparking/burning smell', 'Need new install', 'Other'] },
     q2: { text: 'Where in the home?', options: ['One room', 'Multiple rooms', 'Whole house', 'Outdoor/garage', 'Panel/breaker box'] },
     q3: { text: 'Is there any safety concern?', options: ['Burning smell or sparks', 'Exposed wires', 'Water near electrical', 'No safety concern'] },
   },
   hvac: {
-    icon: '\u2744\uFE0F', label: 'HVAC',
+    icon: '\u2744\uFE0F', label: 'HVAC', group: 'repair',
     q1: { text: "What's going on?", options: ['AC not cooling', 'Heat not working', 'Strange noises', 'Thermostat issue', 'Bad smell from vents', 'Maintenance/tune-up'] },
     q2: { text: 'What type of system?', options: ['Central AC', 'Mini split', 'Window unit', 'Furnace', 'Heat pump', 'Not sure'] },
     q3: { text: 'How old is the system?', options: ['Under 5 years', '5\u201310 years', '10\u201315 years', '15+ years', 'No idea'] },
   },
   appliance: {
-    icon: '\uD83C\uDF73', label: 'Appliance',
+    icon: '\uD83C\uDF73', label: 'Appliance', group: 'repair',
     q1: { text: 'Which appliance?', options: ['Washer', 'Dryer', 'Dishwasher', 'Refrigerator', 'Oven/stove', 'Garbage disposal', 'Other'] },
     q2: { text: "What's it doing?", options: ["Won't turn on", 'Leaking water', 'Making noise', 'Not completing cycle', 'Error code showing', 'Other'] },
     q3: { text: 'Do you know the brand?', options: ['GE', 'Whirlpool', 'Samsung', 'LG', 'Maytag', 'Bosch', 'Other', 'Not sure'] },
   },
   roofing: {
-    icon: '\uD83C\uDFE0', label: 'Roofing',
+    icon: '\uD83C\uDFE0', label: 'Roofing', group: 'repair',
     q1: { text: "What's the concern?", options: ['Active leak inside', 'Missing/damaged shingles', 'Gutter issue', 'Storm damage', 'General inspection', 'Other'] },
     q2: { text: 'Roof type?', options: ['Asphalt shingles', 'Tile', 'Metal', 'Flat/low slope', 'Not sure'] },
     q3: { text: 'How old is the roof?', options: ['Under 5 years', '5\u201315 years', '15\u201325 years', '25+ years', 'No idea'] },
   },
   general: {
-    icon: '\uD83D\uDD28', label: 'Handyman',
-    q1: { text: 'What kind of work?', options: ['Drywall repair', 'Painting', 'Door/window issue', 'Fence repair', 'Furniture assembly', 'Other'] },
+    icon: '\uD83D\uDD28', label: 'Handyman', group: 'repair',
+    q1: { text: 'What kind of work?', options: ['Drywall repair', 'Door/window issue', 'Fence repair', 'Furniture assembly', 'Other'] },
     q2: { text: 'How big is the job?', options: ['Quick fix (under 1 hour)', 'Half-day job', 'Full day or more', 'Not sure'] },
     q3: { text: 'Anything else important?', options: ['Need it done ASAP', 'Can wait a bit', 'Just getting a price', 'Multiple small jobs'] },
+  },
+  garage_door: {
+    icon: '\uD83D\uDEA8', label: 'Garage Door', group: 'repair',
+    q1: { text: "What's the issue?", options: ['Won\'t open/close', 'Making noise', 'Off track', 'Opener broken', 'Spring snapped', 'Other'] },
+    q2: { text: 'Door type?', options: ['Single car', 'Double car', 'Not sure'] },
+    q3: { text: 'How urgent is this?', options: ['Car is stuck inside', 'Door is stuck open', 'Still works but struggling', 'Just getting a quote'] },
+  },
+  // ── Services ──
+  house_cleaning: {
+    icon: '\u2728', label: 'House Cleaning', group: 'service',
+    q1: { text: 'What type of cleaning?', options: ['Regular cleaning', 'Deep clean', 'Move-in/move-out', 'Post-construction', 'One-time', 'Other'] },
+    q2: { text: 'Home size?', options: ['Studio/1 bed', '2 bedrooms', '3 bedrooms', '4+ bedrooms', 'Not sure'] },
+    q3: { text: 'How often?', options: ['One-time', 'Weekly', 'Bi-weekly', 'Monthly', 'Just want a quote'] },
+  },
+  landscaping: {
+    icon: '\uD83C\uDF3F', label: 'Landscaping', group: 'service',
+    q1: { text: 'What do you need?', options: ['Lawn mowing', 'Garden design', 'Tree trimming', 'Hedge trimming', 'Yard cleanup', 'Sprinkler repair', 'Other'] },
+    q2: { text: 'Yard size?', options: ['Small (under 1/4 acre)', 'Medium (1/4\u20131/2 acre)', 'Large (1/2+ acre)', 'Not sure'] },
+    q3: { text: 'How often?', options: ['One-time', 'Weekly', 'Bi-weekly', 'Monthly', 'Seasonal'] },
+  },
+  pool: {
+    icon: '\uD83C\uDFCA', label: 'Pool Service', group: 'service',
+    q1: { text: 'What do you need?', options: ['Regular cleaning', 'Green/cloudy water', 'Equipment repair', 'Opening/closing', 'Leak detection', 'Other'] },
+    q2: { text: 'Pool type?', options: ['In-ground', 'Above-ground', 'Spa/hot tub', 'Not sure'] },
+    q3: { text: 'How often?', options: ['One-time', 'Weekly service', 'Monthly', 'Just need a repair'] },
+  },
+  pest_control: {
+    icon: '\uD83D\uDC1B', label: 'Pest Control', group: 'service',
+    q1: { text: 'What kind of pest?', options: ['Ants', 'Roaches', 'Mice/rats', 'Termites', 'Spiders', 'Wasps/bees', 'Bed bugs', 'Other'] },
+    q2: { text: 'Where are you seeing them?', options: ['Kitchen', 'Bathroom', 'Bedroom', 'Garage', 'Yard/exterior', 'Multiple areas'] },
+    q3: { text: 'How bad is it?', options: ['Just noticed one or two', 'Seeing them regularly', 'Major infestation', 'Want preventive treatment'] },
+  },
+  painting: {
+    icon: '\uD83C\uDFA8', label: 'Painting', group: 'service',
+    q1: { text: 'Interior or exterior?', options: ['Interior', 'Exterior', 'Both', 'Cabinet painting', 'Other'] },
+    q2: { text: 'How much needs painting?', options: ['One room', '2\u20133 rooms', 'Whole interior', 'Full exterior', 'Touch-ups only'] },
+    q3: { text: 'Any prep work needed?', options: ['Walls are ready to paint', 'Some patching/sanding', 'Wallpaper removal', 'Not sure'] },
+  },
+  moving: {
+    icon: '\uD83D\uDE9A', label: 'Moving', group: 'service',
+    q1: { text: 'What kind of move?', options: ['Full home move', 'Apartment move', 'Few large items', 'Junk removal', 'Storage pickup/delivery', 'Other'] },
+    q2: { text: 'Move size?', options: ['Studio/1 bed', '2 bedrooms', '3+ bedrooms', 'Just a few items'] },
+    q3: { text: 'How far?', options: ['Same building', 'Within 10 miles', '10\u201350 miles', '50+ miles', 'Not sure'] },
+  },
+  pressure_washing: {
+    icon: '\uD83D\uDCA6', label: 'Pressure Wash', group: 'service',
+    q1: { text: 'What needs washing?', options: ['Driveway', 'Patio/deck', 'House siding', 'Fence', 'Roof', 'Multiple areas'] },
+    q2: { text: 'Surface material?', options: ['Concrete', 'Wood', 'Brick', 'Vinyl siding', 'Stone', 'Not sure'] },
+    q3: { text: 'Approximate area?', options: ['Small (under 500 sq ft)', 'Medium (500\u20131,000 sq ft)', 'Large (1,000+ sq ft)', 'Not sure'] },
+  },
+  locksmith: {
+    icon: '\uD83D\uDD11', label: 'Locksmith', group: 'service',
+    q1: { text: 'What do you need?', options: ['Locked out', 'Rekey locks', 'New lock install', 'Lock repair', 'Smart lock setup', 'Other'] },
+    q2: { text: 'What type?', options: ['Front door', 'Car', 'Garage', 'Mailbox/safe', 'Multiple doors'] },
+    q3: { text: 'How urgent is this?', options: ['Locked out right now', 'Today', 'This week', 'Just getting a price'] },
   },
 };
 
@@ -473,7 +529,8 @@ export default function GetQuotes() {
     goToZip();
   };
 
-  const catOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
+  const repairOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'repair').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
+  const serviceOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'service').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
 
   return (
     <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
@@ -548,7 +605,14 @@ export default function GetQuotes() {
 
         {(phase === 'diagnosis' || phase === 'tier' || phase === 'outreach') && data.a1 && <DiagnosisSummary data={data} />}
 
-        {phase === 'category' && <QuickReplies options={catOptions} onSelect={(opt) => handleCategory(opt as CatOption)} columns={3} />}
+        {phase === 'category' && (
+          <>
+            <div style={{ marginLeft: 42, fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6, animation: 'fadeSlide 0.3s ease' }}>REPAIR</div>
+            <QuickReplies options={repairOptions} onSelect={(opt) => handleCategory(opt as CatOption)} columns={4} />
+            <div style={{ marginLeft: 42, fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6, animation: 'fadeSlide 0.3s ease' }}>SERVICES</div>
+            <QuickReplies options={serviceOptions} onSelect={(opt) => handleCategory(opt as CatOption)} columns={4} />
+          </>
+        )}
         {phase === 'q1' && flow && <QuickReplies options={flow.q1.options} onSelect={(opt) => handleQ1(opt as string)} />}
         {phase === 'q2' && flow && <QuickReplies options={flow.q2.options} onSelect={(opt) => handleQ2(opt as string)} />}
         {phase === 'q3' && flow && <QuickReplies options={flow.q3.options} onSelect={(opt) => handleQ3(opt as string)} />}
