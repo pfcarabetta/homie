@@ -30,8 +30,8 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
     const responseId = session.metadata?.response_id;
     const providerId = session.metadata?.provider_id;
 
-    if (!jobId || !responseId || !providerId) {
-      logger.error('[Stripe webhook] Missing metadata in session %s', session.id);
+    if (!jobId) {
+      logger.error('[Stripe webhook] Missing job_id in session %s', session.id);
       res.status(200).json({ received: true });
       return;
     }
@@ -40,30 +40,33 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       // Mark job as paid
       await db.update(jobs).set({ paymentStatus: 'paid' }).where(eq(jobs.id, jobId));
 
-      // Get job to find homeowner
-      const [job] = await db.select({ homeownerId: jobs.homeownerId }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
-      if (!job) {
-        logger.error('[Stripe webhook] Job not found: %s', jobId);
-        res.status(200).json({ received: true });
-        return;
-      }
+      // If provider/response IDs are present, also create a booking (post-outreach payment)
+      if (responseId && providerId) {
+        const [job] = await db.select({ homeownerId: jobs.homeownerId }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
+        if (!job) {
+          logger.error('[Stripe webhook] Job not found: %s', jobId);
+          res.status(200).json({ received: true });
+          return;
+        }
 
-      // Complete the booking
-      await db.update(jobs).set({ status: 'completed' }).where(eq(jobs.id, jobId));
+        await db.update(jobs).set({ status: 'completed' }).where(eq(jobs.id, jobId));
 
-      const [booking] = await db
-        .insert(bookings)
-        .values({
-          jobId,
-          homeownerId: job.homeownerId,
-          providerId,
+        const [booking] = await db
+          .insert(bookings)
+          .values({
+            jobId,
+            homeownerId: job.homeownerId,
+            providerId,
           responseId,
         })
         .returning();
 
-      void sendBookingNotifications(jobId, providerId, booking.id);
-
-      logger.info(`[Stripe webhook] Payment confirmed & booking created for job ${jobId}`);
+        void sendBookingNotifications(jobId, providerId, booking.id);
+        logger.info(`[Stripe webhook] Payment confirmed & booking created for job ${jobId}`);
+      } else {
+        // Upfront payment — just mark as paid, outreach continues
+        logger.info(`[Stripe webhook] Upfront payment confirmed for job ${jobId}`);
+      }
     } catch (err) {
       logger.error({ err }, '[Stripe webhook] Error processing payment');
     }

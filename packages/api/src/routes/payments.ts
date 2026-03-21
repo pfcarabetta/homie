@@ -30,14 +30,6 @@ router.post('/checkout', async (req: Request, res: Response) => {
     res.status(400).json({ data: null, error: 'job_id must be a valid UUID', meta: {} });
     return;
   }
-  if (!response_id || !UUID_RE.test(response_id)) {
-    res.status(400).json({ data: null, error: 'response_id must be a valid UUID', meta: {} });
-    return;
-  }
-  if (!provider_id || !UUID_RE.test(provider_id)) {
-    res.status(400).json({ data: null, error: 'provider_id must be a valid UUID', meta: {} });
-    return;
-  }
 
   try {
     const [job] = await db
@@ -68,9 +60,9 @@ router.post('/checkout', async (req: Request, res: Response) => {
       customerId,
       jobId: job.id,
       tier: job.tier,
-      responseId: response_id,
-      providerId: provider_id,
-      successUrl: `${APP_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      responseId: response_id ?? '',
+      providerId: provider_id ?? '',
+      successUrl: `${APP_URL}/quote?paid=1`,
       cancelUrl: `${APP_URL}/quote`,
     });
 

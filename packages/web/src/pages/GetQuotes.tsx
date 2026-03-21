@@ -588,6 +588,20 @@ export default function GetQuotes() {
   useEffect(() => {
     window.scrollTo(0, 0);
 
+    // Check if returning from Stripe payment
+    const paidJob = sessionStorage.getItem('homie_paid_job');
+    if (paidJob && authService.isAuthenticated()) {
+      sessionStorage.removeItem('homie_paid_job');
+      try {
+        const { jobId } = JSON.parse(paidJob) as { jobId: string; tier: string };
+        setJobId(jobId);
+        addAssistant("Payment confirmed! Launching your AI agent now \uD83D\uDE80");
+        setPhase('outreach');
+        scrollDown();
+        return;
+      } catch { /* ignore */ }
+    }
+
     // Check if returning from login with pending quote
     const pending = sessionStorage.getItem('homie_pending_quote');
     if (pending && authService.isAuthenticated()) {
@@ -817,7 +831,57 @@ export default function GetQuotes() {
       return;
     }
 
-    setTimeout(() => void launchOutreach(t.id), 500);
+    // Create the job first, then redirect to payment
+    setTimeout(async () => {
+      addAssistant("Great choice! Let me set up your search...");
+
+      try {
+        const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
+        const diagPayload: DiagnosisPayload = {
+          category: data.category ?? 'general',
+          severity: 'medium',
+          summary: data.aiDiagnosis || `${cat?.label}: ${data.a1}. ${data.extra || ''}`,
+          recommendedActions: [],
+        };
+
+        const res = await jobService.createJob({
+          diagnosis: diagPayload,
+          timing: (data.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
+          budget: 'flexible',
+          tier: t.id as 'standard' | 'priority' | 'emergency',
+          zipCode: data.zip,
+        });
+
+        if (res.data) {
+          // Redirect to Stripe Checkout for payment
+          try {
+            const payRes = await paymentService.createCheckout(res.data.id, '', '');
+            if (payRes.data?.checkout_url) {
+              // Save state so we can resume after payment
+              sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data.id, tier: t.id }));
+              window.location.href = payRes.data.checkout_url;
+              return;
+            }
+          } catch {
+            // Payment not configured — launch outreach without payment
+          }
+
+          setJobId(res.data.id);
+          addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+          setPhase('outreach');
+          scrollDown();
+        } else {
+          // Job creation failed — fall back to mock
+          addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+          setPhase('outreach');
+          scrollDown();
+        }
+      } catch {
+        addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+        setPhase('outreach');
+        scrollDown();
+      }
+    }, 500);
   };
 
   const repairOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'repair').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
