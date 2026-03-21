@@ -1,10 +1,12 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { ProviderAuthProvider } from '@/contexts/ProviderAuthContext';
 import HomePage from '@/pages/HomePage';
 import DiagnosticChat from '@/pages/DiagnosticChat';
 import GetQuotes from '@/pages/GetQuotes';
 import ProviderResults from '@/pages/ProviderResults';
 import ProviderPortal from '@/pages/ProviderPortal';
+import ProviderLogin from '@/pages/ProviderLogin';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ResetPassword from '@/pages/ResetPassword';
@@ -22,6 +24,7 @@ import AdminBookings from '@/pages/admin/AdminBookings';
 export default function App() {
   return (
     <AuthProvider>
+      <ProviderAuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -34,6 +37,7 @@ export default function App() {
           <Route path="/payment/success" element={<PaymentSuccess />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
+          <Route path="/portal/login" element={<ProviderLogin />} />
           <Route path="/portal" element={<ProviderPortal />} />
           <Route path="/admin" element={<AdminLogin />} />
           <Route element={<AdminLayout />}>
@@ -45,6 +49,7 @@ export default function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      </ProviderAuthProvider>
     </AuthProvider>
   );
 }

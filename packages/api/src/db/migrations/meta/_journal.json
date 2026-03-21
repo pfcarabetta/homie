@@ -29,6 +29,13 @@
       "when": 1774055140497,
       "tag": "0003_narrow_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774060520980,
+      "tag": "0004_giant_silvermane",
+      "breakpoints": true
     }
   ]
 }

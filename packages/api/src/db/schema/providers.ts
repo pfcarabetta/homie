@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, numeric, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, numeric, boolean, jsonb, index } from 'drizzle-orm/pg-core';
 
 export const providers = pgTable(
   'providers',
@@ -14,6 +14,11 @@ export const providers = pgTable(
     categories: text('categories').array(),
     lat: numeric('lat', { precision: 10, scale: 7 }),
     lng: numeric('lng', { precision: 10, scale: 7 }),
+    notificationPref: text('notification_pref').notNull().default('both'),
+    vacationMode: boolean('vacation_mode').notNull().default(false),
+    businessHours: jsonb('business_hours'),
+    licenseInfo: jsonb('license_info'),
+    serviceZips: text('service_zips').array(),
     discoveredAt: timestamp('discovered_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

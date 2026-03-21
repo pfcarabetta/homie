@@ -1,490 +1,411 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import {
-  MOCK_PROVIDER_NAME,
-  MOCK_STATS,
-  MOCK_JOBS,
-  type PortalJob,
-  type JobTab,
-  type Severity,
-  type ProviderStats,
-} from '@/mocks/provider-portal';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useProviderAuth } from '@/contexts/ProviderAuthContext';
+import { portalService, type DashboardStats, type IncomingJob, type HistoryJob, type ProviderProfile, type ProviderSettings } from '@/services/provider-api';
 
-// ── Main page ───────────────────────────────────────────────────────────────
+const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
-export default function ProviderPortal() {
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const selectedJob = MOCK_JOBS.find((j) => j.id === selectedJobId) ?? null;
+const TABS = ['dashboard', 'jobs', 'history', 'profile', 'settings'] as const;
+type Tab = typeof TABS[number];
+const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', jobs: 'Incoming', history: 'History', profile: 'Profile', settings: 'Settings' };
 
-  if (selectedJob) {
-    return <JobDetail job={selectedJob} onBack={() => setSelectedJobId(null)} />;
-  }
+const BADGE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  'top-rated': { bg: '#FFF7ED', text: '#C2410C', label: 'Top Rated' },
+  'fast-responder': { bg: '#F0FDF4', text: '#16A34A', label: 'Fast Responder' },
+  'reliable': { bg: '#EFF6FF', text: '#2563EB', label: 'Reliable' },
+  'veteran': { bg: '#F5F3FF', text: '#7C3AED', label: 'Veteran Pro' },
+};
 
-  return <Dashboard onSelectJob={setSelectedJobId} />;
+const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  pending: { bg: '#FFF7ED', text: '#C2410C' },
+  accepted: { bg: '#F0FDF4', text: '#16A34A' },
+  declined: { bg: '#FEF2F2', text: '#DC2626' },
+  responded: { bg: '#EFF6FF', text: '#2563EB' },
+};
+
+function timeAgo(d: string): string {
+  const diff = Date.now() - new Date(d).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ── Dashboard ───────────────────────────────────────────────────────────────
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '12px 16px', borderRadius: 12, fontSize: 15,
+  border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: D,
+  fontFamily: "'DM Sans', sans-serif",
+};
 
-function Dashboard({ onSelectJob }: { onSelectJob: (id: string) => void }) {
-  useDocumentTitle('Provider Dashboard');
-  const [tab, setTab] = useState<JobTab>('new');
-  const filtered = MOCK_JOBS.filter((j) => j.status === tab);
-  const newCount = MOCK_JOBS.filter((j) => j.status === 'new').length;
+/* -- Dashboard Tab -- */
+function DashboardTab() {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  useEffect(() => { portalService.getDashboard().then(r => setStats(r.data)); }, []);
+  if (!stats) return <div style={{ color: '#9B9490', padding: 20 }}>Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-warm">
-      <PortalHeader />
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }}>
+        {[
+          { label: 'Jobs Received', val: stats.jobs_received, color: D },
+          { label: 'Acceptance Rate', val: `${stats.acceptance_rate}%`, color: O },
+          { label: 'Avg Rating', val: stats.avg_rating > 0 ? `${stats.avg_rating}` : '\u2014', color: '#EAB308' },
+          { label: 'Completed', val: stats.completed_count, color: G },
+        ].map((s, i) => (
+          <div key={i} style={{ background: 'white', borderRadius: 14, padding: '20px 16px', border: '1px solid rgba(0,0,0,0.06)', textAlign: 'center' }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: s.color }}>{s.val}</div>
+            <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {stats.badges.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {stats.badges.map(b => {
+            const s = BADGE_STYLES[b] ?? { bg: '#F5F5F5', text: '#9B9490', label: b };
+            return <span key={b} style={{ background: s.bg, color: s.text, padding: '5px 14px', borderRadius: 100, fontSize: 13, fontWeight: 600 }}>{s.label}</span>;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        <StatsRow stats={MOCK_STATS} />
+/* -- Incoming Jobs Tab -- */
+function IncomingJobsTab() {
+  const [jobs, setJobs] = useState<IncomingJob[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [quote, setQuote] = useState('');
+  const [avail, setAvail] = useState('');
+  const [msg, setMsg] = useState('');
+  const [responding, setResponding] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border border-dark/10">
-          {TABS.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => setTab(t.value)}
-              className={`relative flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${
-                tab === t.value
-                  ? 'bg-dark text-white shadow-sm'
-                  : 'text-dark/50 hover:text-dark/70'
-              }`}
-            >
-              {t.label}
-              {t.value === 'new' && newCount > 0 && (
-                <span className="absolute -top-1.5 -right-1 bg-orange-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                  {newCount}
-                </span>
-              )}
-            </button>
+  useEffect(() => { portalService.getIncomingJobs().then(r => { setJobs(r.data?.jobs ?? []); setLoading(false); }); }, []);
+
+  async function respond(attemptId: string, action: 'accept' | 'decline') {
+    setResponding(true);
+    try {
+      await portalService.respondToJob(attemptId, { action, quoted_price: quote || undefined, availability: avail || undefined, message: msg || undefined });
+      setJobs(j => j.filter(x => x.attempt_id !== attemptId));
+      setExpanded(null);
+      setQuote(''); setAvail(''); setMsg('');
+    } catch { /* ignore */ }
+    setResponding(false);
+  }
+
+  if (loading) return <div style={{ color: '#9B9490', padding: 20 }}>Loading...</div>;
+  if (jobs.length === 0) return (
+    <div style={{ textAlign: 'center', padding: '40px 0', color: '#9B9490' }}>
+      <div style={{ fontSize: 32, marginBottom: 8 }}>{'\u2705'}</div>
+      <div style={{ fontSize: 15, fontWeight: 500 }}>No pending jobs</div>
+      <div style={{ fontSize: 13, marginTop: 4 }}>New requests will appear here</div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {jobs.map(j => (
+        <div key={j.attempt_id} style={{ background: 'white', borderRadius: 14, padding: '16px 18px', border: expanded === j.attempt_id ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', transition: 'all 0.15s' }}
+          onClick={() => setExpanded(expanded === j.attempt_id ? null : j.attempt_id)}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontWeight: 600, fontSize: 15, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.category ?? 'Job Request'}</span>
+            <span style={{ fontSize: 12, color: '#9B9490' }}>{timeAgo(j.attempted_at)}</span>
+          </div>
+          {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 6 }}>{j.diagnosis.summary}</div>}
+          <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#9B9490' }}>
+            <span>{j.zip_code}</span>
+            <span>{j.tier} tier</span>
+            {j.timing && <span>{j.timing}</span>}
+            {j.budget && <span>{j.budget}</span>}
+          </div>
+
+          {expanded === j.attempt_id && (
+            <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14 }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                <input value={quote} onChange={e => setQuote(e.target.value)} placeholder="Your price estimate (e.g. $150-200)" style={inputStyle} />
+                <input value={avail} onChange={e => setAvail(e.target.value)} placeholder="Your availability (e.g. Tomorrow 9-11 AM)" style={inputStyle} />
+                <textarea value={msg} onChange={e => setMsg(e.target.value)} placeholder="Message to homeowner (optional)" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => respond(j.attempt_id, 'decline')} disabled={responding} style={{
+                  padding: '12px 20px', borderRadius: 100, border: '2px solid #E24B4A', background: 'white',
+                  color: '#E24B4A', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                }}>Decline</button>
+                <button onClick={() => respond(j.attempt_id, 'accept')} disabled={responding} style={{
+                  flex: 1, padding: '12px 20px', borderRadius: 100, border: 'none', background: G,
+                  color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                }}>{responding ? 'Sending...' : 'Accept & Send Quote'}</button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* -- History Tab -- */
+function HistoryTab() {
+  const [jobs, setJobs] = useState<HistoryJob[]>([]);
+  const [filter, setFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    portalService.getHistory({ status: filter === 'all' ? undefined : filter }).then(r => { setJobs(r.data?.jobs ?? []); setLoading(false); });
+  }, [filter]);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {['all', 'accepted', 'declined'].map(s => (
+          <button key={s} onClick={() => setFilter(s)} style={{
+            padding: '7px 16px', borderRadius: 100, border: 'none', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            background: filter === s ? D : 'rgba(0,0,0,0.04)', color: filter === s ? 'white' : '#9B9490',
+            fontFamily: "'DM Sans', sans-serif", textTransform: 'capitalize',
+          }}>{s}</button>
+        ))}
+      </div>
+
+      {loading ? <div style={{ color: '#9B9490', padding: 20 }}>Loading...</div> :
+        jobs.length === 0 ? <div style={{ textAlign: 'center', padding: '40px 0', color: '#9B9490', fontSize: 14 }}>No jobs found</div> :
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {jobs.map(j => {
+            const sc = STATUS_COLORS[j.status] ?? STATUS_COLORS.pending;
+            return (
+              <div key={j.attempt_id} style={{ background: 'white', borderRadius: 14, padding: '14px 18px', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.category ?? 'Job'}</span>
+                  <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
+                </div>
+                {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.4 }}>{j.diagnosis.summary}</div>}
+                <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#9B9490', marginTop: 6 }}>
+                  <span>{j.zip_code}</span>
+                  <span>via {j.channel}</span>
+                  <span>{timeAgo(j.attempted_at)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      }
+    </div>
+  );
+}
+
+/* -- Profile Tab -- */
+function ProfileTab() {
+  const [profile, setProfile] = useState<ProviderProfile | null>(null);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [categories, setCategories] = useState('');
+  const [zips, setZips] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    portalService.getProfile().then(r => {
+      if (r.data) {
+        setProfile(r.data);
+        setName(r.data.name);
+        setPhone(r.data.phone ?? '');
+        setEmail(r.data.email ?? '');
+        setCategories(r.data.categories?.join(', ') ?? '');
+        setZips(r.data.service_zips?.join(', ') ?? '');
+      }
+    });
+  }, []);
+
+  async function save() {
+    setMsg(null);
+    setSaving(true);
+    try {
+      const updates: Record<string, unknown> = {};
+      if (name !== profile?.name) updates.name = name;
+      if (phone !== (profile?.phone ?? '')) updates.phone = phone;
+      if (email !== (profile?.email ?? '')) updates.email = email;
+      const catArr = categories.split(',').map(s => s.trim()).filter(Boolean);
+      if (JSON.stringify(catArr) !== JSON.stringify(profile?.categories ?? [])) updates.categories = catArr;
+      const zipArr = zips.split(',').map(s => s.trim()).filter(Boolean);
+      if (JSON.stringify(zipArr) !== JSON.stringify(profile?.service_zips ?? [])) updates.service_zips = zipArr;
+
+      if (Object.keys(updates).length === 0) { setMsg({ type: 'error', text: 'No changes' }); setSaving(false); return; }
+      await portalService.updateProfile(updates as Parameters<typeof portalService.updateProfile>[0]);
+      setMsg({ type: 'success', text: 'Profile updated' });
+    } catch (err) { setMsg({ type: 'error', text: (err as Error).message }); }
+    setSaving(false);
+  }
+
+  if (!profile) return <div style={{ color: '#9B9490', padding: 20 }}>Loading...</div>;
+
+  return (
+    <div>
+      {profile.google_rating && (
+        <div style={{ background: 'white', borderRadius: 12, padding: '12px 16px', marginBottom: 16, border: '1px solid rgba(0,0,0,0.06)', display: 'flex', gap: 16, fontSize: 14, color: '#6B6560' }}>
+          <span>{'\u2B50'} {profile.google_rating} ({profile.review_count} reviews)</span>
+        </div>
+      )}
+      {msg && <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, fontSize: 14, background: msg.type === 'success' ? '#F0FDF4' : '#FEF2F2', color: msg.type === 'success' ? '#16A34A' : '#DC2626', border: `1px solid ${msg.type === 'success' ? '#BBF7D0' : '#FECACA'}` }}>{msg.text}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Business Name</label><input value={name} onChange={e => setName(e.target.value)} style={inputStyle} /></div>
+        <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Phone</label><input value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /></div>
+        <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Email</label><input value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} /></div>
+        <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Service Categories <span style={{ fontWeight: 400, color: '#9B9490' }}>(comma-separated)</span></label><input value={categories} onChange={e => setCategories(e.target.value)} placeholder="plumbing, electrical, hvac" style={inputStyle} /></div>
+        <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Service Zip Codes <span style={{ fontWeight: 400, color: '#9B9490' }}>(comma-separated)</span></label><input value={zips} onChange={e => setZips(e.target.value)} placeholder="92103, 92104, 92105" style={inputStyle} /></div>
+        <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14, marginTop: 4 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 8 }}>Calendar Integration</div>
+          <div style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 12, padding: '16px', textAlign: 'center', color: '#9B9490', fontSize: 13 }}>Coming soon — sync your availability with Google Calendar or other tools</div>
+        </div>
+        <button onClick={save} disabled={saving} style={{ padding: '14px 0', borderRadius: 100, border: 'none', background: O, color: 'white', fontSize: 16, fontWeight: 600, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: "'DM Sans', sans-serif" }}>{saving ? 'Saving...' : 'Save Changes'}</button>
+      </div>
+    </div>
+  );
+}
+
+/* -- Settings Tab -- */
+function SettingsTab() {
+  const [settings, setSettings] = useState<ProviderSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [optingOut, setOptingOut] = useState(false);
+  const [optedOut, setOptedOut] = useState(false);
+
+  useEffect(() => { portalService.getSettings().then(r => setSettings(r.data)); }, []);
+
+  async function updatePref(pref: string) {
+    setSaving(true);
+    await portalService.updateSettings({ notification_pref: pref });
+    setSettings(s => s ? { ...s, notificationPref: pref } : s);
+    setSaving(false);
+  }
+
+  async function toggleVacation() {
+    if (!settings) return;
+    setSaving(true);
+    await portalService.updateSettings({ vacation_mode: !settings.vacationMode });
+    setSettings(s => s ? { ...s, vacationMode: !s.vacationMode } : s);
+    setSaving(false);
+  }
+
+  async function handleOptOut() {
+    if (!confirm('Are you sure? You will stop receiving all Homie job requests.')) return;
+    setOptingOut(true);
+    await portalService.optOut();
+    setOptedOut(true);
+    setOptingOut(false);
+  }
+
+  if (!settings) return <div style={{ color: '#9B9490', padding: 20 }}>Loading...</div>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 10 }}>Notification Preferences</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {['sms', 'email', 'both'].map(p => (
+            <button key={p} onClick={() => updatePref(p)} disabled={saving} style={{
+              flex: 1, padding: '12px', borderRadius: 12, border: settings.notificationPref === p ? `2px solid ${O}` : '2px solid rgba(0,0,0,0.06)',
+              background: settings.notificationPref === p ? 'rgba(232,99,43,0.04)' : 'white', color: D, fontSize: 14, fontWeight: 500,
+              cursor: 'pointer', textTransform: 'capitalize', fontFamily: "'DM Sans', sans-serif",
+            }}>{p}</button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: D }}>Vacation Mode</div>
+            <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>Pause all new job requests</div>
+          </div>
+          <button onClick={toggleVacation} disabled={saving} style={{
+            width: 52, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer', position: 'relative',
+            background: settings.vacationMode ? O : 'rgba(0,0,0,0.12)', transition: 'background 0.2s',
+          }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: '50%', background: 'white', position: 'absolute', top: 3,
+              left: settings.vacationMode ? 27 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+            }} />
+          </button>
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 20 }}>
+        {optedOut ? (
+          <div style={{ background: '#FEF2F2', borderRadius: 12, padding: '16px', textAlign: 'center', color: '#DC2626', fontSize: 14 }}>
+            You've been removed from Homie. You will no longer receive job requests.
+          </div>
+        ) : (
+          <div style={{ border: '2px solid #FECACA', borderRadius: 14, padding: '16px' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#DC2626', marginBottom: 4 }}>Remove from Homie</div>
+            <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.5 }}>Stop receiving all job requests from Homie permanently.</div>
+            <button onClick={handleOptOut} disabled={optingOut} style={{
+              padding: '10px 20px', borderRadius: 100, border: 'none', background: '#DC2626', color: 'white',
+              fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+            }}>{optingOut ? 'Processing...' : 'Opt Out'}</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* -- Main Portal Page -- */
+export default function ProviderPortal() {
+  const navigate = useNavigate();
+  const { provider, isProviderAuthenticated, logout } = useProviderAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') as Tab) || 'dashboard';
+
+  useEffect(() => {
+    if (!isProviderAuthenticated) navigate('/portal/login');
+  }, [isProviderAuthenticated, navigate]);
+
+  if (!isProviderAuthenticated || !provider) return null;
+
+  return (
+    <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 50, background: D,
+        padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Link to="/" style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, textDecoration: 'none' }}>homie</Link>
+          <span style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6 }}>PRO</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>{provider.name}</span>
+          <button onClick={() => { logout(); navigate('/'); }} style={{
+            background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 100,
+            padding: '6px 14px', fontSize: 12, color: 'rgba(255,255,255,0.6)', cursor: 'pointer',
+            fontFamily: "'DM Sans', sans-serif",
+          }}>Sign out</button>
+        </div>
+      </nav>
+
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px 16px 80px' }}>
+        <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: D, marginBottom: 24 }}>
+          Welcome, {provider.name}
+        </h1>
+
+        <div style={{ display: 'flex', gap: 2, marginBottom: 28, borderBottom: '1px solid rgba(0,0,0,0.06)', overflowX: 'auto' }}>
+          {TABS.map(tab => (
+            <button key={tab} onClick={() => setSearchParams({ tab })} style={{
+              padding: '10px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+              background: 'none', border: 'none', borderBottom: activeTab === tab ? `2px solid ${O}` : '2px solid transparent',
+              color: activeTab === tab ? O : '#9B9490', fontFamily: "'DM Sans', sans-serif",
+              transition: 'all 0.15s', marginBottom: -1,
+            }}>{TAB_LABELS[tab]}</button>
           ))}
         </div>
 
-        {/* Job grid */}
-        {filtered.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-dark/30 text-sm">No {tab} jobs right now.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filtered.map((job) => (
-              <JobCard key={job.id} job={job} onClick={() => onSelectJob(job.id)} />
-            ))}
-          </div>
-        )}
+        {activeTab === 'dashboard' && <DashboardTab />}
+        {activeTab === 'jobs' && <IncomingJobsTab />}
+        {activeTab === 'history' && <HistoryTab />}
+        {activeTab === 'profile' && <ProfileTab />}
+        {activeTab === 'settings' && <SettingsTab />}
       </div>
     </div>
-  );
-}
-
-const TABS: { value: JobTab; label: string }[] = [
-  { value: 'new', label: 'New' },
-  { value: 'accepted', label: 'Accepted' },
-  { value: 'completed', label: 'Completed' },
-];
-
-// ── Portal Header ───────────────────────────────────────────────────────────
-
-function PortalHeader() {
-  return (
-    <header className="sticky top-0 z-50 bg-dark">
-      <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-        <div className="flex items-baseline gap-2">
-          <Link to="/portal" className="font-display font-bold text-2xl text-orange-500">
-            homie
-          </Link>
-          <span className="text-white/40 text-sm font-semibold">PRO</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-white/70 text-sm hidden sm:inline">{MOCK_PROVIDER_NAME}</span>
-          <div className="w-9 h-9 rounded-full bg-orange-500/20 text-orange-500 flex items-center justify-center text-sm font-bold">
-            R
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-// ── Stats Row ───────────────────────────────────────────────────────────────
-
-function StatsRow({ stats }: { stats: ProviderStats }) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <StatCard label="Jobs completed" value={stats.jobsCompleted.toString()} />
-      <StatCard label="Avg rating" value={`⭐ ${stats.avgRating}`} />
-      <StatCard label="Response rate" value={`${Math.round(stats.responseRate * 100)}%`} />
-      <StatCard label="Revenue (month)" value={`$${stats.revenueThisMonth.toLocaleString()}`} />
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-dark/10 p-4 shadow-sm">
-      <p className="text-xs text-dark/45 font-medium mb-1">{label}</p>
-      <p className="text-xl font-bold text-dark">{value}</p>
-    </div>
-  );
-}
-
-// ── Job Card ────────────────────────────────────────────────────────────────
-
-const CATEGORY_COLORS: Record<string, string> = {
-  plumbing: 'bg-blue-100 text-blue-700',
-  hvac: 'bg-purple-100 text-purple-700',
-  electrical: 'bg-yellow-100 text-yellow-700',
-  roofing: 'bg-red-100 text-red-700',
-  landscaping: 'bg-green-100 text-green-700',
-};
-
-const SEVERITY_STYLES: Record<Severity, { dot: string; label: string }> = {
-  low: { dot: 'bg-green-500', label: 'Low' },
-  moderate: { dot: 'bg-yellow-500', label: 'Moderate' },
-  high: { dot: 'bg-orange-500', label: 'High' },
-  critical: { dot: 'bg-red-500', label: 'Critical' },
-};
-
-function JobCard({ job, onClick }: { job: PortalJob; onClick: () => void }) {
-  const catStyle = CATEGORY_COLORS[job.category] ?? 'bg-dark/10 text-dark/70';
-  const sev = SEVERITY_STYLES[job.severity];
-
-  return (
-    <button
-      onClick={onClick}
-      className="text-left bg-white rounded-2xl border border-dark/10 shadow-sm p-5 hover:border-dark/20 hover:shadow-md transition-all group"
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <h3 className="font-bold text-dark group-hover:text-orange-600 transition-colors leading-snug">
-          {job.title}
-        </h3>
-        <span className={`${catStyle} text-xs font-semibold px-2.5 py-0.5 rounded-full shrink-0`}>
-          {job.category}
-        </span>
-      </div>
-
-      {/* Meta row */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-dark/50 mb-3">
-        <span className="flex items-center gap-1">
-          <PinIcon />
-          {job.zipCode} · {job.distanceMiles} mi
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${sev.dot}`} />
-          {sev.label}
-        </span>
-        <span>{job.timing}</span>
-      </div>
-
-      {/* Budget + confidence */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-dark">{job.budgetRange}</span>
-        <span className="text-xs text-dark/40">
-          AI confidence: <strong className="text-dark/70">{Math.round(job.confidence * 100)}%</strong>
-        </span>
-      </div>
-
-      {/* Footer */}
-      <div className="mt-4 pt-3 border-t border-dark/5 flex items-center justify-between">
-        {job.status === 'completed' && job.review && (
-          <span className="text-xs text-dark/50">
-            {'⭐'.repeat(job.review.rating)}
-          </span>
-        )}
-        {job.status === 'accepted' && (
-          <span className="text-xs text-green-600 font-medium">Quoted ${job.quotedPrice}</span>
-        )}
-        {job.status === 'new' && <span />}
-        <span className="text-xs text-orange-500 font-semibold group-hover:text-orange-600 transition-colors">
-          View details →
-        </span>
-      </div>
-    </button>
-  );
-}
-
-// ── Job Detail ──────────────────────────────────────────────────────────────
-
-function JobDetail({ job, onBack }: { job: PortalJob; onBack: () => void }) {
-  useDocumentTitle(job.title);
-  const [price, setPrice] = useState(job.quotedPrice ?? '');
-  const [availability, setAvailability] = useState(job.quotedAvailability ?? '');
-  const [message, setMessage] = useState(job.quotedMessage ?? '');
-  const [submitted, setSubmitted] = useState(job.status !== 'new');
-
-  const sev = SEVERITY_STYLES[job.severity];
-  const catStyle = CATEGORY_COLORS[job.category] ?? 'bg-dark/10 text-dark/70';
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitted(true);
-  }
-
-  return (
-    <div className="min-h-screen bg-warm">
-      <PortalHeader />
-
-      <div className="max-w-3xl mx-auto px-4 py-6">
-        {/* Back button */}
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-dark/50 hover:text-dark transition-colors mb-6"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-          Back to dashboard
-        </button>
-
-        {/* Title section */}
-        <div className="flex flex-wrap items-start gap-3 mb-6">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold mb-2">{job.title}</h1>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`${catStyle} text-xs font-semibold px-2.5 py-0.5 rounded-full`}>
-                {job.category}
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-dark/50">
-                <span className={`w-2 h-2 rounded-full ${sev.dot}`} />
-                {sev.label} severity
-              </span>
-              <span className="text-xs text-dark/50">
-                {job.zipCode} · {job.distanceMiles} mi
-              </span>
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            <p className="text-lg font-bold text-dark">{job.budgetRange}</p>
-            <p className="text-xs text-dark/40">{job.timing}</p>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          {/* AI diagnostic summary */}
-          <DetailSection title="AI Diagnostic Summary">
-            <p className="text-sm text-dark/70 leading-relaxed">{job.summary}</p>
-
-            {job.homeownerNote && (
-              <div className="mt-4 bg-orange-500/5 border border-orange-500/15 rounded-xl p-4">
-                <p className="text-xs font-semibold text-orange-600 mb-1">Homeowner note</p>
-                <p className="text-sm text-dark/70 italic">"{job.homeownerNote}"</p>
-              </div>
-            )}
-          </DetailSection>
-
-          {/* Recommended actions */}
-          <DetailSection title="Recommended Actions">
-            <ol className="space-y-2">
-              {job.recommendedActions.map((action, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm text-dark/70">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-dark/5 text-dark/40 flex items-center justify-center text-xs font-bold">
-                    {i + 1}
-                  </span>
-                  {action}
-                </li>
-              ))}
-            </ol>
-          </DetailSection>
-
-          {/* Confidence */}
-          <DetailSection title="AI Confidence">
-            <div className="flex items-center gap-4">
-              <div className="flex-1 h-3 bg-dark/10 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500 rounded-full transition-all duration-700"
-                  style={{ width: `${job.confidence * 100}%` }}
-                />
-              </div>
-              <span className="text-lg font-bold text-dark shrink-0">
-                {Math.round(job.confidence * 100)}%
-              </span>
-            </div>
-            <p className="text-xs text-dark/40 mt-2">
-              {job.confidence >= 0.85
-                ? 'High confidence — diagnosis is well-supported by the description.'
-                : job.confidence >= 0.7
-                  ? 'Moderate confidence — on-site inspection will clarify.'
-                  : 'Lower confidence — multiple possible causes, inspection recommended.'}
-            </p>
-          </DetailSection>
-
-          {/* Photos */}
-          {job.photos.length > 0 && (
-            <DetailSection title="Photos">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {job.photos.map((url, i) => (
-                  <div key={i} className="aspect-square rounded-xl bg-dark/5 overflow-hidden">
-                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            </DetailSection>
-          )}
-          {job.photos.length === 0 && (
-            <DetailSection title="Photos">
-              <div className="flex items-center justify-center py-6 rounded-xl bg-dark/[0.03] border border-dashed border-dark/10">
-                <p className="text-sm text-dark/30">No photos provided by homeowner</p>
-              </div>
-            </DetailSection>
-          )}
-
-          {/* Review (completed jobs) */}
-          {job.status === 'completed' && job.review && (
-            <DetailSection title="Homeowner Review">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">{'⭐'.repeat(job.review.rating)}</span>
-                <span className="text-sm font-semibold text-dark">{job.review.rating}.0</span>
-              </div>
-              <p className="text-sm text-dark/70 italic">"{job.review.comment}"</p>
-            </DetailSection>
-          )}
-
-          {/* Quote form / status */}
-          {job.status === 'new' && !submitted && (
-            <DetailSection title="Submit Your Quote">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-dark mb-1.5">Your price</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-dark/40 font-medium">$</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ''))}
-                      placeholder="e.g. 185"
-                      required
-                      className="w-full bg-warm rounded-xl pl-8 pr-4 py-3 text-sm text-dark placeholder:text-dark/30 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-dark mb-1.5">Your availability</label>
-                  <input
-                    type="text"
-                    value={availability}
-                    onChange={(e) => setAvailability(e.target.value)}
-                    placeholder="e.g. Tomorrow 9–11 AM"
-                    required
-                    className="w-full bg-warm rounded-xl px-4 py-3 text-sm text-dark placeholder:text-dark/30 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-dark mb-1.5">
-                    Message to homeowner <span className="text-dark/30 font-normal">(optional)</span>
-                  </label>
-                  <textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Any notes about the job, your experience with this type of repair, etc."
-                    rows={3}
-                    className="w-full bg-warm rounded-xl px-4 py-3 text-sm text-dark placeholder:text-dark/30 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-full transition-colors"
-                >
-                  Submit quote
-                </button>
-              </form>
-            </DetailSection>
-          )}
-
-          {/* Submitted / waiting state */}
-          {(submitted && job.status === 'new') && (
-            <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 text-center animate-fade-in">
-              <div className="w-12 h-12 bg-green-500/15 rounded-full flex items-center justify-center mx-auto mb-3">
-                <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-dark mb-1">Quote submitted!</h3>
-              <p className="text-sm text-dark/50 mb-3">
-                ${price} · {availability}
-              </p>
-              <div className="flex items-center justify-center gap-2 text-sm text-dark/40">
-                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                Waiting for homeowner to respond
-              </div>
-            </div>
-          )}
-
-          {/* Accepted jobs — show submitted quote */}
-          {job.status === 'accepted' && (
-            <DetailSection title="Your Quote">
-              <div className="bg-warm rounded-xl p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-dark/50">Price</span>
-                  <span className="font-semibold">${job.quotedPrice}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-dark/50">Availability</span>
-                  <span className="font-semibold">{job.quotedAvailability}</span>
-                </div>
-                {job.quotedMessage && (
-                  <div className="pt-2 border-t border-dark/10">
-                    <p className="text-sm text-dark/60 italic">"{job.quotedMessage}"</p>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center justify-center gap-2 text-sm text-dark/40 mt-4">
-                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                Waiting for homeowner to respond
-              </div>
-            </DetailSection>
-          )}
-
-          {/* Completed jobs — show final */}
-          {job.status === 'completed' && (
-            <DetailSection title="Job Summary">
-              <div className="bg-warm rounded-xl p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-dark/50">Final price</span>
-                  <span className="font-semibold">${job.quotedPrice}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-dark/50">Completed</span>
-                  <span className="font-semibold">{job.quotedAvailability}</span>
-                </div>
-              </div>
-            </DetailSection>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Shared detail section ───────────────────────────────────────────────────
-
-function DetailSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="bg-white rounded-2xl border border-dark/10 shadow-sm p-5">
-      <h3 className="text-sm font-bold text-dark mb-3">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-// ── Icons ───────────────────────────────────────────────────────────────────
-
-function PinIcon() {
-  return (
-    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-    </svg>
   );
 }

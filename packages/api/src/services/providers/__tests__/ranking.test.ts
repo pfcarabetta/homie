@@ -16,6 +16,11 @@ const BASE_PROVIDER: Provider = {
   categories: ['plumbing'],
   lat: null,
   lng: null,
+  notificationPref: 'both',
+  vacationMode: false,
+  businessHours: null,
+  licenseInfo: null,
+  serviceZips: null,
   discoveredAt: new Date(),
 };
 

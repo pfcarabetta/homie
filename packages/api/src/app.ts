@@ -11,8 +11,11 @@ import paymentsRouter from './routes/payments';
 import accountRouter from './routes/account';
 import adminRouter from './routes/admin';
 import { stripeWebhookHandler } from './routes/stripe-webhook';
+import providerAuthRouter from './routes/provider-auth';
+import providerPortalRouter from './routes/provider-portal';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
+import { requireProviderAuth } from './middleware/provider-auth';
 import { authLimiter, diagnosticLimiter, apiLimiter } from './middleware/rate-limit';
 
 const app = express();
@@ -49,6 +52,8 @@ app.use('/api/v1/bookings', apiLimiter, requireAuth, bookingsRouter);
 app.use('/api/v1/providers', apiLimiter, providersRouter);
 app.use('/api/v1/account', apiLimiter, requireAuth, accountRouter);
 app.use('/api/v1/payments', apiLimiter, requireAuth, paymentsRouter);
+app.use('/api/v1/provider-auth', authLimiter, providerAuthRouter);
+app.use('/api/v1/portal', apiLimiter, requireProviderAuth, providerPortalRouter);
 app.use('/api/v1/webhooks', webhooksRouter);
 app.use('/api/v1/admin', requireAdmin, adminRouter);
 
