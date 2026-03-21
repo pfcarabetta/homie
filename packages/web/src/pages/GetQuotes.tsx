@@ -417,6 +417,12 @@ function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | nu
 
   return (
     <>
+      {/* Safe to leave notice */}
+      <div style={{ marginLeft: 42, marginBottom: 16, background: '#EFF6FF', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(37,99,235,0.1)', animation: 'fadeSlide 0.3s ease' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#2563EB', marginBottom: 4 }}>You can close this page</div>
+        <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5 }}>We'll notify you by text and email when quotes arrive. You can also check your quotes anytime in your <a href="/account?tab=quotes" style={{ color: '#E8632B', textDecoration: 'none', fontWeight: 600 }}>account portal</a>.</div>
+      </div>
+
       {/* Compact stats */}
       <div style={{ marginLeft: 42, display: 'flex', gap: 8, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
         {[

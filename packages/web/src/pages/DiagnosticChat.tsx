@@ -1220,7 +1220,13 @@ function ProviderModal({
             {state.matchStep === 'tier' && <TierStep state={state} dispatch={dispatch} />}
             {state.matchStep === 'preferences' && <PreferencesStep state={state} dispatch={dispatch} startOutreach={startOutreach} />}
             {state.matchStep === 'outreach' && (
-              <OutreachProgress providersContacted={state.outreach.providersContacted} channels={state.outreach.channels} active={state.outreach.active} expiresAt={state.expiresAt} />
+              <>
+                <OutreachProgress providersContacted={state.outreach.providersContacted} channels={state.outreach.channels} active={state.outreach.active} expiresAt={state.expiresAt} />
+                <div className="mt-4 bg-blue-50 rounded-xl p-3 border border-blue-100">
+                  <p className="text-[13px] font-semibold text-blue-600 mb-1">You can close this page</p>
+                  <p className="text-xs text-dark/60 leading-relaxed">We'll notify you by text and email when quotes arrive. You can also check your quotes anytime in your <a href="/account?tab=quotes" className="text-orange-500 font-semibold no-underline">account portal</a>.</p>
+                </div>
+              </>
             )}
             {state.matchStep === 'results' && <ResultsStep providers={state.respondedProviders} onBook={handleBook} />}
           </>
