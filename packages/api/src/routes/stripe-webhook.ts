@@ -37,36 +37,16 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
     }
 
     try {
-      // Mark job as paid
-      await db.update(jobs).set({ paymentStatus: 'paid' }).where(eq(jobs.id, jobId));
+      // Get the payment intent ID from the session
+      const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
 
-      // If provider/response IDs are present, also create a booking (post-outreach payment)
-      if (responseId && providerId) {
-        const [job] = await db.select({ homeownerId: jobs.homeownerId }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
-        if (!job) {
-          logger.error('[Stripe webhook] Job not found: %s', jobId);
-          res.status(200).json({ received: true });
-          return;
-        }
+      // Mark job as authorized (card held, not charged yet)
+      await db.update(jobs).set({
+        paymentStatus: 'authorized',
+        stripePaymentIntentId: paymentIntentId ?? null,
+      }).where(eq(jobs.id, jobId));
 
-        await db.update(jobs).set({ status: 'completed' }).where(eq(jobs.id, jobId));
-
-        const [booking] = await db
-          .insert(bookings)
-          .values({
-            jobId,
-            homeownerId: job.homeownerId,
-            providerId,
-          responseId,
-        })
-        .returning();
-
-        void sendBookingNotifications(jobId, providerId, booking.id);
-        logger.info(`[Stripe webhook] Payment confirmed & booking created for job ${jobId}`);
-      } else {
-        // Upfront payment — just mark as paid, outreach continues
-        logger.info(`[Stripe webhook] Upfront payment confirmed for job ${jobId}`);
-      }
+      logger.info(`[Stripe webhook] Payment authorized for job ${jobId} (intent: ${paymentIntentId})`);
     } catch (err) {
       logger.error({ err }, '[Stripe webhook] Error processing payment');
     }

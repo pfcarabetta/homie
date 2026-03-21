@@ -59,6 +59,14 @@ export async function createCheckoutSession(params: {
   return getStripe().checkout.sessions.create({
     mode: 'payment',
     customer: params.customerId,
+    payment_intent_data: {
+      capture_method: 'manual', // Authorize only — capture later when results arrive
+      metadata: {
+        job_id: params.jobId,
+        response_id: params.responseId,
+        provider_id: params.providerId,
+      },
+    },
     line_items: [{
       price_data: {
         currency: 'usd',
@@ -75,6 +83,22 @@ export async function createCheckoutSession(params: {
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,
   });
+}
+
+/**
+ * Capture a previously authorized payment (charge the card).
+ * Call this when provider results are returned.
+ */
+export async function capturePayment(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  return getStripe().paymentIntents.capture(paymentIntentId);
+}
+
+/**
+ * Cancel a previously authorized payment (release the hold).
+ * Call this when a job expires with no results.
+ */
+export async function cancelPayment(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  return getStripe().paymentIntents.cancel(paymentIntentId);
 }
 
 export function constructWebhookEvent(body: Buffer, signature: string): Stripe.Event {

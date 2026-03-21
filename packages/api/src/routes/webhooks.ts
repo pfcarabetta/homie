@@ -9,7 +9,28 @@ import { providers } from '../db/schema/providers';
 import { buildWebhookToken } from '../services/outreach/web';
 import { processProviderSpeech, getConversation } from '../services/outreach/voice-conversation';
 import { recordProviderResponse } from '../services/providers/scores';
+import { capturePayment } from '../services/stripe';
+import { jobs } from '../db/schema/jobs';
 import logger from '../logger';
+
+/** Capture authorized payment when first provider response comes in */
+async function captureJobPayment(jobId: string): Promise<void> {
+  try {
+    const [job] = await db
+      .select({ paymentStatus: jobs.paymentStatus, stripePaymentIntentId: jobs.stripePaymentIntentId })
+      .from(jobs)
+      .where(eq(jobs.id, jobId))
+      .limit(1);
+
+    if (job?.paymentStatus === 'authorized' && job.stripePaymentIntentId) {
+      await capturePayment(job.stripePaymentIntentId);
+      await db.update(jobs).set({ paymentStatus: 'paid' }).where(eq(jobs.id, jobId));
+      logger.info(`[payment] Captured payment for job ${jobId}`);
+    }
+  } catch (err) {
+    logger.error({ err }, `[payment] Failed to capture payment for job ${jobId}`);
+  }
+}
 
 const router = Router();
 
@@ -162,6 +183,7 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
 
         const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
         void recordProviderResponse(attempt.providerId, responseTimeSec);
+        if (state.accepted) void captureJobPayment(attempt.jobId);
 
         logger.info({ attemptId, accepted: state.accepted, quote: state.quotedPrice, availability: state.availability }, '[voice-conversation] Conversation complete');
       }
@@ -224,6 +246,7 @@ router.post('/twilio/voice/gather', async (req: Request, res: Response) => {
       'voice',
       'Accepted via IVR (pressed 1)',
     );
+    void captureJobPayment(attempt.jobId);
 
     const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
     void recordProviderResponse(attempt.providerId, responseTimeSec);
@@ -357,6 +380,7 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
       'sms',
       Body,
     );
+    void captureJobPayment(attempt.jobId);
   }
 
   const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
@@ -515,6 +539,7 @@ router.post('/web/submit-quote', async (req: Request, res: Response) => {
 
   const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
   void recordProviderResponse(attempt.providerId, responseTimeSec);
+  void captureJobPayment(attempt.jobId);
 
   const portalUrl = (process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000') + '/portal/login';
 
