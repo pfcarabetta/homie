@@ -460,14 +460,33 @@ export default function DiagnosticChat() {
 
   // Resume after payment — restore chat and launch outreach
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
     const paidChat = sessionStorage.getItem('homie_paid_chat');
-    if (paidChat && authService.isAuthenticated()) {
+
+    // User hit back from Stripe without completing payment
+    if (paidChat && !urlParams.has('paid')) {
       sessionStorage.removeItem('homie_paid_chat');
+      // Don't show error on fresh page load — only if there was a pending payment
+      return;
+    }
+
+    if (paidChat && urlParams.has('paid') && authService.isAuthenticated()) {
+      sessionStorage.removeItem('homie_paid_chat');
+      window.history.replaceState({}, '', '/chat');
       try {
         const saved = JSON.parse(paidChat);
-        const restoredMessages = (saved.messages ?? []).map((m: { id: string; role: string; content: string }) => ({
-          ...m, timestamp: new Date(),
-        })) as ChatMessage[];
+
+        // Verify payment with API
+        if (saved.jobId) {
+          paymentService.getPaymentStatus(saved.jobId).then(res => {
+            if (!res.data || (res.data.payment_status !== 'authorized' && res.data.payment_status !== 'paid')) {
+              // Payment not completed
+              return;
+            }
+
+            const restoredMessages = (saved.messages ?? []).map((m: { id: string; role: string; content: string }) => ({
+              ...m, timestamp: new Date(),
+            })) as ChatMessage[];
 
         dispatch({
           type: 'RESTORE_STATE',
@@ -516,6 +535,8 @@ export default function DiagnosticChat() {
             }
           });
           cleanupOutreachRef.current = () => jobSocket.close();
+            }
+          }).catch(() => { /* payment verification failed */ });
         }
       } catch { /* ignore */ }
       return;
