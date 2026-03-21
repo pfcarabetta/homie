@@ -389,7 +389,13 @@ function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | nu
       return () => socket.close();
     }
 
-    // Mock outreach for demo
+    // If authenticated but no jobId yet, wait for it
+    if (!isDemo && authService.isAuthenticated()) {
+      setLog([{ t: 0, msg: 'Setting up your search...', type: 'system' }]);
+      return;
+    }
+
+    // Mock outreach for demo / unauthenticated
     const timers = OUTREACH_LOG.map((e) => setTimeout(() => {
       setLog(p => [...p, e]);
       if (['voice', 'sms', 'web'].includes(e.type)) setStats(s => ({ ...s, contacted: s.contacted + 1 }));
@@ -590,7 +596,7 @@ export default function GetQuotes() {
         const saved = JSON.parse(pending) as QuoteData;
         setData(saved);
         addAssistant("Welcome back! Let me launch your quote search now \uD83D\uDE80");
-        setTimeout(() => void launchOutreach(saved.tier ?? 'priority'), 500);
+        setTimeout(() => void launchOutreach(saved.tier ?? 'priority', saved), 500);
         return;
       } catch { /* ignore bad data */ }
     }
@@ -750,27 +756,31 @@ export default function GetQuotes() {
     }, 500);
   };
 
-  const launchOutreach = async (tier: string) => {
-    if (data.category) {
+  const launchOutreach = async (tier: string, quoteData?: QuoteData) => {
+    const d = quoteData ?? data;
+    let createdJobId: string | null = null;
+
+    if (d.category && authService.isAuthenticated()) {
       try {
-        const cat = CATEGORY_FLOWS[data.category];
+        const cat = CATEGORY_FLOWS[d.category];
         const diagPayload: DiagnosisPayload = {
-          category: data.category,
+          category: d.category,
           severity: 'medium',
-          summary: data.aiDiagnosis || `${cat?.label}: ${data.a1}. ${data.extra || ''}`,
+          summary: d.aiDiagnosis || `${cat?.label}: ${d.a1}. ${d.extra || ''}`,
           recommendedActions: [],
         };
 
         const res = await jobService.createJob({
           diagnosis: diagPayload,
-          timing: (data.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
+          timing: (d.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
           budget: 'flexible',
           tier: tier as 'standard' | 'priority' | 'emergency',
-          zipCode: data.zip,
+          zipCode: d.zip,
         });
 
         if (res.data) {
-          setJobId(res.data.id);
+          createdJobId = res.data.id;
+          setJobId(createdJobId);
         }
       } catch {
         // Job creation failed — continue with mock
@@ -778,6 +788,7 @@ export default function GetQuotes() {
     }
 
     addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+    setJobId(createdJobId); // ensure state is set before phase change
     setPhase('outreach');
     scrollDown();
   };
