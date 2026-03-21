@@ -1,3 +1,6 @@
+import { initSentry } from './sentry';
+initSentry();
+
 import { validateEnv } from './env';
 
 // Validate env vars before importing modules that use them

@@ -17,6 +17,7 @@ import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
 import { requireProviderAuth } from './middleware/provider-auth';
 import { authLimiter, diagnosticLimiter, apiLimiter } from './middleware/rate-limit';
+import { Sentry } from './sentry';
 
 const app = express();
 
@@ -56,5 +57,8 @@ app.use('/api/v1/provider-auth', authLimiter, providerAuthRouter);
 app.use('/api/v1/portal', apiLimiter, requireProviderAuth, providerPortalRouter);
 app.use('/api/v1/webhooks', webhooksRouter);
 app.use('/api/v1/admin', requireAdmin, adminRouter);
+
+// Sentry error handler — must be after all routes
+Sentry.setupExpressErrorHandler(app);
 
 export default app;

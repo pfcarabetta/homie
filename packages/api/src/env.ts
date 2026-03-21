@@ -49,6 +49,9 @@ const ENV_VARS: EnvVar[] = [
   { name: 'STRIPE_SECRET_KEY', required: false, description: 'Stripe secret key for payment processing' },
   { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook signing secret' },
 
+  // Sentry
+  { name: 'SENTRY_DSN', required: false, description: 'Sentry DSN for error tracking' },
+
   // Admin
   { name: 'ADMIN_SECRET', required: false, description: 'Shared secret for admin dashboard access' },
 ];
