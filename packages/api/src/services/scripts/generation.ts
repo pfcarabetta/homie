@@ -96,9 +96,8 @@ Create templates for all three channels using the generate_scripts tool.
 Use {{placeholder}} syntax for dynamic values — do NOT hard-code specific names, dollar amounts, or zip codes.`;
 
   const response = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: 'claude-sonnet-4-6',
     max_tokens: 1024,
-    thinking: { type: 'adaptive' },
     system: systemPrompt,
     tools: [GENERATE_SCRIPTS_TOOL],
     tool_choice: { type: 'tool', name: 'generate_scripts' },
