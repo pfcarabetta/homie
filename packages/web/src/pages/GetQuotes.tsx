@@ -619,8 +619,11 @@ export default function GetQuotes() {
         return;
       } catch { /* ignore */ }
     } else if (paidJob && !urlParams.has('paid')) {
-      // User hit back from Stripe without completing — clear the pending job
+      // User hit back from Stripe without completing payment
       sessionStorage.removeItem('homie_paid_job');
+      addAssistant("Payment was not completed. Please select a tier to try again.");
+      setPhase('tier');
+      return;
     }
 
     // Check if returning from login with pending quote
