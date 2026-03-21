@@ -41,8 +41,32 @@ export default function Register() {
     if (err) {
       setError(err);
     } else {
-      navigate('/');
+      setShowVerify(true);
     }
+  }
+
+  const [showVerify, setShowVerify] = useState(false);
+
+  if (showVerify) {
+    return (
+      <div className="min-h-screen bg-warm flex flex-col">
+        <header className="py-8 text-center">
+          <Link to="/" className="font-display font-bold text-3xl text-orange-500">homie</Link>
+        </header>
+        <div className="flex-1 flex items-start justify-center px-4 pt-12">
+          <div className="w-full max-w-sm text-center">
+            <div className="text-5xl mb-4">{'\u2709\uFE0F'}</div>
+            <h1 className="text-2xl font-bold mb-2">Check your email</h1>
+            <p className="text-dark/50 text-sm mb-2">We sent a verification link to</p>
+            <p className="text-dark font-semibold mb-6">{email}</p>
+            <p className="text-dark/40 text-xs mb-8">Click the link in the email to verify your account. You can start using Homie right away — just verify when you get a chance.</p>
+            <Link to="/" className="inline-block bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-8 rounded-full transition-colors">
+              Continue to Homie
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean } from 'drizzle-orm/pg-core';
 
 export const homeowners = pgTable('homeowners', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -10,6 +10,8 @@ export const homeowners = pgTable('homeowners', {
   zipCode: text('zip_code').notNull(),
   membershipTier: text('membership_tier').notNull().default('free'),
   stripeCustomerId: text('stripe_customer_id'),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  emailVerifyToken: text('email_verify_token'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -10,6 +10,7 @@ import Register from '@/pages/Register';
 import ResetPassword from '@/pages/ResetPassword';
 import Account from '@/pages/Account';
 import PaymentSuccess from '@/pages/PaymentSuccess';
+import VerifyEmail from '@/pages/VerifyEmail';
 import AdminLogin from '@/pages/admin/AdminLogin';
 import AdminLayout from '@/pages/admin/AdminLayout';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/account" element={<Account />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
           <Route path="/portal" element={<ProviderPortal />} />
           <Route path="/admin" element={<AdminLogin />} />

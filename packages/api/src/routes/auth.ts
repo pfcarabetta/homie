@@ -5,6 +5,7 @@ import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
 import { signToken } from '../middleware/auth';
 import { ApiResponse } from '../types/api';
+import { generateVerifyToken, sendVerificationEmail, verifyEmail } from '../services/email-verify';
 
 const router = Router();
 
@@ -60,6 +61,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
   try {
     const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
+    const verifyToken = generateVerifyToken();
 
     const [homeowner] = await db
       .insert(homeowners)
@@ -70,8 +72,12 @@ router.post('/register', async (req: Request, res: Response) => {
         passwordHash,
         zipCode: body.zip_code,
         phone: typeof body.phone === 'string' ? body.phone : null,
+        emailVerifyToken: verifyToken,
       })
       .returning();
+
+    // Send verification email (fire-and-forget)
+    void sendVerificationEmail(homeowner.id, homeowner.email, verifyToken, homeowner.firstName);
 
     const token = signToken(homeowner.id);
 
@@ -165,6 +171,61 @@ router.post('/login', async (req: Request, res: Response) => {
     console.error('[POST /auth/login]', err);
     const out: ApiResponse<null> = { data: null, error: 'Login failed', meta: {} };
     res.status(500).json(out);
+  }
+});
+
+// ── GET /api/v1/auth/verify-email ─────────────────────────────────────────────
+
+router.get('/verify-email', async (req: Request, res: Response) => {
+  const token = req.query.token as string;
+  if (!token) {
+    res.status(400).json({ data: null, error: 'token is required', meta: {} });
+    return;
+  }
+
+  try {
+    const verified = await verifyEmail(token);
+    if (!verified) {
+      res.status(400).json({ data: null, error: 'Invalid or expired verification link', meta: {} });
+      return;
+    }
+    res.json({ data: { verified: true }, error: null, meta: {} });
+  } catch (err) {
+    console.error('[GET /auth/verify-email]', err);
+    res.status(500).json({ data: null, error: 'Verification failed', meta: {} });
+  }
+});
+
+// ── POST /api/v1/auth/resend-verification ────────────────────────────────────
+
+router.post('/resend-verification', async (req: Request, res: Response) => {
+  const { email } = req.body as { email?: string };
+  if (!email || typeof email !== 'string') {
+    res.status(400).json({ data: null, error: 'email is required', meta: {} });
+    return;
+  }
+
+  try {
+    const [homeowner] = await db
+      .select({ id: homeowners.id, firstName: homeowners.firstName, emailVerified: homeowners.emailVerified })
+      .from(homeowners)
+      .where(eq(homeowners.email, email.toLowerCase().trim()))
+      .limit(1);
+
+    // Always return success to prevent enumeration
+    if (!homeowner || homeowner.emailVerified) {
+      res.json({ data: { sent: true }, error: null, meta: {} });
+      return;
+    }
+
+    const newToken = generateVerifyToken();
+    await db.update(homeowners).set({ emailVerifyToken: newToken }).where(eq(homeowners.id, homeowner.id));
+    void sendVerificationEmail(homeowner.id, email.toLowerCase().trim(), newToken, homeowner.firstName);
+
+    res.json({ data: { sent: true }, error: null, meta: {} });
+  } catch (err) {
+    console.error('[POST /auth/resend-verification]', err);
+    res.status(500).json({ data: null, error: 'Failed to resend', meta: {} });
   }
 });
 
