@@ -21,7 +21,7 @@ export class SmsAdapter implements ChannelAdapter {
       await client.messages.create({
         to: payload.phone,
         from: fromNumber,
-        body: payload.script,
+        body: payload.script + '\n\nReply STOP to opt out. HELP for info.',
         statusCallback: `${process.env.API_BASE_URL}/api/v1/webhooks/twilio/sms/status?attemptId=${encodeURIComponent(payload.attemptId)}`,
       });
 

@@ -6,6 +6,7 @@ import { db } from '../db';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerResponses } from '../db/schema/provider-responses';
 import { providers } from '../db/schema/providers';
+import { suppressionList } from '../db/schema/suppression-list';
 import { buildWebhookToken } from '../services/outreach/web';
 import { processProviderSpeech, getConversation } from '../services/outreach/voice-conversation';
 import { processSmsReply } from '../services/outreach/sms-conversation';
@@ -343,6 +344,41 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
     .limit(1);
 
   if (!provider) {
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  // Handle STOP/opt-out keywords (Twilio compliance)
+  const stopWords = ['stop', 'unsubscribe', 'cancel', 'end', 'quit', 'optout', 'opt out'];
+  if (stopWords.includes(Body.trim().toLowerCase())) {
+    try {
+      await db.insert(suppressionList).values({
+        providerId: provider.id,
+        reason: 'sms_stop',
+      });
+      logger.info(`[sms] Provider ${provider.name} opted out via STOP keyword`);
+    } catch {
+      // Already suppressed — ignore duplicate
+    }
+    twiml.message("You've been unsubscribed from Homie messages. You will no longer receive job requests from us. Reply START to re-subscribe.");
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  // Handle START/re-subscribe
+  if (Body.trim().toLowerCase() === 'start') {
+    try {
+      await db.delete(suppressionList).where(eq(suppressionList.providerId, provider.id));
+      logger.info(`[sms] Provider ${provider.name} re-subscribed via START keyword`);
+    } catch { /* ignore */ }
+    twiml.message("Welcome back! You've been re-subscribed to Homie job notifications. We'll reach out when there's a job in your area.");
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  // Handle HELP keyword
+  if (Body.trim().toLowerCase() === 'help') {
+    twiml.message("Homie connects homeowners with local service providers. Reply STOP to unsubscribe. For support, visit homiepro.ai or email support@homiepro.ai");
     res.type('text/xml').send(twiml.toString());
     return;
   }
