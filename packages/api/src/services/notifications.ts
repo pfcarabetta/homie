@@ -23,7 +23,7 @@ export async function sendSms(to: string, body: string): Promise<void> {
  * Sends a plain-text email via SendGrid.
  * Silently skips (with a warning) if SendGrid is not configured.
  */
-export async function sendEmail(to: string, subject: string, text: string): Promise<void> {
+export async function sendEmail(to: string, subject: string, htmlOrText: string): Promise<void> {
   const apiKey = process.env.SENDGRID_API_KEY;
   const fromEmail = process.env.SENDGRID_FROM_EMAIL;
 
@@ -33,5 +33,11 @@ export async function sendEmail(to: string, subject: string, text: string): Prom
   }
 
   sgMail.setApiKey(apiKey);
-  await sgMail.send({ to, from: fromEmail, subject, text });
+  const isHtml = htmlOrText.trim().startsWith('<');
+  await sgMail.send({
+    to,
+    from: fromEmail,
+    subject,
+    ...(isHtml ? { html: htmlOrText } : { text: htmlOrText }),
+  });
 }
