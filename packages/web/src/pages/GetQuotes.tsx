@@ -578,9 +578,23 @@ export default function GetQuotes() {
     );
   }, []);
 
-  // Greeting on mount
+  // Greeting on mount — or resume after login
   useEffect(() => {
     window.scrollTo(0, 0);
+
+    // Check if returning from login with pending quote
+    const pending = sessionStorage.getItem('homie_pending_quote');
+    if (pending && authService.isAuthenticated()) {
+      sessionStorage.removeItem('homie_pending_quote');
+      try {
+        const saved = JSON.parse(pending) as QuoteData;
+        setData(saved);
+        addAssistant("Welcome back! Let me launch your quote search now \uD83D\uDE80");
+        setTimeout(() => void launchOutreach(saved.tier ?? 'priority'), 500);
+        return;
+      } catch { /* ignore bad data */ }
+    }
+
     const t = setTimeout(() => {
       addAssistant("Hey! \uD83D\uDC4B I'm Homie. Let's get you some quotes. What kind of help do you need?");
       setPhase('category');
@@ -736,13 +750,8 @@ export default function GetQuotes() {
     }, 500);
   };
 
-  const handleTier = async (t: typeof TIERS[number]) => {
-    setData(d => ({ ...d, tier: t.id }));
-    setPhase('waiting');
-    addUser(`${t.name} \u2014 ${t.price}`);
-
-    // Create real job if authenticated and not demo
-    if (!isDemo && authService.isAuthenticated() && data.category) {
+  const launchOutreach = async (tier: string) => {
+    if (data.category) {
       try {
         const cat = CATEGORY_FLOWS[data.category];
         const diagPayload: DiagnosisPayload = {
@@ -756,7 +765,7 @@ export default function GetQuotes() {
           diagnosis: diagPayload,
           timing: (data.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
           budget: 'flexible',
-          tier: t.id as 'standard' | 'priority' | 'emergency',
+          tier: tier as 'standard' | 'priority' | 'emergency',
           zipCode: data.zip,
         });
 
@@ -768,11 +777,36 @@ export default function GetQuotes() {
       }
     }
 
-    setTimeout(() => {
-      addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-      setPhase('outreach');
-      scrollDown();
-    }, 500);
+    addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+    setPhase('outreach');
+    scrollDown();
+  };
+
+  const handleTier = async (t: typeof TIERS[number]) => {
+    setData(d => ({ ...d, tier: t.id }));
+    setPhase('waiting');
+    addUser(`${t.name} \u2014 ${t.price}`);
+
+    if (isDemo) {
+      setTimeout(() => {
+        addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+        setPhase('outreach');
+        scrollDown();
+      }, 500);
+      return;
+    }
+
+    // Require sign in before outreach
+    if (!authService.isAuthenticated()) {
+      setTimeout(() => {
+        addAssistant("Almost there! You'll need to sign in so we can save your quotes and send you results.");
+        setPhase('auth_gate');
+        scrollDown();
+      }, 500);
+      return;
+    }
+
+    setTimeout(() => void launchOutreach(t.id), 500);
   };
 
   const repairOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'repair').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
@@ -889,6 +923,26 @@ export default function GetQuotes() {
         {phase === 'zip' && !streaming && <TextInput placeholder="Enter zip code..." onSubmit={handleZip} />}
         {phase === 'timing' && !streaming && <QuickReplies options={['ASAP', 'This week', 'This month', 'Flexible']} onSelect={(opt) => handleTiming(opt as string)} />}
         {phase === 'tier' && !streaming && <TierCards onSelect={handleTier} />}
+        {phase === 'auth_gate' && (
+          <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button onClick={() => {
+                sessionStorage.setItem('homie_pending_quote', JSON.stringify(data));
+                navigate('/login');
+              }} style={{
+                padding: '14px 0', borderRadius: 100, border: 'none', fontSize: 16, fontWeight: 600,
+                background: O, color: 'white', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              }}>Sign in</button>
+              <button onClick={() => {
+                sessionStorage.setItem('homie_pending_quote', JSON.stringify(data));
+                navigate('/register');
+              }} style={{
+                padding: '14px 0', borderRadius: 100, border: `2px solid ${O}`, fontSize: 16, fontWeight: 600,
+                background: 'white', color: O, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              }}>Create account</button>
+            </div>
+          </div>
+        )}
         {phase === 'outreach' && <OutreachView isDemo={isDemo} jobId={jobId} />}
 
         <div ref={bottomRef} />
