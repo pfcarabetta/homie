@@ -850,7 +850,7 @@ export default function GetQuotes() {
 
       jobService.createJob({
         diagnosis: diagPayload,
-        timing: (currentData.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
+        timing: ({ 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' }[currentData.timing ?? ''] ?? 'flexible') as 'asap' | 'this_week' | 'this_month' | 'flexible',
         budget: 'flexible',
         tier: t.id as 'standard' | 'priority' | 'emergency',
         zipCode: currentData.zip,
