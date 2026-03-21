@@ -102,7 +102,28 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
   logger.info({ attemptId, speech: SpeechResult }, '[voice-conversation] Provider speech received');
 
   try {
-    const { response, state } = await processProviderSpeech(attemptId, SpeechResult);
+    // Build job context for conversation initialization
+    let jobContext: string | undefined;
+    const existingConv = getConversation(attemptId);
+    if (!existingConv) {
+      const [attempt] = await db
+        .select({ jobId: outreachAttempts.jobId, script: outreachAttempts.scriptUsed })
+        .from(outreachAttempts)
+        .where(eq(outreachAttempts.id, attemptId))
+        .limit(1);
+      if (attempt?.script) {
+        jobContext = attempt.script;
+      } else if (attempt?.jobId) {
+        const { jobs } = require('../db/schema/jobs');
+        const [job] = await db.select({ diagnosis: jobs.diagnosis, zipCode: jobs.zipCode }).from(jobs).where(eq(jobs.id, attempt.jobId)).limit(1);
+        if (job?.diagnosis) {
+          const d = job.diagnosis as { category?: string; summary?: string };
+          jobContext = `${d.category ?? 'home service'} job near ${job.zipCode}. ${d.summary ?? ''}`;
+        }
+      }
+    }
+
+    const { response, state } = await processProviderSpeech(attemptId, SpeechResult, jobContext);
 
     twiml.say({ voice: 'Polly.Joanna' }, response);
 

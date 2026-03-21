@@ -47,10 +47,16 @@ export function initConversation(attemptId: string, jobScript: string): Conversa
 
 const SYSTEM_PROMPT = `You are Homie's AI calling agent, making outreach calls to service providers about job opportunities. You are having a phone conversation.
 
+ABOUT HOMIE:
+- Homie is an AI-powered home services platform that connects homeowners with local service providers
+- Homie's AI agent finds and contacts providers on behalf of homeowners who need help
+- Providers receive job opportunities matched to their skills and location
+
 RULES:
 - Be professional, friendly, and brief — this is a phone call
 - Keep responses to 1-2 sentences max
 - Never make up information about the job — only share what was in the initial script
+- If asked what Homie is, briefly explain (1 sentence) then redirect to the job opportunity
 - Your goal is to determine if the provider is interested, and if so, collect their price estimate, availability, and any notes
 
 CONVERSATION FLOW:
@@ -67,13 +73,12 @@ IMPORTANT: You must respond with ONLY what you would SAY on the phone. No action
 export async function processProviderSpeech(
   attemptId: string,
   providerSpeech: string,
+  jobContext?: string,
 ): Promise<{ response: string; state: ConversationState }> {
-  const conv = getConversation(attemptId);
+  let conv = getConversation(attemptId);
   if (!conv) {
-    return {
-      response: "I'm sorry, I'm having trouble with this call. We'll try reaching you again. Goodbye.",
-      state: { messages: [], phase: 'done', accepted: false, quotedPrice: null, availability: null, notes: null },
-    };
+    // Auto-initialize if no state exists (e.g. server restarted or state expired)
+    conv = initConversation(attemptId, jobContext ?? 'We called about a home service job opportunity.');
   }
 
   conv.messages.push({ role: 'user', content: providerSpeech });
