@@ -14,6 +14,8 @@ import {
   authService,
   jobService,
   paymentService,
+  connectJobSocket,
+  type JobStatusResponse,
 } from '@/services/api';
 import {
   mockStreamResponse,
@@ -556,46 +558,99 @@ export default function DiagnosticChat() {
   }
 
   async function startOutreach() {
-    // If authenticated and we have enough info, persist the job to the DB
-    if (authService.isAuthenticated() && (state.diagnosis || state.jobSummary)) {
-      dispatch({ type: 'MATCH_FLOW_LOADING', loading: true });
-
-      try {
-        const diag = state.diagnosis;
-        const summary = state.jobSummary;
-        const category = diag?.category ?? summary?.category ?? 'general';
-        const severity = diag?.severity ?? summary?.severity_estimate ?? 'medium';
-        const budget = diag?.estimated_cost_pro ?? summary?.estimated_cost_pro ?? 'flexible';
-
-        const diagPayload: DiagnosisPayload = {
-          category,
-          severity: severity as DiagnosisPayload['severity'],
-          summary: diag?.issue ?? summary?.description ?? summary?.title ?? 'Home repair',
-          recommendedActions: diag?.steps ?? [],
-        };
-
-        await jobService.createJob({
-          diagnosis: diagPayload,
-          timing: state.timing,
-          budget,
-          tier: state.tier,
-          zipCode: state.zipCode,
-        });
-      } catch {
-        // Job creation failed — continue with mock anyway for demo purposes
-      }
-
-      dispatch({ type: 'MATCH_FLOW_LOADING', loading: false });
+    // Demo mode — use mock outreach
+    if (isDemo) {
+      runMockOutreach();
+      return;
     }
 
-    // Use mock outreach simulation (no real providers in DB yet)
-    // Real provider outreach will replace this once providers are seeded
-    runMockOutreach();
-  }
+    // Must be authenticated to create a real job
+    if (!authService.isAuthenticated()) {
+      runMockOutreach();
+      return;
+    }
 
-  // NOTE: WebSocket/polling (connectJobSocket, pollJobStatus, fetchResults) removed temporarily.
-  // Mock outreach is used until real providers are seeded in the database.
-  // The wiring code is preserved in git history and in src/services/api.ts.
+    if (!(state.diagnosis || state.jobSummary)) {
+      runMockOutreach();
+      return;
+    }
+
+    dispatch({ type: 'MATCH_FLOW_LOADING', loading: true });
+
+    try {
+      const diag = state.diagnosis;
+      const summary = state.jobSummary;
+      const category = diag?.category ?? summary?.category ?? 'general';
+      const severity = diag?.severity ?? summary?.severity_estimate ?? 'medium';
+      const budget = diag?.estimated_cost_pro ?? summary?.estimated_cost_pro ?? 'flexible';
+
+      const diagPayload: DiagnosisPayload = {
+        category,
+        severity: severity as DiagnosisPayload['severity'],
+        summary: diag?.issue ?? summary?.description ?? summary?.title ?? 'Home repair',
+        recommendedActions: diag?.steps ?? [],
+      };
+
+      const res = await jobService.createJob({
+        diagnosis: diagPayload,
+        timing: state.timing,
+        budget,
+        tier: state.tier,
+        zipCode: state.zipCode,
+      });
+
+      if (!res.data) {
+        dispatch({ type: 'MATCH_FLOW_LOADING', loading: false });
+        runMockOutreach();
+        return;
+      }
+
+      dispatch({ type: 'JOB_CREATED', jobId: res.data.id, expiresAt: res.data.expires_at });
+
+      // Connect WebSocket for live outreach updates
+      const jobSocket = connectJobSocket(res.data.id, (status: JobStatusResponse) => {
+        dispatch({
+          type: 'UPDATE_OUTREACH',
+          outreach: {
+            providersContacted: status.providers_contacted,
+            channels: {
+              voice: { attempted: status.outreach_channels.voice.attempted, responded: status.outreach_channels.voice.connected },
+              sms: { attempted: status.outreach_channels.sms.attempted, responded: status.outreach_channels.sms.connected },
+              web: { attempted: status.outreach_channels.web.attempted, responded: status.outreach_channels.web.connected },
+            },
+            active: !['completed', 'expired', 'refunded'].includes(status.status),
+          },
+        });
+
+        // When outreach is done, fetch real provider responses
+        if (['completed', 'expired'].includes(status.status) || status.providers_responded > 0) {
+          void jobService.getResponses(res.data!.id).then(respRes => {
+            if (respRes.data && respRes.data.responses.length > 0) {
+              dispatch({
+                type: 'SET_RESULTS',
+                providers: respRes.data.responses.map(r => ({
+                  id: r.provider.id,
+                  responseId: r.id,
+                  name: r.provider.name,
+                  googleRating: parseFloat(r.provider.google_rating ?? '0'),
+                  reviewCount: r.provider.review_count,
+                  quotedPrice: r.quoted_price ?? 'TBD',
+                  availability: r.availability ?? 'To be confirmed',
+                  message: r.message ?? '',
+                  channel: r.channel as 'voice' | 'sms' | 'web',
+                })),
+              });
+            }
+          });
+        }
+      });
+
+      cleanupOutreachRef.current = () => jobSocket.close();
+    } catch {
+      dispatch({ type: 'MATCH_FLOW_LOADING', loading: false });
+      runMockOutreach();
+    }
+  }
 
   async function handleBook(provider: MatchedProvider) {
     if (!state.jobId) return;

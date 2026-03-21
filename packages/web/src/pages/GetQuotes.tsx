@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { diagnosticService } from '@/services/api';
+import { diagnosticService, authService, jobService, paymentService, connectJobSocket, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -320,16 +320,76 @@ function TierCards({ onSelect }: { onSelect: (t: typeof TIERS[number]) => void }
 }
 
 /* -- Outreach live view -- */
-function OutreachView({ isDemo }: { isDemo?: boolean }) {
+interface RealProvider {
+  id: string;
+  responseId: string;
+  name: string;
+  rating: number;
+  reviews: number;
+  quote: string;
+  availability: string;
+  channel: string;
+  note: string;
+  distance: string;
+}
+
+function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | null }) {
+  const navigate = useNavigate();
   const [log, setLog] = useState<typeof OUTREACH_LOG>([]);
-  const [providers, setProviders] = useState<typeof MOCK_PROVIDERS>([]);
+  const [providers, setProviders] = useState<(typeof MOCK_PROVIDERS[number] | RealProvider)[]>([]);
   const [done, setDone] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
-  const [booked, setBooked] = useState<typeof MOCK_PROVIDERS[number] | null>(null);
+  const [booked, setBooked] = useState<(typeof MOCK_PROVIDERS[number]) | null>(null);
   const [stats, setStats] = useState({ contacted: 0, responded: 0 });
   const logRef = useRef<HTMLDivElement>(null);
+  const fetchedResponses = useRef(false);
 
   useEffect(() => {
+    // Real outreach via WebSocket
+    if (jobId && !isDemo) {
+      setLog([{ t: 0, msg: 'Launching AI agent...', type: 'system' }]);
+
+      const socket = connectJobSocket(jobId, (status: JobStatusResponse) => {
+        setStats({ contacted: status.providers_contacted, responded: status.providers_responded });
+
+        // Build log entries from channel stats
+        const newLog: typeof OUTREACH_LOG = [{ t: 0, msg: `Contacting ${status.providers_contacted} providers...`, type: 'system' }];
+        if (status.outreach_channels.voice.attempted > 0) newLog.push({ t: 1, msg: `${status.outreach_channels.voice.attempted} voice calls`, type: 'voice' });
+        if (status.outreach_channels.sms.attempted > 0) newLog.push({ t: 2, msg: `${status.outreach_channels.sms.attempted} SMS messages`, type: 'sms' });
+        if (status.outreach_channels.web.attempted > 0) newLog.push({ t: 3, msg: `${status.outreach_channels.web.attempted} web contacts`, type: 'web' });
+        if (status.providers_responded > 0) newLog.push({ t: 4, msg: `${status.providers_responded} quote(s) received!`, type: 'success' });
+        if (['completed', 'expired'].includes(status.status)) {
+          newLog.push({ t: 5, msg: status.providers_responded > 0 ? `${status.providers_responded} quotes ready!` : 'Outreach complete', type: 'done' });
+          setDone(true);
+        }
+        setLog(newLog);
+
+        // Fetch real provider responses
+        if (status.providers_responded > 0 && !fetchedResponses.current) {
+          fetchedResponses.current = true;
+          void jobService.getResponses(jobId).then(res => {
+            if (res.data?.responses) {
+              setProviders(res.data.responses.map((r: ProviderResponseItem) => ({
+                id: r.provider.id,
+                responseId: r.id,
+                name: r.provider.name,
+                rating: parseFloat(r.provider.google_rating ?? '0'),
+                reviews: r.provider.review_count,
+                quote: r.quoted_price ?? 'TBD',
+                availability: r.availability ?? 'To be confirmed',
+                channel: r.channel,
+                note: r.message ?? '',
+                distance: '',
+              })));
+            }
+          });
+        }
+      });
+
+      return () => socket.close();
+    }
+
+    // Mock outreach for demo
     const timers = OUTREACH_LOG.map((e) => setTimeout(() => {
       setLog(p => [...p, e]);
       if (['voice', 'sms', 'web'].includes(e.type)) setStats(s => ({ ...s, contacted: s.contacted + 1 }));
@@ -338,7 +398,7 @@ function OutreachView({ isDemo }: { isDemo?: boolean }) {
     }, e.t));
     const pt = MOCK_PROVIDERS.map(p => setTimeout(() => setProviders(prev => [...prev, p]), p.delay));
     return () => { timers.forEach(clearTimeout); pt.forEach(clearTimeout); };
-  }, []);
+  }, [jobId, isDemo]);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
 
@@ -403,7 +463,19 @@ function OutreachView({ isDemo }: { isDemo?: boolean }) {
             </div>
             {p.note && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic', marginTop: 6 }}>"{p.note}"</div>}
             {selected === i && !booked && (
-              <button onClick={() => { if (isDemo) setBooked(p); }} style={{
+              <button onClick={async () => {
+                if (isDemo) { setBooked(p as unknown as typeof MOCK_PROVIDERS[number]); return; }
+                if (jobId && 'responseId' in p) {
+                  try {
+                    const res = await paymentService.createCheckout(jobId, (p as RealProvider).responseId, p.id ?? '');
+                    if (res.data?.checkout_url) { window.location.href = res.data.checkout_url; return; }
+                  } catch { /* payment not configured, try direct book */ }
+                  try {
+                    await jobService.bookProvider(jobId, (p as RealProvider).responseId, p.id ?? '');
+                    setBooked(p as unknown as typeof MOCK_PROVIDERS[number]);
+                  } catch { /* ignore */ }
+                }
+              }} style={{
                 marginTop: 14, width: '100%', padding: '13px 0', borderRadius: 100, border: 'none',
                 background: O, color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer',
                 fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40`,
@@ -452,6 +524,7 @@ export default function GetQuotes() {
   const [phase, setPhase] = useState('greeting');
   const [data, setData] = useState<QuoteData>({ category: null, a1: null, aiFollowUp: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
   const [streaming, setStreaming] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -663,10 +736,38 @@ export default function GetQuotes() {
     }, 500);
   };
 
-  const handleTier = (t: typeof TIERS[number]) => {
+  const handleTier = async (t: typeof TIERS[number]) => {
     setData(d => ({ ...d, tier: t.id }));
     setPhase('waiting');
     addUser(`${t.name} \u2014 ${t.price}`);
+
+    // Create real job if authenticated and not demo
+    if (!isDemo && authService.isAuthenticated() && data.category) {
+      try {
+        const cat = CATEGORY_FLOWS[data.category];
+        const diagPayload: DiagnosisPayload = {
+          category: data.category,
+          severity: 'medium',
+          summary: data.aiDiagnosis || `${cat?.label}: ${data.a1}. ${data.extra || ''}`,
+          recommendedActions: [],
+        };
+
+        const res = await jobService.createJob({
+          diagnosis: diagPayload,
+          timing: (data.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
+          budget: 'flexible',
+          tier: t.id as 'standard' | 'priority' | 'emergency',
+          zipCode: data.zip,
+        });
+
+        if (res.data) {
+          setJobId(res.data.id);
+        }
+      } catch {
+        // Job creation failed — continue with mock
+      }
+    }
+
     setTimeout(() => {
       addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
       setPhase('outreach');
@@ -788,7 +889,7 @@ export default function GetQuotes() {
         {phase === 'zip' && !streaming && <TextInput placeholder="Enter zip code..." onSubmit={handleZip} />}
         {phase === 'timing' && !streaming && <QuickReplies options={['ASAP', 'This week', 'This month', 'Flexible']} onSelect={(opt) => handleTiming(opt as string)} />}
         {phase === 'tier' && !streaming && <TierCards onSelect={handleTier} />}
-        {phase === 'outreach' && <OutreachView isDemo={isDemo} />}
+        {phase === 'outreach' && <OutreachView isDemo={isDemo} jobId={jobId} />}
 
         <div ref={bottomRef} />
       </div>

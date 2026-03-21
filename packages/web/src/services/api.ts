@@ -497,12 +497,12 @@ export interface JobSocket {
  */
 export function connectJobSocket(
   jobId: string,
-  onEvent: (event: JobSocketEvent) => void,
+  onStatus: (status: JobStatusResponse) => void,
   onStatusChange?: (connected: boolean) => void,
 ): JobSocket {
   const wsBase = API_BASE.replace(/^http/, 'ws');
   const token = getToken();
-  const url = `${wsBase}/api/v1/jobs/${jobId}/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  const url = `${wsBase}/ws/jobs/${jobId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
   let ws: WebSocket;
   let attempt = 0;
@@ -519,8 +519,8 @@ export function connectJobSocket(
 
     ws.addEventListener('message', (e) => {
       try {
-        const event = JSON.parse(e.data as string) as JobSocketEvent;
-        onEvent(event);
+        const status = JSON.parse(e.data as string) as JobStatusResponse;
+        onStatus(status);
       } catch { /* ignore malformed frames */ }
     });
 
