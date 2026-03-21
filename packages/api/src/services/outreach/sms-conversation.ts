@@ -67,6 +67,8 @@ CONVERSATION FLOW:
 
 If they decline, thank them politely.
 
+When the conversation is DONE (after collecting notes or after a decline), include this at the end of your final message: "Manage your Homie jobs anytime at homiepro.ai/portal/login"
+
 Respond with ONLY the text message to send. No formatting, no emojis unless natural.`;
 
 export async function processSmsReply(
@@ -140,7 +142,7 @@ export async function processSmsReply(
       case 'quote': response = "Great, you're interested! What would you estimate for this job?"; break;
       case 'availability': response = 'Got it. When are you available?'; break;
       case 'notes': response = 'Thanks! Any notes for the homeowner? Reply "none" if not.'; break;
-      case 'done': response = "Thanks! We'll pass your info to the homeowner. Have a great day!"; break;
+      case 'done': response = "Thanks! We'll pass your info to the homeowner. Manage all your Homie jobs at homiepro.ai/portal/login"; break;
       default: response = 'Thanks for getting back to us! Are you interested in this job? Reply YES or NO.';
     }
     conv.messages.push({ role: 'assistant', content: response });

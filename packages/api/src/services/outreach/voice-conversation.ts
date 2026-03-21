@@ -76,6 +76,8 @@ CONVERSATION FLOW:
 
 If they decline or aren't interested, thank them politely and say goodbye.
 
+When the conversation is DONE (after collecting notes or after a decline), mention that they can manage their Homie jobs anytime at homiepro.ai/portal
+
 IMPORTANT: You must respond with ONLY what you would SAY on the phone. No actions, descriptions, or stage directions. Just the spoken words.`;
 
 export async function processProviderSpeech(

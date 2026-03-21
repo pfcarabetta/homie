@@ -458,6 +458,8 @@ router.get('/web/respond', async (req: Request, res: Response) => {
     return;
   }
 
+  const portalUrl = (process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000') + '/portal/login';
+
   if (action === 'decline') {
     const respondedAt = new Date();
     await db.update(outreachAttempts).set({ status: 'declined', respondedAt }).where(eq(outreachAttempts.id, attemptId));
@@ -472,7 +474,9 @@ router.get('/web/respond', async (req: Request, res: Response) => {
   </div>
   <div style="background:white;padding:48px 32px;text-align:center">
     <h1 style="color:#2D2926;font-size:24px;margin:0 0 12px">No problem!</h1>
-    <p style="color:#6B6560;font-size:16px;margin:0">We won't contact you about this job again. Thanks for your time.</p>
+    <p style="color:#6B6560;font-size:16px;margin:0 0 24px">We won't contact you about this job again. Thanks for your time.</p>
+    <p style="color:#9B9490;font-size:13px;margin:0">Want to manage future Homie job opportunities?</p>
+    <a href="${portalUrl}" style="display:inline-block;background:#E8632B;color:white;padding:10px 24px;border-radius:100px;text-decoration:none;font-size:14px;font-weight:600;margin-top:12px">Create Free Pro Account</a>
   </div>
 </body>
 </html>`);
@@ -481,7 +485,6 @@ router.get('/web/respond', async (req: Request, res: Response) => {
 
   // Accept — show quote form
   const [provider] = await db.select({ name: providers.name, phone: providers.phone, email: providers.email }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
-  const portalUrl = (process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000') + '/portal/login';
   const submitUrl = `${process.env.API_BASE_URL ?? 'https://api.homie.app'}/api/v1/webhooks/web/submit-quote`;
 
   res.type('text/html').send(`<!DOCTYPE html>
