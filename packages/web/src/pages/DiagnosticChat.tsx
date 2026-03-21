@@ -889,10 +889,21 @@ export default function DiagnosticChat() {
         <span onClick={() => navigate('/')}
           style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1B9E77', boxShadow: '0 0 0 3px rgba(27,158,119,0.15)' }} />
-            <span style={{ fontSize: 13, color: '#1B9E77', fontWeight: 600 }}>Online</span>
-          </div>
+          {(() => {
+            const hour = new Date().getHours();
+            const isBusinessHours = hour >= 8 && hour < 18;
+            return isBusinessHours ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1B9E77', boxShadow: '0 0 0 3px rgba(27,158,119,0.15)' }} />
+                <span style={{ fontSize: 13, color: '#1B9E77', fontWeight: 600 }}>Online</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="Some businesses may not be reachable outside business hours. Quotes may take longer as a result.">
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF9F27', boxShadow: '0 0 0 3px rgba(239,159,39,0.15)' }} />
+                <span style={{ fontSize: 12, color: '#EF9F27', fontWeight: 600 }}>After hours</span>
+              </div>
+            );
+          })()}
           <AvatarDropdown />
         </div>
       </nav>
@@ -907,6 +918,21 @@ export default function DiagnosticChat() {
           Demo mode — no payment required, no real outreach
         </div>
       )}
+
+      {/* After hours notice */}
+      {(() => {
+        const hour = new Date().getHours();
+        return (hour < 8 || hour >= 18) ? (
+          <div style={{
+            background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
+            padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center',
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>{'\uD83C\uDF19'}</span>
+            <span>Some businesses may not be reachable outside business hours (8 AM – 6 PM). Quotes may take longer as a result.</span>
+          </div>
+        ) : null;
+      })()}
 
       {/* Messages area */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
