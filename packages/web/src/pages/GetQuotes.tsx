@@ -716,7 +716,7 @@ export default function GetQuotes() {
       <div className="gq-chat-area" style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
         {messages.map((m, i) => (
           m.role === 'assistant'
-            ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1} />
+            ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1 && i > 0} />
             : <UserMsg key={i} text={m.text} />
         ))}
 
