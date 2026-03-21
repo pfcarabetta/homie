@@ -13,7 +13,59 @@ import { processSmsReply } from '../services/outreach/sms-conversation';
 import { recordProviderResponse } from '../services/providers/scores';
 import { capturePayment } from '../services/stripe';
 import { jobs } from '../db/schema/jobs';
+import { homeowners } from '../db/schema/homeowners';
+import { sendEmail } from '../services/notifications';
 import logger from '../logger';
+
+const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+
+/** Notify homeowner via email when a provider submits a quote */
+async function notifyHomeownerOfQuote(jobId: string, providerName: string, quotedPrice: string | null, availability: string | null, message: string | null): Promise<void> {
+  try {
+    const [job] = await db.select({ homeownerId: jobs.homeownerId, diagnosis: jobs.diagnosis }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
+    if (!job) return;
+
+    const [homeowner] = await db.select({ email: homeowners.email, firstName: homeowners.firstName }).from(homeowners).where(eq(homeowners.id, job.homeownerId)).limit(1);
+    if (!homeowner) return;
+
+    const diagnosis = job.diagnosis as { category?: string; summary?: string } | null;
+    const category = diagnosis?.category ? diagnosis.category.charAt(0).toUpperCase() + diagnosis.category.slice(1) : 'Home Service';
+    const name = homeowner.firstName ?? 'there';
+    const quotesUrl = `${APP_URL}/account?tab=quotes`;
+
+    const subject = `You got a quote! ${providerName}${quotedPrice ? ` quoted ${quotedPrice}` : ''}`;
+
+    const html = `
+    <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
+      <div style="background:#2D2926;padding:20px 32px;text-align:center">
+        <span style="color:#E8632B;font-size:24px;font-weight:700;font-family:Georgia,serif">homie</span>
+      </div>
+      <div style="background:white;padding:32px">
+        <p style="color:#2D2926;font-size:18px;font-weight:600;margin:0 0 4px">Hey ${name}!</p>
+        <p style="color:#6B6560;font-size:14px;margin:0 0 24px">A provider responded to your ${category.toLowerCase()} request</p>
+
+        <div style="background:#F9F5F2;border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
+          <div style="font-size:17px;font-weight:700;color:#2D2926;margin-bottom:12px">${providerName}</div>
+          ${quotedPrice ? `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#6B6560;font-size:14px">Estimated Price</span><span style="color:#E8632B;font-size:18px;font-weight:700">${quotedPrice}</span></div>` : ''}
+          ${availability ? `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#6B6560;font-size:14px">Availability</span><span style="color:#2D2926;font-size:14px;font-weight:600">${availability}</span></div>` : ''}
+          ${message ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06)"><span style="color:#9B9490;font-size:12px">Provider's note:</span><div style="color:#6B6560;font-size:14px;font-style:italic;margin-top:4px">"${message}"</div></div>` : ''}
+        </div>
+
+        <div style="text-align:center">
+          <a href="${quotesUrl}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View All Quotes</a>
+        </div>
+      </div>
+      <div style="padding:20px 32px;text-align:center">
+        <p style="color:#9B9490;font-size:12px;margin:0">&copy; ${new Date().getFullYear()} Homie Technologies, Inc.</p>
+      </div>
+    </div>`;
+
+    await sendEmail(homeowner.email, subject, html);
+    logger.info(`[notification] Quote email sent to ${homeowner.email} for job ${jobId}`);
+  } catch (err) {
+    logger.error({ err }, `[notification] Failed to send quote email for job ${jobId}`);
+  }
+}
 
 /** Capture authorized payment when first provider response comes in */
 async function captureJobPayment(jobId: string): Promise<void> {
@@ -185,7 +237,11 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
 
         const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
         void recordProviderResponse(attempt.providerId, responseTimeSec);
-        if (state.accepted) void captureJobPayment(attempt.jobId);
+        if (state.accepted) {
+          void captureJobPayment(attempt.jobId);
+          const [prov] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+          void notifyHomeownerOfQuote(attempt.jobId, prov?.name ?? 'A provider', state.quotedPrice, state.availability, state.notes);
+        }
 
         logger.info({ attemptId, accepted: state.accepted, quote: state.quotedPrice, availability: state.availability }, '[voice-conversation] Conversation complete');
       }
@@ -249,6 +305,8 @@ router.post('/twilio/voice/gather', async (req: Request, res: Response) => {
       'Accepted via IVR (pressed 1)',
     );
     void captureJobPayment(attempt.jobId);
+    const [ivrProv] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+    void notifyHomeownerOfQuote(attempt.jobId, ivrProv?.name ?? 'A provider', null, null, 'Accepted via phone call');
 
     const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
     void recordProviderResponse(attempt.providerId, responseTimeSec);
@@ -442,6 +500,7 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
           message: state.notes,
         });
         void captureJobPayment(attempt.jobId);
+        void notifyHomeownerOfQuote(attempt.jobId, provider.name, state.quotedPrice, state.availability, state.notes);
       }
 
       const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
@@ -617,6 +676,10 @@ router.post('/web/submit-quote', async (req: Request, res: Response) => {
   const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
   void recordProviderResponse(attempt.providerId, responseTimeSec);
   void captureJobPayment(attempt.jobId);
+
+  // Notify homeowner
+  const [webProv] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+  void notifyHomeownerOfQuote(attempt.jobId, webProv?.name ?? 'A provider', quoted_price || null, availability || null, message || null);
 
   const portalUrl = (process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000') + '/portal/login';
 
