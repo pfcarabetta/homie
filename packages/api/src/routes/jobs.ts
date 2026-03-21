@@ -132,7 +132,8 @@ router.post('/', async (req: Request, res: Response) => {
       .returning();
 
     // Fire-and-forget — orchestration engine picks it up asynchronously
-    void dispatchJob(job.id);
+    logger.info(`[jobs] Dispatching job ${job.id}`);
+    dispatchJob(job.id).catch(err => logger.error({ err }, `[jobs] dispatchJob failed for ${job.id}`));
 
     const out: ApiResponse<CreateJobResponse> = {
       data: {

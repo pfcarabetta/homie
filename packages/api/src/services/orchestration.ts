@@ -49,6 +49,8 @@ async function sendOutreachToProvider(
   provider: DiscoveredProvider,
   adapters: Record<OutreachChannel, ChannelAdapter>,
 ): Promise<void> {
+  logger.info(`[orchestration] Sending outreach to ${provider.name} (channels: ${provider.channels_available.join(',')})`);
+
   // Generate scripts for this provider (templates are cached per category:severity)
   const bundle = await generateScripts({
     jobId: job.id,
