@@ -226,6 +226,7 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
         rank_score: Math.round(rankScore * 1000) / 1000,
         homie_score: buildHomieScore(score),
         channels_available: channelsAvailable,
+        open_now: openNow,
         suppressed: suppressedIds.has(p.id),
         rate_limited: rateLimitedIds.has(p.id),
         last_contacted: lastContacted,

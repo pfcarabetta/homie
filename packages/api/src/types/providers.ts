@@ -30,6 +30,7 @@ export interface DiscoveredProvider {
   rank_score: number;
   homie_score: HomieScore;
   channels_available: string[];
+  open_now: boolean | null;
   suppressed: boolean;
   rate_limited: boolean;
   last_contacted: string | null;

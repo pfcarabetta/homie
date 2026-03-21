@@ -30,6 +30,7 @@ const mockDiscoveryResult: DiscoveryResult = {
       channels_available: ['voice', 'sms', 'web'],
       suppressed: false,
       rate_limited: false,
+      open_now: null,
       last_contacted: null,
     },
   ],

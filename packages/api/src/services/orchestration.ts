@@ -88,18 +88,23 @@ async function sendOutreachToProvider(
     return;
   }
 
-  // Determine channels based on tier
+  // Determine channels based on tier and business hours
   const tier = (job.tier as JobTier) in TIER_PROVIDER_LIMITS ? (job.tier as JobTier) : 'standard';
+  const isClosed = provider.open_now === false;
   let channels: OutreachChannel[];
 
-  if (tier === 'standard') {
+  if (isClosed && tier !== 'emergency') {
+    // Business is closed — only send SMS and email (no voice calls)
+    channels = allChannels.filter(ch => ch === 'sms' || ch === 'web');
+    logger.info(`[orchestration] ${provider.name} is closed — skipping voice, using SMS/email only`);
+  } else if (tier === 'standard') {
     // Standard: SMS + Email only (no calls)
     channels = allChannels.filter(ch => ch === 'sms' || ch === 'web');
   } else if (tier === 'priority') {
     // Priority: SMS first, voice after delay
     channels = allChannels.filter(ch => ch === 'sms' || ch === 'web');
-    // Schedule voice follow-up after 5 minutes if no response
-    if (allChannels.includes('voice')) {
+    // Schedule voice follow-up after 5 minutes if no response (skip if closed)
+    if (allChannels.includes('voice') && !isClosed) {
       setTimeout(async () => {
         try {
           // Check if provider already responded
