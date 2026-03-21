@@ -7,6 +7,7 @@ import http from 'http';
 import { WebSocketServer } from 'ws';
 import app from './app';
 import { handleJobsWebSocket } from './ws/jobs';
+import { startJobExpiryWorker } from './services/job-expiry';
 
 const PORT = process.env.PORT ?? 3001;
 
@@ -25,6 +26,7 @@ server.on('upgrade', (req, socket, head) => {
 
 server.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);
+  startJobExpiryWorker();
 });
 
 export default app;
