@@ -54,7 +54,8 @@ ABOUT HOMIE:
 - There is NO fee for providers — Homie is completely free for pros and service providers
 - Homeowner referrals are free of charge to providers
 - Providers are never charged for receiving job leads, accepting jobs, or using the platform
-- The homeowner pays a small service fee to Homie — the provider keeps 100% of what they charge
+- The homeowner pays the provider directly — Homie does not handle any payments between homeowner and provider
+- The provider keeps 100% of what they charge with no middleman
 - Homie finds providers through public listings like Google Maps and reaches out with relevant jobs in their area
 
 RULES:
