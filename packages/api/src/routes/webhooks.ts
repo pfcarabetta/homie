@@ -1,13 +1,14 @@
 import { Router, Request, Response } from 'express';
 import twilio from 'twilio';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray, desc } from 'drizzle-orm';
 import { db } from '../db';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerResponses } from '../db/schema/provider-responses';
 import { providers } from '../db/schema/providers';
 import { buildWebhookToken } from '../services/outreach/web';
 import { processProviderSpeech, getConversation } from '../services/outreach/voice-conversation';
+import { processSmsReply } from '../services/outreach/sms-conversation';
 import { recordProviderResponse } from '../services/providers/scores';
 import { capturePayment } from '../services/stripe';
 import { jobs } from '../db/schema/jobs';
@@ -316,6 +317,7 @@ router.post('/twilio/voice/status', async (req: Request, res: Response) => {
 
 // ── POST /twilio/sms ──────────────────────────────────────────────────────────
 // Called by Twilio when a provider replies to an outreach SMS.
+// Uses conversational AI to collect quote details over multiple messages.
 
 router.post('/twilio/sms', async (req: Request, res: Response) => {
   if (!isTwilioRequestValid(req)) {
@@ -335,18 +337,17 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
 
   // Find the provider by phone number
   const [provider] = await db
-    .select({ id: providers.id })
+    .select({ id: providers.id, name: providers.name })
     .from(providers)
     .where(eq(providers.phone, From))
     .limit(1);
 
   if (!provider) {
-    // Unknown sender — ignore silently
     res.type('text/xml').send(twiml.toString());
     return;
   }
 
-  // Find their most recent pending SMS attempt
+  // Find their most recent pending or in-progress SMS attempt
   const [attempt] = await db
     .select()
     .from(outreachAttempts)
@@ -354,37 +355,74 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
       and(
         eq(outreachAttempts.providerId, provider.id),
         eq(outreachAttempts.channel, 'sms'),
-        eq(outreachAttempts.status, 'pending'),
+        inArray(outreachAttempts.status, ['pending', 'responded']),
       ),
     )
+    .orderBy(desc(outreachAttempts.attemptedAt))
     .limit(1);
 
   if (!attempt) {
+    twiml.message("Thanks for reaching out! We don't have any active job requests for you right now. We'll be in touch when something comes up.");
     res.type('text/xml').send(twiml.toString());
     return;
   }
 
-  const intent = parseSmsReply(Body);
-  const respondedAt = new Date();
+  logger.info({ from: From, body: Body, attemptId: attempt.id }, '[sms-conversation] Reply received');
 
-  await db
-    .update(outreachAttempts)
-    .set({ status: intent, responseRaw: Body, respondedAt })
-    .where(eq(outreachAttempts.id, attempt.id));
+  try {
+    // Build job context from the script or job data
+    let jobContext = attempt.scriptUsed ?? '';
+    if (!jobContext) {
+      const { jobs: jobsTable } = require('../db/schema/jobs');
+      const [job] = await db.select({ diagnosis: jobsTable.diagnosis, zipCode: jobsTable.zipCode }).from(jobsTable).where(eq(jobsTable.id, attempt.jobId)).limit(1);
+      if (job?.diagnosis) {
+        const d = job.diagnosis as { category?: string; summary?: string };
+        jobContext = `${d.category ?? 'home service'} job near ${job.zipCode}. ${d.summary ?? ''}`;
+      }
+    }
 
-  if (intent === 'accepted' || intent === 'responded') {
-    await createProviderResponse(
-      attempt.id,
-      attempt.jobId,
-      attempt.providerId,
-      'sms',
-      Body,
-    );
-    void captureJobPayment(attempt.jobId);
+    const { response, state } = await processSmsReply(attempt.id, Body, jobContext);
+
+    // Send AI response back via TwiML
+    twiml.message(response);
+
+    // Update attempt status based on conversation state
+    if (state.phase === 'done') {
+      const respondedAt = new Date();
+      const newStatus = state.accepted ? 'accepted' : 'declined';
+
+      await db
+        .update(outreachAttempts)
+        .set({ status: newStatus, responseRaw: JSON.stringify(state.messages), respondedAt })
+        .where(eq(outreachAttempts.id, attempt.id));
+
+      if (state.accepted) {
+        await db.insert(providerResponses).values({
+          jobId: attempt.jobId,
+          providerId: attempt.providerId,
+          channel: 'sms',
+          quotedPrice: state.quotedPrice,
+          availability: state.availability,
+          message: state.notes,
+        });
+        void captureJobPayment(attempt.jobId);
+      }
+
+      const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
+      void recordProviderResponse(attempt.providerId, responseTimeSec);
+
+      logger.info({ attemptId: attempt.id, accepted: state.accepted, quote: state.quotedPrice }, '[sms-conversation] Conversation complete');
+    } else {
+      // Mark as responded (in progress) so we can find it on next reply
+      await db
+        .update(outreachAttempts)
+        .set({ status: 'responded', responseRaw: Body })
+        .where(eq(outreachAttempts.id, attempt.id));
+    }
+  } catch (err) {
+    logger.error({ err }, '[sms-conversation] Error processing reply');
+    twiml.message("Thanks for your reply! Are you interested in this job? Reply YES or NO.");
   }
-
-  const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
-  void recordProviderResponse(attempt.providerId, responseTimeSec);
 
   res.type('text/xml').send(twiml.toString());
 });
