@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
 import { signToken } from '../middleware/auth';
@@ -104,7 +105,7 @@ router.post('/register', async (req: Request, res: Response) => {
       res.status(409).json(out);
       return;
     }
-    console.error('[POST /auth/register]', err);
+    logger.error({ err }, '[POST /auth/register]');
     const out: ApiResponse<null> = { data: null, error: 'Registration failed', meta: {} };
     res.status(500).json(out);
   }
@@ -168,7 +169,7 @@ router.post('/login', async (req: Request, res: Response) => {
     };
     res.json(out);
   } catch (err) {
-    console.error('[POST /auth/login]', err);
+    logger.error({ err }, '[POST /auth/login]');
     const out: ApiResponse<null> = { data: null, error: 'Login failed', meta: {} };
     res.status(500).json(out);
   }
@@ -191,7 +192,7 @@ router.get('/verify-email', async (req: Request, res: Response) => {
     }
     res.json({ data: { verified: true }, error: null, meta: {} });
   } catch (err) {
-    console.error('[GET /auth/verify-email]', err);
+    logger.error({ err }, '[GET /auth/verify-email]');
     res.status(500).json({ data: null, error: 'Verification failed', meta: {} });
   }
 });
@@ -224,7 +225,7 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
 
     res.json({ data: { sent: true }, error: null, meta: {} });
   } catch (err) {
-    console.error('[POST /auth/resend-verification]', err);
+    logger.error({ err }, '[POST /auth/resend-verification]');
     res.status(500).json({ data: null, error: 'Failed to resend', meta: {} });
   }
 });
@@ -270,7 +271,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     const out: ApiResponse<{ reset: true }> = { data: { reset: true }, error: null, meta: {} };
     res.json(out);
   } catch (err) {
-    console.error('[POST /auth/reset-password]', err);
+    logger.error({ err }, '[POST /auth/reset-password]');
     const out: ApiResponse<null> = { data: null, error: 'Password reset failed', meta: {} };
     res.status(500).json(out);
   }

@@ -4,6 +4,7 @@ import { validateEnv } from './env';
 validateEnv();
 
 import http from 'http';
+import logger from './logger';
 import { WebSocketServer } from 'ws';
 import app from './app';
 import { handleJobsWebSocket } from './ws/jobs';
@@ -25,7 +26,7 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`API server running on http://localhost:${PORT}`);
+  logger.info(`API server running on http://localhost:${PORT}`);
   startJobExpiryWorker();
 });
 

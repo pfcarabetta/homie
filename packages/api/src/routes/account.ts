@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { eq, desc } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
 import { jobs } from '../db/schema/jobs';
@@ -51,7 +52,7 @@ router.get('/', async (req: Request, res: Response) => {
       meta: {},
     });
   } catch (err) {
-    console.error('[GET /account]', err);
+    logger.error({ err }, '[GET /account]');
     res.status(500).json({ data: null, error: 'Failed to fetch account', meta: {} });
   }
 });
@@ -153,7 +154,7 @@ router.patch('/', async (req: Request, res: Response) => {
       res.status(409).json({ data: null, error: 'An account with that email already exists', meta: {} });
       return;
     }
-    console.error('[PATCH /account]', err);
+    logger.error({ err }, '[PATCH /account]');
     res.status(500).json({ data: null, error: 'Failed to update account', meta: {} });
   }
 });
@@ -183,7 +184,7 @@ router.get('/jobs', async (req: Request, res: Response) => {
       meta: {},
     });
   } catch (err) {
-    console.error('[GET /account/jobs]', err);
+    logger.error({ err }, '[GET /account/jobs]');
     res.status(500).json({ data: null, error: 'Failed to fetch jobs', meta: {} });
   }
 });
@@ -215,7 +216,7 @@ router.get('/bookings', async (req: Request, res: Response) => {
       meta: {},
     });
   } catch (err) {
-    console.error('[GET /account/bookings]', err);
+    logger.error({ err }, '[GET /account/bookings]');
     res.status(500).json({ data: null, error: 'Failed to fetch bookings', meta: {} });
   }
 });

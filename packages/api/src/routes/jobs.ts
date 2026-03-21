@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { eq, and, count, desc } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { jobs, outreachAttempts, providerResponses, providers, bookings } from '../db/schema';
 import { dispatchJob, sendBookingNotifications } from '../services/orchestration';
@@ -147,7 +148,7 @@ router.post('/', async (req: Request, res: Response) => {
     };
     res.status(201).json(out);
   } catch (err) {
-    console.error('[POST /jobs]', err);
+    logger.error({ err }, '[POST /jobs]');
     const out: ApiResponse<null> = { data: null, error: 'Failed to create job', meta: {} };
     res.status(500).json(out);
   }
@@ -190,7 +191,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const out: ApiResponse<JobStatusResponse> = { data: status, error: null, meta: {} };
     res.json(out);
   } catch (err) {
-    console.error('[GET /jobs/:id]', err);
+    logger.error({ err }, '[GET /jobs/:id]');
     const out: ApiResponse<null> = { data: null, error: 'Failed to fetch job', meta: {} };
     res.status(500).json(out);
   }
@@ -263,7 +264,7 @@ router.get('/:id/responses', async (req: Request, res: Response) => {
     };
     res.json(out);
   } catch (err) {
-    console.error('[GET /jobs/:id/responses]', err);
+    logger.error({ err }, '[GET /jobs/:id/responses]');
     const out: ApiResponse<null> = { data: null, error: 'Failed to fetch responses', meta: {} };
     res.status(500).json(out);
   }
@@ -365,7 +366,7 @@ router.post('/:id/book', async (req: Request, res: Response) => {
     };
     res.json(out);
   } catch (err) {
-    console.error('[POST /jobs/:id/book]', err);
+    logger.error({ err }, '[POST /jobs/:id/book]');
     const out: ApiResponse<null> = { data: null, error: 'Failed to book job', meta: {} };
     res.status(500).json(out);
   }
@@ -422,7 +423,7 @@ router.post('/:id/rate', async (req: Request, res: Response) => {
     const out: ApiResponse<{ recorded: true }> = { data: { recorded: true }, error: null, meta: {} };
     res.status(201).json(out);
   } catch (err) {
-    console.error('[POST /jobs/:id/rate]', err);
+    logger.error({ err }, '[POST /jobs/:id/rate]');
     const out: ApiResponse<null> = { data: null, error: 'Failed to record rating', meta: {} };
     res.status(500).json(out);
   }

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import Stripe from 'stripe';
 import { eq } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { jobs } from '../db/schema/jobs';
 import { bookings } from '../db/schema/bookings';
@@ -18,7 +19,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
   try {
     event = constructWebhookEvent(req.body as Buffer, sig);
   } catch (err) {
-    console.error('[Stripe webhook] Signature verification failed:', err);
+    logger.error({ err }, '[Stripe webhook] Signature verification failed');
     res.status(400).json({ error: 'Invalid signature' });
     return;
   }
@@ -30,7 +31,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
     const providerId = session.metadata?.provider_id;
 
     if (!jobId || !responseId || !providerId) {
-      console.error('[Stripe webhook] Missing metadata in session', session.id);
+      logger.error('[Stripe webhook] Missing metadata in session %s', session.id);
       res.status(200).json({ received: true });
       return;
     }
@@ -42,7 +43,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       // Get job to find homeowner
       const [job] = await db.select({ homeownerId: jobs.homeownerId }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
       if (!job) {
-        console.error('[Stripe webhook] Job not found:', jobId);
+        logger.error('[Stripe webhook] Job not found: %s', jobId);
         res.status(200).json({ received: true });
         return;
       }
@@ -62,9 +63,9 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
 
       void sendBookingNotifications(jobId, providerId, booking.id);
 
-      console.log(`[Stripe webhook] Payment confirmed & booking created for job ${jobId}`);
+      logger.info(`[Stripe webhook] Payment confirmed & booking created for job ${jobId}`);
     } catch (err) {
-      console.error('[Stripe webhook] Error processing payment:', err);
+      logger.error({ err }, '[Stripe webhook] Error processing payment');
     }
   }
 

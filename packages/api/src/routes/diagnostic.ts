@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
+import logger from '../logger';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -176,7 +177,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (err) {
-    console.error('[POST /diagnostic/chat]', err);
+    logger.error({ err }, '[POST /diagnostic/chat]');
 
     if (res.headersSent) {
       res.write(`data: ${JSON.stringify({ error: 'Stream interrupted' })}\n\n`);

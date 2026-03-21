@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { eq, and } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { bookings, providers, providerResponses } from '../db/schema';
 import { BookingResponse } from '../types/jobs';
@@ -50,7 +51,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     };
     res.json(out);
   } catch (err) {
-    console.error('[GET /bookings/:id]', err);
+    logger.error({ err }, '[GET /bookings/:id]');
     const out: ApiResponse<null> = { data: null, error: 'Failed to fetch booking', meta: {} };
     res.status(500).json(out);
   }

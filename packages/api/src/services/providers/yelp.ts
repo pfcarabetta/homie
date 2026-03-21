@@ -1,3 +1,5 @@
+import logger from '../../logger';
+
 const YELP_BASE = 'https://api.yelp.com/v3';
 
 // Maps Homie categories to Yelp category aliases.
@@ -51,7 +53,7 @@ export async function searchNearby(params: {
 }): Promise<YelpBusiness[]> {
   const apiKey = process.env.YELP_API_KEY;
   if (!apiKey) {
-    console.warn('[yelp] YELP_API_KEY not configured — skipping Yelp supplementary search');
+    logger.warn('[yelp] YELP_API_KEY not configured — skipping Yelp supplementary search');
     return [];
   }
 

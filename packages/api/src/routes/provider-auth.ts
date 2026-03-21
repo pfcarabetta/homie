@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { eq, or } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { providers } from '../db/schema/providers';
 import { signProviderToken, type ProviderJwtPayload } from '../middleware/provider-auth';
@@ -56,7 +57,7 @@ router.post('/magic-link', async (req: Request, res: Response) => {
 
     res.json({ data: { sent: true }, error: null, meta: {} });
   } catch (err) {
-    console.error('[POST /provider-auth/magic-link]', err);
+    logger.error({ err }, '[POST /provider-auth/magic-link]');
     res.status(500).json({ data: null, error: 'Failed to send login link', meta: {} });
   }
 });

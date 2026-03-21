@@ -1,4 +1,5 @@
 import { eq, inArray, gte, and, sql } from 'drizzle-orm';
+import logger from '../../logger';
 import { db } from '../../db';
 import { providers } from '../../db/schema/providers';
 import { providerScores } from '../../db/schema/provider-scores';
@@ -23,7 +24,7 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
   const [places, yelpResults] = await Promise.all([
     googleMaps.searchNearby({ lat, lng, radiusMeters, category, minRating }),
     yelp.searchNearby({ lat, lng, radiusMeters, category, minRating, limit }).catch((err) => {
-      console.error('[discovery] Yelp search failed, continuing without it:', err);
+      logger.error({ err }, '[discovery] Yelp search failed, continuing without it');
       return [] as yelp.YelpBusiness[];
     }),
   ]);

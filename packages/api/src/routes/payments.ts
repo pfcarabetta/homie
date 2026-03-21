@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { eq, and } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { jobs } from '../db/schema/jobs';
 import { homeowners } from '../db/schema/homeowners';
@@ -85,7 +86,7 @@ router.post('/checkout', async (req: Request, res: Response) => {
     };
     res.json(out);
   } catch (err) {
-    console.error('[POST /payments/checkout]', err);
+    logger.error({ err }, '[POST /payments/checkout]');
     res.status(500).json({ data: null, error: 'Failed to create checkout session', meta: {} });
   }
 });
@@ -112,7 +113,7 @@ router.get('/status/:jobId', async (req: Request, res: Response) => {
 
     res.json({ data: { payment_status: job.paymentStatus, job_status: job.status }, error: null, meta: {} });
   } catch (err) {
-    console.error('[GET /payments/status]', err);
+    logger.error({ err }, '[GET /payments/status]');
     res.status(500).json({ data: null, error: 'Failed to fetch payment status', meta: {} });
   }
 });

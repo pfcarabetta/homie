@@ -1,4 +1,5 @@
 import { eq, inArray, sql } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { jobs } from '../db/schema/jobs';
 import { homeowners } from '../db/schema/homeowners';
@@ -138,11 +139,11 @@ export async function dispatchJob(jobId: string): Promise<void> {
   // Load job
   const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
   if (!job) {
-    console.error(`[orchestration] dispatchJob: job ${jobId} not found`);
+    logger.error(`[orchestration] dispatchJob: job ${jobId} not found`);
     return;
   }
   if (!job.diagnosis) {
-    console.error(`[orchestration] dispatchJob: job ${jobId} has no diagnosis`);
+    logger.error(`[orchestration] dispatchJob: job ${jobId} has no diagnosis`);
     return;
   }
 
@@ -162,7 +163,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
     });
     discoveredProviders = result.providers;
   } catch (err) {
-    console.error(`[orchestration] dispatchJob: discovery failed for job ${jobId}:`, err);
+    logger.error({ err }, `[orchestration] dispatchJob: discovery failed for job ${jobId}`);
     return;
   }
 
@@ -172,7 +173,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
     .slice(0, limit);
 
   if (eligible.length === 0) {
-    console.warn(`[orchestration] dispatchJob: no eligible providers for job ${jobId}`);
+    logger.warn(`[orchestration] dispatchJob: no eligible providers for job ${jobId}`);
     return;
   }
 
@@ -188,7 +189,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
 
   const failed = results.filter((r) => r.status === 'rejected');
   if (failed.length > 0) {
-    console.error(
+    logger.error(
       `[orchestration] dispatchJob: ${failed.length}/${eligible.length} provider outreach(es) failed for job ${jobId}`,
     );
   }
@@ -196,7 +197,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
   // Record that these providers were outreached (feeds the ranking algorithm)
   await incrementOutreachCounts(eligible.map((p) => p.id));
 
-  console.log(
+  logger.info(
     `[orchestration] dispatchJob: contacted ${eligible.length} providers for job ${jobId}`,
   );
 }
@@ -211,7 +212,7 @@ export async function sendBookingNotifications(
   providerId: string,
   bookingId: string,
 ): Promise<void> {
-  console.log(
+  logger.info(
     `[orchestration] booking confirmed — jobId=${jobId} providerId=${providerId} bookingId=${bookingId}`,
   );
 
@@ -230,7 +231,7 @@ export async function sendBookingNotifications(
       });
   } catch (err) {
     // Non-fatal: score update failure should not block the booking confirmation
-    console.error(`[orchestration] sendBookingNotifications: score update failed:`, err);
+    logger.error({ err }, '[orchestration] sendBookingNotifications: score update failed');
   }
 
   // Fetch data needed for confirmation messages
@@ -261,7 +262,7 @@ export async function sendBookingNotifications(
         `Your Homie booking is confirmed! ${provider.name} will handle your ${category} job. They'll be in touch shortly. Booking ID: ${bookingId}.`,
       );
     } catch (err) {
-      console.error('[orchestration] homeowner SMS failed:', err);
+      logger.error({ err }, '[orchestration] homeowner SMS failed');
     }
   }
 
@@ -271,13 +272,13 @@ export async function sendBookingNotifications(
     try {
       await sendSms(provider.phone, providerMsg);
     } catch (err) {
-      console.error('[orchestration] provider SMS failed:', err);
+      logger.error({ err }, '[orchestration] provider SMS failed');
     }
   } else if (provider.email) {
     try {
       await sendEmail(provider.email, 'New booking via Homie!', providerMsg);
     } catch (err) {
-      console.error('[orchestration] provider email failed:', err);
+      logger.error({ err }, '[orchestration] provider email failed');
     }
   }
 }

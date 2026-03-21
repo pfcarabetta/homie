@@ -1,6 +1,7 @@
 import { and, lte, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import { jobs } from '../db/schema/jobs';
+import logger from '../logger';
 
 const ACTIVE_STATUSES = ['open', 'dispatching', 'collecting'];
 const CHECK_INTERVAL_MS = 60_000; // 1 minute
@@ -21,10 +22,10 @@ export function startJobExpiryWorker(): void {
         .returning({ id: jobs.id });
 
       if (expired.length > 0) {
-        console.log(`[job-expiry] Expired ${expired.length} job(s): ${expired.map(j => j.id).join(', ')}`);
+        logger.info(`[job-expiry] Expired ${expired.length} job(s): ${expired.map(j => j.id).join(', ')}`);
       }
     } catch (err) {
-      console.error('[job-expiry] Error:', err);
+      logger.error({ err }, '[job-expiry] Error');
     }
   }
 
@@ -32,5 +33,5 @@ export function startJobExpiryWorker(): void {
   void expireJobs();
   setInterval(expireJobs, CHECK_INTERVAL_MS);
 
-  console.log('[job-expiry] Worker started (checking every 60s)');
+  logger.info('[job-expiry] Worker started (checking every 60s)');
 }

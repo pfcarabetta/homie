@@ -1,5 +1,6 @@
 import twilio from 'twilio';
 import sgMail from '@sendgrid/mail';
+import logger from '../logger';
 
 /**
  * Sends a plain SMS via Twilio.
@@ -11,7 +12,7 @@ export async function sendSms(to: string, body: string): Promise<void> {
   const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
   if (!accountSid || !authToken || !fromNumber) {
-    console.warn('[notifications] Twilio credentials not configured — skipping SMS to', to);
+    logger.warn('[notifications] Twilio credentials not configured — skipping SMS to %s', to);
     return;
   }
 
@@ -28,7 +29,7 @@ export async function sendEmail(to: string, subject: string, htmlOrText: string)
   const fromEmail = process.env.SENDGRID_FROM_EMAIL;
 
   if (!apiKey || !fromEmail) {
-    console.warn('[notifications] SendGrid not configured — skipping email to', to);
+    logger.warn('[notifications] SendGrid not configured — skipping email to %s', to);
     return;
   }
 

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { eq, and, desc, count, inArray } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { providers } from '../db/schema/providers';
 import { providerScores } from '../db/schema/provider-scores';
@@ -51,7 +52,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
       meta: {},
     });
   } catch (err) {
-    console.error('[GET /portal/dashboard]', err);
+    logger.error({ err }, '[GET /portal/dashboard]');
     res.status(500).json({ data: null, error: 'Failed to fetch dashboard', meta: {} });
   }
 });
@@ -85,7 +86,7 @@ router.get('/jobs/incoming', async (req: Request, res: Response) => {
       meta: {},
     });
   } catch (err) {
-    console.error('[GET /portal/jobs/incoming]', err);
+    logger.error({ err }, '[GET /portal/jobs/incoming]');
     res.status(500).json({ data: null, error: 'Failed to fetch incoming jobs', meta: {} });
   }
 });
@@ -152,7 +153,7 @@ router.post('/jobs/:attemptId/respond', async (req: Request, res: Response) => {
 
     res.json({ data: { status: newStatus }, error: null, meta: {} });
   } catch (err) {
-    console.error('[POST /portal/jobs/:attemptId/respond]', err);
+    logger.error({ err }, '[POST /portal/jobs/:attemptId/respond]');
     res.status(500).json({ data: null, error: 'Failed to respond', meta: {} });
   }
 });
@@ -198,7 +199,7 @@ router.get('/jobs/history', async (req: Request, res: Response) => {
       meta: {},
     });
   } catch (err) {
-    console.error('[GET /portal/jobs/history]', err);
+    logger.error({ err }, '[GET /portal/jobs/history]');
     res.status(500).json({ data: null, error: 'Failed to fetch history', meta: {} });
   }
 });
@@ -229,7 +230,7 @@ router.get('/profile', async (req: Request, res: Response) => {
       meta: {},
     });
   } catch (err) {
-    console.error('[GET /portal/profile]', err);
+    logger.error({ err }, '[GET /portal/profile]');
     res.status(500).json({ data: null, error: 'Failed to fetch profile', meta: {} });
   }
 });
@@ -272,7 +273,7 @@ router.patch('/profile', async (req: Request, res: Response) => {
       meta: {},
     });
   } catch (err) {
-    console.error('[PATCH /portal/profile]', err);
+    logger.error({ err }, '[PATCH /portal/profile]');
     res.status(500).json({ data: null, error: 'Failed to update profile', meta: {} });
   }
 });
@@ -288,7 +289,7 @@ router.get('/settings', async (req: Request, res: Response) => {
 
     res.json({ data: provider, error: null, meta: {} });
   } catch (err) {
-    console.error('[GET /portal/settings]', err);
+    logger.error({ err }, '[GET /portal/settings]');
     res.status(500).json({ data: null, error: 'Failed to fetch settings', meta: {} });
   }
 });
@@ -309,7 +310,7 @@ router.patch('/settings', async (req: Request, res: Response) => {
     await db.update(providers).set(updates).where(eq(providers.id, req.providerId));
     res.json({ data: { updated: true }, error: null, meta: {} });
   } catch (err) {
-    console.error('[PATCH /portal/settings]', err);
+    logger.error({ err }, '[PATCH /portal/settings]');
     res.status(500).json({ data: null, error: 'Failed to update settings', meta: {} });
   }
 });
@@ -323,7 +324,7 @@ router.post('/opt-out', async (req: Request, res: Response) => {
     });
     res.json({ data: { opted_out: true }, error: null, meta: {} });
   } catch (err) {
-    console.error('[POST /portal/opt-out]', err);
+    logger.error({ err }, '[POST /portal/opt-out]');
     res.status(500).json({ data: null, error: 'Failed to opt out', meta: {} });
   }
 });

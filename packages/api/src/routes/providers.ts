@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { providers } from '../db/schema/providers';
 import { suppressionList } from '../db/schema/suppression-list';
@@ -57,7 +58,7 @@ router.get('/discover', async (req: Request, res: Response) => {
     const out: ApiResponse<DiscoveryResult> = { data: result, error: null, meta: {} };
     res.json(out);
   } catch (err) {
-    console.error('[GET /providers/discover]', err);
+    logger.error({ err }, '[GET /providers/discover]');
     const message = err instanceof Error ? err.message : 'Discovery failed';
     const out: ApiResponse<null> = { data: null, error: message, meta: {} };
     res.status(502).json(out);
@@ -104,7 +105,7 @@ router.post('/:id/suppress', async (req: Request, res: Response) => {
     };
     res.status(201).json(out);
   } catch (err) {
-    console.error('[POST /providers/:id/suppress]', err);
+    logger.error({ err }, '[POST /providers/:id/suppress]');
     const out: ApiResponse<null> = { data: null, error: 'Failed to suppress provider', meta: {} };
     res.status(500).json(out);
   }

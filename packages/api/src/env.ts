@@ -1,3 +1,5 @@
+import logger from './logger';
+
 /**
  * Validates required and optional environment variables at startup.
  * Call this before importing any modules that use process.env.
@@ -67,17 +69,17 @@ export function validateEnv(): void {
   }
 
   if (warnings.length > 0) {
-    console.warn(`\n[env] Optional variables not set (features will be degraded):\n${warnings.join('\n')}\n`);
+    logger.warn(`\n[env] Optional variables not set (features will be degraded):\n${warnings.join('\n')}\n`);
   }
 
   if (missing.length > 0) {
-    console.error(`\n[env] Missing required environment variables:\n${missing.join('\n')}\n`);
+    logger.error(`\n[env] Missing required environment variables:\n${missing.join('\n')}\n`);
     process.exit(1);
   }
 
   // Soft validations (warnings, not fatal)
   const jwtSecret = process.env.JWT_SECRET;
   if (jwtSecret && jwtSecret.length < 32) {
-    console.warn('[env] JWT_SECRET is shorter than 32 characters — consider using a stronger secret');
+    logger.warn('[env] JWT_SECRET is shorter than 32 characters — consider using a stronger secret');
   }
 }

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { count, desc, eq, sql } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts } from '../db/schema';
 import { ApiResponse } from '../types/api';
@@ -32,7 +33,7 @@ router.get('/stats', async (_req: Request, res: Response) => {
     };
     res.json(out);
   } catch (err) {
-    console.error('[GET /admin/stats]', err);
+    logger.error({ err }, '[GET /admin/stats]');
     res.status(500).json({ data: null, error: 'Failed to fetch stats', meta: {} });
   }
 });
@@ -62,7 +63,7 @@ router.get('/homeowners', async (req: Request, res: Response) => {
 
     res.json({ data: rows, error: null, meta: { total, limit, offset } });
   } catch (err) {
-    console.error('[GET /admin/homeowners]', err);
+    logger.error({ err }, '[GET /admin/homeowners]');
     res.status(500).json({ data: null, error: 'Failed to fetch homeowners', meta: {} });
   }
 });
@@ -100,7 +101,7 @@ router.get('/jobs', async (req: Request, res: Response) => {
 
     res.json({ data: rows, error: null, meta: { total, limit, offset } });
   } catch (err) {
-    console.error('[GET /admin/jobs]', err);
+    logger.error({ err }, '[GET /admin/jobs]');
     res.status(500).json({ data: null, error: 'Failed to fetch jobs', meta: {} });
   }
 });
@@ -137,7 +138,7 @@ router.get('/providers', async (req: Request, res: Response) => {
 
     res.json({ data: rows, error: null, meta: { total, limit, offset } });
   } catch (err) {
-    console.error('[GET /admin/providers]', err);
+    logger.error({ err }, '[GET /admin/providers]');
     res.status(500).json({ data: null, error: 'Failed to fetch providers', meta: {} });
   }
 });
@@ -169,7 +170,7 @@ router.get('/bookings', async (req: Request, res: Response) => {
 
     res.json({ data: rows, error: null, meta: { total, limit, offset } });
   } catch (err) {
-    console.error('[GET /admin/bookings]', err);
+    logger.error({ err }, '[GET /admin/bookings]');
     res.status(500).json({ data: null, error: 'Failed to fetch bookings', meta: {} });
   }
 });
