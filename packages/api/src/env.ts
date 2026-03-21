@@ -43,6 +43,10 @@ const ENV_VARS: EnvVar[] = [
   { name: 'WEBHOOK_SECRET', required: false, description: 'HMAC secret for verifying inbound webhooks' },
   { name: 'CALLBACK_PHONE', required: false, description: 'Callback phone number included in outreach scripts' },
 
+  // Stripe
+  { name: 'STRIPE_SECRET_KEY', required: false, description: 'Stripe secret key for payment processing' },
+  { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook signing secret' },
+
   // Admin
   { name: 'ADMIN_SECRET', required: false, description: 'Shared secret for admin dashboard access' },
 ];

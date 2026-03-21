@@ -464,19 +464,23 @@ export const jobService = {
 // ── paymentService ──────────────────────────────────────────────────────────
 
 export const paymentService = {
-  async charge(
+  async createCheckout(
     jobId: string,
-    tier: JobTier,
-    paymentMethodId: string,
-  ): Promise<ApiResponse<ChargeResponse>> {
-    return fetchAPI<ChargeResponse>('/api/v1/payments/charge', {
+    responseId: string,
+    providerId: string,
+  ): Promise<ApiResponse<{ checkout_url: string }>> {
+    return fetchAPI<{ checkout_url: string }>('/api/v1/payments/checkout', {
       method: 'POST',
       body: JSON.stringify({
         job_id: jobId,
-        tier,
-        payment_method_id: paymentMethodId,
+        response_id: responseId,
+        provider_id: providerId,
       }),
     });
+  },
+
+  async getPaymentStatus(jobId: string): Promise<ApiResponse<{ payment_status: string; job_status: string }>> {
+    return fetchAPI<{ payment_status: string; job_status: string }>(`/api/v1/payments/status/${jobId}`);
   },
 };
 

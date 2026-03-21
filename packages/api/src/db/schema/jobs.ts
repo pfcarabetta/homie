@@ -22,6 +22,8 @@ export const jobs = pgTable(
     budget: text('budget'),
     tier: text('tier').notNull().default('standard'),
     status: text('status').notNull().default('open'),
+    paymentStatus: text('payment_status').notNull().default('unpaid'),
+    stripeSessionId: text('stripe_session_id'),
     zipCode: text('zip_code').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

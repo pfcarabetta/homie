@@ -7,8 +7,10 @@ import jobsRouter from './routes/jobs';
 import bookingsRouter from './routes/bookings';
 import providersRouter from './routes/providers';
 import webhooksRouter from './routes/webhooks';
+import paymentsRouter from './routes/payments';
 import accountRouter from './routes/account';
 import adminRouter from './routes/admin';
+import { stripeWebhookHandler } from './routes/stripe-webhook';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
 
@@ -21,7 +23,6 @@ const ALLOWED_ORIGINS = process.env.CORS_ORIGIN
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, server-to-server)
       if (!origin || ALLOWED_ORIGINS.includes(origin)) {
         callback(null, true);
       } else {
@@ -31,6 +32,10 @@ app.use(
     credentials: true,
   }),
 );
+
+// Stripe webhook needs raw body — mount BEFORE express.json()
+app.post('/api/v1/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+
 app.use(express.json({ limit: '10mb' }));
 // Twilio sends webhooks as application/x-www-form-urlencoded
 app.use(express.urlencoded({ extended: false }));
@@ -43,6 +48,7 @@ app.use('/api/v1/bookings', requireAuth, bookingsRouter);
 // /providers/discover is public; /providers/:id/suppress requires auth
 app.use('/api/v1/providers', providersRouter);
 app.use('/api/v1/account', requireAuth, accountRouter);
+app.use('/api/v1/payments', requireAuth, paymentsRouter);
 app.use('/api/v1/webhooks', webhooksRouter);
 app.use('/api/v1/admin', requireAdmin, adminRouter);
 

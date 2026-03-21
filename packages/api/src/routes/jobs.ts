@@ -292,7 +292,7 @@ router.post('/:id/book', async (req: Request, res: Response) => {
 
   try {
     const [job] = await db
-      .select({ status: jobs.status, homeownerId: jobs.homeownerId })
+      .select({ status: jobs.status, homeownerId: jobs.homeownerId, paymentStatus: jobs.paymentStatus })
       .from(jobs)
       .where(eq(jobs.id, id))
       .limit(1);
@@ -304,6 +304,11 @@ router.post('/:id/book', async (req: Request, res: Response) => {
     if (job.homeownerId !== req.homeownerId) {
       const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
       res.status(404).json(out);
+      return;
+    }
+    if (job.paymentStatus !== 'paid') {
+      const out: ApiResponse<null> = { data: null, error: 'Payment required before booking', meta: {} };
+      res.status(402).json(out);
       return;
     }
     if (job.status === 'completed') {
