@@ -592,18 +592,35 @@ export default function GetQuotes() {
   useEffect(() => {
     window.scrollTo(0, 0);
 
-    // Check if returning from Stripe payment
+    // Check if returning from Stripe payment — must have ?paid=1 in URL
+    const urlParams = new URLSearchParams(window.location.search);
     const paidJob = sessionStorage.getItem('homie_paid_job');
-    if (paidJob && authService.isAuthenticated()) {
+    if (paidJob && urlParams.has('paid') && authService.isAuthenticated()) {
       sessionStorage.removeItem('homie_paid_job');
+      // Clean URL
+      window.history.replaceState({}, '', '/quote');
       try {
-        const { jobId } = JSON.parse(paidJob) as { jobId: string; tier: string };
-        setJobId(jobId);
-        addAssistant("Payment confirmed! Launching your AI agent now \uD83D\uDE80");
-        setPhase('outreach');
-        scrollDown();
+        const { jobId: paidJobId } = JSON.parse(paidJob) as { jobId: string; tier: string };
+        // Verify payment with API before launching
+        paymentService.getPaymentStatus(paidJobId).then(res => {
+          if (res.data && (res.data.payment_status === 'authorized' || res.data.payment_status === 'paid')) {
+            setJobId(paidJobId);
+            addAssistant("Payment confirmed! Launching your AI agent now \uD83D\uDE80");
+            setPhase('outreach');
+            scrollDown();
+          } else {
+            addAssistant("Payment was not completed. Please try again.");
+            setPhase('tier');
+          }
+        }).catch(() => {
+          addAssistant("Could not verify payment. Please try again.");
+          setPhase('tier');
+        });
         return;
       } catch { /* ignore */ }
+    } else if (paidJob && !urlParams.has('paid')) {
+      // User hit back from Stripe without completing — clear the pending job
+      sessionStorage.removeItem('homie_paid_job');
     }
 
     // Check if returning from login with pending quote
