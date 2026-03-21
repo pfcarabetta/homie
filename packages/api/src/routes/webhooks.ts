@@ -381,7 +381,7 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
       }
     }
 
-    const { response, state } = await processSmsReply(attempt.id, Body, jobContext);
+    const { response, state } = await processSmsReply(attempt.id, Body, jobContext, attempt.providerId);
 
     // Send AI response back via TwiML
     twiml.message(response);

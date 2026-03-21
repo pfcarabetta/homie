@@ -1,5 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { signProviderToken } from '../../middleware/provider-auth';
 import logger from '../../logger';
+
+const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
 
 interface SmsConversationState {
   messages: { role: 'user' | 'assistant'; content: string }[];
@@ -9,6 +12,7 @@ interface SmsConversationState {
   availability: string | null;
   notes: string | null;
   jobContext: string;
+  providerId: string;
 }
 
 // In-memory state per provider phone (TTL: 30 minutes for SMS since responses are slower)
@@ -29,7 +33,7 @@ export function getSmsConversation(attemptId: string): SmsConversationState | nu
   return entry.state;
 }
 
-export function initSmsConversation(attemptId: string, jobContext: string, initialMessage: string): SmsConversationState {
+export function initSmsConversation(attemptId: string, jobContext: string, initialMessage: string, providerId: string): SmsConversationState {
   const state: SmsConversationState = {
     messages: [{ role: 'assistant', content: initialMessage }],
     phase: 'interest',
@@ -38,6 +42,7 @@ export function initSmsConversation(attemptId: string, jobContext: string, initi
     availability: null,
     notes: null,
     jobContext,
+    providerId,
   };
   conversations.set(attemptId, { state, expiresAt: Date.now() + TTL_MS });
   return state;
@@ -67,7 +72,7 @@ CONVERSATION FLOW:
 
 If they decline, thank them politely.
 
-When the conversation is DONE (after collecting notes or after a decline), include this at the end of your final message: "Manage your Homie jobs anytime at homiepro.ai/portal/login"
+When the conversation is DONE (after collecting notes or after a decline), include the portal link that will be provided in the system context at the end of your message.
 
 Respond with ONLY the text message to send. No formatting, no emojis unless natural.`;
 
@@ -75,22 +80,26 @@ export async function processSmsReply(
   attemptId: string,
   providerReply: string,
   jobContext?: string,
+  providerId?: string,
 ): Promise<{ response: string; state: SmsConversationState }> {
   let conv = getSmsConversation(attemptId);
   if (!conv) {
-    conv = initSmsConversation(attemptId, jobContext ?? 'A home service job opportunity.', jobContext ?? 'Initial outreach sent.');
+    conv = initSmsConversation(attemptId, jobContext ?? 'A home service job opportunity.', jobContext ?? 'Initial outreach sent.', providerId ?? '');
   }
 
   conv.messages.push({ role: 'user', content: providerReply });
 
   const lower = providerReply.toLowerCase().trim();
 
+  // Build portal magic link
+  const portalLink = conv.providerId ? `${APP_URL}/portal/login?token=${signProviderToken(conv.providerId)}` : `${APP_URL}/portal/login`;
+
   // Check for decline
   const declineWords = ['no', 'not interested', 'busy', 'pass', 'decline', 'stop', 'remove', 'unsubscribe', 'nope', 'can\'t', 'cannot'];
   if (conv.phase === 'interest' && declineWords.some(w => lower === w || lower.startsWith(w + ' ') || lower.startsWith(w + ','))) {
     conv.phase = 'done';
     conv.accepted = false;
-    const response = "No problem! Thanks for your time. We'll keep you in mind for future opportunities.";
+    const response = `No problem! Thanks for your time. Manage future Homie jobs anytime: ${portalLink}`;
     conv.messages.push({ role: 'assistant', content: response });
     conversations.set(attemptId, { state: conv, expiresAt: Date.now() + TTL_MS });
     return { response, state: conv };
@@ -121,7 +130,7 @@ export async function processSmsReply(
     const result = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 100,
-      system: SYSTEM_PROMPT + `\n\nJob context: ${conv.jobContext}\nCurrent phase: ${conv.phase}. ${conv.phase === 'done' ? 'Thank them and say goodbye.' : ''}`,
+      system: SYSTEM_PROMPT + `\n\nJob context: ${conv.jobContext}\nCurrent phase: ${conv.phase}. ${conv.phase === 'done' ? `Thank them and include this portal link at the end: ${portalLink}` : ''}`,
       messages: conv.messages.map(m => ({ role: m.role, content: m.content })),
     });
 
@@ -142,7 +151,7 @@ export async function processSmsReply(
       case 'quote': response = "Great, you're interested! What would you estimate for this job?"; break;
       case 'availability': response = 'Got it. When are you available?'; break;
       case 'notes': response = 'Thanks! Any notes for the homeowner? Reply "none" if not.'; break;
-      case 'done': response = "Thanks! We'll pass your info to the homeowner. Manage all your Homie jobs at homiepro.ai/portal/login"; break;
+      case 'done': response = `Thanks! We'll pass your info to the homeowner. Manage your Homie jobs: ${portalLink}`; break;
       default: response = 'Thanks for getting back to us! Are you interested in this job? Reply YES or NO.';
     }
     conv.messages.push({ role: 'assistant', content: response });
