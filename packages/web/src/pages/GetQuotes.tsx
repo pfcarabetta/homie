@@ -480,11 +480,15 @@ export default function GetQuotes() {
     );
   }, []);
 
-  // Greeting on mount
+  // Reset scroll and show greeting on mount
   useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    window.scrollTo(0, 0);
     const t = setTimeout(() => {
       addAssistant("Hey! \uD83D\uDC4B I'm Homie. Let's get you some quotes. What kind of help do you need?");
       setPhase('category');
+      // Force scroll to top after greeting renders
+      setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, 50);
     }, 400);
     return () => clearTimeout(t);
   }, [addAssistant]);
