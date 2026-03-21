@@ -1217,7 +1217,10 @@ function TierStep({ state, dispatch }: { state: State; dispatch: React.Dispatch<
           </button>
         ))}
       </div>
-      <p className="text-center text-xs text-dark/40 mt-3.5">💳 You're only charged once results are delivered</p>
+      <div className="text-center mt-3.5">
+        <p className="text-[13px] text-green-600 font-semibold">&#10003; Only charged if you receive quotes</p>
+        <p className="text-xs text-dark/40 mt-1">100% satisfaction guarantee — no quotes, no charge</p>
+      </div>
     </div>
   );
 }

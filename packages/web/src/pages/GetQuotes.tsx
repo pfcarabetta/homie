@@ -315,6 +315,10 @@ function TierCards({ onSelect }: { onSelect: (t: typeof TIERS[number]) => void }
           <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : D }}>{t.price}</div>
         </button>
       ))}
+      <div style={{ textAlign: 'center', marginTop: 4 }}>
+        <div style={{ fontSize: 13, color: G, fontWeight: 600 }}>{'\u2705'} Only charged if you receive quotes</div>
+        <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>100% satisfaction guarantee — no quotes, no charge</div>
+      </div>
     </div>
   );
 }
