@@ -564,9 +564,10 @@ export default function DiagnosticChat() {
       return;
     }
 
-    // Must be authenticated to create a real job
+    // Require sign in before real outreach
     if (!authService.isAuthenticated()) {
-      runMockOutreach();
+      dispatch({ type: 'CLOSE_MATCH_FLOW' });
+      navigate('/login');
       return;
     }
 
