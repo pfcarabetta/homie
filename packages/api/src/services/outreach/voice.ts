@@ -1,23 +1,31 @@
 import twilio from 'twilio';
 import { ChannelAdapter, OutreachPayload, OutreachResult } from './types';
+import { initConversation } from './voice-conversation';
 
-function buildTwiml(script: string, attemptId: string): string {
+function buildConversationalTwiml(script: string, attemptId: string): string {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const response = new VoiceResponse();
 
-  const gatherUrl = `${process.env.API_BASE_URL}/api/v1/webhooks/twilio/voice/gather?attemptId=${encodeURIComponent(attemptId)}`;
+  // Initialize conversation state
+  initConversation(attemptId, script);
 
+  // Say the initial script
+  response.say({ voice: 'Polly.Joanna' }, script);
+
+  // Gather speech response
+  const gatherUrl = `${process.env.API_BASE_URL}/api/v1/webhooks/twilio/voice/conversation?attemptId=${encodeURIComponent(attemptId)}`;
   const gather = response.gather({
-    numDigits: 1,
+    input: ['speech'],
+    speechTimeout: 'auto',
+    speechModel: 'phone_call',
     action: gatherUrl,
     method: 'POST',
-    timeout: 10,
+    timeout: 8,
   });
-  gather.say({ voice: 'alice' }, script);
-  gather.say({ voice: 'alice' }, 'Press 1 to accept this job request, or press 2 to decline.');
+  gather.say({ voice: 'Polly.Joanna' }, 'Are you interested in this job?');
 
-  // Fallback if the provider does not press anything
-  response.say({ voice: 'alice' }, 'We did not receive your input. We will try reaching you again. Goodbye.');
+  // If no response
+  response.say({ voice: 'Polly.Joanna' }, "I didn't catch that. We'll try reaching you again. Goodbye.");
 
   return response.toString();
 }
@@ -43,7 +51,7 @@ export class VoiceAdapter implements ChannelAdapter {
       await client.calls.create({
         to: payload.phone,
         from: fromNumber,
-        twiml: buildTwiml(payload.script, payload.attemptId),
+        twiml: buildConversationalTwiml(payload.script, payload.attemptId),
         statusCallback: statusCallbackUrl,
         statusCallbackEvent: ['completed'],
         statusCallbackMethod: 'POST',

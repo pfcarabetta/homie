@@ -7,7 +7,9 @@ import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerResponses } from '../db/schema/provider-responses';
 import { providers } from '../db/schema/providers';
 import { buildWebhookToken } from '../services/outreach/web';
+import { processProviderSpeech, getConversation } from '../services/outreach/voice-conversation';
 import { recordProviderResponse } from '../services/providers/scores';
+import logger from '../logger';
 
 const router = Router();
 
@@ -67,6 +69,92 @@ async function createProviderResponse(
     message,
   });
 }
+
+// ── POST /twilio/voice/conversation ──────────────────────────────────────────
+// Called by Twilio with speech transcription during a conversational AI call.
+
+router.post('/twilio/voice/conversation', async (req: Request, res: Response) => {
+  if (!isTwilioRequestValid(req)) {
+    res.status(403).send('Forbidden');
+    return;
+  }
+
+  const attemptId = req.query.attemptId as string | undefined;
+  if (!attemptId || !UUID_RE.test(attemptId)) {
+    res.status(400).send('Invalid attemptId');
+    return;
+  }
+
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  const { SpeechResult } = req.body as { SpeechResult?: string };
+
+  if (!SpeechResult) {
+    twiml.say({ voice: 'Polly.Joanna' }, "I didn't catch that. Could you repeat that?");
+    const gatherUrl = `${process.env.API_BASE_URL}/api/v1/webhooks/twilio/voice/conversation?attemptId=${encodeURIComponent(attemptId)}`;
+    twiml.gather({ input: ['speech'], speechTimeout: 'auto', speechModel: 'phone_call', action: gatherUrl, method: 'POST', timeout: 8 });
+    twiml.say({ voice: 'Polly.Joanna' }, "I'm still here if you'd like to respond. Goodbye.");
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  logger.info({ attemptId, speech: SpeechResult }, '[voice-conversation] Provider speech received');
+
+  try {
+    const { response, state } = await processProviderSpeech(attemptId, SpeechResult);
+
+    twiml.say({ voice: 'Polly.Joanna' }, response);
+
+    if (state.phase !== 'done') {
+      // Continue conversation — gather more speech
+      const gatherUrl = `${process.env.API_BASE_URL}/api/v1/webhooks/twilio/voice/conversation?attemptId=${encodeURIComponent(attemptId)}`;
+      twiml.gather({ input: ['speech'], speechTimeout: 'auto', speechModel: 'phone_call', action: gatherUrl, method: 'POST', timeout: 10 });
+      twiml.say({ voice: 'Polly.Joanna' }, "Are you still there? I'll let you go. Goodbye.");
+    } else {
+      // Conversation complete — update the outreach attempt
+      const [attempt] = await db
+        .select()
+        .from(outreachAttempts)
+        .where(eq(outreachAttempts.id, attemptId))
+        .limit(1);
+
+      if (attempt) {
+        const respondedAt = new Date();
+        const newStatus = state.accepted ? 'accepted' : 'declined';
+
+        await db
+          .update(outreachAttempts)
+          .set({ status: newStatus, respondedAt, responseRaw: JSON.stringify(state.messages) })
+          .where(eq(outreachAttempts.id, attemptId));
+
+        if (state.accepted) {
+          await db.insert(providerResponses).values({
+            jobId: attempt.jobId,
+            providerId: attempt.providerId,
+            channel: 'voice',
+            quotedPrice: state.quotedPrice,
+            availability: state.availability,
+            message: state.notes,
+          });
+        }
+
+        const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
+        void recordProviderResponse(attempt.providerId, responseTimeSec);
+
+        logger.info({ attemptId, accepted: state.accepted, quote: state.quotedPrice, availability: state.availability }, '[voice-conversation] Conversation complete');
+      }
+
+      twiml.hangup();
+    }
+  } catch (err) {
+    logger.error({ err, attemptId }, '[voice-conversation] Error processing speech');
+    twiml.say({ voice: 'Polly.Joanna' }, "I'm sorry, I'm having technical difficulties. We'll try reaching you again. Goodbye.");
+    twiml.hangup();
+  }
+
+  res.type('text/xml').send(twiml.toString());
+});
 
 // ── POST /twilio/voice/gather ─────────────────────────────────────────────────
 // Called by Twilio when the provider presses a digit during the IVR call.
