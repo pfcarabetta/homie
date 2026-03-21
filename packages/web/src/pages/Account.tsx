@@ -225,10 +225,11 @@ function QuotesTab() {
               <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
             </div>
             {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>{j.diagnosis.summary}</div>}
-            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#9B9490' }}>
+            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#9B9490', flexWrap: 'wrap' }}>
               <span>{j.tier} tier</span>
               <span>{j.zip_code}</span>
-              <span>{timeAgo(j.created_at)}</span>
+              <span>{new Date(j.created_at).toLocaleDateString()} {new Date(j.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+              <span>({timeAgo(j.created_at)})</span>
             </div>
 
             {/* Expanded Detail */}
