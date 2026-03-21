@@ -14,7 +14,7 @@ import { recordProviderResponse } from '../services/providers/scores';
 import { capturePayment } from '../services/stripe';
 import { jobs } from '../db/schema/jobs';
 import { homeowners } from '../db/schema/homeowners';
-import { sendEmail } from '../services/notifications';
+import { sendEmail, sendSms } from '../services/notifications';
 import logger from '../logger';
 
 const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
@@ -25,7 +25,7 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
     const [job] = await db.select({ homeownerId: jobs.homeownerId, diagnosis: jobs.diagnosis }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
     if (!job) return;
 
-    const [homeowner] = await db.select({ email: homeowners.email, firstName: homeowners.firstName }).from(homeowners).where(eq(homeowners.id, job.homeownerId)).limit(1);
+    const [homeowner] = await db.select({ email: homeowners.email, phone: homeowners.phone, firstName: homeowners.firstName }).from(homeowners).where(eq(homeowners.id, job.homeownerId)).limit(1);
     if (!homeowner) return;
 
     const diagnosis = job.diagnosis as { category?: string; summary?: string } | null;
@@ -62,6 +62,13 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
 
     await sendEmail(homeowner.email, subject, html);
     logger.info(`[notification] Quote email sent to ${homeowner.email} for job ${jobId}`);
+
+    // Also send SMS if homeowner has a phone number
+    if (homeowner.phone) {
+      const smsText = `Homie: ${providerName} responded to your ${category.toLowerCase()} request!${quotedPrice ? ` Quote: ${quotedPrice}.` : ''}${availability ? ` Available: ${availability}.` : ''} View all quotes: ${quotesUrl}`;
+      await sendSms(homeowner.phone, smsText);
+      logger.info(`[notification] Quote SMS sent to ${homeowner.phone} for job ${jobId}`);
+    }
   } catch (err) {
     logger.error({ err }, `[notification] Failed to send quote email for job ${jobId}`);
   }
