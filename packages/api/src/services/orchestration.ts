@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { jobs } from '../db/schema/jobs';
@@ -79,16 +79,68 @@ async function sendOutreachToProvider(
     web: bundle.web,
   };
 
-  const channels = provider.channels_available.filter(
+  const allChannels = provider.channels_available.filter(
     (ch): ch is OutreachChannel => ch === 'voice' || ch === 'sms' || ch === 'web',
   );
 
-  if (channels.length === 0) {
+  if (allChannels.length === 0) {
     logger.warn(`[orchestration] No available channels for ${provider.name}`);
     return;
   }
 
-  // Send each channel sequentially — avoids hammering a single provider simultaneously
+  // Determine channels based on tier
+  const tier = (job.tier as JobTier) in TIER_PROVIDER_LIMITS ? (job.tier as JobTier) : 'standard';
+  let channels: OutreachChannel[];
+
+  if (tier === 'standard') {
+    // Standard: SMS + Email only (no calls)
+    channels = allChannels.filter(ch => ch === 'sms' || ch === 'web');
+  } else if (tier === 'priority') {
+    // Priority: SMS first, voice after delay
+    channels = allChannels.filter(ch => ch === 'sms' || ch === 'web');
+    // Schedule voice follow-up after 5 minutes if no response
+    if (allChannels.includes('voice')) {
+      setTimeout(async () => {
+        try {
+          // Check if provider already responded
+          const [existing] = await db
+            .select({ status: outreachAttempts.status })
+            .from(outreachAttempts)
+            .where(and(eq(outreachAttempts.jobId, job.id), eq(outreachAttempts.providerId, provider.id), inArray(outreachAttempts.status, ['accepted', 'declined', 'responded'])))
+            .limit(1);
+
+          if (existing) {
+            logger.info(`[orchestration] Skipping voice follow-up for ${provider.name} — already responded`);
+            return;
+          }
+
+          logger.info(`[orchestration] Sending voice follow-up to ${provider.name}`);
+          const script = scriptByChannel.voice;
+          const [attempt] = await db.insert(outreachAttempts).values({ jobId: job.id, providerId: provider.id, channel: 'voice', scriptUsed: script, status: 'pending' }).returning({ id: outreachAttempts.id });
+          const result = await adapters.voice.send({ attemptId: attempt.id, jobId: job.id, providerId: provider.id, providerName: provider.name, phone: provider.phone ?? null, email: null, website: null, script, channel: 'voice' });
+          if (result.status === 'failed') {
+            logger.warn(`[orchestration] Voice follow-up failed for ${provider.name}: ${result.error}`);
+            await db.update(outreachAttempts).set({ status: 'failed', responseRaw: result.error ?? null }).where(eq(outreachAttempts.id, attempt.id));
+          } else {
+            logger.info(`[orchestration] Voice follow-up sent to ${provider.name}`);
+          }
+        } catch (err) {
+          logger.error({ err }, `[orchestration] Voice follow-up error for ${provider.name}`);
+        }
+      }, 5 * 60 * 1000); // 5 minutes
+    }
+  } else {
+    // Emergency: all channels simultaneously
+    channels = allChannels;
+  }
+
+  if (channels.length === 0) {
+    logger.warn(`[orchestration] No channels for ${provider.name} at ${tier} tier`);
+    return;
+  }
+
+  logger.info(`[orchestration] ${tier} tier: sending ${channels.join(',')} to ${provider.name}${tier === 'priority' && allChannels.includes('voice') ? ' (voice in 5min)' : ''}`);
+
   for (const channel of channels) {
     const script = scriptByChannel[channel];
 
