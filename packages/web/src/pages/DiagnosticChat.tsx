@@ -268,7 +268,8 @@ type Action =
   | { type: 'RESET_CHAT' }
   | { type: 'DISMISS_BANNER' }
   | { type: 'SCREENING_ANSWERED' }
-  | { type: 'STREAM_ERROR'; error: string };
+  | { type: 'STREAM_ERROR'; error: string }
+  | { type: 'RESTORE_STATE'; payload: Partial<State> };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -389,6 +390,9 @@ function reducer(state: State, action: Action): State {
         messages: state.messages.filter((m) => m.id !== state.streamingMessageId || m.content.length > 0),
       };
 
+    case 'RESTORE_STATE':
+      return { ...state, ...action.payload };
+
     default:
       return state;
   }
@@ -452,6 +456,36 @@ export default function DiagnosticChat() {
       abortRef.current?.abort();
       cleanupOutreachRef.current?.();
     };
+  }, []);
+
+  // Resume after login — restore saved chat state and reopen match flow
+  useEffect(() => {
+    const pending = sessionStorage.getItem('homie_pending_chat');
+    if (pending && authService.isAuthenticated()) {
+      sessionStorage.removeItem('homie_pending_chat');
+      try {
+        const saved = JSON.parse(pending);
+        const restoredMessages = (saved.messages ?? []).map((m: { id: string; role: string; content: string }) => ({
+          ...m,
+          timestamp: new Date(),
+        })) as ChatMessage[];
+
+        dispatch({
+          type: 'RESTORE_STATE',
+          payload: {
+            messages: restoredMessages,
+            diagnosis: saved.diagnosis ?? null,
+            jobSummary: saved.jobSummary ?? null,
+            tier: saved.tier ?? 'priority',
+            zipCode: saved.zipCode ?? '',
+            timing: saved.timing ?? 'asap',
+            screeningAnswered: saved.screeningAnswered ?? true,
+            matchFlowActive: true,
+            matchStep: 'preferences',
+          },
+        });
+      } catch { /* ignore bad data */ }
+    }
   }, []);
 
   const sendMessage = useCallback(
@@ -564,8 +598,17 @@ export default function DiagnosticChat() {
       return;
     }
 
-    // Require sign in before real outreach
+    // Require sign in before real outreach — save state for resume
     if (!authService.isAuthenticated()) {
+      sessionStorage.setItem('homie_pending_chat', JSON.stringify({
+        messages: state.messages.map(m => ({ id: m.id, role: m.role, content: m.content })),
+        diagnosis: state.diagnosis,
+        jobSummary: state.jobSummary,
+        tier: state.tier,
+        zipCode: state.zipCode,
+        timing: state.timing,
+        screeningAnswered: state.screeningAnswered,
+      }));
       dispatch({ type: 'CLOSE_MATCH_FLOW' });
       navigate('/login?redirect=/chat');
       return;
