@@ -468,6 +468,7 @@ export const paymentService = {
     jobId: string,
     responseId: string,
     providerId: string,
+    returnPath?: string,
   ): Promise<ApiResponse<{ checkout_url: string }>> {
     return fetchAPI<{ checkout_url: string }>('/api/v1/payments/checkout', {
       method: 'POST',
@@ -475,6 +476,7 @@ export const paymentService = {
         job_id: jobId,
         response_id: responseId,
         provider_id: providerId,
+        ...(returnPath ? { return_path: returnPath } : {}),
       }),
     });
   },

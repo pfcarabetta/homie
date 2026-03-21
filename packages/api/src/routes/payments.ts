@@ -20,10 +20,11 @@ router.post('/checkout', async (req: Request, res: Response) => {
     return;
   }
 
-  const { job_id, response_id, provider_id } = req.body as {
+  const { job_id, response_id, provider_id, return_path } = req.body as {
     job_id?: string;
     response_id?: string;
     provider_id?: string;
+    return_path?: string;
   };
 
   if (!job_id || !UUID_RE.test(job_id)) {
@@ -62,8 +63,8 @@ router.post('/checkout', async (req: Request, res: Response) => {
       tier: job.tier,
       responseId: response_id ?? '',
       providerId: provider_id ?? '',
-      successUrl: `${APP_URL}/quote?paid=1`,
-      cancelUrl: `${APP_URL}/quote`,
+      successUrl: `${APP_URL}${return_path ?? '/quote'}?paid=1`,
+      cancelUrl: `${APP_URL}${return_path ?? '/quote'}`,
     });
 
     await db.update(jobs).set({

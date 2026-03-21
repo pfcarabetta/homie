@@ -458,6 +458,70 @@ export default function DiagnosticChat() {
     };
   }, []);
 
+  // Resume after payment — restore chat and launch outreach
+  useEffect(() => {
+    const paidChat = sessionStorage.getItem('homie_paid_chat');
+    if (paidChat && authService.isAuthenticated()) {
+      sessionStorage.removeItem('homie_paid_chat');
+      try {
+        const saved = JSON.parse(paidChat);
+        const restoredMessages = (saved.messages ?? []).map((m: { id: string; role: string; content: string }) => ({
+          ...m, timestamp: new Date(),
+        })) as ChatMessage[];
+
+        dispatch({
+          type: 'RESTORE_STATE',
+          payload: {
+            messages: restoredMessages,
+            diagnosis: saved.diagnosis ?? null,
+            jobSummary: saved.jobSummary ?? null,
+            screeningAnswered: saved.screeningAnswered ?? true,
+            jobId: saved.jobId,
+            matchFlowActive: true,
+            matchStep: 'outreach',
+            outreach: { providersContacted: 0, channels: { voice: { attempted: 0, responded: 0 }, sms: { attempted: 0, responded: 0 }, web: { attempted: 0, responded: 0 } }, active: true },
+          },
+        });
+
+        if (saved.jobId) {
+          dispatch({ type: 'JOB_CREATED', jobId: saved.jobId, expiresAt: saved.expiresAt ?? '' });
+
+          const jobSocket = connectJobSocket(saved.jobId, (status: JobStatusResponse) => {
+            dispatch({
+              type: 'UPDATE_OUTREACH',
+              outreach: {
+                providersContacted: status.providers_contacted,
+                channels: {
+                  voice: { attempted: status.outreach_channels.voice.attempted, responded: status.outreach_channels.voice.connected },
+                  sms: { attempted: status.outreach_channels.sms.attempted, responded: status.outreach_channels.sms.connected },
+                  web: { attempted: status.outreach_channels.web.attempted, responded: status.outreach_channels.web.connected },
+                },
+                active: !['completed', 'expired', 'refunded'].includes(status.status),
+              },
+            });
+            if (['completed', 'expired'].includes(status.status) || status.providers_responded > 0) {
+              void jobService.getResponses(saved.jobId).then(respRes => {
+                if (respRes.data && respRes.data.responses.length > 0) {
+                  dispatch({
+                    type: 'SET_RESULTS',
+                    providers: respRes.data.responses.map(r => ({
+                      id: r.provider.id, responseId: r.id, name: r.provider.name,
+                      googleRating: parseFloat(r.provider.google_rating ?? '0'), reviewCount: r.provider.review_count,
+                      quotedPrice: r.quoted_price ?? 'TBD', availability: r.availability ?? 'To be confirmed',
+                      message: r.message ?? '', channel: r.channel as 'voice' | 'sms' | 'web',
+                    })),
+                  });
+                }
+              });
+            }
+          });
+          cleanupOutreachRef.current = () => jobSocket.close();
+        }
+      } catch { /* ignore */ }
+      return;
+    }
+  }, []);
+
   // Resume after login — restore saved chat state and reopen match flow
   useEffect(() => {
     const pending = sessionStorage.getItem('homie_pending_chat');
@@ -647,6 +711,26 @@ export default function DiagnosticChat() {
         dispatch({ type: 'MATCH_FLOW_LOADING', loading: false });
         runMockOutreach();
         return;
+      }
+
+      // Authorize payment via Stripe before launching outreach
+      try {
+        const payRes = await paymentService.createCheckout(res.data.id, '', '', '/chat');
+        if (payRes.data?.checkout_url) {
+          // Save state for resume after payment
+          sessionStorage.setItem('homie_paid_chat', JSON.stringify({
+            jobId: res.data.id,
+            expiresAt: res.data.expires_at,
+            messages: state.messages.map(m => ({ id: m.id, role: m.role, content: m.content })),
+            diagnosis: state.diagnosis,
+            jobSummary: state.jobSummary,
+            screeningAnswered: state.screeningAnswered,
+          }));
+          window.location.href = payRes.data.checkout_url;
+          return;
+        }
+      } catch {
+        // Payment not configured — continue without payment
       }
 
       dispatch({ type: 'JOB_CREATED', jobId: res.data.id, expiresAt: res.data.expires_at });
