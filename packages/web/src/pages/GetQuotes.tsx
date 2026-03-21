@@ -703,24 +703,26 @@ export default function GetQuotes() {
   };
 
   const handleExtraDetails = (text: string) => {
-    setData(d => ({ ...d, extra: (d.extra ? d.extra + '. ' : '') + text }));
+    const updatedExtra = (data.extra ? data.extra + '. ' : '') + text;
+    setData(d => ({ ...d, extra: updatedExtra }));
     setPhase('waiting');
     addUser(text);
-    generateDiagnosis();
+    generateDiagnosis(updatedExtra);
   };
 
   const handleSkipExtra = () => {
     setPhase('waiting');
     addUser("That's everything");
-    generateDiagnosis();
+    generateDiagnosis(data.extra ?? '');
   };
 
-  const generateDiagnosis = () => {
+  const generateDiagnosis = (extraDetails: string) => {
     const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
+    const allDetails = [data.a1, data.extra !== extraDetails ? data.extra : null, extraDetails].filter(Boolean).join('. ');
     const history: { role: 'user' | 'assistant'; content: string }[] = [
       { role: 'user', content: `I need ${cat?.label} help: ${data.a1}` },
       { role: 'assistant', content: data.aiFollowUp || '' },
-      { role: 'user', content: data.extra || '' },
+      { role: 'user', content: allDetails },
     ];
 
     setStreaming(true);
@@ -744,7 +746,7 @@ export default function GetQuotes() {
           },
           onError: () => {
             setStreaming(false);
-            setData(d => ({ ...d, aiDiagnosis: `${cat?.label}: ${data.a1}. ${data.extra || ''}` }));
+            setData(d => ({ ...d, aiDiagnosis: `${cat?.label}: ${data.a1}. ${extraDetails || d.extra || ''}` }));
             setTimeout(() => {
               addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
               setPhase('zip');
