@@ -110,7 +110,7 @@ function IncomingJobsTab() {
           onClick={() => setExpanded(expanded === j.attempt_id ? null : j.attempt_id)}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <span style={{ fontWeight: 600, fontSize: 15, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.category ?? 'Job Request'}</span>
-            <span style={{ fontSize: 12, color: '#9B9490' }}>{timeAgo(j.attempted_at)}</span>
+            <span style={{ fontSize: 12, color: '#9B9490' }}>{new Date(j.attempted_at).toLocaleDateString()} {new Date(j.attempted_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ({timeAgo(j.attempted_at)})</span>
           </div>
           {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 6 }}>{j.diagnosis.summary}</div>}
           <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#9B9490' }}>
@@ -183,7 +183,7 @@ function HistoryTab() {
                 <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#9B9490', marginTop: 6 }}>
                   <span>{j.zip_code}</span>
                   <span>via {j.channel}</span>
-                  <span>{timeAgo(j.attempted_at)}</span>
+                  <span>{new Date(j.attempted_at).toLocaleDateString()} {new Date(j.attempted_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ({timeAgo(j.attempted_at)})</span>
                 </div>
               </div>
             );
