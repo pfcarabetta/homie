@@ -3,9 +3,15 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
-  apiVersion: '2026-02-25.clover',
-});
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
+      apiVersion: '2026-02-25.clover',
+    });
+  }
+  return _stripe;
+}
 
 const TIER_PRICES: Record<string, number> = {
   standard: 999,
@@ -28,7 +34,7 @@ export async function getOrCreateCustomer(homeownerId: string, email: string): P
 
   if (homeowner?.stripeCustomerId) return homeowner.stripeCustomerId;
 
-  const customer = await stripe.customers.create({
+  const customer = await getStripe().customers.create({
     email,
     metadata: { homie_homeowner_id: homeownerId },
   });
@@ -50,7 +56,7 @@ export async function createCheckoutSession(params: {
   const amount = TIER_PRICES[params.tier];
   if (!amount) throw new Error(`Invalid tier: ${params.tier}`);
 
-  return stripe.checkout.sessions.create({
+  return getStripe().checkout.sessions.create({
     mode: 'payment',
     customer: params.customerId,
     line_items: [{
@@ -73,5 +79,5 @@ export async function createCheckoutSession(params: {
 
 export function constructWebhookEvent(body: Buffer, signature: string): Stripe.Event {
   const secret = process.env.STRIPE_WEBHOOK_SECRET ?? '';
-  return stripe.webhooks.constructEvent(body, signature, secret);
+  return getStripe().webhooks.constructEvent(body, signature, secret);
 }
