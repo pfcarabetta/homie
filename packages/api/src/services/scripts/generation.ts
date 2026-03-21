@@ -53,14 +53,14 @@ const GENERATE_SCRIPTS_TOOL: Anthropic.Tool = {
       sms: {
         type: 'string',
         description:
-          'SMS message (≤160 characters). Must be terse: job category, zip code, budget range, and a reply link placeholder. ' +
-          'Use {{category}}, {{zip_code}}, {{budget}}, {{accept_link}}.',
+          'SMS message (≤160 characters). Must be terse: job category, zip code, budget range, and ask the provider to reply YES if interested. ' +
+          'Do NOT include any URLs or links. Use {{category}}, {{zip_code}}, {{budget}}.',
       },
       web: {
         type: 'string',
         description:
-          'Web/email message body (2–4 sentences). Professional tone. Summarize the job and invite the provider to view full details. ' +
-          'Use {{provider_name}}, {{category}}, {{summary}}, {{budget}}, {{zip_code}}, {{job_link}}.',
+          'Web/email message body (2–4 sentences). Professional tone. Summarize the job for the provider. ' +
+          'Do NOT include any URLs or links — they are added automatically. Use {{provider_name}}, {{category}}, {{summary}}, {{budget}}, {{zip_code}}.',
       },
     },
     required: ['voice', 'sms', 'web'],
@@ -162,8 +162,6 @@ export async function generateScripts(params: GenerateScriptsParams): Promise<Sc
     zip_code: zipCode,
     timing,
     callback_number: process.env.CALLBACK_PHONE ?? '+18005550100',
-    accept_link: `${process.env.API_BASE_URL ?? 'https://api.homie.app'}/providers/${providerId}/jobs/${jobId}/accept`,
-    job_link: `${process.env.API_BASE_URL ?? 'https://api.homie.app'}/providers/${providerId}/jobs/${jobId}`,
   };
 
   return {
