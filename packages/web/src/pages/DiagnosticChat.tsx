@@ -1270,6 +1270,9 @@ function TierStep({ state, dispatch }: { state: State; dispatch: React.Dispatch<
       <div className="text-center mt-3.5">
         <p className="text-[13px] text-green-600 font-semibold">&#10003; Only charged if you receive quotes</p>
         <p className="text-xs text-dark/40 mt-1">100% satisfaction guarantee — no quotes, no charge</p>
+        <p className="text-[10px] text-dark/20 mt-2 max-w-[360px] mx-auto leading-relaxed">
+          By selecting a tier, you authorize Homie to contact service providers on your behalf via phone call, text message, and email to obtain quotes for your request.
+        </p>
       </div>
     </div>
   );

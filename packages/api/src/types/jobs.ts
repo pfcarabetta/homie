@@ -12,6 +12,7 @@ export interface CreateJobBody {
   budget: string;
   tier: JobTier;
   zip_code: string;
+  consent: boolean;
 }
 
 export interface CreateJobResponse {

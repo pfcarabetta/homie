@@ -434,6 +434,7 @@ export const jobService = {
         budget: params.budget,
         tier: params.tier,
         zip_code: params.zipCode,
+        consent: true,
       }),
     });
   },

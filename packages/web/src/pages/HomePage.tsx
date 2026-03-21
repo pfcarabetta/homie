@@ -662,6 +662,10 @@ export default function HomePage() {
         <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, marginTop: 8 }}>
           Your home's best friend. &copy; {new Date().getFullYear()} Homie Technologies, Inc.
         </p>
+        <p style={{ marginTop: 8 }}>
+          <a href="/terms" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, textDecoration: 'none', marginRight: 16 }}>Terms of Service</a>
+          <a href="/privacy" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, textDecoration: 'none' }}>Privacy Policy</a>
+        </p>
       </footer>
     </div>
   );

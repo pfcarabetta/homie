@@ -113,8 +113,16 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(400).json(out);
     return;
   }
+  if (!body.consent) {
+    const out: ApiResponse<null> = { data: null, error: 'consent is required', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
 
   try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.ip ?? '';
+    const consentText = 'By proceeding, you authorize Homie to contact service providers on your behalf via phone call, text message, and email to obtain quotes for your request.';
+
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const [job] = await db
       .insert(jobs)
@@ -127,6 +135,10 @@ router.post('/', async (req: Request, res: Response) => {
         tier: body.tier,
         status: 'open',
         zipCode: body.zip_code,
+        consentGiven: true,
+        consentText,
+        consentIp: clientIp,
+        consentAt: new Date(),
         expiresAt,
       })
       .returning();

@@ -318,6 +318,9 @@ function TierCards({ onSelect }: { onSelect: (t: typeof TIERS[number]) => void }
       <div style={{ textAlign: 'center', marginTop: 4 }}>
         <div style={{ fontSize: 13, color: G, fontWeight: 600 }}>{'\u2705'} Only charged if you receive quotes</div>
         <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>100% satisfaction guarantee — no quotes, no charge</div>
+        <div style={{ fontSize: 11, color: '#bbb', marginTop: 8, lineHeight: 1.5, maxWidth: 400, marginLeft: 'auto', marginRight: 'auto' }}>
+          By selecting a tier, you authorize Homie to contact service providers on your behalf via phone call, text message, and email to obtain quotes for your request.
+        </div>
       </div>
     </div>
   );

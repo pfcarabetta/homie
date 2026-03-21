@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, jsonb, boolean, index } from 'drizzle-orm/pg-core';
 import { homeowners } from './homeowners';
 
 export interface DiagnosisPayload {
@@ -26,6 +26,10 @@ export const jobs = pgTable(
     stripeSessionId: text('stripe_session_id'),
     stripePaymentIntentId: text('stripe_payment_intent_id'),
     zipCode: text('zip_code').notNull(),
+    consentGiven: boolean('consent_given').notNull().default(false),
+    consentText: text('consent_text'),
+    consentIp: text('consent_ip'),
+    consentAt: timestamp('consent_at', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
