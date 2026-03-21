@@ -2,16 +2,38 @@ const MAPS_BASE = 'https://maps.googleapis.com/maps/api';
 
 // Maps Homie categories to Google Places types.
 const CATEGORY_TO_GOOGLE_TYPE: Record<string, string> = {
+  // Repair
   plumbing: 'plumber',
   electrical: 'electrician',
   hvac: 'hvac_contractor',
+  appliance: 'appliance_repair_service',
   roofing: 'roofing_contractor',
-  landscaping: 'landscaping',
-  painting: 'painter',
-  flooring: 'flooring_contractor',
-  handyman: 'general_contractor',
-  pest_control: 'pest_control_service',
+  general: 'general_contractor',
+  garage_door: 'garage_door_supplier',
+  // Services
+  house_cleaning: 'house_cleaning_service',
   cleaning: 'house_cleaning_service',
+  landscaping: 'landscaper',
+  pool: 'swimming_pool_contractor',
+  pest_control: 'pest_control_service',
+  painting: 'painter',
+  moving: 'moving_company',
+  pressure_washing: 'pressure_washing_service',
+  locksmith: 'locksmith',
+  // Other common
+  handyman: 'general_contractor',
+  flooring: 'flooring_contractor',
+  fence: 'fence_contractor',
+  tree_trimming: 'tree_service',
+  gutter: 'gutter_cleaning_service',
+  carpet_cleaning: 'carpet_cleaning_service',
+  window_cleaning: 'window_cleaning_service',
+  concrete: 'concrete_contractor',
+  masonry: 'masonry_contractor',
+  siding: 'siding_contractor',
+  insulation: 'insulation_contractor',
+  solar: 'solar_energy_contractor',
+  security: 'security_system_supplier',
 };
 
 export interface NearbyPlace {
@@ -84,13 +106,18 @@ export async function searchNearby(params: {
   category: string;
   minRating: number;
 }): Promise<NearbyPlace[]> {
-  const googleType = CATEGORY_TO_GOOGLE_TYPE[params.category] ?? params.category;
+  const googleType = CATEGORY_TO_GOOGLE_TYPE[params.category];
   const qs = new URLSearchParams({
     location: `${params.lat},${params.lng}`,
     radius: params.radiusMeters.toString(),
-    type: googleType,
     key: apiKey(),
   });
+  // Use Google place type if mapped, otherwise use keyword search
+  if (googleType) {
+    qs.set('type', googleType);
+  } else {
+    qs.set('keyword', params.category.replace(/_/g, ' '));
+  }
 
   const res = await fetch(`${MAPS_BASE}/place/nearbysearch/json?${qs}`);
   const data = (await res.json()) as NearbyResponse;
