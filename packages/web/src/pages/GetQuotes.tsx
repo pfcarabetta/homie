@@ -811,7 +811,7 @@ export default function GetQuotes() {
     scrollDown();
   };
 
-  const handleTier = async (t: typeof TIERS[number]) => {
+  const handleTier = (t: typeof TIERS[number]) => {
     setData(d => ({ ...d, tier: t.id }));
     setPhase('waiting');
     addUser(`${t.name} \u2014 ${t.price}`);
@@ -825,7 +825,6 @@ export default function GetQuotes() {
       return;
     }
 
-    // Require sign in before outreach
     if (!authService.isAuthenticated()) {
       setTimeout(() => {
         addAssistant("Almost there! You'll need to sign in so we can save your quotes and send you results.");
@@ -835,12 +834,12 @@ export default function GetQuotes() {
       return;
     }
 
-    // Capture data before async work (React state may be stale in setTimeout)
     const currentData = { ...data, tier: t.id };
 
-    addAssistant("Great choice! Let me set up your search...");
+    setTimeout(() => {
+      addAssistant("Great choice! Let me set up your search...");
+      scrollDown();
 
-    try {
       const cat = currentData.category ? CATEGORY_FLOWS[currentData.category] : null;
       const diagPayload: DiagnosisPayload = {
         category: currentData.category ?? 'general',
@@ -849,50 +848,45 @@ export default function GetQuotes() {
         recommendedActions: [],
       };
 
-      console.log('[GetQuotes] Creating job with data:', { category: currentData.category, zip: currentData.zip, tier: t.id });
-
-      const res = await jobService.createJob({
+      jobService.createJob({
         diagnosis: diagPayload,
         timing: (currentData.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
         budget: 'flexible',
         tier: t.id as 'standard' | 'priority' | 'emergency',
         zipCode: currentData.zip,
-      });
-
-      console.log('[GetQuotes] Job created:', res.data);
-
-      if (res.data) {
-        // Redirect to Stripe Checkout for payment authorization
-        console.log('[GetQuotes] Creating checkout for job:', res.data.id);
-        try {
-          const payRes = await paymentService.createCheckout(res.data.id, '', '', '/quote');
-          console.log('[GetQuotes] Checkout response:', payRes.data);
-          if (payRes.data?.checkout_url) {
-            sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data.id, tier: t.id }));
-            window.location.href = payRes.data.checkout_url;
-            return;
-          }
-        } catch (payErr) {
-          console.error('[GetQuotes] Payment checkout failed:', payErr);
+      }).then(res => {
+        if (!res.data) {
+          addAssistant('Something went wrong creating your job. Please try again.');
+          setPhase('tier');
+          return;
         }
 
-        // Payment not available — launch outreach directly
-        setJobId(res.data.id);
-        addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-        setPhase('outreach');
-        scrollDown();
-      } else {
-        console.error('[GetQuotes] Job creation returned no data');
-        addAssistant('Something went wrong creating your job. Please try again.');
+        // Try Stripe payment
+        paymentService.createCheckout(res.data.id, '', '', '/quote').then(payRes => {
+          if (payRes.data?.checkout_url) {
+            sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data!.id, tier: t.id }));
+            window.location.href = payRes.data.checkout_url;
+          } else {
+            // No checkout URL — launch outreach directly
+            setJobId(res.data!.id);
+            addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+            setPhase('outreach');
+            scrollDown();
+          }
+        }).catch(() => {
+          // Payment not configured — launch outreach without payment
+          setJobId(res.data!.id);
+          addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+          setPhase('outreach');
+          scrollDown();
+        });
+      }).catch(err => {
+        console.error('[GetQuotes] Job creation failed:', err);
+        addAssistant('Something went wrong. Please try again.');
         setPhase('tier');
         scrollDown();
-      }
-    } catch (err) {
-      console.error('[GetQuotes] Job creation failed:', err);
-      addAssistant('Something went wrong setting up your search. Please try again.');
-      setPhase('tier');
-      scrollDown();
-    }
+      });
+    }, 500);
   };
 
   const repairOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'repair').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
