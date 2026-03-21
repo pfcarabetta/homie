@@ -195,13 +195,33 @@ function HistoryTab() {
 }
 
 /* -- Profile Tab -- */
+const ALL_CATEGORIES = [
+  // Repair
+  'Plumbing', 'Electrical', 'HVAC', 'Appliance Repair', 'Roofing', 'Garage Door',
+  'Drywall Repair', 'Window Repair', 'Door Repair', 'Foundation Repair',
+  // Services
+  'House Cleaning', 'Landscaping', 'Pool Service', 'Pest Control', 'Painting',
+  'Pressure Washing', 'Locksmith', 'Moving', 'Tree Trimming', 'Gutter Cleaning',
+  'Carpet Cleaning', 'Window Cleaning', 'Fence Install/Repair', 'Deck/Patio',
+  'Flooring', 'Tile Work', 'Concrete', 'Masonry', 'Siding',
+  // Specialty
+  'Handyman', 'Home Inspection', 'Insulation', 'Water Damage', 'Mold Remediation',
+  'Security Systems', 'Smart Home', 'Solar Panel', 'EV Charger Install',
+  'Furniture Assembly', 'Junk Removal', 'Snow Removal',
+];
+
+const RADIUS_OPTIONS = [5, 10, 15, 25, 50];
+
 function ProfileTab() {
   const [profile, setProfile] = useState<ProviderProfile | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [categories, setCategories] = useState('');
-  const [zips, setZips] = useState('');
+  const [selectedCats, setSelectedCats] = useState<string[]>([]);
+  const [catSearch, setCatSearch] = useState('');
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  const [serviceZip, setServiceZip] = useState('');
+  const [serviceRadius, setServiceRadius] = useState(15);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -212,11 +232,35 @@ function ProfileTab() {
         setName(r.data.name);
         setPhone(r.data.phone ?? '');
         setEmail(r.data.email ?? '');
-        setCategories(r.data.categories?.join(', ') ?? '');
-        setZips(r.data.service_zips?.join(', ') ?? '');
+        setSelectedCats(r.data.categories ?? []);
+        // Parse service_zips: first entry is the zip, stored as "zip:radius" or just zips
+        if (r.data.service_zips && r.data.service_zips.length > 0) {
+          const first = r.data.service_zips[0];
+          if (first.includes(':')) {
+            const [z, rad] = first.split(':');
+            setServiceZip(z);
+            setServiceRadius(Number(rad) || 15);
+          } else {
+            setServiceZip(first);
+          }
+        }
       }
     });
   }, []);
+
+  const filteredCats = ALL_CATEGORIES.filter(c =>
+    c.toLowerCase().includes(catSearch.toLowerCase()) && !selectedCats.includes(c.toLowerCase())
+  );
+
+  function toggleCat(cat: string) {
+    const lower = cat.toLowerCase();
+    setSelectedCats(prev => prev.includes(lower) ? prev.filter(c => c !== lower) : [...prev, lower]);
+    setCatSearch('');
+  }
+
+  function removeCat(cat: string) {
+    setSelectedCats(prev => prev.filter(c => c !== cat));
+  }
 
   async function save() {
     setMsg(null);
@@ -226,10 +270,9 @@ function ProfileTab() {
       if (name !== profile?.name) updates.name = name;
       if (phone !== (profile?.phone ?? '')) updates.phone = phone;
       if (email !== (profile?.email ?? '')) updates.email = email;
-      const catArr = categories.split(',').map(s => s.trim()).filter(Boolean);
-      if (JSON.stringify(catArr) !== JSON.stringify(profile?.categories ?? [])) updates.categories = catArr;
-      const zipArr = zips.split(',').map(s => s.trim()).filter(Boolean);
-      if (JSON.stringify(zipArr) !== JSON.stringify(profile?.service_zips ?? [])) updates.service_zips = zipArr;
+      if (JSON.stringify(selectedCats) !== JSON.stringify(profile?.categories ?? [])) updates.categories = selectedCats;
+      const zipData = serviceZip ? [`${serviceZip}:${serviceRadius}`] : [];
+      if (JSON.stringify(zipData) !== JSON.stringify(profile?.service_zips ?? [])) updates.service_zips = zipData;
 
       if (Object.keys(updates).length === 0) { setMsg({ type: 'error', text: 'No changes' }); setSaving(false); return; }
       await portalService.updateProfile(updates as Parameters<typeof portalService.updateProfile>[0]);
@@ -252,8 +295,84 @@ function ProfileTab() {
         <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Business Name</label><input value={name} onChange={e => setName(e.target.value)} style={inputStyle} /></div>
         <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Phone</label><input value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /></div>
         <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Email</label><input value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} /></div>
-        <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Service Categories <span style={{ fontWeight: 400, color: '#9B9490' }}>(comma-separated)</span></label><input value={categories} onChange={e => setCategories(e.target.value)} placeholder="plumbing, electrical, hvac" style={inputStyle} /></div>
-        <div><label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Service Zip Codes <span style={{ fontWeight: 400, color: '#9B9490' }}>(comma-separated)</span></label><input value={zips} onChange={e => setZips(e.target.value)} placeholder="92103, 92104, 92105" style={inputStyle} /></div>
+
+        {/* Service Categories — searchable multi-select */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Service Categories</label>
+          {selectedCats.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {selectedCats.map(cat => (
+                <span key={cat} style={{
+                  background: 'rgba(232,99,43,0.08)', color: O, padding: '4px 10px', borderRadius: 100,
+                  fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, textTransform: 'capitalize',
+                }}>
+                  {cat}
+                  <button onClick={() => removeCat(cat)} style={{ background: 'none', border: 'none', color: O, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>{'\u00D7'}</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{ position: 'relative' }}>
+            <input
+              value={catSearch}
+              onChange={e => { setCatSearch(e.target.value); setCatDropdownOpen(true); }}
+              onFocus={() => setCatDropdownOpen(true)}
+              placeholder="Search categories..."
+              style={inputStyle}
+            />
+            {catDropdownOpen && filteredCats.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, marginTop: 4,
+                background: 'white', borderRadius: 12, border: '1px solid rgba(0,0,0,0.08)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08)', maxHeight: 200, overflowY: 'auto',
+              }}>
+                {filteredCats.slice(0, 15).map(cat => (
+                  <button key={cat} onClick={() => { toggleCat(cat); setCatDropdownOpen(false); }} style={{
+                    display: 'block', width: '100%', padding: '10px 14px', background: 'none', border: 'none',
+                    textAlign: 'left', fontSize: 14, color: D, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                    borderBottom: '1px solid rgba(0,0,0,0.04)',
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.background = W}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  >{cat}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Service Area — zip + radius */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Service Area</label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <input
+                value={serviceZip}
+                onChange={e => setServiceZip(e.target.value.replace(/\D/g, ''))}
+                maxLength={5}
+                placeholder="Zip code"
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <select
+                value={serviceRadius}
+                onChange={e => setServiceRadius(Number(e.target.value))}
+                style={{ ...inputStyle, cursor: 'pointer', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\'%3E%3Cpath fill=\'%239B9490\' d=\'M6 8L1 3h10z\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center' }}
+              >
+                {RADIUS_OPTIONS.map(r => (
+                  <option key={r} value={r}>{r} mile radius</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {serviceZip && (
+            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>
+              Serving {serviceRadius} miles around {serviceZip}
+            </div>
+          )}
+        </div>
+
         <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14, marginTop: 4 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 8 }}>Calendar Integration</div>
           <div style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 12, padding: '16px', textAlign: 'center', color: '#9B9490', fontSize: 13 }}>Coming soon — sync your availability with Google Calendar or other tools</div>
