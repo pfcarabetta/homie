@@ -71,6 +71,52 @@ export const adminService = {
     }>>(`/api/v1/admin/jobs?${q}`);
   },
 
+  async getJobDetail(jobId: string) {
+    return fetchAdmin<{
+      job: {
+        id: string;
+        homeownerEmail: string | null;
+        homeownerPhone: string | null;
+        homeownerName: string | null;
+        diagnosis: { category?: string; severity?: string; summary?: string; recommendedActions?: string[] } | null;
+        tier: string;
+        status: string;
+        paymentStatus: string;
+        zipCode: string;
+        preferredTiming: string | null;
+        budget: string | null;
+        createdAt: string;
+        expiresAt: string | null;
+      };
+      outreach_attempts: Array<{
+        id: string;
+        channel: string;
+        status: string;
+        providerName: string | null;
+        providerPhone: string | null;
+        providerEmail: string | null;
+        attemptedAt: string;
+        respondedAt: string | null;
+      }>;
+      provider_responses: Array<{
+        id: string;
+        providerName: string | null;
+        providerPhone: string | null;
+        channel: string;
+        quotedPrice: string | null;
+        availability: string | null;
+        message: string | null;
+        createdAt: string;
+      }>;
+      bookings: Array<{
+        id: string;
+        providerName: string | null;
+        status: string;
+        confirmedAt: string;
+      }>;
+    }>(`/api/v1/admin/jobs/${jobId}`);
+  },
+
   async getProviders(params?: { limit?: number; offset?: number }) {
     const q = new URLSearchParams();
     if (params?.limit) q.set('limit', String(params.limit));

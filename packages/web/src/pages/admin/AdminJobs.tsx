@@ -13,6 +13,50 @@ interface Job {
   createdAt: string;
 }
 
+interface JobDetail {
+  job: {
+    id: string;
+    homeownerEmail: string | null;
+    homeownerPhone: string | null;
+    homeownerName: string | null;
+    diagnosis: { category?: string; severity?: string; summary?: string; recommendedActions?: string[] } | null;
+    tier: string;
+    status: string;
+    paymentStatus: string;
+    zipCode: string;
+    preferredTiming: string | null;
+    budget: string | null;
+    createdAt: string;
+    expiresAt: string | null;
+  };
+  outreach_attempts: Array<{
+    id: string;
+    channel: string;
+    status: string;
+    providerName: string | null;
+    providerPhone: string | null;
+    providerEmail: string | null;
+    attemptedAt: string;
+    respondedAt: string | null;
+  }>;
+  provider_responses: Array<{
+    id: string;
+    providerName: string | null;
+    providerPhone: string | null;
+    channel: string;
+    quotedPrice: string | null;
+    availability: string | null;
+    message: string | null;
+    createdAt: string;
+  }>;
+  bookings: Array<{
+    id: string;
+    providerName: string | null;
+    status: string;
+    confirmedAt: string;
+  }>;
+}
+
 const PAGE_SIZE = 25;
 const STATUSES = ['all', 'open', 'dispatching', 'collecting', 'completed', 'expired', 'refunded'];
 
@@ -23,6 +67,9 @@ export default function AdminJobs() {
   const [status, setStatus] = useState('all');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<JobDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -35,17 +82,28 @@ export default function AdminJobs() {
       .finally(() => setLoading(false));
   }, [offset, status]);
 
+  async function selectJob(id: string) {
+    if (selectedId === id) { setSelectedId(null); setDetail(null); return; }
+    setSelectedId(id);
+    setDetailLoading(true);
+    try {
+      const res = await adminService.getJobDetail(id);
+      setDetail(res.data);
+    } catch { setDetail(null); }
+    setDetailLoading(false);
+  }
+
   if (error) return <div className="text-red-600">{error}</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-dark">Jobs</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {STATUSES.map((s) => (
             <button
               key={s}
-              onClick={() => { setStatus(s); setOffset(0); }}
+              onClick={() => { setStatus(s); setOffset(0); setSelectedId(null); }}
               className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors capitalize ${
                 status === s ? 'bg-dark text-white' : 'bg-dark/5 text-dark/50 hover:bg-dark/10'
               }`}
@@ -76,15 +134,30 @@ export default function AdminJobs() {
               <tr><td colSpan={7} className="px-4 py-8 text-center text-dark/40">No jobs found</td></tr>
             ) : (
               rows.map((j) => (
-                <tr key={j.id} className="border-b border-dark/5 hover:bg-warm/50">
-                  <td className="px-4 py-3 text-dark/60 font-mono text-xs">{j.id.slice(0, 8)}</td>
-                  <td className="px-4 py-3 text-dark">{j.homeownerEmail ?? '-'}</td>
-                  <td className="px-4 py-3 text-dark/60 capitalize">{j.diagnosis?.category ?? '-'}</td>
-                  <td className="px-4 py-3"><StatusBadge status={j.status} /></td>
-                  <td className="px-4 py-3 capitalize text-dark/60">{j.tier}</td>
-                  <td className="px-4 py-3 text-dark/60">{j.zipCode}</td>
-                  <td className="px-4 py-3 text-dark/60">{new Date(j.createdAt).toLocaleDateString()}</td>
-                </tr>
+                <>
+                  <tr key={j.id} onClick={() => selectJob(j.id)} className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === j.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
+                    <td className="px-4 py-3 text-dark/60 font-mono text-xs">{j.id.slice(0, 8)}</td>
+                    <td className="px-4 py-3 text-dark">{j.homeownerEmail ?? '-'}</td>
+                    <td className="px-4 py-3 text-dark/60 capitalize">{j.diagnosis?.category ?? '-'}</td>
+                    <td className="px-4 py-3"><StatusBadge status={j.status} /></td>
+                    <td className="px-4 py-3 capitalize text-dark/60">{j.tier}</td>
+                    <td className="px-4 py-3 text-dark/60">{j.zipCode}</td>
+                    <td className="px-4 py-3 text-dark/60">{new Date(j.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                  {selectedId === j.id && (
+                    <tr key={`${j.id}-detail`}>
+                      <td colSpan={7} className="px-0 py-0 bg-warm/30">
+                        {detailLoading ? (
+                          <div className="px-6 py-8 text-center text-dark/40">Loading details...</div>
+                        ) : detail ? (
+                          <JobDetailView detail={detail} />
+                        ) : (
+                          <div className="px-6 py-8 text-center text-dark/40">Failed to load details</div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))
             )}
           </tbody>
@@ -102,6 +175,139 @@ export default function AdminJobs() {
   );
 }
 
+function JobDetailView({ detail }: { detail: JobDetail }) {
+  const { job, outreach_attempts, provider_responses, bookings } = detail;
+  return (
+    <div className="px-6 py-5 space-y-5">
+      {/* Job Info */}
+      <div>
+        <h3 className="text-sm font-bold text-dark mb-3">Job Details</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <InfoCard label="Job ID" value={job.id.slice(0, 8)} mono />
+          <InfoCard label="Status" value={job.status} capitalize badge />
+          <InfoCard label="Payment" value={job.paymentStatus} capitalize />
+          <InfoCard label="Tier" value={job.tier} capitalize />
+          <InfoCard label="Category" value={job.diagnosis?.category ?? '-'} capitalize />
+          <InfoCard label="Severity" value={job.diagnosis?.severity ?? '-'} capitalize />
+          <InfoCard label="Zip Code" value={job.zipCode} />
+          <InfoCard label="Timing" value={job.preferredTiming ?? 'Flexible'} />
+          <InfoCard label="Budget" value={job.budget ?? 'Not specified'} />
+          <InfoCard label="Created" value={new Date(job.createdAt).toLocaleString()} />
+          <InfoCard label="Expires" value={job.expiresAt ? new Date(job.expiresAt).toLocaleString() : 'N/A'} />
+        </div>
+        {job.diagnosis?.summary && (
+          <div className="mt-3 bg-white rounded-lg border border-dark/5 p-3">
+            <div className="text-xs font-semibold text-dark/40 mb-1">Diagnosis Summary</div>
+            <div className="text-sm text-dark/70 leading-relaxed">{job.diagnosis.summary}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Homeowner */}
+      <div>
+        <h3 className="text-sm font-bold text-dark mb-3">Homeowner</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <InfoCard label="Name" value={job.homeownerName ?? '-'} />
+          <InfoCard label="Email" value={job.homeownerEmail ?? '-'} />
+          <InfoCard label="Phone" value={job.homeownerPhone ?? '-'} />
+        </div>
+      </div>
+
+      {/* Outreach Attempts */}
+      <div>
+        <h3 className="text-sm font-bold text-dark mb-3">Outreach Attempts ({outreach_attempts.length})</h3>
+        {outreach_attempts.length === 0 ? (
+          <div className="text-sm text-dark/40">No outreach attempts</div>
+        ) : (
+          <div className="bg-white rounded-lg border border-dark/5 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-dark/3 border-b border-dark/5">
+                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Provider</th>
+                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Channel</th>
+                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Status</th>
+                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Contact</th>
+                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Sent</th>
+                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Responded</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outreach_attempts.map(a => (
+                  <tr key={a.id} className="border-b border-dark/3">
+                    <td className="px-3 py-2 text-dark font-medium">{a.providerName ?? '-'}</td>
+                    <td className="px-3 py-2 text-dark/60 capitalize">{a.channel}</td>
+                    <td className="px-3 py-2"><StatusBadge status={a.status} /></td>
+                    <td className="px-3 py-2 text-dark/50">{a.providerPhone ?? a.providerEmail ?? '-'}</td>
+                    <td className="px-3 py-2 text-dark/50">{new Date(a.attemptedAt).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-dark/50">{a.respondedAt ? new Date(a.respondedAt).toLocaleString() : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Provider Responses */}
+      <div>
+        <h3 className="text-sm font-bold text-dark mb-3">Provider Quotes ({provider_responses.length})</h3>
+        {provider_responses.length === 0 ? (
+          <div className="text-sm text-dark/40">No quotes received</div>
+        ) : (
+          <div className="space-y-2">
+            {provider_responses.map(r => (
+              <div key={r.id} className="bg-white rounded-lg border border-dark/5 p-3">
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <span className="text-sm font-semibold text-dark">{r.providerName ?? 'Unknown'}</span>
+                    {r.providerPhone && <span className="text-xs text-dark/40 ml-2">{r.providerPhone}</span>}
+                  </div>
+                  {r.quotedPrice && <span className="text-lg font-bold text-orange-500">{r.quotedPrice}</span>}
+                </div>
+                <div className="flex gap-4 text-xs text-dark/50">
+                  {r.availability && <span>Avail: {r.availability}</span>}
+                  <span>via {r.channel}</span>
+                  <span>{new Date(r.createdAt).toLocaleString()}</span>
+                </div>
+                {r.message && <div className="mt-2 text-sm text-dark/60 italic">"{r.message}"</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Bookings */}
+      {bookings.length > 0 && (
+        <div>
+          <h3 className="text-sm font-bold text-dark mb-3">Bookings ({bookings.length})</h3>
+          <div className="space-y-2">
+            {bookings.map(b => (
+              <div key={b.id} className="bg-green-500/5 rounded-lg border border-green-500/10 p-3 flex justify-between items-center">
+                <div>
+                  <span className="text-sm font-semibold text-dark">{b.providerName ?? 'Unknown'}</span>
+                  <StatusBadge status={b.status} />
+                </div>
+                <span className="text-xs text-dark/50">{new Date(b.confirmedAt).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoCard({ label, value, mono, capitalize, badge }: { label: string; value: string; mono?: boolean; capitalize?: boolean; badge?: boolean }) {
+  return (
+    <div className="bg-white rounded-lg border border-dark/5 px-3 py-2">
+      <div className="text-[10px] font-semibold text-dark/40 uppercase tracking-wide">{label}</div>
+      <div className={`text-sm font-medium text-dark mt-0.5 ${mono ? 'font-mono' : ''} ${capitalize ? 'capitalize' : ''}`}>
+        {badge ? <StatusBadge status={value} /> : value}
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700',
@@ -110,6 +316,15 @@ function StatusBadge({ status }: { status: string }) {
     completed: 'bg-green-100 text-green-700',
     expired: 'bg-dark/10 text-dark/50',
     refunded: 'bg-red-100 text-red-700',
+    accepted: 'bg-green-100 text-green-700',
+    declined: 'bg-red-100 text-red-700',
+    pending: 'bg-amber-100 text-amber-700',
+    failed: 'bg-red-100 text-red-700',
+    no_answer: 'bg-dark/10 text-dark/50',
+    confirmed: 'bg-green-100 text-green-700',
+    authorized: 'bg-blue-100 text-blue-700',
+    paid: 'bg-green-100 text-green-700',
+    unpaid: 'bg-dark/10 text-dark/50',
   };
   return (
     <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${colors[status] ?? 'bg-dark/5 text-dark/50'}`}>

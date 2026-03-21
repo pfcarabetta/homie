@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { count, desc, eq, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
-import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts } from '../db/schema';
+import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses } from '../db/schema';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -103,6 +103,98 @@ router.get('/jobs', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /admin/jobs]');
     res.status(500).json({ data: null, error: 'Failed to fetch jobs', meta: {} });
+  }
+});
+
+// GET /api/v1/admin/jobs/:id
+router.get('/jobs/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const [job] = await db
+      .select({
+        id: jobs.id,
+        homeownerEmail: homeowners.email,
+        homeownerPhone: homeowners.phone,
+        homeownerName: sql`COALESCE(${homeowners.firstName} || ' ' || ${homeowners.lastName}, ${homeowners.email})`,
+        diagnosis: jobs.diagnosis,
+        tier: jobs.tier,
+        status: jobs.status,
+        paymentStatus: jobs.paymentStatus,
+        zipCode: jobs.zipCode,
+        preferredTiming: jobs.preferredTiming,
+        budget: jobs.budget,
+        createdAt: jobs.createdAt,
+        expiresAt: jobs.expiresAt,
+      })
+      .from(jobs)
+      .leftJoin(homeowners, eq(jobs.homeownerId, homeowners.id))
+      .where(eq(jobs.id, id))
+      .limit(1);
+
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Job not found', meta: {} });
+      return;
+    }
+
+    // Get outreach attempts
+    const attempts = await db
+      .select({
+        id: outreachAttempts.id,
+        channel: outreachAttempts.channel,
+        status: outreachAttempts.status,
+        providerName: providers.name,
+        providerPhone: providers.phone,
+        providerEmail: providers.email,
+        attemptedAt: outreachAttempts.attemptedAt,
+        respondedAt: outreachAttempts.respondedAt,
+      })
+      .from(outreachAttempts)
+      .leftJoin(providers, eq(outreachAttempts.providerId, providers.id))
+      .where(eq(outreachAttempts.jobId, id))
+      .orderBy(desc(outreachAttempts.attemptedAt));
+
+    // Get provider responses
+    const responses = await db
+      .select({
+        id: providerResponses.id,
+        providerName: providers.name,
+        providerPhone: providers.phone,
+        channel: providerResponses.channel,
+        quotedPrice: providerResponses.quotedPrice,
+        availability: providerResponses.availability,
+        message: providerResponses.message,
+        createdAt: providerResponses.createdAt,
+      })
+      .from(providerResponses)
+      .leftJoin(providers, eq(providerResponses.providerId, providers.id))
+      .where(eq(providerResponses.jobId, id))
+      .orderBy(desc(providerResponses.createdAt));
+
+    // Get bookings
+    const jobBookings = await db
+      .select({
+        id: bookings.id,
+        providerName: providers.name,
+        status: bookings.status,
+        confirmedAt: bookings.confirmedAt,
+      })
+      .from(bookings)
+      .leftJoin(providers, eq(bookings.providerId, providers.id))
+      .where(eq(bookings.jobId, id));
+
+    res.json({
+      data: {
+        job,
+        outreach_attempts: attempts,
+        provider_responses: responses,
+        bookings: jobBookings,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/jobs/:id]');
+    res.status(500).json({ data: null, error: 'Failed to fetch job details', meta: {} });
   }
 });
 
