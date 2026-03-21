@@ -93,6 +93,30 @@ export async function processProviderSpeech(
 
   conv.messages.push({ role: 'user', content: providerSpeech });
 
+  // Detect IVR / automated phone system / voicemail
+  const speechLower = providerSpeech.toLowerCase();
+  const ivrIndicators = [
+    'press 1', 'press 2', 'press 3', 'press 4', 'press 5',
+    'press one', 'press two', 'press three',
+    'for english', 'for spanish', 'para español',
+    'leave a message', 'leave your message', 'after the beep', 'after the tone',
+    'mailbox is full', 'voicemail', 'not available',
+    'our office hours', 'office is currently closed',
+    'please hold', 'your call is important',
+    'dial by name', 'extension', 'menu',
+    'thanks for calling', 'thank you for calling',
+    'if you know your party', 'if you are a',
+  ];
+  if (ivrIndicators.some(phrase => speechLower.includes(phrase))) {
+    conv.phase = 'done';
+    conv.accepted = false;
+    logger.info(`[voice-conversation] Detected IVR/voicemail for attempt ${attemptId}`);
+    const response = "It seems I've reached an automated system. We'll try to reach you through another channel. Goodbye.";
+    conv.messages.push({ role: 'assistant', content: response });
+    saveConversation(attemptId, conv);
+    return { response, state: conv };
+  }
+
   // Check for decline intent
   const lower = providerSpeech.toLowerCase();
   const declineWords = ['no', 'not interested', 'busy', 'pass', 'decline', 'can\'t', 'cannot', 'nope'];
