@@ -266,6 +266,22 @@ export async function dispatchJob(jobId: string): Promise<void> {
     return;
   }
 
+  // Enrich providers without email — try scraping their website
+  const { scrapeEmailFromWebsite } = await import('./providers/email-scraper');
+  for (const p of eligible) {
+    if (!p.email && p.website) {
+      try {
+        const email = await scrapeEmailFromWebsite(p.website);
+        if (email) {
+          p.email = email;
+          // Save to DB for future use
+          await db.update(providers).set({ email }).where(eq(providers.id, p.id));
+          logger.info(`[orchestration] Found email ${email} for ${p.name}`);
+        }
+      } catch { /* skip */ }
+    }
+  }
+
   // Transition job status to collecting
   await db.update(jobs).set({ status: 'collecting' }).where(eq(jobs.id, jobId));
 
