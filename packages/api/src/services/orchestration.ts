@@ -52,18 +52,26 @@ async function sendOutreachToProvider(
   logger.info(`[orchestration] Sending outreach to ${provider.name} (channels: ${provider.channels_available.join(',')})`);
 
   // Generate scripts for this provider (templates are cached per category:severity)
-  const bundle = await generateScripts({
-    jobId: job.id,
-    providerId: provider.id,
-    providerName: provider.name,
-    category: diagnosis.category,
-    severity: diagnosis.severity,
-    summary: diagnosis.summary,
-    recommendedActions: diagnosis.recommendedActions,
-    budget: job.budget ?? 'flexible',
-    zipCode: job.zipCode,
-    timing: job.preferredTiming ?? 'flexible',
-  });
+  let bundle;
+  try {
+    bundle = await generateScripts({
+      jobId: job.id,
+      providerId: provider.id,
+      providerName: provider.name,
+      category: diagnosis.category,
+      severity: diagnosis.severity,
+      summary: diagnosis.summary,
+      recommendedActions: diagnosis.recommendedActions,
+      budget: job.budget ?? 'flexible',
+      zipCode: job.zipCode,
+      timing: job.preferredTiming ?? 'flexible',
+    });
+  } catch (err) {
+    logger.error({ err }, `[orchestration] Script generation failed for ${provider.name}`);
+    // Fall back to simple templates
+    const fallbackScript = `Hi ${provider.name}, this is Homie. We have a ${diagnosis.category} job near ${job.zipCode}. ${diagnosis.summary}. Budget: ${job.budget ?? 'flexible'}. Are you interested?`;
+    bundle = { job_id: job.id, provider_id: provider.id, voice: fallbackScript, sms: `${diagnosis.category} job near ${job.zipCode}. ${diagnosis.summary}. Interested? Reply YES`, web: fallbackScript, generated_at: new Date().toISOString() };
+  }
 
   const scriptByChannel: Record<OutreachChannel, string> = {
     voice: bundle.voice,
@@ -75,40 +83,50 @@ async function sendOutreachToProvider(
     (ch): ch is OutreachChannel => ch === 'voice' || ch === 'sms' || ch === 'web',
   );
 
+  if (channels.length === 0) {
+    logger.warn(`[orchestration] No available channels for ${provider.name}`);
+    return;
+  }
+
   // Send each channel sequentially — avoids hammering a single provider simultaneously
   for (const channel of channels) {
     const script = scriptByChannel[channel];
 
-    // Insert the attempt row before calling the adapter — ensures a record exists
-    // even if the adapter throws partway through
-    const [attempt] = await db
-      .insert(outreachAttempts)
-      .values({
+    try {
+      const [attempt] = await db
+        .insert(outreachAttempts)
+        .values({
+          jobId: job.id,
+          providerId: provider.id,
+          channel,
+          scriptUsed: script,
+          status: 'pending',
+        })
+        .returning({ id: outreachAttempts.id });
+
+      const result = await adapters[channel].send({
+        attemptId: attempt.id,
         jobId: job.id,
         providerId: provider.id,
+        providerName: provider.name,
+        phone: provider.phone ?? null,
+        email: provider.email ?? null,
+        website: provider.website ?? null,
+        script,
         channel,
-        scriptUsed: script,
-        status: 'pending',
-      })
-      .returning({ id: outreachAttempts.id });
+      });
 
-    const result = await adapters[channel].send({
-      attemptId: attempt.id,
-      jobId: job.id,
-      providerId: provider.id,
-      providerName: provider.name,
-      phone: provider.phone ?? null,
-      email: provider.email ?? null,
-      website: provider.website ?? null,
-      script,
-      channel,
-    });
-
-    if (result.status === 'failed') {
-      await db
-        .update(outreachAttempts)
-        .set({ status: 'failed', responseRaw: result.error ?? null })
-        .where(eq(outreachAttempts.id, attempt.id));
+      if (result.status === 'failed') {
+        logger.warn(`[orchestration] ${channel} outreach failed for ${provider.name}: ${result.error}`);
+        await db
+          .update(outreachAttempts)
+          .set({ status: 'failed', responseRaw: result.error ?? null })
+          .where(eq(outreachAttempts.id, attempt.id));
+      } else {
+        logger.info(`[orchestration] ${channel} outreach sent to ${provider.name}`);
+      }
+    } catch (err) {
+      logger.error({ err }, `[orchestration] ${channel} outreach error for ${provider.name}`);
     }
     // 'pending' attempts stay pending until a webhook delivers the provider's reply
   }
