@@ -13,6 +13,7 @@ import {
   diagnosticService,
   authService,
   jobService,
+  paymentService,
 } from '@/services/api';
 import {
   mockStreamResponse,
@@ -421,6 +422,7 @@ function normalizeDiagnosis(raw: Record<string, unknown>): DiagnosisData {
 
 export default function DiagnosticChat() {
   const navigate = useNavigate();
+  const isDemo = new URLSearchParams(window.location.search).has('demo');
   const [state, dispatch] = useReducer(reducer, initialState);
   // useAuth() ensures AuthProvider context is available
   useAuth();
@@ -598,14 +600,27 @@ export default function DiagnosticChat() {
   async function handleBook(provider: MatchedProvider) {
     if (!state.jobId) return;
 
-    // Mock mode — book instantly
-    if (!authService.isAuthenticated()) {
+    // Demo mode — book instantly without payment
+    if (isDemo) {
       dispatch({ type: 'BOOK_PROVIDER', provider });
       return;
     }
 
+    // Not authenticated — prompt to sign in
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+
+    // Require payment via Stripe Checkout
     dispatch({ type: 'BOOKING_LOADING', loading: true });
     try {
+      const payRes = await paymentService.createCheckout(state.jobId, provider.responseId, provider.id);
+      if (payRes.data?.checkout_url) {
+        window.location.href = payRes.data.checkout_url;
+        return;
+      }
+      // If payment is already done (e.g. returning from Stripe), proceed to book
       const res = await jobService.bookProvider(state.jobId, provider.responseId, provider.id);
       if (!res.data) {
         dispatch({ type: 'MATCH_FLOW_ERROR', error: res.error ?? 'Booking failed' });
@@ -614,7 +629,15 @@ export default function DiagnosticChat() {
       }
       dispatch({ type: 'BOOK_PROVIDER', provider });
     } catch (err) {
-      dispatch({ type: 'MATCH_FLOW_ERROR', error: (err as Error).message ?? 'Booking failed' });
+      const message = (err as Error).message ?? 'Booking failed';
+      // If payment not configured, fall back to direct booking
+      if (message.includes('not configured')) {
+        try {
+          const res = await jobService.bookProvider(state.jobId, provider.responseId, provider.id);
+          if (res.data) { dispatch({ type: 'BOOK_PROVIDER', provider }); return; }
+        } catch { /* fall through */ }
+      }
+      dispatch({ type: 'MATCH_FLOW_ERROR', error: message });
       dispatch({ type: 'BOOKING_LOADING', loading: false });
     }
   }
@@ -666,6 +689,17 @@ export default function DiagnosticChat() {
           <AvatarDropdown />
         </div>
       </nav>
+
+      {/* Demo banner */}
+      {isDemo && (
+        <div style={{
+          background: '#EFF6FF', borderBottom: '1px solid rgba(37,99,235,0.15)',
+          padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          fontSize: 13, color: '#2563EB', fontWeight: 500,
+        }}>
+          Demo mode — no payment required, no real outreach
+        </div>
+      )}
 
       {/* Messages area */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -799,6 +833,7 @@ export default function DiagnosticChat() {
           startOutreach={startOutreach}
           handleBook={handleBook}
           onClose={() => dispatch({ type: 'CLOSE_MATCH_FLOW' })}
+          isDemo={isDemo}
         />
       )}
 
@@ -905,12 +940,14 @@ function ProviderModal({
   startOutreach,
   handleBook,
   onClose,
+  isDemo,
 }: {
   state: State;
   dispatch: React.Dispatch<Action>;
   startOutreach: () => void;
   handleBook: (p: MatchedProvider) => void;
   onClose: () => void;
+  isDemo?: boolean;
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-50" onClick={onClose}>
@@ -944,7 +981,7 @@ function ProviderModal({
         )}
 
         {state.bookedProvider ? (
-          <BookingConfirmation provider={state.bookedProvider} />
+          <BookingConfirmation provider={state.bookedProvider} isDemo={isDemo} />
         ) : (
           <>
             {state.matchStep === 'tier' && <TierStep state={state} dispatch={dispatch} />}
@@ -1088,7 +1125,7 @@ function ResultsStep({ providers, onBook }: { providers: MatchedProvider[]; onBo
   );
 }
 
-function BookingConfirmation({ provider }: { provider: MatchedProvider }) {
+function BookingConfirmation({ provider, isDemo }: { provider: MatchedProvider; isDemo?: boolean }) {
   return (
     <div className="text-center py-8 animate-fade-in">
       <div className="w-16 h-16 bg-green-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1105,6 +1142,7 @@ function BookingConfirmation({ provider }: { provider: MatchedProvider }) {
         <div className="flex justify-between text-sm"><span className="text-dark/50">When</span><span className="font-semibold">{provider.availability}</span></div>
         <div className="flex justify-between text-sm"><span className="text-dark/50">Rating</span><span className="font-semibold">⭐ {provider.googleRating}</span></div>
       </div>
+      {isDemo && <p className="text-dark/30 text-xs mt-4">This is a demo — no actual booking was made</p>}
     </div>
   );
 }
