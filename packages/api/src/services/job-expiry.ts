@@ -35,6 +35,23 @@ export function startJobExpiryWorker(): void {
         }
       }
 
+      // Close unpaid 'open' jobs older than 10 minutes (user abandoned before payment)
+      const staleOpen = await db
+        .update(jobs)
+        .set({ status: 'expired' })
+        .where(
+          and(
+            eq(jobs.status, 'open'),
+            eq(jobs.paymentStatus, 'unpaid'),
+            lte(jobs.createdAt, new Date(now.getTime() - 10 * 60 * 1000)),
+          ),
+        )
+        .returning({ id: jobs.id });
+
+      if (staleOpen.length > 0) {
+        logger.info(`[job-expiry] Closed ${staleOpen.length} abandoned unpaid job(s): ${staleOpen.map(j => j.id).join(', ')}`);
+      }
+
       if (expired.length > 0) {
         logger.info(`[job-expiry] Expired ${expired.length} job(s): ${expired.map(j => j.id).join(', ')}`);
       }
