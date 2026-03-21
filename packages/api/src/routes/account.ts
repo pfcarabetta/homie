@@ -173,8 +173,11 @@ router.get('/jobs', async (req: Request, res: Response) => {
         jobs: rows.map((j) => ({
           id: j.id,
           status: j.status,
+          payment_status: j.paymentStatus,
           tier: j.tier,
           zip_code: j.zipCode,
+          budget: j.budget,
+          preferred_timing: j.preferredTiming,
           diagnosis: j.diagnosis,
           created_at: j.createdAt.toISOString(),
           expires_at: j.expiresAt?.toISOString() ?? null,

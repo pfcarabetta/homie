@@ -569,8 +569,11 @@ export interface AccountProfile {
 export interface AccountJob {
   id: string;
   status: string;
+  payment_status: string;
   tier: string;
   zip_code: string;
+  budget: string | null;
+  preferred_timing: string | null;
   diagnosis: DiagnosisPayload | null;
   created_at: string;
   expires_at: string | null;
