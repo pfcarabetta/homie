@@ -831,57 +831,56 @@ export default function GetQuotes() {
       return;
     }
 
-    // Create the job first, then redirect to payment
-    setTimeout(async () => {
-      addAssistant("Great choice! Let me set up your search...");
+    // Capture data before async work (React state may be stale in setTimeout)
+    const currentData = { ...data, tier: t.id };
 
-      try {
-        const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
-        const diagPayload: DiagnosisPayload = {
-          category: data.category ?? 'general',
-          severity: 'medium',
-          summary: data.aiDiagnosis || `${cat?.label}: ${data.a1}. ${data.extra || ''}`,
-          recommendedActions: [],
-        };
+    addAssistant("Great choice! Let me set up your search...");
 
-        const res = await jobService.createJob({
-          diagnosis: diagPayload,
-          timing: (data.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
-          budget: 'flexible',
-          tier: t.id as 'standard' | 'priority' | 'emergency',
-          zipCode: data.zip,
-        });
+    try {
+      const cat = currentData.category ? CATEGORY_FLOWS[currentData.category] : null;
+      const diagPayload: DiagnosisPayload = {
+        category: currentData.category ?? 'general',
+        severity: 'medium',
+        summary: currentData.aiDiagnosis || `${cat?.label}: ${currentData.a1}. ${currentData.extra || ''}`,
+        recommendedActions: [],
+      };
 
-        if (res.data) {
-          // Redirect to Stripe Checkout for payment
-          try {
-            const payRes = await paymentService.createCheckout(res.data.id, '', '');
-            if (payRes.data?.checkout_url) {
-              // Save state so we can resume after payment
-              sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data.id, tier: t.id }));
-              window.location.href = payRes.data.checkout_url;
-              return;
-            }
-          } catch {
-            // Payment not configured — launch outreach without payment
+      const res = await jobService.createJob({
+        diagnosis: diagPayload,
+        timing: (currentData.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
+        budget: 'flexible',
+        tier: t.id as 'standard' | 'priority' | 'emergency',
+        zipCode: currentData.zip,
+      });
+
+      if (res.data) {
+        // Redirect to Stripe Checkout for payment authorization
+        try {
+          const payRes = await paymentService.createCheckout(res.data.id, '', '', '/quote');
+          if (payRes.data?.checkout_url) {
+            sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data.id, tier: t.id }));
+            window.location.href = payRes.data.checkout_url;
+            return;
           }
-
-          setJobId(res.data.id);
-          addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-          setPhase('outreach');
-          scrollDown();
-        } else {
-          // Job creation failed — fall back to mock
-          addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-          setPhase('outreach');
-          scrollDown();
+        } catch (payErr) {
+          console.error('[GetQuotes] Payment checkout failed:', payErr);
         }
-      } catch {
+
+        // Payment not available — launch outreach directly
+        setJobId(res.data.id);
+        addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+        setPhase('outreach');
+        scrollDown();
+      } else {
         addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
         setPhase('outreach');
         scrollDown();
       }
-    }, 500);
+    } catch {
+      addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
+      setPhase('outreach');
+      scrollDown();
+    }
   };
 
   const repairOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'repair').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
