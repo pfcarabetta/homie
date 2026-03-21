@@ -849,6 +849,8 @@ export default function GetQuotes() {
         recommendedActions: [],
       };
 
+      console.log('[GetQuotes] Creating job with data:', { category: currentData.category, zip: currentData.zip, tier: t.id });
+
       const res = await jobService.createJob({
         diagnosis: diagPayload,
         timing: (currentData.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
@@ -857,10 +859,14 @@ export default function GetQuotes() {
         zipCode: currentData.zip,
       });
 
+      console.log('[GetQuotes] Job created:', res.data);
+
       if (res.data) {
         // Redirect to Stripe Checkout for payment authorization
+        console.log('[GetQuotes] Creating checkout for job:', res.data.id);
         try {
           const payRes = await paymentService.createCheckout(res.data.id, '', '', '/quote');
+          console.log('[GetQuotes] Checkout response:', payRes.data);
           if (payRes.data?.checkout_url) {
             sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data.id, tier: t.id }));
             window.location.href = payRes.data.checkout_url;
@@ -876,11 +882,13 @@ export default function GetQuotes() {
         setPhase('outreach');
         scrollDown();
       } else {
+        console.error('[GetQuotes] Job creation returned no data');
         addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
         setPhase('outreach');
         scrollDown();
       }
-    } catch {
+    } catch (err) {
+      console.error('[GetQuotes] Job creation failed:', err);
       addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
       setPhase('outreach');
       scrollDown();
