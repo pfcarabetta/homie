@@ -430,12 +430,8 @@ export default function GetQuotes() {
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
   const scrollDown = () => setTimeout(() => {
-    const el = scrollRef.current;
-    if (el && el.scrollHeight > el.clientHeight) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, 100);
 
   const addAssistant = useCallback((text: string) => {
@@ -480,15 +476,12 @@ export default function GetQuotes() {
     );
   }, []);
 
-  // Reset scroll and show greeting on mount
+  // Greeting on mount
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
     window.scrollTo(0, 0);
     const t = setTimeout(() => {
       addAssistant("Hey! \uD83D\uDC4B I'm Homie. Let's get you some quotes. What kind of help do you need?");
       setPhase('category');
-      // Force scroll to top after greeting renders
-      setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, 50);
     }, 400);
     return () => clearTimeout(t);
   }, [addAssistant]);
@@ -656,9 +649,8 @@ export default function GetQuotes() {
   const serviceOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'service').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
 
   return (
-    <div className="gq-root" style={{ display: 'flex', flexDirection: 'column', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
-        .gq-root { height: 100vh; height: 100dvh; }
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
@@ -671,7 +663,7 @@ export default function GetQuotes() {
 
       {/* Header */}
       <nav style={{
-        flexShrink: 0, zIndex: 50, background: 'white',
+        position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
         padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
@@ -703,7 +695,7 @@ export default function GetQuotes() {
           <div style={{
             background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
             padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center', flexShrink: 0,
+            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center',
           }}>
             <span style={{ fontSize: 16, flexShrink: 0 }}>{'\uD83C\uDF19'}</span>
             <span>Some businesses may not be reachable outside business hours (8 AM – 6 PM). Quotes may take longer as a result.</span>
@@ -712,7 +704,6 @@ export default function GetQuotes() {
       })()}
 
       {/* Chat area */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
       <div className="gq-chat-area" style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
         {messages.map((m, i) => (
           m.role === 'assistant'
@@ -760,7 +751,6 @@ export default function GetQuotes() {
         {phase === 'outreach' && <OutreachView />}
 
         <div ref={bottomRef} />
-      </div>
       </div>
     </div>
   );
