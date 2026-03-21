@@ -928,14 +928,14 @@ export default function GetQuotes() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <button onClick={() => {
                 sessionStorage.setItem('homie_pending_quote', JSON.stringify(data));
-                navigate('/login');
+                navigate('/login?redirect=/quote');
               }} style={{
                 padding: '14px 0', borderRadius: 100, border: 'none', fontSize: 16, fontWeight: 600,
                 background: O, color: 'white', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
               }}>Sign in</button>
               <button onClick={() => {
                 sessionStorage.setItem('homie_pending_quote', JSON.stringify(data));
-                navigate('/register');
+                navigate('/register?redirect=/quote');
               }} style={{
                 padding: '14px 0', borderRadius: 100, border: `2px solid ${O}`, fontSize: 16, fontWeight: 600,
                 background: 'white', color: O, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",

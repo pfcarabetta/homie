@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Spinner } from '@/components/Skeleton';
@@ -8,6 +8,8 @@ export default function Login() {
   useDocumentTitle('Sign in');
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('redirect') ?? '/';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +25,7 @@ export default function Login() {
     if (err) {
       setError(err);
     } else {
-      navigate('/');
+      navigate(returnTo);
     }
   }
 

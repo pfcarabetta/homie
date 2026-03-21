@@ -567,7 +567,7 @@ export default function DiagnosticChat() {
     // Require sign in before real outreach
     if (!authService.isAuthenticated()) {
       dispatch({ type: 'CLOSE_MATCH_FLOW' });
-      navigate('/login');
+      navigate('/login?redirect=/chat');
       return;
     }
 
@@ -664,7 +664,7 @@ export default function DiagnosticChat() {
 
     // Not authenticated — prompt to sign in
     if (!authService.isAuthenticated()) {
-      navigate('/login');
+      navigate('/login?redirect=/chat');
       return;
     }
 

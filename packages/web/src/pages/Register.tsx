@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Spinner } from '@/components/Skeleton';
@@ -8,6 +8,8 @@ export default function Register() {
   useDocumentTitle('Create account');
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('redirect') ?? null;
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -60,8 +62,8 @@ export default function Register() {
             <p className="text-dark/50 text-sm mb-2">We sent a verification link to</p>
             <p className="text-dark font-semibold mb-6">{email}</p>
             <p className="text-dark/40 text-xs mb-8">Click the link in the email to verify your account. You can start using Homie right away — just verify when you get a chance.</p>
-            <Link to="/" className="inline-block bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-8 rounded-full transition-colors">
-              Continue to Homie
+            <Link to={returnTo ?? '/'} className="inline-block bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-8 rounded-full transition-colors">
+              {returnTo ? 'Continue' : 'Continue to Homie'}
             </Link>
           </div>
         </div>
