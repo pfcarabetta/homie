@@ -320,11 +320,12 @@ function TierCards({ onSelect }: { onSelect: (t: typeof TIERS[number]) => void }
 }
 
 /* -- Outreach live view -- */
-function OutreachView() {
+function OutreachView({ isDemo }: { isDemo?: boolean }) {
   const [log, setLog] = useState<typeof OUTREACH_LOG>([]);
   const [providers, setProviders] = useState<typeof MOCK_PROVIDERS>([]);
   const [done, setDone] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
+  const [booked, setBooked] = useState<typeof MOCK_PROVIDERS[number] | null>(null);
   const [stats, setStats] = useState({ contacted: 0, responded: 0 });
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -401,8 +402,8 @@ function OutreachView() {
               <span style={{ background: W, padding: '2px 10px', borderRadius: 100, fontSize: 11, color: '#9B9490' }}>via {p.channel}</span>
             </div>
             {p.note && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic', marginTop: 6 }}>"{p.note}"</div>}
-            {selected === i && (
-              <button style={{
+            {selected === i && !booked && (
+              <button onClick={() => { if (isDemo) setBooked(p); }} style={{
                 marginTop: 14, width: '100%', padding: '13px 0', borderRadius: 100, border: 'none',
                 background: O, color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer',
                 fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40`,
@@ -412,7 +413,31 @@ function OutreachView() {
         </div>
       ))}
 
-      {done && providers.length > 0 && selected === null && (
+      {/* Demo booking confirmation */}
+      {booked && (
+        <div style={{ marginLeft: 42, animation: 'fadeSlide 0.4s ease' }}>
+          <div style={{
+            background: 'white', borderRadius: 16, padding: '28px 24px', textAlign: 'center',
+            border: `2px solid ${G}22`, boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: `${G}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 12.75l6 6 9-13.5" /></svg>
+            </div>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, marginBottom: 6 }}>You're all set!</div>
+            <div style={{ fontSize: 14, color: '#6B6560', marginBottom: 16 }}>
+              <strong style={{ color: D }}>{booked.name}</strong> has been booked. They'll be in touch to confirm details.
+            </div>
+            <div style={{ background: W, borderRadius: 12, padding: '12px 16px', textAlign: 'left', fontSize: 14, color: '#6B6560' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><span>Quote</span><span style={{ fontWeight: 600, color: D }}>{booked.quote}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><span>When</span><span style={{ fontWeight: 600, color: D }}>{booked.availability}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Rating</span><span style={{ fontWeight: 600, color: D }}>{'\u2B50'} {booked.rating}</span></div>
+            </div>
+            {isDemo && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 12 }}>This is a demo — no actual booking was made</div>}
+          </div>
+        </div>
+      )}
+
+      {done && providers.length > 0 && selected === null && !booked && (
         <div style={{ marginLeft: 42, textAlign: 'center', color: '#9B9490', fontSize: 14, marginTop: 8 }}>{'\u2191'} Tap a provider to book</div>
       )}
     </>
@@ -422,6 +447,7 @@ function OutreachView() {
 /* -- MAIN COMPONENT -- */
 export default function GetQuotes() {
   const navigate = useNavigate();
+  const isDemo = new URLSearchParams(window.location.search).has('demo');
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [phase, setPhase] = useState('greeting');
   const [data, setData] = useState<QuoteData>({ category: null, a1: null, aiFollowUp: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
@@ -691,6 +717,17 @@ export default function GetQuotes() {
         </div>
       </nav>
 
+      {/* Demo banner */}
+      {isDemo && (
+        <div style={{
+          background: '#EFF6FF', borderBottom: '1px solid rgba(37,99,235,0.15)',
+          padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          fontSize: 13, color: '#2563EB', fontWeight: 500,
+        }}>
+          Demo mode — no payment required, no real outreach
+        </div>
+      )}
+
       {/* After hours notice */}
       {(() => {
         const hour = new Date().getHours();
@@ -751,7 +788,7 @@ export default function GetQuotes() {
         {phase === 'zip' && !streaming && <TextInput placeholder="Enter zip code..." onSubmit={handleZip} />}
         {phase === 'timing' && !streaming && <QuickReplies options={['ASAP', 'This week', 'This month', 'Flexible']} onSelect={(opt) => handleTiming(opt as string)} />}
         {phase === 'tier' && !streaming && <TierCards onSelect={handleTier} />}
-        {phase === 'outreach' && <OutreachView />}
+        {phase === 'outreach' && <OutreachView isDemo={isDemo} />}
 
         <div ref={bottomRef} />
       </div>
