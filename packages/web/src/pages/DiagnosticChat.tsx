@@ -435,9 +435,11 @@ export default function DiagnosticChat() {
 
   useDocumentTitle('Diagnostic Chat');
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when messages change (skip if only welcome/empty)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (state.messages.length > 1) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [state.messages]);
 
   // Cleanup on unmount

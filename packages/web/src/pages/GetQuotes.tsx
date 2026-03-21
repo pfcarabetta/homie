@@ -435,8 +435,11 @@ export default function GetQuotes() {
   }, 100);
 
   const addAssistant = useCallback((text: string) => {
-    setMessages(m => [...m, { role: 'assistant', text }]);
-    scrollDown();
+    setMessages(m => {
+      const next = [...m, { role: 'assistant', text }];
+      if (next.length > 1) setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      return next;
+    });
   }, []);
 
   const addUser = useCallback((text: string) => {
