@@ -529,6 +529,50 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
   res.type('text/xml').send(twiml.toString());
 });
 
+// ── POST /twilio/sms/status ──────────────────────────────────────────────────
+// Called by Twilio with SMS delivery status updates (delivered, undelivered, failed).
+
+router.post('/twilio/sms/status', async (req: Request, res: Response) => {
+  if (!isTwilioRequestValid(req)) {
+    res.status(403).send('Forbidden');
+    return;
+  }
+
+  const attemptId = req.query.attemptId as string | undefined;
+  if (!attemptId || !UUID_RE.test(attemptId)) {
+    res.status(204).send();
+    return;
+  }
+
+  const { MessageStatus, ErrorCode } = req.body as { MessageStatus?: string; ErrorCode?: string };
+
+  const failedStatuses: Record<string, string> = {
+    undelivered: 'failed',
+    failed: 'failed',
+  };
+
+  const newStatus = MessageStatus ? failedStatuses[MessageStatus] : undefined;
+
+  if (newStatus) {
+    await db
+      .update(outreachAttempts)
+      .set({
+        status: newStatus,
+        responseRaw: `SMS ${MessageStatus}${ErrorCode ? ` (error: ${ErrorCode})` : ''}`,
+        respondedAt: new Date(),
+      })
+      .where(
+        and(eq(outreachAttempts.id, attemptId), eq(outreachAttempts.status, 'pending')),
+      );
+
+    logger.warn(`[sms-status] SMS ${MessageStatus} for attempt ${attemptId}${ErrorCode ? ` (error: ${ErrorCode})` : ''}`);
+  } else if (MessageStatus === 'delivered') {
+    logger.info(`[sms-status] SMS delivered for attempt ${attemptId}`);
+  }
+
+  res.status(204).send();
+});
+
 // ── GET /web/respond ──────────────────────────────────────────────────────────
 // Called when a provider clicks Accept or Decline in the outreach email.
 
