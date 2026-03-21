@@ -1,0 +1,1 @@
+ALTER TABLE "provider_responses" ALTER COLUMN "quoted_price" SET DATA TYPE text;

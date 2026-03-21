@@ -15,7 +15,7 @@ export const providerResponses = pgTable('provider_responses', {
     onDelete: 'set null',
   }),
   channel: text('channel').notNull(),
-  quotedPrice: numeric('quoted_price', { precision: 10, scale: 2 }),
+  quotedPrice: text('quoted_price'),
   availability: text('availability'),
   message: text('message'),
   ratingAtTime: numeric('rating_at_time', { precision: 3, scale: 2 }),

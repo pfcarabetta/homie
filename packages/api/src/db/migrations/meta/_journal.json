@@ -36,6 +36,13 @@
       "when": 1774060520980,
       "tag": "0004_giant_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774070648393,
+      "tag": "0005_talented_big_bertha",
+      "breakpoints": true
     }
   ]
 }

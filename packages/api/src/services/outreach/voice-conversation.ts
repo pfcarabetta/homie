@@ -96,12 +96,25 @@ export async function processProviderSpeech(
   }
 
   // Extract structured data from speech based on phase
+  const acceptWords = ['yes', 'yeah', 'yep', 'sure', 'interested', 'absolutely', 'definitely', 'ok', 'okay', 'i can', 'i could', 'sign me up'];
+  const questionIndicators = ['what', 'who', 'how', 'why', 'where', 'when', 'is there', 'do i', 'can i', 'tell me', '?'];
+  const isQuestion = questionIndicators.some(q => lower.includes(q));
+  const isAccept = acceptWords.some(w => lower.includes(w));
+
   if (conv.phase === 'interest') {
-    conv.accepted = true;
-    conv.phase = 'quote';
+    // Only advance if clear acceptance — questions stay in interest phase
+    if (isAccept && !isQuestion) {
+      conv.accepted = true;
+      conv.phase = 'quote';
+    }
+    // Otherwise let Claude handle the question naturally
   } else if (conv.phase === 'quote') {
-    conv.quotedPrice = providerSpeech;
-    conv.phase = 'availability';
+    // Only capture price if it looks like a price (has numbers or dollar signs)
+    if (/[\d$]/.test(providerSpeech)) {
+      conv.quotedPrice = providerSpeech;
+      conv.phase = 'availability';
+    }
+    // Otherwise it's probably a question — stay in quote phase
   } else if (conv.phase === 'availability') {
     conv.availability = providerSpeech;
     conv.phase = 'notes';
