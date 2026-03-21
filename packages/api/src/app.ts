@@ -13,6 +13,7 @@ import adminRouter from './routes/admin';
 import { stripeWebhookHandler } from './routes/stripe-webhook';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
+import { authLimiter, diagnosticLimiter, apiLimiter } from './middleware/rate-limit';
 
 const app = express();
 
@@ -41,14 +42,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use('/api/v1/health', healthRouter);
-app.use('/api/v1/auth', authRouter);
-app.use('/api/v1/diagnostic', diagnosticRouter);
-app.use('/api/v1/jobs', requireAuth, jobsRouter);
-app.use('/api/v1/bookings', requireAuth, bookingsRouter);
-// /providers/discover is public; /providers/:id/suppress requires auth
-app.use('/api/v1/providers', providersRouter);
-app.use('/api/v1/account', requireAuth, accountRouter);
-app.use('/api/v1/payments', requireAuth, paymentsRouter);
+app.use('/api/v1/auth', authLimiter, authRouter);
+app.use('/api/v1/diagnostic', diagnosticLimiter, diagnosticRouter);
+app.use('/api/v1/jobs', apiLimiter, requireAuth, jobsRouter);
+app.use('/api/v1/bookings', apiLimiter, requireAuth, bookingsRouter);
+app.use('/api/v1/providers', apiLimiter, providersRouter);
+app.use('/api/v1/account', apiLimiter, requireAuth, accountRouter);
+app.use('/api/v1/payments', apiLimiter, requireAuth, paymentsRouter);
 app.use('/api/v1/webhooks', webhooksRouter);
 app.use('/api/v1/admin', requireAdmin, adminRouter);
 
