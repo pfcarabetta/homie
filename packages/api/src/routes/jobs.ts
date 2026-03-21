@@ -125,20 +125,20 @@ router.post('/', async (req: Request, res: Response) => {
         preferredTiming: body.timing,
         budget: body.budget,
         tier: body.tier,
-        status: 'dispatching',
+        status: 'open',
         zipCode: body.zip_code,
         expiresAt,
       })
       .returning();
 
-    // Fire-and-forget — orchestration engine picks it up asynchronously
-    logger.info(`[jobs] Dispatching job ${job.id}`);
-    dispatchJob(job.id).catch(err => logger.error({ err }, `[jobs] dispatchJob failed for ${job.id}`));
+    // Don't dispatch yet — wait for payment authorization
+    // Dispatch is triggered by the Stripe webhook or by the frontend after payment
+    logger.info(`[jobs] Job ${job.id} created, awaiting payment`);
 
     const out: ApiResponse<CreateJobResponse> = {
       data: {
         id: job.id,
-        status: 'dispatching',
+        status: 'open',
         tier: job.tier,
         expires_at: expiresAt.toISOString(),
         providers_contacted: 0,

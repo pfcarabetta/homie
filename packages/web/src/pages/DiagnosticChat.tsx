@@ -14,6 +14,7 @@ import {
   authService,
   jobService,
   paymentService,
+  fetchAPI,
   connectJobSocket,
   type JobStatusResponse,
 } from '@/services/api';
@@ -480,9 +481,11 @@ export default function DiagnosticChat() {
         if (saved.jobId) {
           paymentService.getPaymentStatus(saved.jobId).then(res => {
             if (!res.data || (res.data.payment_status !== 'authorized' && res.data.payment_status !== 'paid')) {
-              // Payment not completed
               return;
             }
+
+            // Trigger dispatch in case webhook hasn't fired yet
+            void fetchAPI('/api/v1/payments/dispatch/' + saved.jobId, { method: 'POST' }).catch(() => {});
 
             const restoredMessages = (saved.messages ?? []).map((m: { id: string; role: string; content: string }) => ({
               ...m, timestamp: new Date(),

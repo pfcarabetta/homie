@@ -5,7 +5,7 @@ import logger from '../logger';
 import { db } from '../db';
 import { jobs } from '../db/schema/jobs';
 import { bookings } from '../db/schema/bookings';
-import { sendBookingNotifications } from '../services/orchestration';
+import { sendBookingNotifications, dispatchJob } from '../services/orchestration';
 import { constructWebhookEvent } from '../services/stripe';
 
 export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
@@ -40,13 +40,17 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       // Get the payment intent ID from the session
       const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
 
-      // Mark job as authorized (card held, not charged yet)
+      // Mark job as authorized and dispatch outreach
       await db.update(jobs).set({
         paymentStatus: 'authorized',
+        status: 'dispatching',
         stripePaymentIntentId: paymentIntentId ?? null,
       }).where(eq(jobs.id, jobId));
 
-      logger.info(`[Stripe webhook] Payment authorized for job ${jobId} (intent: ${paymentIntentId})`);
+      logger.info(`[Stripe webhook] Payment authorized for job ${jobId} — launching outreach`);
+
+      // Now dispatch the job to contact providers
+      dispatchJob(jobId).catch(err => logger.error({ err }, `[Stripe webhook] dispatchJob failed for ${jobId}`));
     } catch (err) {
       logger.error({ err }, '[Stripe webhook] Error processing payment');
     }

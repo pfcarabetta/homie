@@ -111,4 +111,46 @@ router.get('/status/:jobId', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/payments/dispatch/:jobId
+// Called by frontend after returning from Stripe to trigger outreach
+// Only dispatches if payment is authorized and job hasn't started yet
+router.post('/dispatch/:jobId', async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+  if (!UUID_RE.test(jobId)) {
+    res.status(400).json({ data: null, error: 'Invalid job ID', meta: {} });
+    return;
+  }
+
+  try {
+    const [job] = await db
+      .select({ paymentStatus: jobs.paymentStatus, status: jobs.status })
+      .from(jobs)
+      .where(and(eq(jobs.id, jobId), eq(jobs.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Job not found', meta: {} });
+      return;
+    }
+
+    if (job.paymentStatus !== 'authorized' && job.paymentStatus !== 'paid') {
+      res.status(402).json({ data: null, error: 'Payment required', meta: {} });
+      return;
+    }
+
+    // Only dispatch if not already dispatching/collecting
+    if (job.status === 'open') {
+      await db.update(jobs).set({ status: 'dispatching' }).where(eq(jobs.id, jobId));
+      const { dispatchJob } = require('../services/orchestration');
+      dispatchJob(jobId).catch((err: unknown) => logger.error({ err }, `[payments] dispatchJob failed for ${jobId}`));
+      logger.info(`[payments] Dispatching job ${jobId} after payment confirmation`);
+    }
+
+    res.json({ data: { dispatched: true, status: job.status === 'open' ? 'dispatching' : job.status }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /payments/dispatch]');
+    res.status(500).json({ data: null, error: 'Failed to dispatch', meta: {} });
+  }
+});
+
 export default router;

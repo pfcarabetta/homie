@@ -2,7 +2,7 @@ import { DiagnosisPayload } from '../db/schema/jobs';
 
 export type JobTier = 'standard' | 'priority' | 'emergency';
 export type JobTiming = 'asap' | 'this_week' | 'this_month' | 'flexible';
-export type JobStatus = 'created' | 'dispatching' | 'collecting' | 'completed' | 'expired' | 'refunded';
+export type JobStatus = 'open' | 'created' | 'dispatching' | 'collecting' | 'completed' | 'expired' | 'refunded';
 export type OutreachChannel = 'voice' | 'sms' | 'web';
 
 export interface CreateJobBody {

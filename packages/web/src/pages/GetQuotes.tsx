@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { diagnosticService, authService, jobService, paymentService, connectJobSocket, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem } from '@/services/api';
+import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -604,6 +604,8 @@ export default function GetQuotes() {
         // Verify payment with API before launching
         paymentService.getPaymentStatus(paidJobId).then(res => {
           if (res.data && (res.data.payment_status === 'authorized' || res.data.payment_status === 'paid')) {
+            // Trigger dispatch in case webhook hasn't fired yet
+            void fetchAPI('/api/v1/payments/dispatch/' + paidJobId, { method: 'POST' }).catch(() => {});
             setJobId(paidJobId);
             addAssistant("Payment confirmed! Launching your AI agent now \uD83D\uDE80");
             setPhase('outreach');
