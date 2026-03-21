@@ -151,9 +151,10 @@ export async function dispatchJob(jobId: string): Promise<void> {
   const tier = (job.tier as JobTier) in TIER_PROVIDER_LIMITS ? (job.tier as JobTier) : 'standard';
   const limit = TIER_PROVIDER_LIMITS[tier];
 
-  // Discover providers
+  // Discover providers — start at 15 miles, expand to 25 if none found
   let discoveredProviders: DiscoveredProvider[];
   try {
+    logger.info(`[orchestration] dispatchJob: discovering providers for job ${jobId} (${diagnosis.category}, ${job.zipCode})`);
     const result = await discoverProviders({
       category: diagnosis.category,
       zipCode: job.zipCode,
@@ -162,6 +163,22 @@ export async function dispatchJob(jobId: string): Promise<void> {
       limit: limit + DISCOVERY_BUFFER,
     });
     discoveredProviders = result.providers;
+    logger.info(`[orchestration] dispatchJob: found ${discoveredProviders.length} providers at 15mi for job ${jobId}`);
+
+    // Retry with larger radius if no eligible providers
+    const firstPassEligible = discoveredProviders.filter((p) => !p.suppressed && !p.rate_limited);
+    if (firstPassEligible.length === 0) {
+      logger.info(`[orchestration] dispatchJob: no eligible at 15mi, expanding to 25mi for job ${jobId}`);
+      const expanded = await discoverProviders({
+        category: diagnosis.category,
+        zipCode: job.zipCode,
+        radiusMiles: 25,
+        minRating: 3.5,
+        limit: limit + DISCOVERY_BUFFER + 5,
+      });
+      discoveredProviders = expanded.providers;
+      logger.info(`[orchestration] dispatchJob: found ${discoveredProviders.length} providers at 25mi for job ${jobId}`);
+    }
   } catch (err) {
     logger.error({ err }, `[orchestration] dispatchJob: discovery failed for job ${jobId}`);
     return;
@@ -173,7 +190,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
     .slice(0, limit);
 
   if (eligible.length === 0) {
-    logger.warn(`[orchestration] dispatchJob: no eligible providers for job ${jobId}`);
+    logger.warn(`[orchestration] dispatchJob: no eligible providers for job ${jobId} even at expanded radius`);
     return;
   }
 
