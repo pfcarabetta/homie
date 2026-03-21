@@ -396,39 +396,146 @@ router.get('/web/respond', async (req: Request, res: Response) => {
     return;
   }
 
-  const newStatus = action === 'accept' ? 'accepted' : 'declined';
+  if (action === 'decline') {
+    const respondedAt = new Date();
+    await db.update(outreachAttempts).set({ status: 'declined', respondedAt }).where(eq(outreachAttempts.id, attemptId));
+    const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
+    void recordProviderResponse(attempt.providerId, responseTimeSec);
+
+    res.type('text/html').send(`<!DOCTYPE html>
+<html>
+<body style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:480px;margin:0 auto;padding:0;background:#F9F5F2">
+  <div style="background:#2D2926;padding:20px;text-align:center">
+    <span style="color:#E8632B;font-size:24px;font-weight:700;font-family:Georgia,serif">homie</span>
+  </div>
+  <div style="background:white;padding:48px 32px;text-align:center">
+    <h1 style="color:#2D2926;font-size:24px;margin:0 0 12px">No problem!</h1>
+    <p style="color:#6B6560;font-size:16px;margin:0">We won't contact you about this job again. Thanks for your time.</p>
+  </div>
+</body>
+</html>`);
+    return;
+  }
+
+  // Accept — show quote form
+  const [provider] = await db.select({ name: providers.name, phone: providers.phone, email: providers.email }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+  const portalUrl = (process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000') + '/portal/login';
+  const submitUrl = `${process.env.API_BASE_URL ?? 'https://api.homie.app'}/api/v1/webhooks/web/submit-quote`;
+
+  res.type('text/html').send(`<!DOCTYPE html>
+<html>
+<body style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
+  <div style="background:#2D2926;padding:20px;text-align:center">
+    <span style="color:#E8632B;font-size:24px;font-weight:700;font-family:Georgia,serif">homie</span>
+    <span style="background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:super">PRO</span>
+  </div>
+  <div style="background:white;padding:32px">
+    <h1 style="color:#2D2926;font-size:22px;margin:0 0 8px">Great, you're interested!</h1>
+    <p style="color:#6B6560;font-size:14px;margin:0 0 24px;line-height:1.5">Share your quote details below. The homeowner will see your response alongside other providers.</p>
+
+    <form action="${submitUrl}" method="POST">
+      <input type="hidden" name="attemptId" value="${attemptId}" />
+      <input type="hidden" name="token" value="${token}" />
+
+      <label style="display:block;font-size:13px;font-weight:600;color:#2D2926;margin-bottom:6px">Your Price Estimate</label>
+      <input name="quoted_price" placeholder="e.g. $150-200" required style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid rgba(0,0,0,0.08);font-size:15px;margin-bottom:16px;box-sizing:border-box;outline:none" />
+
+      <label style="display:block;font-size:13px;font-weight:600;color:#2D2926;margin-bottom:6px">Your Availability</label>
+      <input name="availability" placeholder="e.g. Tomorrow 9-11 AM" required style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid rgba(0,0,0,0.08);font-size:15px;margin-bottom:16px;box-sizing:border-box;outline:none" />
+
+      <label style="display:block;font-size:13px;font-weight:600;color:#2D2926;margin-bottom:6px">Message to Homeowner <span style="color:#9B9490;font-weight:400">(optional)</span></label>
+      <textarea name="message" placeholder="Any details, questions, or notes for the homeowner..." rows="3" style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid rgba(0,0,0,0.08);font-size:15px;margin-bottom:24px;box-sizing:border-box;outline:none;resize:vertical;font-family:inherit"></textarea>
+
+      <button type="submit" style="width:100%;padding:14px;border-radius:100px;border:none;background:#1B9E77;color:white;font-size:16px;font-weight:600;cursor:pointer">Submit Quote</button>
+    </form>
+  </div>
+
+  <!-- Optional Pro Account -->
+  <div style="background:white;padding:24px 32px;margin-top:2px;border-top:1px solid rgba(0,0,0,0.06)">
+    <p style="color:#2D2926;font-size:15px;font-weight:600;margin:0 0 8px">Want to manage all your Homie jobs in one place?</p>
+    <p style="color:#6B6560;font-size:13px;line-height:1.5;margin:0 0 16px">Create your free Homie Pro account to view incoming jobs, track your history, and manage your availability. It's 100% free — no fees, ever.</p>
+    <a href="${portalUrl}" style="display:inline-block;background:#E8632B;color:white;padding:10px 24px;border-radius:100px;text-decoration:none;font-size:14px;font-weight:600">Create Free Pro Account</a>
+  </div>
+
+  <div style="padding:20px;text-align:center">
+    <p style="color:#ccc;font-size:11px;margin:0">&copy; ${new Date().getFullYear()} Homie Technologies, Inc.</p>
+  </div>
+</body>
+</html>`);
+});
+
+// ── POST /web/submit-quote ──────────────────────────────────────────────────
+// Called when a provider submits the quote form after clicking Accept in email.
+
+router.post('/web/submit-quote', async (req: Request, res: Response) => {
+  const { attemptId, token, quoted_price, availability, message } = req.body as {
+    attemptId?: string;
+    token?: string;
+    quoted_price?: string;
+    availability?: string;
+    message?: string;
+  };
+
+  if (!attemptId || !UUID_RE.test(attemptId) || !token) {
+    res.status(400).send('Invalid request');
+    return;
+  }
+
+  if (!isWebTokenValid(attemptId, 'accept', token)) {
+    res.status(403).send('Forbidden');
+    return;
+  }
+
+  const [attempt] = await db
+    .select()
+    .from(outreachAttempts)
+    .where(eq(outreachAttempts.id, attemptId))
+    .limit(1);
+
+  if (!attempt) {
+    res.status(404).send('Not found');
+    return;
+  }
+
   const respondedAt = new Date();
 
   await db
     .update(outreachAttempts)
-    .set({ status: newStatus, respondedAt })
+    .set({ status: 'accepted', respondedAt })
     .where(eq(outreachAttempts.id, attemptId));
 
-  if (action === 'accept') {
-    await createProviderResponse(
-      attemptId,
-      attempt.jobId,
-      attempt.providerId,
-      'web',
-      'Accepted via email link',
-    );
-  }
+  await db.insert(providerResponses).values({
+    jobId: attempt.jobId,
+    providerId: attempt.providerId,
+    channel: 'web',
+    quotedPrice: quoted_price || null,
+    availability: availability || null,
+    message: message || null,
+  });
 
   const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
   void recordProviderResponse(attempt.providerId, responseTimeSec);
 
-  const title = action === 'accept' ? 'Job Accepted!' : 'Job Declined';
-  const message =
-    action === 'accept'
-      ? 'Thank you! The homeowner will be in touch with you shortly.'
-      : 'No problem. We will remove you from this job request.';
+  const portalUrl = (process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000') + '/portal/login';
 
   res.type('text/html').send(`<!DOCTYPE html>
 <html>
-<body style="font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center;padding:24px">
-  <h1 style="color:#1a1a1a">${title}</h1>
-  <p style="color:#555;font-size:18px">${message}</p>
-  <p style="color:#888;font-size:13px;margin-top:48px">Powered by Homie</p>
+<body style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:480px;margin:0 auto;padding:0;background:#F9F5F2">
+  <div style="background:#2D2926;padding:20px;text-align:center">
+    <span style="color:#E8632B;font-size:24px;font-weight:700;font-family:Georgia,serif">homie</span>
+  </div>
+  <div style="background:white;padding:48px 32px;text-align:center">
+    <div style="width:56px;height:56px;border-radius:50%;background:rgba(27,158,119,0.12);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+      <span style="color:#1B9E77;font-size:28px">&#10003;</span>
+    </div>
+    <h1 style="color:#2D2926;font-size:22px;margin:0 0 8px">Quote Submitted!</h1>
+    <p style="color:#6B6560;font-size:15px;line-height:1.5;margin:0 0 8px">Your quote of <strong>${quoted_price || 'TBD'}</strong> has been sent to the homeowner.</p>
+    <p style="color:#9B9490;font-size:13px;margin:0 0 24px">They'll be in touch if they'd like to move forward.</p>
+    <a href="${portalUrl}" style="display:inline-block;background:#E8632B;color:white;padding:12px 28px;border-radius:100px;text-decoration:none;font-size:15px;font-weight:600">View in Homie Pro Portal</a>
+  </div>
+  <div style="padding:20px;text-align:center">
+    <p style="color:#ccc;font-size:11px;margin:0">&copy; ${new Date().getFullYear()} Homie Technologies, Inc.</p>
+  </div>
 </body>
 </html>`);
 });
