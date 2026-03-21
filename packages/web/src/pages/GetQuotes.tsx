@@ -883,14 +883,14 @@ export default function GetQuotes() {
         scrollDown();
       } else {
         console.error('[GetQuotes] Job creation returned no data');
-        addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-        setPhase('outreach');
+        addAssistant('Something went wrong creating your job. Please try again.');
+        setPhase('tier');
         scrollDown();
       }
     } catch (err) {
       console.error('[GetQuotes] Job creation failed:', err);
-      addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-      setPhase('outreach');
+      addAssistant('Something went wrong setting up your search. Please try again.');
+      setPhase('tier');
       scrollDown();
     }
   };
