@@ -68,7 +68,23 @@ interface PlaceResult {
   rating?: number;
   user_ratings_total?: number;
   opening_hours?: { open_now?: boolean };
+  types?: string[];
 }
+
+// Business types that indicate non-service businesses (filter these out)
+const EXCLUDED_TYPES = new Set([
+  'store', 'shopping_mall', 'supermarket', 'grocery_or_supermarket',
+  'department_store', 'clothing_store', 'convenience_store',
+  'restaurant', 'food', 'cafe', 'bar', 'bakery',
+  'bank', 'atm', 'finance', 'insurance_agency',
+  'hospital', 'doctor', 'dentist', 'pharmacy', 'drugstore',
+  'gas_station', 'car_dealer', 'car_rental', 'car_wash',
+  'gym', 'spa', 'beauty_salon', 'hair_care',
+  'church', 'school', 'university', 'library',
+  'lodging', 'hotel', 'travel_agency',
+  'movie_theater', 'amusement_park', 'museum',
+  'post_office', 'local_government_office', 'courthouse',
+]);
 interface NearbyResponse {
   status: string;
   results?: PlaceResult[];
@@ -107,16 +123,15 @@ export async function searchNearby(params: {
   minRating: number;
 }): Promise<NearbyPlace[]> {
   const googleType = CATEGORY_TO_GOOGLE_TYPE[params.category];
+  const categoryLabel = params.category.replace(/_/g, ' ');
   const qs = new URLSearchParams({
     location: `${params.lat},${params.lng}`,
     radius: params.radiusMeters.toString(),
+    keyword: categoryLabel,
     key: apiKey(),
   });
-  // Use Google place type if mapped, otherwise use keyword search
   if (googleType) {
     qs.set('type', googleType);
-  } else {
-    qs.set('keyword', params.category.replace(/_/g, ' '));
   }
 
   const res = await fetch(`${MAPS_BASE}/place/nearbysearch/json?${qs}`);
@@ -126,7 +141,13 @@ export async function searchNearby(params: {
   }
 
   return (data.results ?? [])
-    .filter((p) => (p.rating ?? 0) >= params.minRating)
+    .filter((p) => {
+      // Must meet minimum rating
+      if ((p.rating ?? 0) < params.minRating) return false;
+      // Filter out non-service businesses (retail, restaurants, etc.)
+      if (p.types?.some(t => EXCLUDED_TYPES.has(t))) return false;
+      return true;
+    })
     .map((p) => ({
       placeId: p.place_id,
       name: p.name,
