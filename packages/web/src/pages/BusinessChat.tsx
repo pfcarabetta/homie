@@ -329,12 +329,8 @@ export default function BusinessChat() {
       ? `I need ${category.label} service. Specifically: ${answer}`
       : `I have a ${category?.label} issue. ${answer}`;
 
-    streamAI(userContext, [], (_text, rawText) => {
+    streamAI(userContext, [], () => {
       setExchangeCount(1);
-      // AI signals readiness with a diagnosis or job_summary block
-      if (rawText.includes('<diagnosis>') || rawText.includes('<job_summary>')) {
-        setReadyToDispatch(true);
-      }
       setStep('extra');
     });
   }
@@ -349,15 +345,15 @@ export default function BusinessChat() {
       const newCount = exchangeCount + 1;
       setExchangeCount(newCount);
 
-      // AI signals readiness with a diagnosis block
+      // AI signals readiness with a diagnosis block — go straight to summary
       if (rawText.includes('<diagnosis>')) {
         setAiDiagnosis(aiText);
         setStep('summary');
         return;
       }
 
-      // Mark ready if AI included a job_summary or we've had enough exchanges
-      if (rawText.includes('<job_summary>') || newCount >= 2) {
+      // Show dispatch button only after 3+ exchanges
+      if (newCount >= 3) {
         setReadyToDispatch(true);
       }
 
