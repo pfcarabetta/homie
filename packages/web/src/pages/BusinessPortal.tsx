@@ -1360,8 +1360,10 @@ export default function BusinessPortal() {
       {/* Header */}
       <header style={{ background: '#fff', borderBottom: '1px solid #E0DAD4', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span onClick={() => navigate('/')} style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>Homie</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: G, background: `${G}15`, padding: '4px 10px', borderRadius: 20 }}>Business</span>
+          <span onClick={() => navigate('/')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'baseline', gap: 0 }}>
+            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>homie</span>
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, color: G, marginLeft: 6 }}>for business</span>
+          </span>
         </div>
         <AvatarDropdown />
       </header>
@@ -1373,7 +1375,7 @@ export default function BusinessPortal() {
           /* Empty state — no workspaces */
           <div style={{ textAlign: 'center', padding: '80px 20px' }}>
             <div style={{ fontSize: 56, marginBottom: 16 }}>🏢</div>
-            <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: 28, color: D, marginBottom: 12 }}>Welcome to Homie for Business</h2>
+            <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: 28, color: D, marginBottom: 12 }}>Welcome to <span style={{ color: O }}>homie</span> <span style={{ fontSize: 20, color: G }}>for business</span></h2>
             <p style={{ fontSize: 16, color: '#6B6560', maxWidth: 480, margin: '0 auto 32px', lineHeight: 1.6 }}>
               Manage maintenance across all your properties with one dashboard. Create your first workspace to get started.
             </p>
