@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { adminService } from '@/services/admin-api';
 
+function renderBold(text: string) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+  );
+}
+
 interface Job {
   id: string;
   homeownerEmail: string | null;
@@ -202,7 +209,7 @@ function JobDetailView({ detail }: { detail: JobDetail }) {
         {job.diagnosis?.summary && (
           <div className="mt-3 bg-white rounded-lg border border-dark/5 p-3">
             <div className="text-xs font-semibold text-dark/40 mb-1">Diagnosis Summary</div>
-            <div className="text-sm text-dark/70 leading-relaxed">{job.diagnosis.summary}</div>
+            <div className="text-sm text-dark/70 leading-relaxed">{renderBold(job.diagnosis.summary)}</div>
           </div>
         )}
       </div>
