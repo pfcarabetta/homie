@@ -54,15 +54,18 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
   const newPlaces = places.filter((p) => !existingByPlaceId.has(p.placeId));
 
   // Fetch Place Details for new Google providers (phone, website) — run in parallel
-  const detailsResults = await Promise.all(
+  const detailsSettled = await Promise.allSettled(
     newPlaces.map((p) => googleMaps.getPlaceDetails(p.placeId)),
   );
+  const detailsResults = detailsSettled.map(r => r.status === 'fulfilled' ? r.value : { phone: null, website: null });
 
   // Try to find email addresses from provider websites (for those without email)
   const { scrapeEmailFromWebsite } = await import('./email-scraper');
   const emailResults = await Promise.allSettled(
     detailsResults.map((d) => d.website ? scrapeEmailFromWebsite(d.website) : Promise.resolve(null)),
   );
+
+  logger.info(`[discovery] ${places.length} from Google, ${existingProviders.length} existing, ${newPlaces.length} new to insert`);
 
   let googleProviderRows = existingProviders;
   if (newPlaces.length > 0) {
