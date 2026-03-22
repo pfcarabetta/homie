@@ -52,11 +52,50 @@ const B2B_CATEGORIES: CatDef[] = [
     q1: { text: 'What service?', options: ['Private chef', 'Transport', 'Grocery delivery', 'Equipment rental', 'Activities', 'Other'] } },
 ];
 
-const TIERS = [
-  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', detail: '5-8 pros via SMS + email' },
-  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', detail: '10+ pros via voice + SMS + email', popular: true },
-  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', detail: '15+ pros, all channels blitz' },
-];
+/* ── Diagnosis Summary Card ──────────────────────────────────────────────── */
+
+function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching }: {
+  category: CatDef; property: Property; summary: string; isService: boolean;
+  onDispatch: () => void; dispatching: boolean;
+}) {
+  return (
+    <div style={{ marginLeft: 42, marginBottom: 16, background: '#fff', border: `2px solid ${G}22`, borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ background: `${G}10`, padding: '12px 16px', borderBottom: `1px solid ${G}22`, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: G }} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: G }}>{isService ? 'Scope confirmed' : 'AI diagnosis ready'}</span>
+      </div>
+      <div style={{ padding: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>{category.icon} {category.label}</div>
+        <div style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap' }}>
+          {summary.slice(0, 300)}{summary.length > 300 ? '...' : ''}
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+          <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
+            <span style={{ color: '#9B9490' }}>Property:</span> <span style={{ fontWeight: 600, color: D }}>{property.name}</span>
+          </div>
+          {property.zipCode && (
+            <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
+              <span style={{ color: '#9B9490' }}>Zip:</span> <span style={{ fontWeight: 600, color: D }}>{property.zipCode}</span>
+            </div>
+          )}
+          <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
+            <span style={{ color: '#9B9490' }}>Type:</span> <span style={{ fontWeight: 600, color: D }}>{isService ? 'Service' : 'Repair'}</span>
+          </div>
+        </div>
+        <p style={{ fontSize: 12, color: '#9B9490', lineHeight: 1.5, marginBottom: 16 }}>
+          This {isService ? 'scope' : 'diagnosis'} will be shared with providers so they can respond quickly — no need to explain twice.
+        </p>
+        <button onClick={onDispatch} disabled={dispatching} style={{
+          padding: '14px 28px', borderRadius: 10, border: 'none', background: O, color: '#fff',
+          fontSize: 15, fontWeight: 700, cursor: dispatching ? 'default' : 'pointer', width: '100%',
+          opacity: dispatching ? 0.7 : 1,
+        }}>
+          {dispatching ? 'Dispatching...' : `Dispatch ${category.label} Pro`}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /* ── Chat message components ────────────────────────────────────────────── */
 
@@ -94,7 +133,7 @@ function StreamingMsg({ text }: { text: string }) {
 
 /* ── Main component ─────────────────────────────────────────────────────── */
 
-type Step = 'property' | 'category' | 'q1' | 'chat' | 'extra' | 'diagnosis' | 'tier' | 'outreach' | 'results';
+type Step = 'property' | 'category' | 'q1' | 'chat' | 'extra' | 'summary' | 'outreach' | 'results';
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -119,7 +158,6 @@ export default function BusinessChat() {
   const [q1Answer, setQ1Answer] = useState('');
   const [aiDiagnosis, setAiDiagnosis] = useState('');
   const [inputVal, setInputVal] = useState('');
-  const [tier, setTier] = useState('');
 
   // Outreach state
   const [jobId, setJobId] = useState<string | null>(null);
@@ -275,7 +313,7 @@ export default function BusinessChat() {
       // Check if AI included a diagnosis block
       if (aiText.includes('"category"') && aiText.includes('"severity"')) {
         setAiDiagnosis(aiText);
-        setStep('tier');
+        setStep('summary');
       } else {
         setStep('extra');
       }
@@ -292,13 +330,12 @@ export default function BusinessChat() {
 
     streamAI(promptText, newMsgs.slice(0, -1), (aiText) => {
       setAiDiagnosis(aiText);
-      setStep('tier');
+      setStep('summary');
     });
   }
 
-  // Handle tier selection and dispatch
-  async function handleDispatch(selectedTier: string) {
-    setTier(selectedTier);
+  // Handle dispatch (no tier selection — B2B subscription covers it)
+  async function handleDispatch() {
     setDispatching(true);
     setStep('outreach');
 
@@ -316,7 +353,7 @@ export default function BusinessChat() {
         diagnosis,
         timing: 'asap',
         budget: 'flexible',
-        tier: selectedTier as 'standard' | 'priority' | 'emergency',
+        tier: 'priority',
         zipCode,
       });
 
@@ -336,7 +373,7 @@ export default function BusinessChat() {
           }
         });
 
-        setMessages(prev => [...prev, { role: 'assistant', content: `Dispatching ${selectedTier} outreach now. Contacting providers in the ${zipCode} area...` }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: `Dispatching now. Contacting providers in the ${zipCode} area...` }]);
       }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Failed to create job. Please try again.' }]);
@@ -499,28 +536,16 @@ export default function BusinessChat() {
             </div>
           )}
 
-          {/* Tier selection */}
-          {step === 'tier' && !streaming && (
-            <div style={{ marginLeft: 42, marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: D, marginBottom: 12 }}>Select outreach tier:</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {TIERS.map(t => (
-                  <button key={t.id} onClick={() => handleDispatch(t.id)} disabled={dispatching} style={{
-                    display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: dispatching ? 'default' : 'pointer',
-                    border: t.popular ? `2px solid ${O}` : '2px solid rgba(0,0,0,0.06)',
-                    background: t.popular ? 'rgba(232,99,43,0.03)' : 'white', textAlign: 'left', position: 'relative',
-                    opacity: dispatching ? 0.6 : 1,
-                  }}>
-                    {t.popular && <div style={{ position: 'absolute', top: -9, right: 14, background: O, color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 100 }}>RECOMMENDED</div>}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>{t.time}</span></div>
-                      <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
-                    </div>
-                    <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : D }}>{t.price}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* Diagnosis summary card */}
+          {step === 'summary' && !streaming && category && selectedProperty && (
+            <DiagnosisSummaryCard
+              category={category}
+              property={selectedProperty}
+              summary={aiDiagnosis}
+              isService={category.group === 'service'}
+              onDispatch={handleDispatch}
+              dispatching={dispatching}
+            />
           )}
 
           {/* Outreach live status */}
