@@ -180,6 +180,8 @@ export default function BusinessChat() {
   const [outreachStatus, setOutreachStatus] = useState<JobStatusResponse | null>(null);
   const [responses, setResponses] = useState<ProviderResponseItem[]>([]);
   const [dispatching, setDispatching] = useState(false);
+  const [selectedResponse, setSelectedResponse] = useState<number | null>(null);
+  const [bookedName, setBookedName] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -589,71 +591,128 @@ export default function BusinessChat() {
             />
           )}
 
-          {/* Outreach live status */}
-          {step === 'outreach' && outreachStatus && (
-            <div style={{ marginLeft: 42, background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 20, marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: D, marginBottom: 12 }}>Outreach in progress...</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: O }}>{outreachStatus.providers_contacted}</div>
-                  <div style={{ fontSize: 12, color: '#9B9490' }}>Contacted</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: G }}>{outreachStatus.providers_responded}</div>
-                  <div style={{ fontSize: 12, color: '#9B9490' }}>Responded</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: D }}>{outreachStatus.providers_accepted}</div>
-                  <div style={{ fontSize: 12, color: '#9B9490' }}>Quoted</div>
-                </div>
+          {/* Outreach live view */}
+          {(step === 'outreach' || step === 'results') && (
+            <>
+              {/* Safe to leave notice */}
+              <div style={{ marginLeft: 42, marginBottom: 16, background: '#EFF6FF', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(37,99,235,0.1)', animation: 'fadeSlide 0.3s ease' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#2563EB', marginBottom: 4 }}>You can close this page</div>
+                <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5 }}>We'll notify you when quotes arrive. You can also check status in your <span onClick={() => navigate('/business')} style={{ color: O, cursor: 'pointer', fontWeight: 600 }}>business portal</span>.</div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {['voice', 'sms', 'web'].map(ch => {
-                  const stats = outreachStatus.outreach_channels[ch as keyof typeof outreachStatus.outreach_channels];
-                  return (
-                    <div key={ch} style={{ flex: 1, background: W, padding: '8px 12px', borderRadius: 8, textAlign: 'center' }}>
-                      <div style={{ fontSize: 11, color: '#9B9490', textTransform: 'uppercase' }}>{ch}</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{stats.connected}/{stats.attempted}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
-          {/* Results */}
-          {step === 'results' && (
-            <div style={{ marginLeft: 42 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: D, marginBottom: 12 }}>
-                {responses.length > 0 ? `${responses.length} quote${responses.length > 1 ? 's' : ''} received!` : 'No quotes received yet.'}
-              </div>
-              {responses.map(r => (
-                <div key={r.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 16, marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: D }}>{r.provider.name}</div>
-                      <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>
-                        {r.provider.google_rating && `${r.provider.google_rating} stars (${r.provider.review_count} reviews)`}
-                        {r.channel && ` via ${r.channel}`}
-                      </div>
+              {/* Compact stats */}
+              {outreachStatus && (
+                <div style={{ marginLeft: 42, display: 'flex', gap: 8, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
+                  {[
+                    { label: 'Contacted', val: outreachStatus.providers_contacted, icon: '📡' },
+                    { label: 'Quoted', val: outreachStatus.providers_responded, icon: '✅' },
+                    { label: 'Voice', val: outreachStatus.outreach_channels.voice.attempted, icon: '📞' },
+                    { label: 'SMS', val: outreachStatus.outreach_channels.sms.attempted, icon: '💬' },
+                  ].map((s, i) => (
+                    <div key={i} style={{ flex: 1, background: W, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 14 }}>{s.icon}</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: D }}>{s.val}</div>
+                      <div style={{ fontSize: 10, color: '#9B9490' }}>{s.label}</div>
                     </div>
-                    {r.quoted_price && (
-                      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: G }}>{r.quoted_price}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Live log */}
+              {outreachStatus && (
+                <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+                  <div style={{
+                    background: D, borderRadius: 14, padding: 14, maxHeight: 160, overflowY: 'auto',
+                    fontFamily: "'DM Mono', monospace", fontSize: 12, lineHeight: 1.9,
+                  }}>
+                    <div style={{ color: 'rgba(255,255,255,0.45)' }}>  Contacting {outreachStatus.providers_contacted} providers...</div>
+                    {outreachStatus.outreach_channels.voice.attempted > 0 && (
+                      <div style={{ color: 'rgba(255,255,255,0.45)' }}>  {outreachStatus.outreach_channels.voice.attempted} voice calls</div>
+                    )}
+                    {outreachStatus.outreach_channels.sms.attempted > 0 && (
+                      <div style={{ color: 'rgba(255,255,255,0.45)' }}>  {outreachStatus.outreach_channels.sms.attempted} SMS messages</div>
+                    )}
+                    {outreachStatus.outreach_channels.web.attempted > 0 && (
+                      <div style={{ color: 'rgba(255,255,255,0.45)' }}>  {outreachStatus.outreach_channels.web.attempted} email contacts</div>
+                    )}
+                    {outreachStatus.providers_responded > 0 && (
+                      <div style={{ color: G, animation: 'fadeIn 0.2s ease' }}>{'✓ '}{outreachStatus.providers_responded} quote(s) received!</div>
+                    )}
+                    {step === 'results' && (
+                      <div style={{ color: G, animation: 'fadeIn 0.2s ease' }}>{'✓ '}{responses.length} quotes ready!</div>
+                    )}
+                    {step === 'outreach' && <span style={{ color: O, animation: 'pulse 1s infinite' }}>{'▌'}</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Provider cards */}
+              {responses.map((r, i) => (
+                <div key={r.id} style={{ marginLeft: 42, marginBottom: 10, animation: 'fadeSlide 0.4s ease' }}>
+                  <div onClick={() => setSelectedResponse(selectedResponse === i ? null : i)} style={{
+                    background: 'white', borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
+                    border: selectedResponse === i ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
+                    boxShadow: selectedResponse === i ? `0 4px 20px ${O}18` : '0 1px 4px rgba(0,0,0,0.03)',
+                    transition: 'all 0.2s',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: 16, color: D }}>{r.provider.name}</span>
+                        {r.provider.google_rating && (
+                          <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'★'} {r.provider.google_rating} ({r.provider.review_count})</span>
+                        )}
+                      </div>
+                      {r.quoted_price && (
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                          <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 500 }}>estimate</div>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      {r.availability && <span style={{ fontSize: 14, color: D }}>{'📅'} {r.availability}</span>}
+                      <span style={{ background: W, padding: '2px 10px', borderRadius: 100, fontSize: 11, color: '#9B9490' }}>via {r.channel}</span>
+                    </div>
+                    {r.message && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic', marginTop: 6 }}>"{r.message}"</div>}
+                    {selectedResponse === i && (
+                      <div style={{ marginTop: 14 }}>
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
+                          await jobService.bookProvider(jobId!, r.id, r.provider.id, selectedProperty?.address || undefined);
+                          setBookedName(r.provider.name);
+                        }} style={{
+                          width: '100%', padding: '13px 0', borderRadius: 100, border: 'none',
+                          background: O, color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                          fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40`,
+                        }}>Book {r.provider.name.split(' ')[0]}</button>
+                      </div>
                     )}
                   </div>
-                  {r.availability && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 8 }}>Available: {r.availability}</div>}
-                  {r.message && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 4, fontStyle: 'italic' }}>{r.message}</div>}
-                  <button onClick={() => {
-                    jobService.bookProvider(jobId!, r.id, r.provider.id, selectedProperty?.address || undefined);
-                  }} style={{
-                    marginTop: 12, padding: '10px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff',
-                    fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%',
-                  }}>
-                    Book {r.provider.name}
-                  </button>
                 </div>
               ))}
-            </div>
+
+              {/* Booking confirmation */}
+              {bookedName && (
+                <div style={{ marginLeft: 42, animation: 'fadeSlide 0.4s ease' }}>
+                  <div style={{
+                    background: 'white', borderRadius: 16, padding: '28px 24px', textAlign: 'center',
+                    border: `2px solid ${G}22`, boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                  }}>
+                    <div style={{ width: 56, height: 56, borderRadius: '50%', background: `${G}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 12.75l6 6 9-13.5" /></svg>
+                    </div>
+                    <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, marginBottom: 6 }}>You're all set!</div>
+                    <div style={{ fontSize: 14, color: '#6B6560' }}>
+                      <strong style={{ color: D }}>{bookedName}</strong> has been booked. They'll be in touch to confirm details.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {step === 'results' && responses.length > 0 && selectedResponse === null && !bookedName && (
+                <div style={{ marginLeft: 42, textAlign: 'center', color: '#9B9490', fontSize: 14, marginTop: 8 }}>{'↑'} Tap a provider to book</div>
+              )}
+            </>
           )}
 
           <div ref={chatEndRef} />
