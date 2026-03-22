@@ -1262,6 +1262,7 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
 
       <style>{`
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        div::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
   );
@@ -1391,21 +1392,21 @@ export default function BusinessPortal() {
         ) : (
           <>
             {/* Workspace selector */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                 <select value={selectedId || ''} onChange={e => { setSelectedId(e.target.value); setTab('overview'); }}
-                  style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 600, color: D, border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 8px' }}>
+                  style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 600, color: D, border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 8px', maxWidth: '60vw' }}>
                   {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
                 {workspace && (
-                  <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 20, background: `${G}15`, color: G, fontWeight: 600 }}>
+                  <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 20, background: `${G}15`, color: G, fontWeight: 600, flexShrink: 0 }}>
                     {workspace.plan}
                   </span>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => navigate(`/business/chat?workspace=${selectedId}`)}
-                  style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                   New Dispatch
                 </button>
                 <button onClick={() => setShowCreate(true)}
@@ -1416,14 +1417,14 @@ export default function BusinessPortal() {
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #E0DAD4', marginBottom: 24 }}>
+            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #E0DAD4', marginBottom: 24, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
               {TABS.filter(t => t !== 'settings' || workspace?.user_role === 'admin').map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   style={{
-                    padding: '12px 24px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                    padding: '12px 20px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600,
                     color: tab === t ? O : '#9B9490',
                     borderBottom: tab === t ? `2px solid ${O}` : '2px solid transparent',
-                    marginBottom: -1,
+                    marginBottom: -1, whiteSpace: 'nowrap', flexShrink: 0,
                   }}>
                   {TAB_LABELS[t]}
                 </button>
