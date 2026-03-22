@@ -38,6 +38,7 @@ const VENDOR_CATEGORIES: { value: string; label: string }[] = [
   { value: 'pressure_washing', label: 'Pressure Washing' },
   { value: 'window_cleaning', label: 'Window Cleaning' },
   { value: 'steam_cleaning', label: 'Steam Cleaning' },
+  { value: 'furniture_assembly', label: 'Furniture Assembly' },
   { value: 'gutter', label: 'Gutter Cleaning' },
   { value: 'moving', label: 'Moving' },
   { value: 'masonry', label: 'Masonry' },
