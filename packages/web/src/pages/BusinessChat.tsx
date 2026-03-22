@@ -363,19 +363,17 @@ export default function BusinessChat() {
     setMessages(newMsgs);
     setInputVal('');
 
-    streamAI(text, newMsgs.slice(0, -1), (_aiText, _rawText) => {
-      const newCount = exchangeCount + 1;
-      setExchangeCount(newCount);
+    // If we've had enough exchanges, skip the AI call and go to budget
+    if (exchangeCount >= 2) {
+      setTimeout(() => {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Got it. Would you like to set a budget for this dispatch?' }]);
+        setStep('budget');
+      }, 300);
+      return;
+    }
 
-      // After 2+ follow-up exchanges, move to budget
-      if (newCount >= 2) {
-        setTimeout(() => {
-          setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
-          setStep('budget');
-        }, 500);
-        return;
-      }
-
+    streamAI(text, newMsgs.slice(0, -1), () => {
+      setExchangeCount(exchangeCount + 1);
       setStep('extra');
     });
   }
