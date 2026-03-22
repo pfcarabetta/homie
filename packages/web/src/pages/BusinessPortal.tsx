@@ -6,6 +6,34 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
+const VENDOR_CATEGORIES: { value: string; label: string }[] = [
+  { value: 'plumbing', label: 'Plumbing' },
+  { value: 'electrical', label: 'Electrical' },
+  { value: 'hvac', label: 'HVAC' },
+  { value: 'appliance', label: 'Appliance' },
+  { value: 'roofing', label: 'Roofing' },
+  { value: 'general', label: 'General Contractor' },
+  { value: 'pest_control', label: 'Pest Control' },
+  { value: 'landscaping', label: 'Landscaping' },
+  { value: 'cleaning', label: 'Cleaning' },
+  { value: 'pool', label: 'Pool / Hot Tub' },
+  { value: 'painting', label: 'Painting' },
+  { value: 'locksmith', label: 'Locksmith' },
+  { value: 'handyman', label: 'Handyman' },
+  { value: 'flooring', label: 'Flooring' },
+  { value: 'tree_trimming', label: 'Tree Trimming' },
+  { value: 'garage_door', label: 'Garage Door' },
+  { value: 'fence', label: 'Fencing' },
+  { value: 'concrete', label: 'Concrete' },
+  { value: 'window_cleaning', label: 'Window Cleaning' },
+  { value: 'carpet_cleaning', label: 'Carpet Cleaning' },
+  { value: 'pressure_washing', label: 'Pressure Washing' },
+  { value: 'gutter', label: 'Gutter Cleaning' },
+  { value: 'moving', label: 'Moving' },
+  { value: 'masonry', label: 'Masonry' },
+  { value: 'siding', label: 'Siding' },
+];
+
 const PROPERTY_TYPES: Record<string, string> = {
   residential: 'Residential',
   commercial: 'Commercial',
@@ -502,7 +530,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
   const [selectedProvider, setSelectedProvider] = useState<ProviderSearchResult | null>(null);
 
   // Shared fields
-  const [categories, setCategories] = useState('');
+  const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [priority, setPriority] = useState(1);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -536,7 +564,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
           name: newName.trim(),
           phone: newPhone.trim() || undefined,
           email: newEmail.trim() || undefined,
-          categories: categories ? categories.split(',').map(c => c.trim()).filter(Boolean) : undefined,
+          categories: selectedCats.length > 0 ? selectedCats : undefined,
           priority,
           notes: notes || undefined,
         });
@@ -544,7 +572,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
         if (!selectedProvider) { setError('Select a provider first'); setSaving(false); return; }
         await businessService.addVendor(workspaceId, {
           provider_id: selectedProvider.id,
-          categories: categories ? categories.split(',').map(c => c.trim()).filter(Boolean) : undefined,
+          categories: selectedCats.length > 0 ? selectedCats : undefined,
           priority,
           notes: notes || undefined,
         });
@@ -651,8 +679,24 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
 
         {showDetails && (
           <>
-            <label style={labelStyle}>Categories (comma-separated)</label>
-            <input value={categories} onChange={e => setCategories(e.target.value)} placeholder="plumbing, hvac" style={inputStyle} />
+            <label style={labelStyle}>Categories</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {VENDOR_CATEGORIES.map(c => {
+                const active = selectedCats.includes(c.value);
+                return (
+                  <button key={c.value} type="button"
+                    onClick={() => setSelectedCats(prev => active ? prev.filter(x => x !== c.value) : [...prev, c.value])}
+                    style={{
+                      padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                      border: active ? `2px solid ${O}` : '1px solid #E0DAD4',
+                      background: active ? `${O}12` : '#fff',
+                      color: active ? O : '#6B6560',
+                    }}>
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
               <div>
