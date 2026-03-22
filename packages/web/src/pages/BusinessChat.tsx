@@ -185,6 +185,8 @@ export default function BusinessChat() {
   const [inputVal, setInputVal] = useState('');
   const [readyToDispatch, setReadyToDispatch] = useState(false);
   const [exchangeCount, setExchangeCount] = useState(0);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showFreeInput, setShowFreeInput] = useState(false);
 
   // Outreach state
   const [jobId, setJobId] = useState<string | null>(null);
@@ -252,14 +254,24 @@ export default function BusinessChat() {
         for (const ch of token) {
           if (insideTag) {
             tagBuf += ch;
-            if (/<\/(diagnosis|job_summary)>/.test(tagBuf)) { insideTag = false; tagBuf = ''; }
+            if (/<\/(diagnosis|job_summary|suggestions)>/.test(tagBuf)) {
+              // Parse suggestions
+              const sugMatch = tagBuf.match(/<suggestions>([\s\S]*?)<\/suggestions>/);
+              if (sugMatch) {
+                try {
+                  const parsed = JSON.parse(sugMatch[1]) as string[];
+                  if (Array.isArray(parsed)) setSuggestions(parsed);
+                } catch { /* ignore */ }
+              }
+              insideTag = false; tagBuf = '';
+            }
             continue;
           }
           if (ch === '<') { tagBuf = '<'; continue; }
           if (tagBuf.length > 0) {
             tagBuf += ch;
             if (ch === '>') {
-              if (/^<(diagnosis|job_summary)>/.test(tagBuf)) { insideTag = true; }
+              if (/^<(diagnosis|job_summary|suggestions)>/.test(tagBuf)) { insideTag = true; }
               else { full += tagBuf; setStreamText(full); tagBuf = ''; }
             }
             if (tagBuf.length > 15 && !tagBuf.includes('>')) { full += tagBuf; setStreamText(full); tagBuf = ''; }
@@ -324,6 +336,8 @@ export default function BusinessChat() {
   // Handle Q1 answer
   function handleQ1(answer: string) {
     setQ1Answer(answer);
+    setSuggestions([]);
+    setShowFreeInput(false);
     const newMsgs: Message[] = [...messages, { role: 'user', content: answer }];
     setMessages(newMsgs);
     setStep('chat');
@@ -341,6 +355,8 @@ export default function BusinessChat() {
 
   // Handle extra details or free-form chat
   function handleUserInput(text: string) {
+    setSuggestions([]);
+    setShowFreeInput(false);
     const newMsgs: Message[] = [...messages, { role: 'user', content: text }];
     setMessages(newMsgs);
     setInputVal('');
@@ -604,27 +620,56 @@ export default function BusinessChat() {
             </div>
           )}
 
-          {/* Extra details input + dispatch button */}
+          {/* Suggestion buttons + free input */}
           {step === 'extra' && !streaming && (
             <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease' }}>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                <input value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder="Add more details..."
-                  onKeyDown={e => { if (e.key === 'Enter' && inputVal.trim()) handleUserInput(inputVal.trim()); }}
-                  style={{
-                    flex: 1, padding: '12px 16px', borderRadius: 100, fontSize: 15, border: '2px solid rgba(0,0,0,0.08)',
-                    fontFamily: "'DM Sans', sans-serif", outline: 'none', color: D,
+              {/* Quick reply suggestions */}
+              {suggestions.length > 0 && !showFreeInput && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 12 }}>
+                  {suggestions.map(s => (
+                    <button key={s} onClick={() => handleUserInput(s)} style={{
+                      padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
+                      background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                    >{s}</button>
+                  ))}
+                  <button onClick={() => setShowFreeInput(true)} style={{
+                    padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px dashed rgba(0,0,0,0.12)',
+                    background: 'white', fontSize: 14, color: '#9B9490', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    fontFamily: "'DM Sans', sans-serif",
                   }}
-                  onFocus={e => e.target.style.borderColor = O}
-                  onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
-                />
-                <button onClick={() => { if (inputVal.trim()) handleUserInput(inputVal.trim()); }}
-                  style={{
-                    width: 44, height: 44, borderRadius: '50%', border: 'none',
-                    background: inputVal.trim() ? O : 'rgba(0,0,0,0.06)',
-                    color: 'white', fontSize: 18, cursor: inputVal.trim() ? 'pointer' : 'default',
-                    transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>↑</button>
-              </div>
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#9B9490'; }}
+                  >Something else</button>
+                </div>
+              )}
+
+              {/* Free text input — shown when no suggestions or user tapped "Something else" */}
+              {(suggestions.length === 0 || showFreeInput) && (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <input value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder="Type your answer..."
+                    onKeyDown={e => { if (e.key === 'Enter' && inputVal.trim()) handleUserInput(inputVal.trim()); }}
+                    autoFocus
+                    style={{
+                      flex: 1, padding: '12px 16px', borderRadius: 100, fontSize: 15, border: '2px solid rgba(0,0,0,0.08)',
+                      fontFamily: "'DM Sans', sans-serif", outline: 'none', color: D,
+                    }}
+                    onFocus={e => e.target.style.borderColor = O}
+                    onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
+                  />
+                  <button onClick={() => { if (inputVal.trim()) handleUserInput(inputVal.trim()); }}
+                    style={{
+                      width: 44, height: 44, borderRadius: '50%', border: 'none',
+                      background: inputVal.trim() ? O : 'rgba(0,0,0,0.06)',
+                      color: 'white', fontSize: 18, cursor: inputVal.trim() ? 'pointer' : 'default',
+                      transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>↑</button>
+                </div>
+              )}
+
               {readyToDispatch && (
                 <button onClick={handleGenerateSummary} style={{
                   padding: '13px 0', borderRadius: 100, border: 'none', background: G, color: '#fff',
