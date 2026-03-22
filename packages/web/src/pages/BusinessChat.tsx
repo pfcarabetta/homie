@@ -196,6 +196,8 @@ export default function BusinessChat() {
   const [exchangeCount, setExchangeCount] = useState(0);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showFreeInput, setShowFreeInput] = useState(false);
+  const [showQ1Input, setShowQ1Input] = useState(false);
+  const [q1InputVal, setQ1InputVal] = useState('');
   const [budget, setBudget] = useState('flexible');
 
   // Outreach state
@@ -636,17 +638,49 @@ export default function BusinessChat() {
 
           {/* Q1 options */}
           {step === 'q1' && category && !streaming && (
-            <div style={{ marginLeft: 42, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
-              {category.q1.options.map(opt => (
-                <button key={opt} onClick={() => handleQ1(opt)} style={{
-                  padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                  background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
-                >{opt}</button>
-              ))}
+            <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease' }}>
+              {!showQ1Input ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16 }}>
+                  {category.q1.options.filter(o => o !== 'Other').map(opt => (
+                    <button key={opt} onClick={() => handleQ1(opt)} style={{
+                      padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
+                      background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                    >{opt}</button>
+                  ))}
+                  <button onClick={() => setShowQ1Input(true)} style={{
+                    padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px dashed rgba(0,0,0,0.12)',
+                    background: 'white', fontSize: 14, color: '#9B9490', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#9B9490'; }}
+                  >Something else</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                  <input value={q1InputVal} onChange={e => setQ1InputVal(e.target.value)} placeholder="Describe the issue..."
+                    onKeyDown={e => { if (e.key === 'Enter' && q1InputVal.trim()) { handleQ1(q1InputVal.trim()); setShowQ1Input(false); setQ1InputVal(''); } }}
+                    autoFocus
+                    style={{
+                      flex: 1, padding: '12px 16px', borderRadius: 100, fontSize: 15, border: '2px solid rgba(0,0,0,0.08)',
+                      fontFamily: "'DM Sans', sans-serif", outline: 'none', color: D,
+                    }}
+                    onFocus={e => e.target.style.borderColor = O}
+                    onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
+                  />
+                  <button onClick={() => { if (q1InputVal.trim()) { handleQ1(q1InputVal.trim()); setShowQ1Input(false); setQ1InputVal(''); } }}
+                    style={{
+                      width: 44, height: 44, borderRadius: '50%', border: 'none',
+                      background: q1InputVal.trim() ? O : 'rgba(0,0,0,0.06)',
+                      color: 'white', fontSize: 18, cursor: q1InputVal.trim() ? 'pointer' : 'default',
+                      transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>↑</button>
+                </div>
+              )}
             </div>
           )}
 
