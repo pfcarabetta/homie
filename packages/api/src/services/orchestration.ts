@@ -376,19 +376,67 @@ export async function sendBookingNotifications(
     }
   }
 
-  // SMS or email confirmation to provider (SMS preferred; email as fallback)
-  const providerMsg = `Great news! You've been booked via Homie for a ${category} job. The homeowner will be in touch shortly. Booking ID: ${bookingId}.`;
+  // Notify provider via SMS
+  const { signProviderToken } = await import('../middleware/provider-auth');
+  const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+  const portalLink = `${APP_URL}/portal/login?token=${signProviderToken(providerId)}`;
+  const diagnosis = job.diagnosis as DiagnosisPayload | null;
+  const summary = diagnosis?.summary ?? 'Home service request';
+
   if (provider.phone) {
     try {
-      await sendSms(provider.phone, providerMsg);
+      await sendSms(
+        provider.phone,
+        `Homie: You've been booked! A homeowner selected you for their ${category} job. ${summary}. View details & manage: ${portalLink}`,
+      );
     } catch (err) {
-      logger.error({ err }, '[orchestration] provider SMS failed');
+      logger.error({ err }, '[orchestration] provider booking SMS failed');
     }
-  } else if (provider.email) {
+  }
+
+  // Notify provider via email
+  if (provider.email) {
     try {
-      await sendEmail(provider.email, 'New booking via Homie!', providerMsg);
+      const emailHtml = `
+      <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
+        <div style="background:#2D2926;padding:20px 32px;text-align:center">
+          <span style="color:#E8632B;font-size:24px;font-weight:700;font-family:Georgia,serif">homie</span>
+          <span style="background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;vertical-align:super">PRO</span>
+        </div>
+        <div style="background:white;padding:32px">
+          <div style="width:56px;height:56px;border-radius:50%;background:rgba(27,158,119,0.12);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+            <span style="color:#1B9E77;font-size:28px">&#10003;</span>
+          </div>
+          <h1 style="color:#2D2926;font-size:22px;font-weight:700;text-align:center;margin:0 0 8px">You've been booked!</h1>
+          <p style="color:#6B6560;font-size:15px;text-align:center;margin:0 0 24px">A homeowner has selected you for their ${category} job.</p>
+
+          <div style="background:#F9F5F2;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
+            <div style="font-size:14px;font-weight:600;color:#2D2926;margin-bottom:8px">Job Details</div>
+            <div style="font-size:14px;color:#6B6560;line-height:1.6">${summary}</div>
+            <div style="display:flex;gap:16px;margin-top:12px;font-size:13px;color:#9B9490">
+              <span>Zip: ${job.zipCode}</span>
+              <span>Category: ${category}</span>
+            </div>
+          </div>
+
+          ${homeowner.phone ? `<div style="background:#F9F5F2;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
+            <div style="font-size:14px;font-weight:600;color:#2D2926;margin-bottom:4px">Homeowner Contact</div>
+            <div style="font-size:14px;color:#6B6560">${homeowner.firstName ? homeowner.firstName + (homeowner.lastName ? ' ' + homeowner.lastName : '') : 'Homeowner'}</div>
+            ${homeowner.phone ? `<a href="tel:${homeowner.phone}" style="font-size:14px;color:#E8632B;text-decoration:none;font-weight:600">${homeowner.phone}</a>` : ''}
+          </div>` : ''}
+
+          <div style="text-align:center">
+            <a href="${portalLink}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View in Pro Portal</a>
+          </div>
+        </div>
+        <div style="padding:20px 32px;text-align:center">
+          <p style="color:#9B9490;font-size:12px;margin:0">&copy; ${new Date().getFullYear()} Homie Technologies, Inc.</p>
+        </div>
+      </div>`;
+
+      await sendEmail(provider.email, `You've been booked! ${category} job via Homie`, emailHtml);
     } catch (err) {
-      logger.error({ err }, '[orchestration] provider email failed');
+      logger.error({ err }, '[orchestration] provider booking email failed');
     }
   }
 }
