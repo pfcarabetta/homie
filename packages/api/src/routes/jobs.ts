@@ -320,7 +320,7 @@ router.post('/:id/book', async (req: Request, res: Response) => {
       res.status(404).json(out);
       return;
     }
-    if (job.paymentStatus !== 'paid') {
+    if (job.paymentStatus !== 'paid' && job.paymentStatus !== 'authorized') {
       const out: ApiResponse<null> = { data: null, error: 'Payment required before booking', meta: {} };
       res.status(402).json(out);
       return;

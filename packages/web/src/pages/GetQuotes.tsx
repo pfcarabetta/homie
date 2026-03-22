@@ -486,13 +486,11 @@ function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | nu
                 if (isDemo) { setBooked(p as unknown as typeof MOCK_PROVIDERS[number]); return; }
                 if (jobId && 'responseId' in p) {
                   try {
-                    const res = await paymentService.createCheckout(jobId, (p as RealProvider).responseId, p.id ?? '');
-                    if (res.data?.checkout_url) { window.location.href = res.data.checkout_url; return; }
-                  } catch { /* payment not configured, try direct book */ }
-                  try {
-                    await jobService.bookProvider(jobId, (p as RealProvider).responseId, p.id ?? '');
+                    await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id);
                     setBooked(p as unknown as typeof MOCK_PROVIDERS[number]);
-                  } catch { /* ignore */ }
+                  } catch (err) {
+                    console.error('[GetQuotes] Booking failed:', err);
+                  }
                 }
               }} style={{
                 marginTop: 14, width: '100%', padding: '13px 0', borderRadius: 100, border: 'none',

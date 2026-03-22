@@ -311,6 +311,21 @@ function QuotesTab() {
                               <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>{'\uD83D\uDCDE'} Call</a>
                             )}
                           </div>
+                          {j.status !== 'completed' && (
+                            <button onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await jobService.bookProvider(j.id, r.id, r.provider.id);
+                                setJobs(prev => prev.map(job => job.id === j.id ? { ...job, status: 'completed' } : job));
+                              } catch (err) {
+                                alert((err as Error).message || 'Booking failed');
+                              }
+                            }} style={{
+                              marginTop: 10, width: '100%', padding: '11px 0', borderRadius: 100, border: 'none',
+                              background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                              fontFamily: "'DM Sans', sans-serif",
+                            }}>Book {r.provider.name.split(' ')[0]}</button>
+                          )}
                         </div>
                       ))}
                     </div>

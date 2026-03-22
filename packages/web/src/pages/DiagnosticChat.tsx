@@ -807,27 +807,15 @@ export default function DiagnosticChat() {
   async function handleBook(provider: MatchedProvider) {
     if (!state.jobId) return;
 
-    // Demo mode — book instantly without payment
+    // Demo mode — book instantly
     if (isDemo) {
       dispatch({ type: 'BOOK_PROVIDER', provider });
       return;
     }
 
-    // Not authenticated — prompt to sign in
-    if (!authService.isAuthenticated()) {
-      navigate('/login?redirect=/chat');
-      return;
-    }
-
-    // Require payment via Stripe Checkout
+    // Payment already captured — just book directly
     dispatch({ type: 'BOOKING_LOADING', loading: true });
     try {
-      const payRes = await paymentService.createCheckout(state.jobId, provider.responseId, provider.id);
-      if (payRes.data?.checkout_url) {
-        window.location.href = payRes.data.checkout_url;
-        return;
-      }
-      // If payment is already done (e.g. returning from Stripe), proceed to book
       const res = await jobService.bookProvider(state.jobId, provider.responseId, provider.id);
       if (!res.data) {
         dispatch({ type: 'MATCH_FLOW_ERROR', error: res.error ?? 'Booking failed' });
@@ -836,15 +824,7 @@ export default function DiagnosticChat() {
       }
       dispatch({ type: 'BOOK_PROVIDER', provider });
     } catch (err) {
-      const message = (err as Error).message ?? 'Booking failed';
-      // If payment not configured, fall back to direct booking
-      if (message.includes('not configured')) {
-        try {
-          const res = await jobService.bookProvider(state.jobId, provider.responseId, provider.id);
-          if (res.data) { dispatch({ type: 'BOOK_PROVIDER', provider }); return; }
-        } catch { /* fall through */ }
-      }
-      dispatch({ type: 'MATCH_FLOW_ERROR', error: message });
+      dispatch({ type: 'MATCH_FLOW_ERROR', error: (err as Error).message ?? 'Booking failed' });
       dispatch({ type: 'BOOKING_LOADING', loading: false });
     }
   }
