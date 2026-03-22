@@ -89,6 +89,7 @@ router.get('/jobs', async (req: Request, res: Response) => {
           zipCode: jobs.zipCode,
           preferredTiming: jobs.preferredTiming,
           budget: jobs.budget,
+          workspaceId: jobs.workspaceId,
           createdAt: jobs.createdAt,
         })
         .from(jobs)

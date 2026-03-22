@@ -67,6 +67,7 @@ export const adminService = {
       zipCode: string;
       preferredTiming: string | null;
       budget: string | null;
+      workspaceId: string | null;
       createdAt: string;
     }>>(`/api/v1/admin/jobs?${q}`);
   },
