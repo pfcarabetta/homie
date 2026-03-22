@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, or, desc } from 'drizzle-orm';
+import { eq, and, or, desc, ne } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { workspaces } from '../db/schema/workspaces';
 import { workspaceMembers } from '../db/schema/workspace-members';
 import { properties } from '../db/schema/properties';
+import { homeowners } from '../db/schema/homeowners';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 
 const router = Router();
@@ -279,6 +280,182 @@ router.delete('/:workspaceId/properties/:propertyId', requireWorkspace, requireW
   } catch (err) {
     logger.error({ err }, '[DELETE /business/:id/properties/:pid]');
     res.status(500).json({ data: null, error: 'Failed to deactivate property', meta: {} });
+  }
+});
+
+// ── Team Members ────────────────────────────────────────────────────────────
+
+// GET /:workspaceId/members
+router.get('/:workspaceId/members', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: workspaceMembers.id,
+        role: workspaceMembers.role,
+        invitedAt: workspaceMembers.invitedAt,
+        acceptedAt: workspaceMembers.acceptedAt,
+        homeownerId: workspaceMembers.homeownerId,
+        email: homeowners.email,
+        firstName: homeowners.firstName,
+        lastName: homeowners.lastName,
+      })
+      .from(workspaceMembers)
+      .innerJoin(homeowners, eq(workspaceMembers.homeownerId, homeowners.id))
+      .where(eq(workspaceMembers.workspaceId, req.workspaceId))
+      .orderBy(desc(workspaceMembers.createdAt));
+
+    res.json({ data: rows, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/members]');
+    res.status(500).json({ data: null, error: 'Failed to fetch members', meta: {} });
+  }
+});
+
+// POST /:workspaceId/members — Invite by email
+router.post('/:workspaceId/members', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  const { email, role } = req.body as { email?: string; role?: string };
+
+  if (!email || typeof email !== 'string') {
+    res.status(400).json({ data: null, error: 'email is required', meta: {} });
+    return;
+  }
+
+  const validRoles = ['admin', 'coordinator', 'field_tech', 'viewer'];
+  const memberRole = role && validRoles.includes(role) ? role : 'viewer';
+
+  try {
+    // Find user by email
+    const [user] = await db
+      .select({ id: homeowners.id })
+      .from(homeowners)
+      .where(eq(homeowners.email, email.toLowerCase().trim()))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).json({ data: null, error: 'No user found with that email. They need a Homie account first.', meta: {} });
+      return;
+    }
+
+    // Check if already a member
+    const [existing] = await db
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(and(
+        eq(workspaceMembers.workspaceId, req.workspaceId),
+        eq(workspaceMembers.homeownerId, user.id),
+      ))
+      .limit(1);
+
+    if (existing) {
+      res.status(409).json({ data: null, error: 'User is already a member of this workspace', meta: {} });
+      return;
+    }
+
+    const [member] = await db
+      .insert(workspaceMembers)
+      .values({
+        workspaceId: req.workspaceId,
+        homeownerId: user.id,
+        role: memberRole,
+        acceptedAt: new Date(), // auto-accept for now
+      })
+      .returning();
+
+    res.status(201).json({
+      data: {
+        ...member,
+        email: email.toLowerCase().trim(),
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/members]');
+    res.status(500).json({ data: null, error: 'Failed to invite member', meta: {} });
+  }
+});
+
+// PATCH /:workspaceId/members/:memberId — Update role
+router.patch('/:workspaceId/members/:memberId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  const { role } = req.body as { role?: string };
+
+  const validRoles = ['admin', 'coordinator', 'field_tech', 'viewer'];
+  if (!role || !validRoles.includes(role)) {
+    res.status(400).json({ data: null, error: `role must be one of: ${validRoles.join(', ')}`, meta: {} });
+    return;
+  }
+
+  try {
+    // Don't allow changing the workspace owner's role
+    const [workspace] = await db
+      .select({ ownerId: workspaces.ownerId })
+      .from(workspaces)
+      .where(eq(workspaces.id, req.workspaceId))
+      .limit(1);
+
+    const [member] = await db
+      .select({ homeownerId: workspaceMembers.homeownerId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.id, req.params.memberId), eq(workspaceMembers.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!member) {
+      res.status(404).json({ data: null, error: 'Member not found', meta: {} });
+      return;
+    }
+
+    if (workspace && member.homeownerId === workspace.ownerId) {
+      res.status(403).json({ data: null, error: 'Cannot change the workspace owner\'s role', meta: {} });
+      return;
+    }
+
+    const [updated] = await db
+      .update(workspaceMembers)
+      .set({ role })
+      .where(and(eq(workspaceMembers.id, req.params.memberId), eq(workspaceMembers.workspaceId, req.workspaceId)))
+      .returning();
+
+    res.json({ data: updated, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /business/:id/members/:mid]');
+    res.status(500).json({ data: null, error: 'Failed to update member', meta: {} });
+  }
+});
+
+// DELETE /:workspaceId/members/:memberId — Remove member
+router.delete('/:workspaceId/members/:memberId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  try {
+    // Don't allow removing the workspace owner
+    const [workspace] = await db
+      .select({ ownerId: workspaces.ownerId })
+      .from(workspaces)
+      .where(eq(workspaces.id, req.workspaceId))
+      .limit(1);
+
+    const [member] = await db
+      .select({ homeownerId: workspaceMembers.homeownerId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.id, req.params.memberId), eq(workspaceMembers.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!member) {
+      res.status(404).json({ data: null, error: 'Member not found', meta: {} });
+      return;
+    }
+
+    if (workspace && member.homeownerId === workspace.ownerId) {
+      res.status(403).json({ data: null, error: 'Cannot remove the workspace owner', meta: {} });
+      return;
+    }
+
+    await db
+      .delete(workspaceMembers)
+      .where(and(eq(workspaceMembers.id, req.params.memberId), eq(workspaceMembers.workspaceId, req.workspaceId)));
+
+    res.json({ data: { removed: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[DELETE /business/:id/members/:mid]');
+    res.status(500).json({ data: null, error: 'Failed to remove member', meta: {} });
   }
 });
 

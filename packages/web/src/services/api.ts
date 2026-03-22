@@ -615,6 +615,7 @@ export interface WorkspaceDetail extends Workspace {
   member_count: number;
   property_count: number;
   user_role: string;
+  ownerId: string;
   stripeCustomerId: string | null;
   updatedAt: string;
 }
@@ -633,6 +634,17 @@ export interface Property {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  role: string;
+  homeownerId: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  invitedAt: string;
+  acceptedAt: string | null;
 }
 
 export const businessService = {
@@ -661,6 +673,22 @@ export const businessService = {
     }),
   deleteProperty: (workspaceId: string, propertyId: string) =>
     fetchAPI<{ deactivated: boolean }>(`/api/v1/business/${workspaceId}/properties/${propertyId}`, {
+      method: 'DELETE',
+    }),
+
+  // Members
+  listMembers: (workspaceId: string) =>
+    fetchAPI<WorkspaceMember[]>(`/api/v1/business/${workspaceId}/members`),
+  inviteMember: (workspaceId: string, data: { email: string; role?: string }) =>
+    fetchAPI<WorkspaceMember>(`/api/v1/business/${workspaceId}/members`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  updateMemberRole: (workspaceId: string, memberId: string, role: string) =>
+    fetchAPI<WorkspaceMember>(`/api/v1/business/${workspaceId}/members/${memberId}`, {
+      method: 'PATCH', body: JSON.stringify({ role }),
+    }),
+  removeMember: (workspaceId: string, memberId: string) =>
+    fetchAPI<{ removed: boolean }>(`/api/v1/business/${workspaceId}/members/${memberId}`, {
       method: 'DELETE',
     }),
 };
