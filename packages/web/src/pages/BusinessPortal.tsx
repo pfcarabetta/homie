@@ -1417,7 +1417,7 @@ export default function BusinessPortal() {
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #E0DAD4', marginBottom: 24, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #E0DAD4', marginBottom: 24, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x' }}>
               {TABS.filter(t => t !== 'settings' || workspace?.user_role === 'admin').map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   style={{
