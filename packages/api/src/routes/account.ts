@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, isNull } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
@@ -165,7 +165,7 @@ router.get('/jobs', async (req: Request, res: Response) => {
     const rows = await db
       .select()
       .from(jobs)
-      .where(eq(jobs.homeownerId, req.homeownerId))
+      .where(and(eq(jobs.homeownerId, req.homeownerId), isNull(jobs.workspaceId)))
       .orderBy(desc(jobs.createdAt));
 
     res.json({

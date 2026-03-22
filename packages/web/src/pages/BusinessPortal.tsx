@@ -931,8 +931,11 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
             }}>
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ fontWeight: 600, fontSize: 15, color: D }}>
-                  {j.diagnosis?.category ? j.diagnosis.category.charAt(0).toUpperCase() + j.diagnosis.category.slice(1) : 'Dispatch'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 600, fontSize: 15, color: D }}>
+                    {j.diagnosis?.category ? j.diagnosis.category.charAt(0).toUpperCase() + j.diagnosis.category.slice(1) : 'Dispatch'}
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${G}15`, color: G, letterSpacing: '0.03em' }}>BUSINESS</span>
                 </div>
                 <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
               </div>

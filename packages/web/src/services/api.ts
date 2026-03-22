@@ -424,6 +424,8 @@ export const jobService = {
     budget: string;
     tier: JobTier;
     zipCode: string;
+    workspaceId?: string;
+    propertyId?: string;
   }): Promise<ApiResponse<CreateJobResponse>> {
     return fetchAPI<CreateJobResponse>('/api/v1/jobs', {
       method: 'POST',
@@ -435,6 +437,8 @@ export const jobService = {
         tier: params.tier,
         zip_code: params.zipCode,
         consent: true,
+        ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
+        ...(params.propertyId ? { property_id: params.propertyId } : {}),
       }),
     });
   },

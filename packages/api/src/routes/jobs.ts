@@ -135,6 +135,8 @@ router.post('/', async (req: Request, res: Response) => {
         tier: body.tier,
         status: 'open',
         zipCode: body.zip_code,
+        workspaceId: body.workspace_id ?? null,
+        propertyId: body.property_id ?? null,
         consentGiven: true,
         consentText,
         consentIp: clientIp,

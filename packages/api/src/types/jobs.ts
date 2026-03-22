@@ -13,6 +13,8 @@ export interface CreateJobBody {
   tier: JobTier;
   zip_code: string;
   consent: boolean;
+  workspace_id?: string;
+  property_id?: string;
 }
 
 export interface CreateJobResponse {

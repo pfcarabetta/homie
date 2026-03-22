@@ -742,9 +742,7 @@ router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, re
         expiresAt: jobs.expiresAt,
       })
       .from(jobs)
-      .where(
-        sql`(${jobs.workspaceId} = ${req.workspaceId} OR ${jobs.homeownerId} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)}))`
-      )
+      .where(eq(jobs.workspaceId, req.workspaceId))
       .orderBy(desc(jobs.createdAt))
       .limit(100);
 

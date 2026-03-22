@@ -373,6 +373,8 @@ export default function BusinessChat() {
         budget: 'flexible',
         tier: 'priority',
         zipCode,
+        workspaceId: selectedWorkspace || undefined,
+        propertyId: selectedProperty?.id || undefined,
       });
 
       if (res.data) {
