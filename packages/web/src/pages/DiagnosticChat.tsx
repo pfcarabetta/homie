@@ -464,10 +464,10 @@ export default function DiagnosticChat() {
     const urlParams = new URLSearchParams(window.location.search);
     const paidChat = sessionStorage.getItem('homie_paid_chat');
 
-    // User hit back from Stripe without completing payment
+    // User hit back from Stripe without completing payment — full reload for clean state
     if (paidChat && !urlParams.has('paid')) {
       sessionStorage.removeItem('homie_paid_chat');
-      // Don't show error on fresh page load — only if there was a pending payment
+      window.location.href = '/chat';
       return;
     }
 

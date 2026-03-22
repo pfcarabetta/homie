@@ -630,10 +630,9 @@ export default function GetQuotes() {
         return;
       } catch { /* ignore */ }
     } else if (paidJob && !urlParams.has('paid')) {
-      // User hit back from Stripe without completing payment
+      // User hit back from Stripe without completing payment — full reload for clean state
       sessionStorage.removeItem('homie_paid_job');
-      addAssistant("Payment was not completed. Please select a tier to try again.");
-      setPhase('tier');
+      window.location.href = '/quote';
       return;
     }
 
