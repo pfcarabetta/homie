@@ -52,6 +52,10 @@ const B2B_CATEGORIES: CatDef[] = [
     q1: { text: 'What do you need?', options: ['Locked out', 'Rekey locks', 'New lock install', 'Smart lock setup', 'Lockbox replacement'] } },
   { id: 'pressure_washing', icon: '💦', label: 'Pressure Wash', group: 'service',
     q1: { text: 'What needs washing?', options: ['Driveway', 'Patio/deck', 'House siding', 'Fence', 'Pool area', 'Full exterior'] } },
+  { id: 'window_cleaning', icon: '🪟', label: 'Window Cleaning', group: 'service',
+    q1: { text: 'What do you need?', options: ['Interior only', 'Exterior only', 'Interior + exterior', 'Screens & tracks', 'Skylights'] } },
+  { id: 'steam_cleaning', icon: '♨️', label: 'Steam Cleaning', group: 'service',
+    q1: { text: 'What needs steam cleaning?', options: ['Carpets', 'Upholstery/couches', 'Mattresses', 'Tile & grout', 'Full property'] } },
   { id: 'concierge', icon: '🎩', label: 'Concierge', group: 'service',
     q1: { text: 'What service?', options: ['Private chef', 'Transport', 'Grocery delivery', 'Equipment rental', 'Activities', 'Other'] } },
 ];
