@@ -495,18 +495,26 @@ function TeamTab({ workspaceId, role, ownerId }: { workspaceId: string; role: st
 /* ── Add Vendor Modal ──────────────────────────────────────────────────── */
 
 function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string; onClose: () => void; onAdded: () => void }) {
+  const [mode, setMode] = useState<'search' | 'create'>('search');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ProviderSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ProviderSearchResult | null>(null);
+
+  // Shared fields
   const [categories, setCategories] = useState('');
   const [priority, setPriority] = useState(1);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Create-new fields
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+
   useEffect(() => {
-    if (query.length < 2) { setResults([]); return; }
+    if (mode !== 'search' || query.length < 2) { setResults([]); return; }
     const timer = setTimeout(() => {
       setSearching(true);
       businessService.searchProviders(workspaceId, query).then(res => {
@@ -515,19 +523,32 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
       }).catch(() => setSearching(false));
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, workspaceId]);
+  }, [query, workspaceId, mode]);
 
   async function handleAdd() {
-    if (!selectedProvider) { setError('Select a provider first'); return; }
     setSaving(true);
     setError('');
     try {
-      await businessService.addVendor(workspaceId, {
-        provider_id: selectedProvider.id,
-        categories: categories ? categories.split(',').map(c => c.trim()).filter(Boolean) : undefined,
-        priority,
-        notes: notes || undefined,
-      });
+      if (mode === 'create') {
+        if (!newName.trim()) { setError('Name is required'); setSaving(false); return; }
+        if (!newPhone.trim() && !newEmail.trim()) { setError('Phone or email is required'); setSaving(false); return; }
+        await businessService.createVendor(workspaceId, {
+          name: newName.trim(),
+          phone: newPhone.trim() || undefined,
+          email: newEmail.trim() || undefined,
+          categories: categories ? categories.split(',').map(c => c.trim()).filter(Boolean) : undefined,
+          priority,
+          notes: notes || undefined,
+        });
+      } else {
+        if (!selectedProvider) { setError('Select a provider first'); setSaving(false); return; }
+        await businessService.addVendor(workspaceId, {
+          provider_id: selectedProvider.id,
+          categories: categories ? categories.split(',').map(c => c.trim()).filter(Boolean) : undefined,
+          priority,
+          notes: notes || undefined,
+        });
+      }
       onAdded();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to add vendor');
@@ -536,16 +557,35 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
     }
   }
 
+  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
+  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+
+  const showDetails = mode === 'create' || selectedProvider;
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
       <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 20px' }}>Add Preferred Vendor</h3>
 
-        {!selectedProvider ? (
+        {/* Mode toggle */}
+        <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 8, overflow: 'hidden', border: '1px solid #E0DAD4' }}>
+          <button onClick={() => { setMode('search'); setSelectedProvider(null); }}
+            style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              background: mode === 'search' ? O : '#fff', color: mode === 'search' ? '#fff' : '#6B6560' }}>
+            Search Existing
+          </button>
+          <button onClick={() => { setMode('create'); setSelectedProvider(null); }}
+            style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              background: mode === 'create' ? O : '#fff', color: mode === 'create' ? '#fff' : '#6B6560' }}>
+            Add New
+          </button>
+        </div>
+
+        {mode === 'search' && !selectedProvider && (
           <>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Search Providers</label>
+            <label style={labelStyle}>Search Providers</label>
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Type provider name..."
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 8, boxSizing: 'border-box' }} />
+              style={{ ...inputStyle, marginBottom: 8 }} />
             {searching && <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>Searching...</div>}
 
             <div style={{ maxHeight: 300, overflow: 'auto' }}>
@@ -563,36 +603,62 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
                 </div>
               ))}
               {query.length >= 2 && !searching && results.length === 0 && (
-                <div style={{ textAlign: 'center', padding: 20, color: '#9B9490', fontSize: 14 }}>No providers found</div>
+                <div style={{ textAlign: 'center', padding: 20, color: '#9B9490', fontSize: 14 }}>
+                  No providers found. <button onClick={() => { setMode('create'); setNewName(query); }}
+                    style={{ background: 'none', border: 'none', color: O, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+                    Create new vendor
+                  </button>
+                </div>
               )}
             </div>
           </>
-        ) : (
-          <>
-            <div style={{ padding: '12px 16px', borderRadius: 8, border: `2px solid ${O}`, background: `${O}08`, marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{selectedProvider.name}</div>
-                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>
-                    {selectedProvider.phone || selectedProvider.email || 'No contact info'}
-                  </div>
+        )}
+
+        {mode === 'search' && selectedProvider && (
+          <div style={{ padding: '12px 16px', borderRadius: 8, border: `2px solid ${O}`, background: `${O}08`, marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{selectedProvider.name}</div>
+                <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>
+                  {selectedProvider.phone || selectedProvider.email || 'No contact info'}
                 </div>
-                <button onClick={() => setSelectedProvider(null)}
-                  style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#6B6560' }}>
-                  Change
-                </button>
+              </div>
+              <button onClick={() => setSelectedProvider(null)}
+                style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#6B6560' }}>
+                Change
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'create' && (
+          <>
+            <label style={labelStyle}>Vendor Name *</label>
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="ABC Plumbing" style={inputStyle} />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={labelStyle}>Phone</label>
+                <input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="(555) 123-4567" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Email</label>
+                <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="info@vendor.com" type="email" style={inputStyle} />
               </div>
             </div>
+          </>
+        )}
 
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Categories (comma-separated)</label>
-            <input value={categories} onChange={e => setCategories(e.target.value)} placeholder="plumbing, hvac"
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' }} />
+        {showDetails && (
+          <>
+            <label style={labelStyle}>Categories (comma-separated)</label>
+            <input value={categories} onChange={e => setCategories(e.target.value)} placeholder="plumbing, hvac" style={inputStyle} />
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Priority</label>
+                <label style={labelStyle}>Priority</label>
                 <select value={priority} onChange={e => setPriority(+e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, cursor: 'pointer', boxSizing: 'border-box' }}>
+                  style={{ ...inputStyle, cursor: 'pointer', marginBottom: 0 }}>
                   <option value={1}>1 — First choice</option>
                   <option value={2}>2 — Backup</option>
                   <option value={3}>3 — Third option</option>
@@ -600,9 +666,9 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
               </div>
             </div>
 
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Notes</label>
+            <label style={labelStyle}>Notes</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Agreed rate, specialties, etc."
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
+              style={{ ...inputStyle, resize: 'vertical' as const }} />
           </>
         )}
 
@@ -610,10 +676,10 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
-          {selectedProvider && (
+          {showDetails && (
             <button onClick={handleAdd} disabled={saving}
               style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
-              {saving ? 'Adding...' : 'Add Vendor'}
+              {saving ? 'Adding...' : mode === 'create' ? 'Create & Add' : 'Add Vendor'}
             </button>
           )}
         </div>

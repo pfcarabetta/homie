@@ -557,6 +557,71 @@ router.post('/:workspaceId/vendors', requireWorkspace, requireWorkspaceRole('adm
   }
 });
 
+// POST /:workspaceId/vendors/create — Create a new provider and add as preferred vendor
+router.post('/:workspaceId/vendors/create', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const body = req.body as {
+    name?: string;
+    phone?: string;
+    email?: string;
+    categories?: string[];
+    priority?: number;
+    notes?: string;
+    property_id?: string | null;
+  };
+
+  if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
+    res.status(400).json({ data: null, error: 'name is required', meta: {} });
+    return;
+  }
+
+  if (!body.phone && !body.email) {
+    res.status(400).json({ data: null, error: 'At least a phone number or email is required', meta: {} });
+    return;
+  }
+
+  try {
+    // Create the provider
+    const [newProvider] = await db
+      .insert(providers)
+      .values({
+        name: body.name.trim(),
+        phone: body.phone ?? null,
+        email: body.email ?? null,
+        categories: body.categories ?? null,
+      })
+      .returning();
+
+    // Add as preferred vendor
+    const [vendor] = await db
+      .insert(preferredVendors)
+      .values({
+        workspaceId: req.workspaceId,
+        providerId: newProvider.id,
+        propertyId: body.property_id ?? null,
+        categories: body.categories ?? null,
+        priority: body.priority ?? 0,
+        notes: body.notes ?? null,
+      })
+      .returning();
+
+    res.status(201).json({
+      data: {
+        ...vendor,
+        providerName: newProvider.name,
+        providerPhone: newProvider.phone,
+        providerEmail: newProvider.email,
+        providerRating: null,
+        providerReviewCount: 0,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/vendors/create]');
+    res.status(500).json({ data: null, error: 'Failed to create vendor', meta: {} });
+  }
+});
+
 // PATCH /:workspaceId/vendors/:vendorId — Update preferred vendor
 router.patch('/:workspaceId/vendors/:vendorId', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
   const body = req.body as Record<string, unknown>;

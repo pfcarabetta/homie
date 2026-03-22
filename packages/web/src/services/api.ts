@@ -729,6 +729,12 @@ export const businessService = {
   }) => fetchAPI<PreferredVendor>(`/api/v1/business/${workspaceId}/vendors`, {
     method: 'POST', body: JSON.stringify(data),
   }),
+  createVendor: (workspaceId: string, data: {
+    name: string; phone?: string; email?: string; categories?: string[];
+    priority?: number; notes?: string; property_id?: string | null;
+  }) => fetchAPI<PreferredVendor>(`/api/v1/business/${workspaceId}/vendors/create`, {
+    method: 'POST', body: JSON.stringify(data),
+  }),
   updateVendor: (workspaceId: string, vendorId: string, data: Record<string, unknown>) =>
     fetchAPI<PreferredVendor>(`/api/v1/business/${workspaceId}/vendors/${vendorId}`, {
       method: 'PATCH', body: JSON.stringify(data),
