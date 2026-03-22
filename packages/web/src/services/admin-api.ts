@@ -71,6 +71,34 @@ export const adminService = {
     }>>(`/api/v1/admin/jobs?${q}`);
   },
 
+  async getProviderDetail(providerId: string) {
+    return fetchAdmin<{
+      provider: {
+        id: string; name: string; phone: string | null; email: string | null; website: string | null;
+        googlePlaceId: string | null; googleRating: string | null; reviewCount: number;
+        categories: string[] | null; notificationPref: string; vacationMode: boolean;
+        serviceZips: string[] | null; discoveredAt: string;
+      };
+      scores: {
+        acceptanceRate: string | null; avgResponseSec: string | null; completionRate: string | null;
+        avgHomeownerRating: string | null; totalOutreach: number; totalAccepted: number;
+      } | null;
+      outreach_attempts: Array<{
+        id: string; channel: string; status: string; jobCategory: string | null;
+        jobZip: string | null; attemptedAt: string; respondedAt: string | null;
+      }>;
+      provider_responses: Array<{
+        id: string; jobId: string; channel: string; quotedPrice: string | null;
+        availability: string | null; message: string | null; createdAt: string;
+      }>;
+      bookings: Array<{
+        id: string; jobId: string; status: string; serviceAddress: string | null; confirmedAt: string;
+      }>;
+      suppressed: boolean;
+      suppression_reason: string | null;
+    }>(`/api/v1/admin/providers/${providerId}`);
+  },
+
   async getJobDetail(jobId: string) {
     return fetchAdmin<{
       job: {

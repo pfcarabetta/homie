@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { count, desc, eq, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
-import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses } from '../db/schema';
+import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList } from '../db/schema';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -232,6 +232,101 @@ router.get('/providers', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /admin/providers]');
     res.status(500).json({ data: null, error: 'Failed to fetch providers', meta: {} });
+  }
+});
+
+// GET /api/v1/admin/providers/:id
+router.get('/providers/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const [provider] = await db.select().from(providers).where(eq(providers.id, id)).limit(1);
+    if (!provider) {
+      res.status(404).json({ data: null, error: 'Provider not found', meta: {} });
+      return;
+    }
+
+    const [scores] = await db.select().from(providerScores).where(eq(providerScores.providerId, id)).limit(1);
+
+    const attempts = await db
+      .select({
+        id: outreachAttempts.id,
+        channel: outreachAttempts.channel,
+        status: outreachAttempts.status,
+        jobCategory: sql`${jobs.diagnosis}->>'category'`,
+        jobZip: jobs.zipCode,
+        attemptedAt: outreachAttempts.attemptedAt,
+        respondedAt: outreachAttempts.respondedAt,
+      })
+      .from(outreachAttempts)
+      .leftJoin(jobs, eq(outreachAttempts.jobId, jobs.id))
+      .where(eq(outreachAttempts.providerId, id))
+      .orderBy(desc(outreachAttempts.attemptedAt));
+
+    const responses = await db
+      .select({
+        id: providerResponses.id,
+        jobId: providerResponses.jobId,
+        channel: providerResponses.channel,
+        quotedPrice: providerResponses.quotedPrice,
+        availability: providerResponses.availability,
+        message: providerResponses.message,
+        createdAt: providerResponses.createdAt,
+      })
+      .from(providerResponses)
+      .where(eq(providerResponses.providerId, id))
+      .orderBy(desc(providerResponses.createdAt));
+
+    const providerBookings = await db
+      .select({
+        id: bookings.id,
+        jobId: bookings.jobId,
+        status: bookings.status,
+        serviceAddress: bookings.serviceAddress,
+        confirmedAt: bookings.confirmedAt,
+      })
+      .from(bookings)
+      .where(eq(bookings.providerId, id))
+      .orderBy(desc(bookings.confirmedAt));
+
+    const suppressedRows = await db.select().from(suppressionList).where(eq(suppressionList.providerId, id));
+
+    res.json({
+      data: {
+        provider: {
+          id: provider.id,
+          name: provider.name,
+          phone: provider.phone,
+          email: provider.email,
+          website: provider.website,
+          googlePlaceId: provider.googlePlaceId,
+          googleRating: provider.googleRating,
+          reviewCount: provider.reviewCount,
+          categories: provider.categories,
+          notificationPref: provider.notificationPref,
+          vacationMode: provider.vacationMode,
+          serviceZips: provider.serviceZips,
+          discoveredAt: provider.discoveredAt,
+        },
+        scores: scores ? {
+          acceptanceRate: scores.acceptanceRate,
+          avgResponseSec: scores.avgResponseSec,
+          completionRate: scores.completionRate,
+          avgHomeownerRating: scores.avgHomeownerRating,
+          totalOutreach: scores.totalOutreach,
+          totalAccepted: scores.totalAccepted,
+        } : null,
+        outreach_attempts: attempts,
+        provider_responses: responses,
+        bookings: providerBookings,
+        suppressed: suppressedRows.length > 0,
+        suppression_reason: suppressedRows[0]?.reason ?? null,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/providers/:id]');
+    res.status(500).json({ data: null, error: 'Failed to fetch provider details', meta: {} });
   }
 });
 
