@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { businessService } from '@/services/api';
 
-const O = '#E8632B';
+const O = '#E8632B', G = '#1B9E77';
 
 export default function AvatarDropdown() {
   const { homeowner, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [hasWorkspaces, setHasWorkspaces] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -17,6 +19,14 @@ export default function AvatarDropdown() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      businessService.listWorkspaces().then(res => {
+        if (res.data && res.data.length > 0) setHasWorkspaces(true);
+      }).catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   if (!isAuthenticated || !homeowner) {
     return (
@@ -53,6 +63,19 @@ export default function AvatarDropdown() {
             {homeowner.first_name && <div style={{ fontSize: 12, color: '#9B9490' }}>{homeowner.email}</div>}
             <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{homeowner.membership_tier} plan</div>
           </div>
+          {hasWorkspaces && (
+            <button onClick={() => { setOpen(false); navigate('/business'); }} style={{
+              width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+              fontSize: 14, color: G, cursor: 'pointer', textAlign: 'left',
+              fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#F0FDF4'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <span style={{ fontSize: 16 }}>🏢</span> Business Portal
+            </button>
+          )}
           <button onClick={() => { setOpen(false); navigate('/account'); }} style={{
             width: '100%', padding: '12px 16px', background: 'none', border: 'none',
             fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
