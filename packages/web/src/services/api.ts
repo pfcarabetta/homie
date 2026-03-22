@@ -624,6 +624,11 @@ export interface WorkspaceDetail extends Workspace {
   updatedAt: string;
 }
 
+export interface BedConfig {
+  type: string;
+  count: number;
+}
+
 export interface Property {
   id: string;
   workspaceId: string;
@@ -634,6 +639,10 @@ export interface Property {
   zipCode: string | null;
   propertyType: string;
   unitCount: number;
+  bedrooms: number | null;
+  bathrooms: string | null;
+  sqft: number | null;
+  beds: BedConfig[] | null;
   notes: string | null;
   active: boolean;
   createdAt: string;

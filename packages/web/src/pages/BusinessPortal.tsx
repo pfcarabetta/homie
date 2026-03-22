@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { businessService, jobService, type Workspace, type WorkspaceDetail, type Property, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type ProviderResponseItem } from '@/services/api';
+import { businessService, jobService, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type ProviderResponseItem } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -196,12 +196,170 @@ function AddPropertyModal({ workspaceId, onClose, onCreated }: { workspaceId: st
   );
 }
 
+/* ── Edit Property Modal ────────────────────────────────────────────────── */
+
+const BED_TYPES = [
+  { value: 'king', label: 'King' },
+  { value: 'queen', label: 'Queen' },
+  { value: 'full', label: 'Full' },
+  { value: 'twin', label: 'Twin' },
+  { value: 'sofa_bed', label: 'Sofa Bed' },
+  { value: 'bunk', label: 'Bunk' },
+  { value: 'crib', label: 'Crib' },
+];
+
+function EditPropertyModal({ workspaceId, property, onClose, onUpdated }: {
+  workspaceId: string; property: Property; onClose: () => void; onUpdated: (p: Property) => void;
+}) {
+  const [name, setName] = useState(property.name);
+  const [address, setAddress] = useState(property.address || '');
+  const [city, setCity] = useState(property.city || '');
+  const [state, setState] = useState(property.state || '');
+  const [zip, setZip] = useState(property.zipCode || '');
+  const [propType, setPropType] = useState(property.propertyType);
+  const [unitCount, setUnitCount] = useState(property.unitCount);
+  const [bedrooms, setBedrooms] = useState(property.bedrooms ?? 0);
+  const [bathrooms, setBathrooms] = useState(property.bathrooms ?? '1');
+  const [sqft, setSqft] = useState(property.sqft ?? 0);
+  const [beds, setBeds] = useState<BedConfig[]>(property.beds || []);
+  const [notes, setNotes] = useState(property.notes || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  function addBed() { setBeds(prev => [...prev, { type: 'queen', count: 1 }]); }
+  function removeBed(i: number) { setBeds(prev => prev.filter((_, idx) => idx !== i)); }
+  function updateBed(i: number, field: 'type' | 'count', val: string | number) {
+    setBeds(prev => prev.map((b, idx) => idx === i ? { ...b, [field]: val } : b));
+  }
+
+  async function handleSave() {
+    if (!name.trim()) { setError('Name is required'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await businessService.updateProperty(workspaceId, property.id, {
+        name: name.trim(),
+        address: address || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        zip_code: zip || undefined,
+        property_type: propType,
+        unit_count: unitCount,
+        bedrooms: bedrooms || undefined,
+        bathrooms: bathrooms || undefined,
+        sqft: sqft || undefined,
+        beds: beds.length > 0 ? beds : undefined,
+        notes: notes || undefined,
+      });
+      if (res.data) onUpdated(res.data);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
+  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 560, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 20px' }}>Edit Property</h3>
+
+        <label style={labelStyle}>Property Name *</label>
+        <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Property Type</label>
+            <select value={propType} onChange={e => setPropType(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+              {Object.entries(PROPERTY_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Unit Count</label>
+            <input type="number" min={1} value={unitCount} onChange={e => setUnitCount(+e.target.value || 1)} style={inputStyle} />
+          </div>
+        </div>
+
+        <label style={labelStyle}>Street Address</label>
+        <input value={address} onChange={e => setAddress(e.target.value)} style={inputStyle} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
+          <div><label style={labelStyle}>City</label><input value={city} onChange={e => setCity(e.target.value)} style={inputStyle} /></div>
+          <div><label style={labelStyle}>State</label><input value={state} onChange={e => setState(e.target.value)} maxLength={2} style={inputStyle} /></div>
+          <div><label style={labelStyle}>ZIP</label><input value={zip} onChange={e => setZip(e.target.value)} maxLength={10} style={inputStyle} /></div>
+        </div>
+
+        {/* Property details */}
+        <div style={{ borderTop: '1px solid #E0DAD4', paddingTop: 16, marginTop: 4, marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 12 }}>Property Details</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Bedrooms</label>
+              <input type="number" min={0} value={bedrooms} onChange={e => setBedrooms(+e.target.value || 0)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Bathrooms</label>
+              <select value={bathrooms} onChange={e => setBathrooms(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                {['0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '4.5', '5', '5.5', '6'].map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Sq Ft</label>
+              <input type="number" min={0} value={sqft} onChange={e => setSqft(+e.target.value || 0)} placeholder="0" style={inputStyle} />
+            </div>
+          </div>
+        </div>
+
+        {/* Bed configuration */}
+        <div style={{ borderTop: '1px solid #E0DAD4', paddingTop: 16, marginTop: 4, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: D }}>Bed Configuration</div>
+            <button onClick={addBed} style={{ fontSize: 13, color: O, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>+ Add Bed</button>
+          </div>
+          {beds.length === 0 && <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 12 }}>No beds configured</div>}
+          {beds.map((b, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <select value={b.type} onChange={e => updateBed(i, 'type', e.target.value)}
+                style={{ flex: 2, padding: '8px 12px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
+                {BED_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+              </select>
+              <input type="number" min={1} value={b.count} onChange={e => updateBed(i, 'count', +e.target.value || 1)}
+                style={{ flex: 1, padding: '8px 12px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, textAlign: 'center' }} />
+              <button onClick={() => removeBed(i)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #FCA5A5', background: '#FEF2F2', fontSize: 12, cursor: 'pointer', color: '#DC2626' }}>×</button>
+            </div>
+          ))}
+        </div>
+
+        <label style={labelStyle}>Notes</label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Gate code, access instructions, etc."
+          style={{ ...inputStyle, resize: 'vertical' as const }} />
+
+        {error && <div style={{ color: '#DC2626', fontSize: 14, marginBottom: 16 }}>{error}</div>}
+
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Properties Tab ─────────────────────────────────────────────────────── */
 
 function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: string }) {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
@@ -211,6 +369,11 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
   }, [workspaceId]);
 
   const canEdit = role === 'admin' || role === 'coordinator';
+
+  function formatBeds(beds: BedConfig[] | null): string {
+    if (!beds || beds.length === 0) return '';
+    return beds.map(b => `${b.count} ${BED_TYPES.find(bt => bt.value === b.type)?.label || b.type}`).join(', ');
+  }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading properties...</div>;
 
@@ -249,6 +412,12 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {canEdit && (
+                    <button onClick={() => setEditingProperty(p)} style={{
+                      padding: '4px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff',
+                      fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 500,
+                    }}>Edit</button>
+                  )}
                   <span style={{
                     fontSize: 12, padding: '4px 10px', borderRadius: 20, fontWeight: 600,
                     background: p.active ? '#F0FDF4' : '#F5F5F5',
@@ -264,10 +433,27 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
                   </span>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 20, marginTop: 12, fontSize: 13, color: '#9B9490' }}>
+
+              {/* Detail chips */}
+              <div style={{ display: 'flex', gap: 12, marginTop: 12, fontSize: 13, color: '#9B9490', flexWrap: 'wrap' }}>
                 <span>{p.unitCount} {p.unitCount === 1 ? 'unit' : 'units'}</span>
+                {p.bedrooms != null && p.bedrooms > 0 && <span>{p.bedrooms} bd</span>}
+                {p.bathrooms != null && +p.bathrooms > 0 && <span>{p.bathrooms} ba</span>}
+                {p.sqft != null && p.sqft > 0 && <span>{p.sqft.toLocaleString()} sqft</span>}
                 <span>Added {new Date(p.createdAt).toLocaleDateString()}</span>
               </div>
+
+              {/* Bed config */}
+              {p.beds && p.beds.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  {p.beds.map((b, i) => (
+                    <span key={i} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, background: '#F5F3FF', color: '#7C3AED', fontWeight: 500 }}>
+                      {b.count}× {BED_TYPES.find(bt => bt.value === b.type)?.label || b.type}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {p.notes && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 8, fontStyle: 'italic' }}>{p.notes}</div>}
             </div>
           ))}
@@ -277,6 +463,12 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
       {showAdd && (
         <AddPropertyModal workspaceId={workspaceId} onClose={() => setShowAdd(false)}
           onCreated={p => { setProperties(prev => [p, ...prev]); setShowAdd(false); }} />
+      )}
+
+      {editingProperty && (
+        <EditPropertyModal workspaceId={workspaceId} property={editingProperty}
+          onClose={() => setEditingProperty(null)}
+          onUpdated={p => { setProperties(prev => prev.map(x => x.id === p.id ? p : x)); setEditingProperty(null); }} />
       )}
     </div>
   );

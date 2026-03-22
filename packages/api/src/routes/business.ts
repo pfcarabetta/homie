@@ -164,6 +164,10 @@ router.post('/:workspaceId/properties', requireWorkspace, requireWorkspaceRole('
     zip_code?: string;
     property_type?: string;
     unit_count?: number;
+    bedrooms?: number;
+    bathrooms?: string;
+    sqft?: number;
+    beds?: { type: string; count: number }[];
     notes?: string;
   };
 
@@ -184,6 +188,10 @@ router.post('/:workspaceId/properties', requireWorkspace, requireWorkspaceRole('
         zipCode: body.zip_code ?? null,
         propertyType: body.property_type ?? 'residential',
         unitCount: body.unit_count ?? 1,
+        bedrooms: body.bedrooms ?? null,
+        bathrooms: body.bathrooms ?? null,
+        sqft: body.sqft ?? null,
+        beds: body.beds ?? null,
         notes: body.notes ?? null,
       })
       .returning();
@@ -240,6 +248,7 @@ router.patch('/:workspaceId/properties/:propertyId', requireWorkspace, requireWo
   const fields: Record<string, string> = {
     name: 'name', address: 'address', city: 'city', state: 'state',
     zip_code: 'zipCode', property_type: 'propertyType', unit_count: 'unitCount',
+    bedrooms: 'bedrooms', bathrooms: 'bathrooms', sqft: 'sqft', beds: 'beds',
     notes: 'notes', active: 'active',
   };
 

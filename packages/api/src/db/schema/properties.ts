@@ -1,5 +1,10 @@
-import { pgTable, uuid, text, timestamp, integer, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, numeric, jsonb } from 'drizzle-orm/pg-core';
 import { workspaces } from './workspaces';
+
+export interface BedConfig {
+  type: string; // 'king' | 'queen' | 'full' | 'twin' | 'sofa_bed' | 'bunk' | 'crib'
+  count: number;
+}
 
 export const properties = pgTable('properties', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -11,6 +16,10 @@ export const properties = pgTable('properties', {
   zipCode: text('zip_code'),
   propertyType: text('property_type').notNull().default('residential'),
   unitCount: integer('unit_count').notNull().default(1),
+  bedrooms: integer('bedrooms'),
+  bathrooms: numeric('bathrooms', { precision: 3, scale: 1 }),
+  sqft: integer('sqft'),
+  beds: jsonb('beds').$type<BedConfig[]>(),
   pmsSource: text('pms_source'),
   pmsExternalId: text('pms_external_id'),
   notes: text('notes'),
