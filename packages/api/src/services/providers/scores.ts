@@ -85,6 +85,6 @@ export async function recordHomeownerRating(
           4
         )`,
         updatedAt: sql`now()`,
-      },
+      } as Record<string, unknown>,
     });
 }

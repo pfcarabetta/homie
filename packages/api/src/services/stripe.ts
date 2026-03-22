@@ -39,7 +39,7 @@ export async function getOrCreateCustomer(homeownerId: string, email: string): P
     metadata: { homie_homeowner_id: homeownerId },
   });
 
-  await db.update(homeowners).set({ stripeCustomerId: customer.id }).where(eq(homeowners.id, homeownerId));
+  await db.update(homeowners).set({ stripeCustomerId: customer.id } as Record<string, unknown>).where(eq(homeowners.id, homeownerId));
 
   return customer.id;
 }
