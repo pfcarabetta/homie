@@ -58,6 +58,9 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
   category: CatDef; property: Property; summary: string; isService: boolean;
   onDispatch: () => void; dispatching: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = summary.length > 300;
+
   return (
     <div style={{ marginLeft: 42, marginBottom: 16, background: '#fff', border: `2px solid ${G}22`, borderRadius: 16, overflow: 'hidden' }}>
       <div style={{ background: `${G}10`, padding: '12px 16px', borderBottom: `1px solid ${G}22`, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -66,9 +69,15 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
       </div>
       <div style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>{category.icon} {category.label}</div>
-        <div style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap' }}>
-          {renderBold(summary.slice(0, 300))}{summary.length > 300 ? '...' : ''}
+        <div style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: isLong && !expanded ? 4 : 12, whiteSpace: 'pre-wrap' }}>
+          {expanded || !isLong ? renderBold(summary) : <>{renderBold(summary.slice(0, 300))}...</>}
         </div>
+        {isLong && (
+          <button onClick={() => setExpanded(!expanded)} style={{
+            background: 'none', border: 'none', padding: 0, fontSize: 13, fontWeight: 600,
+            color: G, cursor: 'pointer', marginBottom: 12, display: 'block',
+          }}>{expanded ? 'Show less' : 'Show full scope'}</button>
+        )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
             <span style={{ color: '#9B9490' }}>Property:</span> <span style={{ fontWeight: 600, color: D }}>{property.name}</span>
