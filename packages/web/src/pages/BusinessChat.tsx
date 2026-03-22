@@ -293,11 +293,7 @@ export default function BusinessChat() {
         if (tagBuf && !insideTag) { full += tagBuf; }
         setStreaming(false);
         setStreamText('');
-        // If AI included a diagnosis, don't add the message to chat — scope card will show it
-        const hasDiagnosis = raw.includes('<diagnosis>');
-        if (!hasDiagnosis) {
-          setMessages(prev => [...prev, { role: 'assistant', content: full.trim() }]);
-        }
+        setMessages(prev => [...prev, { role: 'assistant', content: full.trim() }]);
         onDone?.(full.trim(), raw);
       },
       onError: (err: Error) => {
@@ -367,22 +363,16 @@ export default function BusinessChat() {
     setMessages(newMsgs);
     setInputVal('');
 
-    streamAI(text, newMsgs.slice(0, -1), (aiText, rawText) => {
+    streamAI(text, newMsgs.slice(0, -1), (_aiText, _rawText) => {
       const newCount = exchangeCount + 1;
       setExchangeCount(newCount);
 
-      // AI signals readiness with a diagnosis block — save it and ask budget
-      if (rawText.includes('<diagnosis>')) {
-        setAiDiagnosis(aiText);
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
-        setStep('budget');
-        return;
-      }
-
-      // After 3+ exchanges, ask budget instead of showing dispatch button
-      if (newCount >= 3) {
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
-        setStep('budget');
+      // After 2+ follow-up exchanges, move to budget
+      if (newCount >= 2) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
+          setStep('budget');
+        }, 500);
         return;
       }
 
@@ -395,13 +385,7 @@ export default function BusinessChat() {
     setBudget(selected);
     setMessages(prev => [...prev, { role: 'user', content: selected === 'flexible' ? 'No budget preference' : selected }]);
 
-    // If we already have a diagnosis from the AI, go straight to summary
-    if (aiDiagnosis) {
-      setStep('summary');
-      return;
-    }
-
-    // Otherwise generate the scope silently
+    // Generate the scope silently after budget is selected
     const promptText = category?.group === 'service'
       ? 'Please generate a final scope summary so I can dispatch a provider.'
       : 'Please generate your diagnosis so I can dispatch a pro.';
