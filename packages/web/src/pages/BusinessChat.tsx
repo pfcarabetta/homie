@@ -343,13 +343,40 @@ export default function BusinessChat() {
     const promptText = category?.group === 'service'
       ? 'Please generate a final scope summary so I can dispatch a provider.'
       : 'Please generate your diagnosis so I can dispatch a pro.';
-    const newMsgs: Message[] = [...messages, { role: 'user', content: promptText }];
-    setMessages(newMsgs);
 
-    streamAI(promptText, newMsgs.slice(0, -1), (aiText) => {
-      setAiDiagnosis(aiText);
-      setStep('summary');
-    });
+    // Send silently — don't add the prompt or AI response to visible chat
+    setStreaming(true);
+    setStreamText('');
+    let full = '';
+
+    const mode = category?.group === 'service' ? 'service' : 'repair';
+
+    abortRef.current = businessChatService.sendMessage(
+      promptText,
+      mode as 'repair' | 'service',
+      {
+        onToken: (token: string) => { full += token; },
+        onDiagnosis: () => {},
+        onJobSummary: () => {},
+        onDone: () => {
+          setStreaming(false);
+          setStreamText('');
+          setAiDiagnosis(full.trim());
+          setStep('summary');
+        },
+        onError: () => {
+          setStreaming(false);
+          setStreamText('');
+          // Fallback: use what we have
+          setAiDiagnosis(`${category?.label}: ${q1Answer}`);
+          setStep('summary');
+        },
+      },
+      {
+        history: messages.map(m => ({ role: m.role, content: m.content })),
+        propertyContext: getPropertyContext(),
+      },
+    );
   }
 
   // Handle dispatch (no tier selection — B2B subscription covers it)
