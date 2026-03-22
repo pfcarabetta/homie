@@ -390,20 +390,43 @@ export default function BusinessChat() {
 
     setStreaming(true);
     setStreamText('');
-    let full = '';
+    let visible = '';
+    let insideXml = false;
+    let xmlBuf = '';
     const mode = category?.group === 'service' ? 'service' : 'repair';
 
     abortRef.current = businessChatService.sendMessage(
       promptText,
       mode as 'repair' | 'service',
       {
-        onToken: (token: string) => { full += token; },
+        onToken: (token: string) => {
+          for (const ch of token) {
+            if (insideXml) {
+              xmlBuf += ch;
+              if (/<\/(diagnosis|job_summary|suggestions)>/.test(xmlBuf)) { insideXml = false; xmlBuf = ''; }
+              continue;
+            }
+            if (ch === '<') { xmlBuf = '<'; continue; }
+            if (xmlBuf.length > 0) {
+              xmlBuf += ch;
+              if (ch === '>') {
+                if (/^<(diagnosis|job_summary|suggestions)>/.test(xmlBuf)) { insideXml = true; }
+                else { visible += xmlBuf; }
+                xmlBuf = '';
+              }
+              if (xmlBuf.length > 15 && !xmlBuf.includes('>')) { visible += xmlBuf; xmlBuf = ''; }
+              continue;
+            }
+            visible += ch;
+          }
+        },
         onDiagnosis: () => {},
         onJobSummary: () => {},
         onDone: () => {
+          if (xmlBuf && !insideXml) visible += xmlBuf;
           setStreaming(false);
           setStreamText('');
-          setAiDiagnosis(full.trim());
+          setAiDiagnosis(visible.trim());
           setStep('summary');
         },
         onError: () => {
