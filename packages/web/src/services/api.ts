@@ -647,6 +647,20 @@ export interface WorkspaceMember {
   acceptedAt: string | null;
 }
 
+export interface WorkspaceDispatch {
+  id: string;
+  status: string;
+  paymentStatus: string;
+  tier: string;
+  zipCode: string;
+  diagnosis: DiagnosisPayload | null;
+  preferredTiming: string | null;
+  propertyId: string | null;
+  propertyName: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
 export interface PreferredVendor {
   id: string;
   providerId: string;
@@ -811,4 +825,8 @@ export const businessService = {
     fetchAPI<{ removed: boolean }>(`/api/v1/business/${workspaceId}/vendors/${vendorId}`, {
       method: 'DELETE',
     }),
+
+  // Dispatches
+  listDispatches: (workspaceId: string) =>
+    fetchAPI<WorkspaceDispatch[]>(`/api/v1/business/${workspaceId}/dispatches`),
 };

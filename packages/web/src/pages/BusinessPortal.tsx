@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { businessService, type Workspace, type WorkspaceDetail, type Property, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult } from '@/services/api';
+import { businessService, jobService, type Workspace, type WorkspaceDetail, type Property, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type ProviderResponseItem } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -832,6 +832,235 @@ function VendorsTab({ workspaceId, role }: { workspaceId: string; role: string }
   );
 }
 
+/* ── Dispatches Tab ────────────────────────────────────────────────────── */
+
+const DISPATCH_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  open: { bg: '#EFF6FF', text: '#2563EB' },
+  dispatching: { bg: '#FFF7ED', text: '#C2410C' },
+  collecting: { bg: '#F5F3FF', text: '#7C3AED' },
+  completed: { bg: '#F0FDF4', text: '#16A34A' },
+  expired: { bg: '#F5F5F5', text: '#9B9490' },
+  refunded: { bg: '#FEF2F2', text: '#DC2626' },
+};
+
+const DISPATCH_STATUS_MESSAGES: Record<string, { icon: string; label: string; desc: string }> = {
+  open: { icon: '📋', label: 'Open', desc: 'Dispatch request has been created' },
+  dispatching: { icon: '🚀', label: 'Searching', desc: 'AI agent is finding and contacting providers' },
+  collecting: { icon: '📡', label: 'Collecting Quotes', desc: 'Providers are being contacted — quotes will appear as they respond' },
+  completed: { icon: '✅', label: 'Complete', desc: 'Outreach is complete — quotes are ready' },
+  expired: { icon: '⏰', label: 'Expired', desc: 'This dispatch request has expired' },
+  refunded: { icon: '💰', label: 'Refunded', desc: 'Payment has been refunded' },
+};
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+function DispatchesTab({ workspaceId }: { workspaceId: string }) {
+  const navigate = useNavigate();
+  const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
+  const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
+
+  useEffect(() => {
+    businessService.listDispatches(workspaceId).then(res => {
+      if (res.data) setDispatches(res.data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [workspaceId]);
+
+  async function toggleExpand(jobId: string) {
+    if (expandedId === jobId) { setExpandedId(null); return; }
+    setExpandedId(jobId);
+    if (!responses[jobId]) {
+      setLoadingResponses(jobId);
+      try {
+        const res = await jobService.getResponses(jobId);
+        setResponses(prev => ({ ...prev, [jobId]: res.data?.responses ?? [] }));
+      } catch { setResponses(prev => ({ ...prev, [jobId]: [] })); }
+      setLoadingResponses(null);
+    }
+  }
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading dispatches...</div>;
+
+  if (dispatches.length === 0) return (
+    <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>🚀</div>
+      <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No dispatches yet</div>
+      <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 20 }}>Dispatch requests from the chat will appear here.</div>
+      <button onClick={() => navigate(`/business/chat?workspace=${workspaceId}`)}
+        style={{ padding: '10px 24px', borderRadius: 100, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+        New Dispatch
+      </button>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Dispatches</h3>
+        <button onClick={() => navigate(`/business/chat?workspace=${workspaceId}`)}
+          style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+          + New Dispatch
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {dispatches.map(j => {
+          const sc = DISPATCH_STATUS_COLORS[j.status] || DISPATCH_STATUS_COLORS.expired;
+          const sm = DISPATCH_STATUS_MESSAGES[j.status] || DISPATCH_STATUS_MESSAGES.open;
+          const isExpanded = expandedId === j.id;
+          const jobResponses = responses[j.id] ?? [];
+          const isActive = ['open', 'dispatching', 'collecting'].includes(j.status);
+
+          return (
+            <div key={j.id} onClick={() => toggleExpand(j.id)} style={{
+              background: 'white', borderRadius: 14, padding: '16px 18px',
+              border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontWeight: 600, fontSize: 15, color: D }}>
+                  {j.diagnosis?.category ? j.diagnosis.category.charAt(0).toUpperCase() + j.diagnosis.category.slice(1) : 'Dispatch'}
+                </div>
+                <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
+              </div>
+              {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>{j.diagnosis.summary}</div>}
+              <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#9B9490', flexWrap: 'wrap' }}>
+                {j.propertyName && <span>🏠 {j.propertyName}</span>}
+                <span>{j.zipCode}</span>
+                <span>{new Date(j.createdAt).toLocaleDateString()} {new Date(j.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                <span>({timeAgo(j.createdAt)})</span>
+              </div>
+
+              {/* Expanded Detail */}
+              {isExpanded && (
+                <div style={{ marginTop: 16, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }} onClick={e => e.stopPropagation()}>
+
+                  {/* Status Banner */}
+                  <div style={{ background: isActive ? '#FFF7ED' : sc.bg, borderRadius: 10, padding: '14px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {isActive && <div style={{ width: 10, height: 10, borderRadius: '50%', background: O, animation: 'pulse 1.2s infinite' }} />}
+                    {!isActive && <span style={{ fontSize: 18 }}>{sm.icon}</span>}
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{sm.label}</div>
+                      <div style={{ fontSize: 12, color: '#6B6560' }}>{sm.desc}</div>
+                    </div>
+                  </div>
+
+                  {/* Job Details Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                    <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Category</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.category ?? 'General'}</div>
+                    </div>
+                    <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Severity</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.severity ?? 'Medium'}</div>
+                    </div>
+                    {j.propertyName && (
+                      <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                        <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Property</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{j.propertyName}</div>
+                      </div>
+                    )}
+                    <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Timing</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{j.preferredTiming ?? 'ASAP'}</div>
+                    </div>
+                  </div>
+
+                  {j.expiresAt && (
+                    <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 16 }}>
+                      {isActive ? 'Expires' : 'Expired'}: {new Date(j.expiresAt).toLocaleString()}
+                    </div>
+                  )}
+
+                  {/* Provider Responses */}
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 10 }}>Provider Responses</div>
+
+                    {loadingResponses === j.id ? (
+                      <div style={{ color: '#9B9490', fontSize: 13 }}>Loading responses...</div>
+                    ) : jobResponses.length === 0 ? (
+                      <div style={{ background: W, borderRadius: 10, padding: '16px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 13, color: '#9B9490' }}>
+                          {isActive ? 'Waiting for providers to respond...' : 'No providers responded to this request'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {jobResponses.map(r => (
+                          <div key={r.id} style={{
+                            background: W, borderRadius: 12, padding: '14px 16px',
+                            border: '1px solid rgba(0,0,0,0.04)',
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                              <div>
+                                <span style={{ fontWeight: 600, fontSize: 15, color: D }}>{r.provider.name}</span>
+                                <span style={{ color: '#9B9490', fontSize: 12, marginLeft: 8 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
+                              </div>
+                              {r.quoted_price && (
+                                <div style={{ textAlign: 'right' }}>
+                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                                  <div style={{ fontSize: 10, color: '#9B9490' }}>estimate</div>
+                                </div>
+                              )}
+                            </div>
+                            {r.availability && <div style={{ fontSize: 13, color: D, marginBottom: 4 }}>📅 {r.availability}</div>}
+                            {r.message && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic' }}>"{r.message}"</div>}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                              <span style={{ fontSize: 11, color: '#9B9490' }}>via {r.channel} · {timeAgo(r.responded_at)}</span>
+                              {r.provider.phone && (
+                                <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
+                              )}
+                            </div>
+                            {isActive && (
+                              <div style={{ marginTop: 10 }}>
+                                <button onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    await jobService.bookProvider(j.id, r.id, r.provider.id);
+                                    setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'completed' } : d));
+                                  } catch (err) {
+                                    alert((err as Error).message || 'Booking failed');
+                                  }
+                                }} style={{
+                                  width: '100%', padding: '11px 0', borderRadius: 100, border: 'none',
+                                  background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                                  fontFamily: "'DM Sans', sans-serif",
+                                }}>Book {r.provider.name.split(' ')[0]}</button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <style>{`
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+      `}</style>
+    </div>
+  );
+}
+
 /* ── Settings Tab ──────────────────────────────────────────────────────── */
 
 function SettingsTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUpdated: (w: WorkspaceDetail) => void }) {
@@ -889,9 +1118,9 @@ function SettingsTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onU
 
 /* ── Main Page ──────────────────────────────────────────────────────────── */
 
-const TABS = ['overview', 'properties', 'vendors', 'team', 'settings'] as const;
+const TABS = ['overview', 'dispatches', 'properties', 'vendors', 'team', 'settings'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', dispatches: 'Dispatches', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
 
 export default function BusinessPortal() {
   const { homeowner } = useAuth();
@@ -995,6 +1224,9 @@ export default function BusinessPortal() {
 
             {/* Tab content */}
             {workspace && tab === 'overview' && <OverviewTab workspace={workspace} />}
+            {workspace && tab === 'dispatches' && (
+              <DispatchesTab workspaceId={workspace.id} />
+            )}
             {workspace && tab === 'properties' && (
               <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} />
             )}

@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, or, desc, ne, sql } from 'drizzle-orm';
+import { eq, and, or, desc, ne, sql, gte, lte } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { workspaces } from '../db/schema/workspaces';
+import { jobs } from '../db/schema/jobs';
+import { providerResponses } from '../db/schema/provider-responses';
+import { bookings } from '../db/schema/bookings';
 import { workspaceMembers } from '../db/schema/workspace-members';
 import { properties } from '../db/schema/properties';
 import { homeowners } from '../db/schema/homeowners';
@@ -705,6 +708,66 @@ router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRol
   } catch (err) {
     logger.error({ err }, '[GET /business/:id/vendors/search]');
     res.status(500).json({ data: null, error: 'Failed to search providers', meta: {} });
+  }
+});
+
+// ── Dispatches (workspace jobs) ─────────────────────────────────────────────
+
+// GET /:workspaceId/dispatches
+router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    // Get all jobs for this workspace, or all jobs created by workspace members
+    const memberRows = await db
+      .select({ homeownerId: workspaceMembers.homeownerId })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, req.workspaceId));
+
+    const memberIds = memberRows.map(m => m.homeownerId);
+    if (memberIds.length === 0) {
+      res.json({ data: [], error: null, meta: {} });
+      return;
+    }
+
+    const rows = await db
+      .select({
+        id: jobs.id,
+        status: jobs.status,
+        paymentStatus: jobs.paymentStatus,
+        tier: jobs.tier,
+        zipCode: jobs.zipCode,
+        diagnosis: jobs.diagnosis,
+        preferredTiming: jobs.preferredTiming,
+        propertyId: jobs.propertyId,
+        createdAt: jobs.createdAt,
+        expiresAt: jobs.expiresAt,
+      })
+      .from(jobs)
+      .where(
+        sql`(${jobs.workspaceId} = ${req.workspaceId} OR ${jobs.homeownerId} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)}))`
+      )
+      .orderBy(desc(jobs.createdAt))
+      .limit(100);
+
+    // Enrich with property names
+    const propertyIds = [...new Set(rows.filter(r => r.propertyId).map(r => r.propertyId!))];
+    let propertyMap: Record<string, string> = {};
+    if (propertyIds.length > 0) {
+      const propRows = await db
+        .select({ id: properties.id, name: properties.name })
+        .from(properties)
+        .where(sql`${properties.id} IN (${sql.join(propertyIds.map(id => sql`${id}`), sql`, `)})`);
+      propertyMap = Object.fromEntries(propRows.map(p => [p.id, p.name]));
+    }
+
+    const enriched = rows.map(r => ({
+      ...r,
+      propertyName: r.propertyId ? propertyMap[r.propertyId] || null : null,
+    }));
+
+    res.json({ data: enriched, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/dispatches]');
+    res.status(500).json({ data: null, error: 'Failed to fetch dispatches', meta: {} });
   }
 });
 
