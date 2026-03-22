@@ -371,7 +371,7 @@ export default function BusinessChat() {
       const newCount = exchangeCount + 1;
       setExchangeCount(newCount);
 
-      // AI signals readiness with a diagnosis block — go to budget then summary
+      // AI signals readiness with a diagnosis block — save it and ask budget
       if (rawText.includes('<diagnosis>')) {
         setAiDiagnosis(aiText);
         setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
@@ -379,26 +379,36 @@ export default function BusinessChat() {
         return;
       }
 
-      // Show dispatch button only after 3+ exchanges
+      // After 3+ exchanges, ask budget instead of showing dispatch button
       if (newCount >= 3) {
-        setReadyToDispatch(true);
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
+        setStep('budget');
+        return;
       }
 
       setStep('extra');
     });
   }
 
-  // Handle "Generate summary & dispatch"
-  function handleGenerateSummary() {
+  // Handle budget selection
+  function handleBudget(selected: string) {
+    setBudget(selected);
+    setMessages(prev => [...prev, { role: 'user', content: selected === 'flexible' ? 'No budget preference' : selected }]);
+
+    // If we already have a diagnosis from the AI, go straight to summary
+    if (aiDiagnosis) {
+      setStep('summary');
+      return;
+    }
+
+    // Otherwise generate the scope silently
     const promptText = category?.group === 'service'
       ? 'Please generate a final scope summary so I can dispatch a provider.'
       : 'Please generate your diagnosis so I can dispatch a pro.';
 
-    // Send silently — don't add the prompt or AI response to visible chat
     setStreaming(true);
     setStreamText('');
     let full = '';
-
     const mode = category?.group === 'service' ? 'service' : 'repair';
 
     abortRef.current = businessChatService.sendMessage(
@@ -412,15 +422,13 @@ export default function BusinessChat() {
           setStreaming(false);
           setStreamText('');
           setAiDiagnosis(full.trim());
-          setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
-          setStep('budget');
+          setStep('summary');
         },
         onError: () => {
           setStreaming(false);
           setStreamText('');
           setAiDiagnosis(`${category?.label}: ${q1Answer}`);
-          setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
-          setStep('budget');
+          setStep('summary');
         },
       },
       {
@@ -428,13 +436,6 @@ export default function BusinessChat() {
         propertyContext: getPropertyContext(),
       },
     );
-  }
-
-  // Handle budget selection
-  function handleBudget(selected: string) {
-    setBudget(selected);
-    setMessages(prev => [...prev, { role: 'user', content: selected === 'flexible' ? 'No budget preference' : selected }]);
-    setStep('summary');
   }
 
   // Handle dispatch (no tier selection — B2B subscription covers it)
@@ -685,15 +686,6 @@ export default function BusinessChat() {
                 </div>
               )}
 
-              {readyToDispatch && (
-                <button onClick={handleGenerateSummary} style={{
-                  padding: '13px 0', borderRadius: 100, border: 'none', background: G, color: '#fff',
-                  fontSize: 15, fontWeight: 600, cursor: 'pointer', width: '100%',
-                  fontFamily: "'DM Sans', sans-serif", animation: 'fadeSlide 0.3s ease',
-                }}>
-                  {category?.group === 'service' ? 'Confirm Scope & Dispatch' : 'Generate Diagnosis & Dispatch'}
-                </button>
-              )}
             </div>
           )}
 
