@@ -41,13 +41,14 @@ export async function recordProviderResponse(
 
   await db
     .insert(providerScores)
-    .values({ providerId, totalOutreach: 0, totalAccepted: 0, avgResponseSec: clamped.toFixed(4) })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .values({ providerId, totalOutreach: 0, totalAccepted: 0, avgResponseSec: clamped.toFixed(4) } as any)
     .onConflictDoUpdate({
       target: providerScores.providerId,
       set: {
         avgResponseSec: emaUpdate(providerScores.avgResponseSec, clamped),
         updatedAt: sql`now()`,
-      },
+      } as Record<string, unknown>,
     });
 }
 
@@ -68,13 +69,14 @@ export async function recordHomeownerRating(
 
   await db
     .insert(providerScores)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .values({
       providerId,
       totalOutreach: 0,
       totalAccepted: 0,
       avgHomeownerRating: clamped.toFixed(4),
       completionRate: '1.0000', // first rating initialises to 100%
-    })
+    } as any)
     .onConflictDoUpdate({
       target: providerScores.providerId,
       set: {
