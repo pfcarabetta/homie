@@ -31,8 +31,6 @@ const B2B_CATEGORIES: CatDef[] = [
     q1: { text: "What's the concern?", options: ['Active leak', 'Missing shingles', 'Storm damage', 'Gutter issue', 'Other'] } },
   { id: 'general', icon: '🔨', label: 'Handyman', group: 'repair',
     q1: { text: 'What kind of work?', options: ['Drywall repair', 'Door/window', 'Fence repair', 'Furniture', 'Other'] } },
-  { id: 'locksmith', icon: '🔑', label: 'Locksmith', group: 'repair',
-    q1: { text: 'What do you need?', options: ['Locked out', 'Rekey locks', 'New lock install', 'Smart lock setup', 'Other'] } },
   // Service (B2B-specific)
   { id: 'cleaning', icon: '✨', label: 'Turnover Clean', group: 'service',
     q1: { text: 'What type of clean?', options: ['Standard turnover', 'Deep clean', 'Post-construction', 'Laundry/linens', 'Other'] } },
@@ -50,6 +48,10 @@ const B2B_CATEGORIES: CatDef[] = [
     q1: { text: 'What kind of pest?', options: ['Ants', 'Roaches', 'Mice/rats', 'Termites', 'Bed bugs', 'Other'] } },
   { id: 'trash', icon: '🗑️', label: 'Trash Valet', group: 'service',
     q1: { text: 'What do you need?', options: ['Scheduled pickup', 'Bulk removal', 'Post-guest cleanout', 'Other'] } },
+  { id: 'locksmith', icon: '🔑', label: 'Locksmith', group: 'service',
+    q1: { text: 'What do you need?', options: ['Locked out', 'Rekey locks', 'New lock install', 'Smart lock setup', 'Lockbox replacement'] } },
+  { id: 'pressure_washing', icon: '💦', label: 'Pressure Wash', group: 'service',
+    q1: { text: 'What needs washing?', options: ['Driveway', 'Patio/deck', 'House siding', 'Fence', 'Pool area', 'Full exterior'] } },
   { id: 'concierge', icon: '🎩', label: 'Concierge', group: 'service',
     q1: { text: 'What service?', options: ['Private chef', 'Transport', 'Grocery delivery', 'Equipment rental', 'Activities', 'Other'] } },
 ];
