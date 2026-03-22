@@ -71,6 +71,13 @@
       "when": 1774167108350,
       "tag": "0009_perpetual_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774169498963,
+      "tag": "0010_condemned_thunderbolt_ross",
+      "breakpoints": true
     }
   ]
 }

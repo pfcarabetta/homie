@@ -647,6 +647,32 @@ export interface WorkspaceMember {
   acceptedAt: string | null;
 }
 
+export interface PreferredVendor {
+  id: string;
+  providerId: string;
+  propertyId: string | null;
+  categories: string[] | null;
+  priority: number;
+  notes: string | null;
+  active: boolean;
+  createdAt: string;
+  providerName: string;
+  providerPhone: string | null;
+  providerEmail: string | null;
+  providerRating: string | null;
+  providerReviewCount: number;
+}
+
+export interface ProviderSearchResult {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  googleRating: string | null;
+  reviewCount: number;
+  categories: string[] | null;
+}
+
 export const businessService = {
   // Workspaces
   listWorkspaces: () => fetchAPI<Workspace[]>('/api/v1/business'),
@@ -689,6 +715,26 @@ export const businessService = {
     }),
   removeMember: (workspaceId: string, memberId: string) =>
     fetchAPI<{ removed: boolean }>(`/api/v1/business/${workspaceId}/members/${memberId}`, {
+      method: 'DELETE',
+    }),
+
+  // Preferred Vendors
+  listVendors: (workspaceId: string) =>
+    fetchAPI<PreferredVendor[]>(`/api/v1/business/${workspaceId}/vendors`),
+  searchProviders: (workspaceId: string, q: string) =>
+    fetchAPI<ProviderSearchResult[]>(`/api/v1/business/${workspaceId}/vendors/search?q=${encodeURIComponent(q)}`),
+  addVendor: (workspaceId: string, data: {
+    provider_id: string; property_id?: string | null; categories?: string[];
+    priority?: number; notes?: string;
+  }) => fetchAPI<PreferredVendor>(`/api/v1/business/${workspaceId}/vendors`, {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  updateVendor: (workspaceId: string, vendorId: string, data: Record<string, unknown>) =>
+    fetchAPI<PreferredVendor>(`/api/v1/business/${workspaceId}/vendors/${vendorId}`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+  removeVendor: (workspaceId: string, vendorId: string) =>
+    fetchAPI<{ removed: boolean }>(`/api/v1/business/${workspaceId}/vendors/${vendorId}`, {
       method: 'DELETE',
     }),
 };

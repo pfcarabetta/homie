@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { businessService, type Workspace, type WorkspaceDetail, type Property, type WorkspaceMember } from '@/services/api';
+import { businessService, type Workspace, type WorkspaceDetail, type Property, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -492,6 +492,236 @@ function TeamTab({ workspaceId, role, ownerId }: { workspaceId: string; role: st
   );
 }
 
+/* ── Add Vendor Modal ──────────────────────────────────────────────────── */
+
+function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string; onClose: () => void; onAdded: () => void }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<ProviderSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<ProviderSearchResult | null>(null);
+  const [categories, setCategories] = useState('');
+  const [priority, setPriority] = useState(1);
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (query.length < 2) { setResults([]); return; }
+    const timer = setTimeout(() => {
+      setSearching(true);
+      businessService.searchProviders(workspaceId, query).then(res => {
+        if (res.data) setResults(res.data);
+        setSearching(false);
+      }).catch(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, workspaceId]);
+
+  async function handleAdd() {
+    if (!selectedProvider) { setError('Select a provider first'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await businessService.addVendor(workspaceId, {
+        provider_id: selectedProvider.id,
+        categories: categories ? categories.split(',').map(c => c.trim()).filter(Boolean) : undefined,
+        priority,
+        notes: notes || undefined,
+      });
+      onAdded();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to add vendor');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 20px' }}>Add Preferred Vendor</h3>
+
+        {!selectedProvider ? (
+          <>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Search Providers</label>
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Type provider name..."
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 8, boxSizing: 'border-box' }} />
+            {searching && <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>Searching...</div>}
+
+            <div style={{ maxHeight: 300, overflow: 'auto' }}>
+              {results.map(p => (
+                <div key={p.id} onClick={() => setSelectedProvider(p)}
+                  style={{ padding: '12px 16px', borderRadius: 8, border: '1px solid #E0DAD4', marginBottom: 6, cursor: 'pointer', background: '#fff' }}
+                  onMouseOver={e => (e.currentTarget.style.background = '#FAFAF8')}
+                  onMouseOut={e => (e.currentTarget.style.background = '#fff')}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{p.name}</div>
+                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4, display: 'flex', gap: 12 }}>
+                    {p.googleRating && <span>Rating: {p.googleRating} ({p.reviewCount})</span>}
+                    {p.phone && <span>{p.phone}</span>}
+                  </div>
+                  {p.categories && <div style={{ fontSize: 12, color: '#6B6560', marginTop: 4 }}>{p.categories.join(', ')}</div>}
+                </div>
+              ))}
+              {query.length >= 2 && !searching && results.length === 0 && (
+                <div style={{ textAlign: 'center', padding: 20, color: '#9B9490', fontSize: 14 }}>No providers found</div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ padding: '12px 16px', borderRadius: 8, border: `2px solid ${O}`, background: `${O}08`, marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{selectedProvider.name}</div>
+                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>
+                    {selectedProvider.phone || selectedProvider.email || 'No contact info'}
+                  </div>
+                </div>
+                <button onClick={() => setSelectedProvider(null)}
+                  style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#6B6560' }}>
+                  Change
+                </button>
+              </div>
+            </div>
+
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Categories (comma-separated)</label>
+            <input value={categories} onChange={e => setCategories(e.target.value)} placeholder="plumbing, hvac"
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' }} />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Priority</label>
+                <select value={priority} onChange={e => setPriority(+e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, cursor: 'pointer', boxSizing: 'border-box' }}>
+                  <option value={1}>1 — First choice</option>
+                  <option value={2}>2 — Backup</option>
+                  <option value={3}>3 — Third option</option>
+                </select>
+              </div>
+            </div>
+
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Notes</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Agreed rate, specialties, etc."
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
+          </>
+        )}
+
+        {error && <div style={{ color: '#DC2626', fontSize: 14, marginBottom: 16 }}>{error}</div>}
+
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+          {selectedProvider && (
+            <button onClick={handleAdd} disabled={saving}
+              style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
+              {saving ? 'Adding...' : 'Add Vendor'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Vendors Tab ──────────────────────────────────────────────────────── */
+
+function VendorsTab({ workspaceId, role }: { workspaceId: string; role: string }) {
+  const [vendors, setVendors] = useState<PreferredVendor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+
+  const canEdit = role === 'admin' || role === 'coordinator';
+
+  function loadVendors() {
+    businessService.listVendors(workspaceId).then(res => {
+      if (res.data) setVendors(res.data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }
+
+  useEffect(() => { loadVendors(); }, [workspaceId]);
+
+  async function handleRemove(vendorId: string, name: string) {
+    if (!confirm(`Remove ${name} from preferred vendors?`)) return;
+    try {
+      await businessService.removeVendor(workspaceId, vendorId);
+      setVendors(prev => prev.filter(v => v.id !== vendorId));
+    } catch { /* ignore */ }
+  }
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading vendors...</div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Preferred Vendors</h3>
+        {canEdit && (
+          <button onClick={() => setShowAdd(true)}
+            style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+            + Add Vendor
+          </button>
+        )}
+      </div>
+
+      <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 20, lineHeight: 1.5 }}>
+        Preferred vendors are contacted first when jobs are dispatched. If they decline or don't respond, backup vendors are tried before falling back to marketplace discovery.
+      </div>
+
+      {vendors.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🤝</div>
+          <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No preferred vendors yet</div>
+          <div style={{ fontSize: 14, color: '#9B9490' }}>Add vendors you trust to get priority dispatch on your jobs.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {vendors.map(v => (
+            <div key={v.id} style={{ background: '#fff', borderRadius: 10, border: '1px solid #E0DAD4', padding: '16px 20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 16, fontWeight: 600, color: D }}>{v.providerName}</span>
+                    <span style={{
+                      fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600,
+                      background: v.priority === 1 ? '#FEF3C7' : v.priority === 2 ? '#DBEAFE' : '#F3F4F6',
+                      color: v.priority === 1 ? '#B45309' : v.priority === 2 ? '#2563EB' : '#6B7280',
+                    }}>
+                      Priority {v.priority}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4, display: 'flex', gap: 16 }}>
+                    {v.providerPhone && <span>{v.providerPhone}</span>}
+                    {v.providerEmail && <span>{v.providerEmail}</span>}
+                    {v.providerRating && <span>Rating: {v.providerRating} ({v.providerReviewCount})</span>}
+                  </div>
+                  {v.categories && v.categories.length > 0 && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                      {v.categories.map(c => (
+                        <span key={c} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, background: `${G}15`, color: G, fontWeight: 500 }}>{c}</span>
+                      ))}
+                    </div>
+                  )}
+                  {v.notes && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 6, fontStyle: 'italic' }}>{v.notes}</div>}
+                </div>
+                {canEdit && (
+                  <button onClick={() => handleRemove(v.id, v.providerName)}
+                    style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #FCA5A5', background: '#FEF2F2', fontSize: 12, cursor: 'pointer', color: '#DC2626', flexShrink: 0 }}>
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <AddVendorModal workspaceId={workspaceId} onClose={() => setShowAdd(false)}
+          onAdded={() => { setShowAdd(false); loadVendors(); }} />
+      )}
+    </div>
+  );
+}
+
 /* ── Settings Tab ──────────────────────────────────────────────────────── */
 
 function SettingsTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUpdated: (w: WorkspaceDetail) => void }) {
@@ -549,9 +779,9 @@ function SettingsTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onU
 
 /* ── Main Page ──────────────────────────────────────────────────────────── */
 
-const TABS = ['overview', 'properties', 'team', 'settings'] as const;
+const TABS = ['overview', 'properties', 'vendors', 'team', 'settings'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', properties: 'Properties', team: 'Team', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
 
 export default function BusinessPortal() {
   const { homeowner } = useAuth();
@@ -651,6 +881,9 @@ export default function BusinessPortal() {
             {workspace && tab === 'overview' && <OverviewTab workspace={workspace} />}
             {workspace && tab === 'properties' && (
               <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} />
+            )}
+            {workspace && tab === 'vendors' && (
+              <VendorsTab workspaceId={workspace.id} role={workspace.user_role} />
             )}
             {workspace && tab === 'team' && (
               <TeamTab workspaceId={workspace.id} role={workspace.user_role} ownerId={workspace.ownerId || ''} />

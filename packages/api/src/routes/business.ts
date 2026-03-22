@@ -1,11 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, or, desc, ne } from 'drizzle-orm';
+import { eq, and, or, desc, ne, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { workspaces } from '../db/schema/workspaces';
 import { workspaceMembers } from '../db/schema/workspace-members';
 import { properties } from '../db/schema/properties';
 import { homeowners } from '../db/schema/homeowners';
+import { providers } from '../db/schema/providers';
+import { preferredVendors } from '../db/schema/preferred-vendors';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 
 const router = Router();
@@ -456,6 +458,188 @@ router.delete('/:workspaceId/members/:memberId', requireWorkspace, requireWorksp
   } catch (err) {
     logger.error({ err }, '[DELETE /business/:id/members/:mid]');
     res.status(500).json({ data: null, error: 'Failed to remove member', meta: {} });
+  }
+});
+
+// ── Preferred Vendors ──────────────────────────────────────────────────────
+
+// GET /:workspaceId/vendors
+router.get('/:workspaceId/vendors', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: preferredVendors.id,
+        providerId: preferredVendors.providerId,
+        propertyId: preferredVendors.propertyId,
+        categories: preferredVendors.categories,
+        priority: preferredVendors.priority,
+        notes: preferredVendors.notes,
+        active: preferredVendors.active,
+        createdAt: preferredVendors.createdAt,
+        providerName: providers.name,
+        providerPhone: providers.phone,
+        providerEmail: providers.email,
+        providerRating: providers.googleRating,
+        providerReviewCount: providers.reviewCount,
+      })
+      .from(preferredVendors)
+      .innerJoin(providers, eq(preferredVendors.providerId, providers.id))
+      .where(and(eq(preferredVendors.workspaceId, req.workspaceId), eq(preferredVendors.active, true)))
+      .orderBy(preferredVendors.priority);
+
+    res.json({ data: rows, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/vendors]');
+    res.status(500).json({ data: null, error: 'Failed to fetch vendors', meta: {} });
+  }
+});
+
+// POST /:workspaceId/vendors — Add preferred vendor
+router.post('/:workspaceId/vendors', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const body = req.body as {
+    provider_id?: string;
+    property_id?: string | null;
+    categories?: string[];
+    priority?: number;
+    notes?: string;
+  };
+
+  if (!body.provider_id) {
+    res.status(400).json({ data: null, error: 'provider_id is required', meta: {} });
+    return;
+  }
+
+  try {
+    // Verify provider exists
+    const [provider] = await db
+      .select({ id: providers.id })
+      .from(providers)
+      .where(eq(providers.id, body.provider_id))
+      .limit(1);
+
+    if (!provider) {
+      res.status(404).json({ data: null, error: 'Provider not found', meta: {} });
+      return;
+    }
+
+    // Check for duplicate
+    const conditions = [
+      eq(preferredVendors.workspaceId, req.workspaceId),
+      eq(preferredVendors.providerId, body.provider_id),
+    ];
+    const [existing] = await db
+      .select({ id: preferredVendors.id })
+      .from(preferredVendors)
+      .where(and(...conditions))
+      .limit(1);
+
+    if (existing) {
+      res.status(409).json({ data: null, error: 'This provider is already a preferred vendor', meta: {} });
+      return;
+    }
+
+    const [vendor] = await db
+      .insert(preferredVendors)
+      .values({
+        workspaceId: req.workspaceId,
+        providerId: body.provider_id,
+        propertyId: body.property_id ?? null,
+        categories: body.categories ?? null,
+        priority: body.priority ?? 0,
+        notes: body.notes ?? null,
+      })
+      .returning();
+
+    res.status(201).json({ data: vendor, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/vendors]');
+    res.status(500).json({ data: null, error: 'Failed to add vendor', meta: {} });
+  }
+});
+
+// PATCH /:workspaceId/vendors/:vendorId — Update preferred vendor
+router.patch('/:workspaceId/vendors/:vendorId', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const body = req.body as Record<string, unknown>;
+  const updates: Record<string, unknown> = {};
+
+  const fields: Record<string, string> = {
+    property_id: 'propertyId',
+    categories: 'categories',
+    priority: 'priority',
+    notes: 'notes',
+    active: 'active',
+  };
+
+  for (const [bodyKey, dbKey] of Object.entries(fields)) {
+    if (body[bodyKey] !== undefined) updates[dbKey] = body[bodyKey];
+  }
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ data: null, error: 'No fields to update', meta: {} });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(preferredVendors)
+      .set(updates)
+      .where(and(eq(preferredVendors.id, req.params.vendorId), eq(preferredVendors.workspaceId, req.workspaceId)))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ data: null, error: 'Vendor not found', meta: {} });
+      return;
+    }
+
+    res.json({ data: updated, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /business/:id/vendors/:vid]');
+    res.status(500).json({ data: null, error: 'Failed to update vendor', meta: {} });
+  }
+});
+
+// DELETE /:workspaceId/vendors/:vendorId — Remove preferred vendor (soft delete)
+router.delete('/:workspaceId/vendors/:vendorId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  try {
+    await db
+      .update(preferredVendors)
+      .set({ active: false })
+      .where(and(eq(preferredVendors.id, req.params.vendorId), eq(preferredVendors.workspaceId, req.workspaceId)));
+
+    res.json({ data: { removed: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[DELETE /business/:id/vendors/:vid]');
+    res.status(500).json({ data: null, error: 'Failed to remove vendor', meta: {} });
+  }
+});
+
+// GET /:workspaceId/vendors/search?q=name — Search providers to add as preferred
+router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const q = (req.query.q as string || '').trim();
+  if (!q || q.length < 2) {
+    res.json({ data: [], error: null, meta: {} });
+    return;
+  }
+
+  try {
+    const rows = await db
+      .select({
+        id: providers.id,
+        name: providers.name,
+        phone: providers.phone,
+        email: providers.email,
+        googleRating: providers.googleRating,
+        reviewCount: providers.reviewCount,
+        categories: providers.categories,
+      })
+      .from(providers)
+      .where(sql`LOWER(${providers.name}) LIKE ${'%' + q.toLowerCase() + '%'}`)
+      .limit(20);
+
+    res.json({ data: rows, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/vendors/search]');
+    res.status(500).json({ data: null, error: 'Failed to search providers', meta: {} });
   }
 });
 

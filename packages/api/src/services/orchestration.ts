@@ -1,4 +1,4 @@
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql, asc } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { jobs } from '../db/schema/jobs';
@@ -6,6 +6,7 @@ import { homeowners } from '../db/schema/homeowners';
 import { providers } from '../db/schema/providers';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerScores } from '../db/schema/provider-scores';
+import { preferredVendors } from '../db/schema/preferred-vendors';
 import { discoverProviders } from './providers/discovery';
 import { generateScripts } from './scripts/generation';
 import { VoiceAdapter } from './outreach/voice';
@@ -228,43 +229,114 @@ export async function dispatchJob(jobId: string): Promise<void> {
   const tier = (job.tier as JobTier) in TIER_PROVIDER_LIMITS ? (job.tier as JobTier) : 'standard';
   const limit = TIER_PROVIDER_LIMITS[tier];
 
-  // Discover providers — start at 15 miles, expand to 25 if none found
-  let discoveredProviders: DiscoveredProvider[];
-  try {
-    logger.info(`[orchestration] dispatchJob: discovering providers for job ${jobId} (${diagnosis.category}, ${job.zipCode})`);
-    const result = await discoverProviders({
-      category: diagnosis.category,
-      zipCode: job.zipCode,
-      radiusMiles: 15,
-      minRating: 4.0,
-      limit: limit + DISCOVERY_BUFFER,
-    });
-    discoveredProviders = result.providers;
-    logger.info(`[orchestration] dispatchJob: found ${discoveredProviders.length} providers at 15mi for job ${jobId}`);
+  // ── Preferred vendor cascade (B2B jobs only) ──────────────────────────
+  const preferredProviderIds: string[] = [];
+  if (job.workspaceId) {
+    try {
+      const pvRows = await db
+        .select({ providerId: preferredVendors.providerId })
+        .from(preferredVendors)
+        .where(and(
+          eq(preferredVendors.workspaceId, job.workspaceId),
+          eq(preferredVendors.active, true),
+          // Match property-specific vendors first, then workspace-wide
+          job.propertyId
+            ? sql`(${preferredVendors.propertyId} = ${job.propertyId} OR ${preferredVendors.propertyId} IS NULL)`
+            : sql`${preferredVendors.propertyId} IS NULL`,
+        ))
+        .orderBy(asc(preferredVendors.priority));
 
-    // Retry with larger radius if no eligible providers
-    const firstPassEligible = discoveredProviders.filter((p) => !p.suppressed && !p.rate_limited);
-    if (firstPassEligible.length === 0) {
-      logger.info(`[orchestration] dispatchJob: no eligible at 15mi, expanding to 25mi for job ${jobId}`);
-      const expanded = await discoverProviders({
-        category: diagnosis.category,
-        zipCode: job.zipCode,
-        radiusMiles: 25,
-        minRating: 3.5,
-        limit: limit + DISCOVERY_BUFFER + 5,
-      });
-      discoveredProviders = expanded.providers;
-      logger.info(`[orchestration] dispatchJob: found ${discoveredProviders.length} providers at 25mi for job ${jobId}`);
+      preferredProviderIds.push(...pvRows.map(r => r.providerId));
+      if (preferredProviderIds.length > 0) {
+        logger.info(`[orchestration] dispatchJob: found ${preferredProviderIds.length} preferred vendors for job ${jobId}`);
+      }
+    } catch (err) {
+      logger.warn({ err }, `[orchestration] dispatchJob: preferred vendor lookup failed for job ${jobId}, falling back to marketplace`);
     }
-  } catch (err) {
-    logger.error({ err }, `[orchestration] dispatchJob: discovery failed for job ${jobId}`);
-    return;
   }
 
-  // Filter out suppressed and rate-limited providers, then cap to tier limit
-  const eligible = discoveredProviders
-    .filter((p) => !p.suppressed && !p.rate_limited)
-    .slice(0, limit);
+  // ── Provider discovery ────────────────────────────────────────────────
+  // Build the eligible list: preferred vendors first, then marketplace discovery fills remaining slots
+
+  let eligible: DiscoveredProvider[] = [];
+
+  // Load preferred vendors as DiscoveredProvider objects
+  if (preferredProviderIds.length > 0) {
+    const pvProviders = await db
+      .select()
+      .from(providers)
+      .where(inArray(providers.id, preferredProviderIds));
+
+    for (const pv of pvProviders) {
+      eligible.push({
+        id: pv.id,
+        name: pv.name,
+        phone: pv.phone,
+        email: pv.email,
+        website: pv.website,
+        google_place_id: pv.googlePlaceId,
+        google_rating: pv.googleRating,
+        review_count: pv.reviewCount,
+        categories: pv.categories,
+        distance_miles: 0,
+        rank_score: 100, // preferred vendors get top rank
+        homie_score: { acceptance_rate: 0, completion_rate: 0, avg_homeowner_rating: 0, avg_response_sec: 0, total_jobs: 0 },
+        channels_available: ['sms', 'voice', 'web'].filter(c =>
+          c !== 'voice' || pv.phone,
+        ),
+        open_now: null,
+        last_contacted: null,
+        suppressed: false,
+        rate_limited: false,
+      });
+    }
+    logger.info(`[orchestration] dispatchJob: loaded ${eligible.length} preferred providers for job ${jobId}`);
+  }
+
+  // Fill remaining slots from marketplace discovery
+  const remainingSlots = limit - eligible.length;
+  if (remainingSlots > 0) {
+    let discoveredProviders: DiscoveredProvider[];
+    try {
+      logger.info(`[orchestration] dispatchJob: discovering ${remainingSlots} marketplace providers for job ${jobId} (${diagnosis.category}, ${job.zipCode})`);
+      const result = await discoverProviders({
+        category: diagnosis.category,
+        zipCode: job.zipCode,
+        radiusMiles: 15,
+        minRating: 4.0,
+        limit: remainingSlots + DISCOVERY_BUFFER,
+      });
+      discoveredProviders = result.providers;
+      logger.info(`[orchestration] dispatchJob: found ${discoveredProviders.length} providers at 15mi for job ${jobId}`);
+
+      // Retry with larger radius if no eligible providers
+      const firstPassEligible = discoveredProviders.filter((p) => !p.suppressed && !p.rate_limited);
+      if (firstPassEligible.length === 0) {
+        logger.info(`[orchestration] dispatchJob: no eligible at 15mi, expanding to 25mi for job ${jobId}`);
+        const expanded = await discoverProviders({
+          category: diagnosis.category,
+          zipCode: job.zipCode,
+          radiusMiles: 25,
+          minRating: 3.5,
+          limit: remainingSlots + DISCOVERY_BUFFER + 5,
+        });
+        discoveredProviders = expanded.providers;
+        logger.info(`[orchestration] dispatchJob: found ${discoveredProviders.length} providers at 25mi for job ${jobId}`);
+      }
+    } catch (err) {
+      logger.error({ err }, `[orchestration] dispatchJob: discovery failed for job ${jobId}`);
+      if (eligible.length === 0) return; // No preferred vendors either
+      discoveredProviders = [];
+    }
+
+    // Filter out suppressed, rate-limited, and already-included preferred vendors
+    const preferredIdSet = new Set(preferredProviderIds);
+    const marketplaceEligible = discoveredProviders
+      .filter((p) => !p.suppressed && !p.rate_limited && !preferredIdSet.has(p.id))
+      .slice(0, remainingSlots);
+
+    eligible = [...eligible, ...marketplaceEligible];
+  }
 
   if (eligible.length === 0) {
     logger.warn(`[orchestration] dispatchJob: no eligible providers for job ${jobId} even at expanded radius`);
