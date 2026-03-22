@@ -99,20 +99,36 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
 
 /* ── Chat message components ────────────────────────────────────────────── */
 
-function AssistantMsg({ text }: { text: string }) {
-  return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
+function AssistantMsg({ text, animate = false }: { text: string; animate?: boolean }) {
+  const [show, setShow] = useState(!animate);
+  useEffect(() => { if (animate) { const t = setTimeout(() => setShow(true), 200); return () => clearTimeout(t); } }, [animate]);
+  if (!show && animate) return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12, animation: 'fadeIn 0.3s ease' }}>
       <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
       </div>
-      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D, whiteSpace: 'pre-wrap' }}>{text}</div>
+      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%' }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ccc', animation: 'pulse 1s infinite' }} />
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ccc', animation: 'pulse 1s infinite 0.2s' }} />
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ccc', animation: 'pulse 1s infinite 0.4s' }} />
+        </div>
+      </div>
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12, animation: animate ? 'fadeSlide 0.3s ease' : 'none' }}>
+      <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
+      </div>
+      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D }}>{text}</div>
     </div>
   );
 }
 
 function UserMsg({ text }: { text: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, animation: 'fadeSlide 0.2s ease' }}>
       <div style={{ background: O, color: 'white', padding: '10px 18px', borderRadius: '16px 16px 4px 16px', maxWidth: '75%', fontSize: 15, lineHeight: 1.5 }}>{text}</div>
     </div>
   );
@@ -124,7 +140,7 @@ function StreamingMsg({ text }: { text: string }) {
       <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
       </div>
-      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D, whiteSpace: 'pre-wrap' }}>
+      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D }}>
         {text}<span style={{ display: 'inline-block', width: 6, height: 16, background: O, marginLeft: 2, animation: 'blink 1s infinite' }} />
       </div>
     </div>
@@ -389,31 +405,45 @@ export default function BusinessChat() {
   const serviceCats = B2B_CATEGORIES.filter(c => c.group === 'service');
 
   return (
-    <div style={{ minHeight: '100vh', background: W, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
+        @media (max-width: 480px) {
+          .b2b-cat-grid { grid-template-columns: repeat(3, 1fr) !important; }
+        }
+      `}</style>
+
       {/* Header */}
-      <header style={{ background: '#fff', borderBottom: '1px solid #E0DAD4', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span onClick={() => navigate('/business')} style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>Homie</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: G, background: `${G}15`, padding: '4px 10px', borderRadius: 20 }}>Dispatch</span>
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
+        padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: '1px solid rgba(0,0,0,0.05)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span onClick={() => navigate('/business')} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: G, background: `${G}15`, padding: '3px 10px', borderRadius: 20 }}>Business</span>
           {selectedProperty && (
-            <span style={{ fontSize: 13, color: '#6B6560' }}>
+            <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>
               {selectedProperty.name}
             </span>
           )}
         </div>
         <AvatarDropdown />
-      </header>
+      </nav>
 
       {/* Chat area */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '24px 24px 120px' }}>
-        <div style={{ maxWidth: 680, margin: '0 auto' }}>
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
 
           {/* Step: Property selection */}
           {step === 'property' && (
             <div>
-              <AssistantMsg text="Which property is this for?" />
+              <AssistantMsg text="Which property is this for?" animate />
               {selectedWorkspace && (
-                <div style={{ marginLeft: 42, display: 'grid', gap: 8, marginBottom: 16 }}>
+                <div style={{ marginLeft: 42, display: 'grid', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
                   {properties.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>
                       No properties found. <span onClick={() => navigate('/business')} style={{ color: O, cursor: 'pointer', fontWeight: 600 }}>Add properties first.</span>
@@ -421,10 +451,11 @@ export default function BusinessChat() {
                   ) : properties.map(p => (
                     <button key={p.id} onClick={() => selectProperty(p)} style={{
                       display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: 'pointer',
-                      border: '2px solid rgba(0,0,0,0.06)', background: 'white', textAlign: 'left', transition: 'all 0.15s',
+                      border: '2px solid rgba(0,0,0,0.07)', background: 'white', textAlign: 'left', transition: 'all 0.15s',
+                      fontFamily: "'DM Sans', sans-serif",
                     }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)'; }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
                     >
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{p.name}</div>
@@ -437,7 +468,7 @@ export default function BusinessChat() {
                   ))}
                   {workspaces.length > 1 && (
                     <select value={selectedWorkspace} onChange={e => { setSelectedWorkspace(e.target.value); setSelectedProperty(null); }}
-                      style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 13, color: '#6B6560', cursor: 'pointer' }}>
+                      style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 13, color: '#6B6560', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
                       {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
                   )}
@@ -449,18 +480,19 @@ export default function BusinessChat() {
           {/* Step: Category selection */}
           {step === 'category' && (
             <div>
-              <AssistantMsg text={`${selectedProperty?.name} selected. What do you need?`} />
+              <AssistantMsg text={`${selectedProperty?.name} selected. What do you need?`} animate />
 
-              <div style={{ marginLeft: 42, marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Repairs</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginBottom: 20 }}>
+              <div style={{ marginLeft: 42, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6 }}>REPAIR</div>
+                <div className="b2b-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
                   {repairCats.map(c => (
                     <button key={c.id} onClick={() => selectCategory(c)} style={{
                       padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
                       background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                      fontFamily: "'DM Sans', sans-serif",
                     }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
                     >
                       <div style={{ fontSize: 22, marginBottom: 4 }}>{c.icon}</div>
                       <div>{c.label}</div>
@@ -468,15 +500,16 @@ export default function BusinessChat() {
                   ))}
                 </div>
 
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Services</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6 }}>SERVICE</div>
+                <div className="b2b-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                   {serviceCats.map(c => (
                     <button key={c.id} onClick={() => selectCategory(c)} style={{
                       padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
                       background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                      fontFamily: "'DM Sans', sans-serif",
                     }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = G; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
                     >
                       <div style={{ fontSize: 22, marginBottom: 4 }}>{c.icon}</div>
                       <div>{c.label}</div>
@@ -499,14 +532,15 @@ export default function BusinessChat() {
 
           {/* Q1 options */}
           {step === 'q1' && category && !streaming && (
-            <div style={{ marginLeft: 42, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16 }}>
+            <div style={{ marginLeft: 42, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
               {category.q1.options.map(opt => (
                 <button key={opt} onClick={() => handleQ1(opt)} style={{
                   padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
                   background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                  fontFamily: "'DM Sans', sans-serif",
                 }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = O; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
                 >{opt}</button>
               ))}
             </div>
@@ -514,22 +548,29 @@ export default function BusinessChat() {
 
           {/* Extra details input + dispatch button */}
           {step === 'extra' && !streaming && (
-            <div style={{ marginLeft: 42 }}>
+            <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease' }}>
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <input value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder="Add more details..."
                   onKeyDown={e => { if (e.key === 'Enter' && inputVal.trim()) handleUserInput(inputVal.trim()); }}
-                  style={{ flex: 1, padding: '12px 16px', borderRadius: 100, fontSize: 15, border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: D }}
+                  style={{
+                    flex: 1, padding: '12px 16px', borderRadius: 100, fontSize: 15, border: '2px solid rgba(0,0,0,0.08)',
+                    fontFamily: "'DM Sans', sans-serif", outline: 'none', color: D,
+                  }}
                   onFocus={e => e.target.style.borderColor = O}
                   onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
                 />
                 <button onClick={() => { if (inputVal.trim()) handleUserInput(inputVal.trim()); }}
-                  style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: inputVal.trim() ? O : 'rgba(0,0,0,0.06)', color: 'white', fontSize: 18, cursor: inputVal.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  ↑
-                </button>
+                  style={{
+                    width: 44, height: 44, borderRadius: '50%', border: 'none',
+                    background: inputVal.trim() ? O : 'rgba(0,0,0,0.06)',
+                    color: 'white', fontSize: 18, cursor: inputVal.trim() ? 'pointer' : 'default',
+                    transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>↑</button>
               </div>
               <button onClick={handleGenerateSummary} style={{
-                padding: '12px 24px', borderRadius: 10, border: 'none', background: G, color: '#fff',
-                fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%',
+                padding: '13px 0', borderRadius: 100, border: 'none', background: G, color: '#fff',
+                fontSize: 15, fontWeight: 600, cursor: 'pointer', width: '100%',
+                fontFamily: "'DM Sans', sans-serif",
               }}>
                 {category?.group === 'service' ? 'Confirm Scope & Dispatch' : 'Generate Diagnosis & Dispatch'}
               </button>
@@ -617,12 +658,6 @@ export default function BusinessChat() {
 
           <div ref={chatEndRef} />
         </div>
-      </div>
-
-      {/* CSS animations */}
-      <style>{`
-        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
-      `}</style>
     </div>
   );
 }
