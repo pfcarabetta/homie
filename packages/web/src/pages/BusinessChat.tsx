@@ -227,12 +227,17 @@ export default function BusinessChat() {
   // Build property context string
   function getPropertyContext(): string {
     if (!selectedProperty) return '';
+    const p = selectedProperty;
     const parts = [
-      `Property: ${selectedProperty.name}`,
-      selectedProperty.address && `Address: ${selectedProperty.address}${selectedProperty.city ? `, ${selectedProperty.city}` : ''}${selectedProperty.state ? `, ${selectedProperty.state}` : ''} ${selectedProperty.zipCode || ''}`,
-      `Type: ${selectedProperty.propertyType}`,
-      `Units: ${selectedProperty.unitCount}`,
-      selectedProperty.notes && `Notes: ${selectedProperty.notes}`,
+      `Property: ${p.name}`,
+      p.address && `Address: ${p.address}${p.city ? `, ${p.city}` : ''}${p.state ? `, ${p.state}` : ''} ${p.zipCode || ''}`,
+      `Type: ${p.propertyType}`,
+      `Units: ${p.unitCount}`,
+      p.bedrooms != null && p.bedrooms > 0 && `Bedrooms: ${p.bedrooms}`,
+      p.bathrooms != null && +p.bathrooms > 0 && `Bathrooms: ${p.bathrooms}`,
+      p.sqft != null && p.sqft > 0 && `Square footage: ${p.sqft.toLocaleString()} sqft`,
+      p.beds && p.beds.length > 0 && `Beds: ${p.beds.map(b => `${b.count}× ${b.type}`).join(', ')}`,
+      p.notes && `Notes: ${p.notes}`,
     ].filter(Boolean);
     return parts.join('\n');
   }
