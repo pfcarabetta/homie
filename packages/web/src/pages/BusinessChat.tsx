@@ -1,0 +1,603 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  businessService, businessChatService, jobService, connectJobSocket,
+  type Property, type Workspace, type DiagnosticStreamCallbacks,
+  type JobStatusResponse, type ProviderResponseItem,
+} from '@/services/api';
+import AvatarDropdown from '@/components/AvatarDropdown';
+
+const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
+
+/* ── Categories ─────────────────────────────────────────────────────────── */
+
+interface CatDef {
+  id: string; icon: string; label: string; group: 'repair' | 'service';
+  q1: { text: string; options: string[] };
+}
+
+const B2B_CATEGORIES: CatDef[] = [
+  // Repair
+  { id: 'plumbing', icon: '🔧', label: 'Plumbing', group: 'repair',
+    q1: { text: "What's happening?", options: ['Leaking/dripping', 'Clogged drain', 'No hot water', 'Running toilet', 'Burst/flooding', 'Other'] } },
+  { id: 'electrical', icon: '⚡', label: 'Electrical', group: 'repair',
+    q1: { text: "What's the problem?", options: ['Outlet not working', 'Lights flickering', 'Breaker tripping', 'Sparking/smell', 'Other'] } },
+  { id: 'hvac', icon: '❄️', label: 'HVAC', group: 'repair',
+    q1: { text: "What's going on?", options: ['AC not cooling', 'Heat not working', 'Strange noises', 'Thermostat issue', 'Bad smell', 'Other'] } },
+  { id: 'appliance', icon: '🍳', label: 'Appliance', group: 'repair',
+    q1: { text: 'Which appliance?', options: ['Washer', 'Dryer', 'Dishwasher', 'Refrigerator', 'Oven/stove', 'Disposal', 'Other'] } },
+  { id: 'roofing', icon: '🏠', label: 'Roofing', group: 'repair',
+    q1: { text: "What's the concern?", options: ['Active leak', 'Missing shingles', 'Storm damage', 'Gutter issue', 'Other'] } },
+  { id: 'general', icon: '🔨', label: 'Handyman', group: 'repair',
+    q1: { text: 'What kind of work?', options: ['Drywall repair', 'Door/window', 'Fence repair', 'Furniture', 'Other'] } },
+  { id: 'locksmith', icon: '🔑', label: 'Locksmith', group: 'repair',
+    q1: { text: 'What do you need?', options: ['Locked out', 'Rekey locks', 'New lock install', 'Smart lock setup', 'Other'] } },
+  // Service (B2B-specific)
+  { id: 'cleaning', icon: '✨', label: 'Turnover Clean', group: 'service',
+    q1: { text: 'What type of clean?', options: ['Standard turnover', 'Deep clean', 'Post-construction', 'Laundry/linens', 'Other'] } },
+  { id: 'hot_tub', icon: '🏊', label: 'Hot Tub / Pool', group: 'service',
+    q1: { text: 'What do you need?', options: ['Chemical balance', 'Filter cleaning', 'Drain & refill', 'Equipment repair', 'Other'] } },
+  { id: 'restocking', icon: '📦', label: 'Supplies Restock', group: 'service',
+    q1: { text: 'What needs restocking?', options: ['Toiletries', 'Kitchen supplies', 'Linens', 'Welcome items', 'Full restock', 'Other'] } },
+  { id: 'inspection', icon: '🔍', label: 'Inspection', group: 'service',
+    q1: { text: 'What kind of inspection?', options: ['Pre-guest walkthrough', 'Post-guest damage check', 'Quarterly review', 'Other'] } },
+  { id: 'landscaping', icon: '🌿', label: 'Landscaping', group: 'service',
+    q1: { text: 'What do you need?', options: ['Lawn mowing', 'Tree trimming', 'Yard cleanup', 'Sprinkler repair', 'Other'] } },
+  { id: 'pest_control', icon: '🐛', label: 'Pest Control', group: 'service',
+    q1: { text: 'What kind of pest?', options: ['Ants', 'Roaches', 'Mice/rats', 'Termites', 'Bed bugs', 'Other'] } },
+  { id: 'trash', icon: '🗑️', label: 'Trash Valet', group: 'service',
+    q1: { text: 'What do you need?', options: ['Scheduled pickup', 'Bulk removal', 'Post-guest cleanout', 'Other'] } },
+  { id: 'concierge', icon: '🎩', label: 'Concierge', group: 'service',
+    q1: { text: 'What service?', options: ['Private chef', 'Transport', 'Grocery delivery', 'Equipment rental', 'Activities', 'Other'] } },
+];
+
+const TIERS = [
+  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', detail: '5-8 pros via SMS + email' },
+  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', detail: '10+ pros via voice + SMS + email', popular: true },
+  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', detail: '15+ pros, all channels blitz' },
+];
+
+/* ── Chat message components ────────────────────────────────────────────── */
+
+function AssistantMsg({ text }: { text: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
+      <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
+      </div>
+      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D, whiteSpace: 'pre-wrap' }}>{text}</div>
+    </div>
+  );
+}
+
+function UserMsg({ text }: { text: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div style={{ background: O, color: 'white', padding: '10px 18px', borderRadius: '16px 16px 4px 16px', maxWidth: '75%', fontSize: 15, lineHeight: 1.5 }}>{text}</div>
+    </div>
+  );
+}
+
+function StreamingMsg({ text }: { text: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
+      <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
+      </div>
+      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D, whiteSpace: 'pre-wrap' }}>
+        {text}<span style={{ display: 'inline-block', width: 6, height: 16, background: O, marginLeft: 2, animation: 'blink 1s infinite' }} />
+      </div>
+    </div>
+  );
+}
+
+/* ── Main component ─────────────────────────────────────────────────────── */
+
+type Step = 'property' | 'category' | 'q1' | 'chat' | 'extra' | 'diagnosis' | 'tier' | 'outreach' | 'results';
+
+interface Message { role: 'user' | 'assistant'; content: string }
+
+export default function BusinessChat() {
+  const { homeowner } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const workspaceId = searchParams.get('workspace') || '';
+
+  // Workspace & properties
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(workspaceId);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+
+  // Chat state
+  const [step, setStep] = useState<Step>('property');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [streamText, setStreamText] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const [category, setCategory] = useState<CatDef | null>(null);
+  const [q1Answer, setQ1Answer] = useState('');
+  const [aiDiagnosis, setAiDiagnosis] = useState('');
+  const [inputVal, setInputVal] = useState('');
+  const [tier, setTier] = useState('');
+
+  // Outreach state
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [outreachStatus, setOutreachStatus] = useState<JobStatusResponse | null>(null);
+  const [responses, setResponses] = useState<ProviderResponseItem[]>([]);
+  const [dispatching, setDispatching] = useState(false);
+
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const sessionIdRef = useRef(`b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+  // Load workspaces
+  useEffect(() => {
+    if (!homeowner) { navigate('/login?redirect=/business/chat'); return; }
+    businessService.listWorkspaces().then(res => {
+      if (res.data) {
+        setWorkspaces(res.data);
+        if (!selectedWorkspace && res.data.length > 0) setSelectedWorkspace(res.data[0].id);
+      }
+    });
+  }, [homeowner]);
+
+  // Load properties when workspace changes
+  useEffect(() => {
+    if (!selectedWorkspace) return;
+    businessService.listProperties(selectedWorkspace).then(res => {
+      if (res.data) setProperties(res.data.filter(p => p.active));
+    });
+  }, [selectedWorkspace]);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (messages.length > 0) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, streamText, step]);
+
+  // Build property context string
+  function getPropertyContext(): string {
+    if (!selectedProperty) return '';
+    const parts = [
+      `Property: ${selectedProperty.name}`,
+      selectedProperty.address && `Address: ${selectedProperty.address}${selectedProperty.city ? `, ${selectedProperty.city}` : ''}${selectedProperty.state ? `, ${selectedProperty.state}` : ''} ${selectedProperty.zipCode || ''}`,
+      `Type: ${selectedProperty.propertyType}`,
+      `Units: ${selectedProperty.unitCount}`,
+      selectedProperty.notes && `Notes: ${selectedProperty.notes}`,
+    ].filter(Boolean);
+    return parts.join('\n');
+  }
+
+  // Stream AI response
+  function streamAI(userMsg: string, history: Message[], onDone?: (fullText: string) => void) {
+    setStreaming(true);
+    setStreamText('');
+    let full = '';
+
+    // Filter out XML tags from visible text
+    let insideTag = false;
+    let tagBuf = '';
+
+    const callbacks: DiagnosticStreamCallbacks = {
+      onToken: (token: string) => {
+        for (const ch of token) {
+          if (insideTag) {
+            tagBuf += ch;
+            if (/<\/(diagnosis|job_summary)>/.test(tagBuf)) { insideTag = false; tagBuf = ''; }
+            continue;
+          }
+          if (ch === '<') { tagBuf = '<'; continue; }
+          if (tagBuf.length > 0) {
+            tagBuf += ch;
+            if (ch === '>') {
+              if (/^<(diagnosis|job_summary)>/.test(tagBuf)) { insideTag = true; }
+              else { full += tagBuf; setStreamText(full); tagBuf = ''; }
+            }
+            if (tagBuf.length > 15 && !tagBuf.includes('>')) { full += tagBuf; setStreamText(full); tagBuf = ''; }
+            continue;
+          }
+          full += ch;
+          setStreamText(full);
+        }
+      },
+      onDiagnosis: () => {},
+      onJobSummary: () => {},
+      onDone: () => {
+        if (tagBuf && !insideTag) { full += tagBuf; }
+        setStreaming(false);
+        setStreamText('');
+        setMessages(prev => [...prev, { role: 'assistant', content: full.trim() }]);
+        onDone?.(full.trim());
+      },
+      onError: (err: Error) => {
+        setStreaming(false);
+        setStreamText('');
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I had trouble processing that. Please try again.' }]);
+      },
+    };
+
+    const mode = category?.group === 'service' ? 'service' : 'repair';
+
+    abortRef.current = businessChatService.sendMessage(
+      userMsg,
+      mode as 'repair' | 'service',
+      callbacks,
+      {
+        history: history.map(m => ({ role: m.role, content: m.content })),
+        propertyContext: getPropertyContext(),
+      },
+    );
+  }
+
+  // Handle property selection
+  function selectProperty(p: Property) {
+    setSelectedProperty(p);
+    setStep('category');
+    setMessages([]);
+  }
+
+  // Handle category selection
+  function selectCategory(cat: CatDef) {
+    setCategory(cat);
+    const propName = selectedProperty?.name || 'this property';
+    if (cat.group === 'service') {
+      setMessages([{ role: 'assistant', content: `${cat.icon} **${cat.label}** for ${propName} — got it. ${cat.q1.text}` }]);
+    } else {
+      setMessages([{ role: 'assistant', content: `${cat.icon} **${cat.label}** issue at ${propName} — let's figure this out. ${cat.q1.text}` }]);
+    }
+    setStep('q1');
+  }
+
+  // Handle Q1 answer
+  function handleQ1(answer: string) {
+    setQ1Answer(answer);
+    const newMsgs: Message[] = [...messages, { role: 'user', content: answer }];
+    setMessages(newMsgs);
+    setStep('chat');
+
+    // Stream AI follow-up
+    const userContext = category?.group === 'service'
+      ? `I need ${category.label} service. Specifically: ${answer}`
+      : `I have a ${category?.label} issue. ${answer}`;
+
+    streamAI(userContext, [], (text) => {
+      setStep('extra');
+    });
+  }
+
+  // Handle extra details or free-form chat
+  function handleUserInput(text: string) {
+    const newMsgs: Message[] = [...messages, { role: 'user', content: text }];
+    setMessages(newMsgs);
+    setInputVal('');
+
+    streamAI(text, newMsgs.slice(0, -1), (aiText) => {
+      // Check if AI included a diagnosis block
+      if (aiText.includes('"category"') && aiText.includes('"severity"')) {
+        setAiDiagnosis(aiText);
+        setStep('tier');
+      } else {
+        setStep('extra');
+      }
+    });
+  }
+
+  // Handle "Generate summary & dispatch"
+  function handleGenerateSummary() {
+    const promptText = category?.group === 'service'
+      ? 'Please generate a final scope summary so I can dispatch a provider.'
+      : 'Please generate your diagnosis so I can dispatch a pro.';
+    const newMsgs: Message[] = [...messages, { role: 'user', content: promptText }];
+    setMessages(newMsgs);
+
+    streamAI(promptText, newMsgs.slice(0, -1), (aiText) => {
+      setAiDiagnosis(aiText);
+      setStep('tier');
+    });
+  }
+
+  // Handle tier selection and dispatch
+  async function handleDispatch(selectedTier: string) {
+    setTier(selectedTier);
+    setDispatching(true);
+    setStep('outreach');
+
+    try {
+      const diagnosis = {
+        category: category?.id || 'general',
+        severity: 'medium' as const,
+        summary: aiDiagnosis || `${category?.label}: ${q1Answer}`,
+        recommendedActions: ['Dispatch professional'],
+      };
+
+      const zipCode = selectedProperty?.zipCode || '92101';
+
+      const res = await jobService.createJob({
+        diagnosis,
+        timing: 'asap',
+        budget: 'flexible',
+        tier: selectedTier as 'standard' | 'priority' | 'emergency',
+        zipCode,
+      });
+
+      if (res.data) {
+        setJobId(res.data.id);
+
+        // Connect WebSocket for live updates
+        connectJobSocket(res.data.id, (status) => {
+          setOutreachStatus(status);
+          if (status.status === 'completed' || status.status === 'expired') {
+            jobService.getResponses(res.data!.id).then(r => {
+              if (r.data) {
+                setResponses(r.data.responses);
+                setStep('results');
+              }
+            });
+          }
+        });
+
+        setMessages(prev => [...prev, { role: 'assistant', content: `Dispatching ${selectedTier} outreach now. Contacting providers in the ${zipCode} area...` }]);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Failed to create job. Please try again.' }]);
+      setStep('extra');
+    } finally {
+      setDispatching(false);
+    }
+  }
+
+  if (!homeowner) return null;
+
+  const repairCats = B2B_CATEGORIES.filter(c => c.group === 'repair');
+  const serviceCats = B2B_CATEGORIES.filter(c => c.group === 'service');
+
+  return (
+    <div style={{ minHeight: '100vh', background: W, display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <header style={{ background: '#fff', borderBottom: '1px solid #E0DAD4', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span onClick={() => navigate('/business')} style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>Homie</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: G, background: `${G}15`, padding: '4px 10px', borderRadius: 20 }}>Dispatch</span>
+          {selectedProperty && (
+            <span style={{ fontSize: 13, color: '#6B6560' }}>
+              {selectedProperty.name}
+            </span>
+          )}
+        </div>
+        <AvatarDropdown />
+      </header>
+
+      {/* Chat area */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '24px 24px 120px' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto' }}>
+
+          {/* Step: Property selection */}
+          {step === 'property' && (
+            <div>
+              <AssistantMsg text="Which property is this for?" />
+              {selectedWorkspace && (
+                <div style={{ marginLeft: 42, display: 'grid', gap: 8, marginBottom: 16 }}>
+                  {properties.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>
+                      No properties found. <span onClick={() => navigate('/business')} style={{ color: O, cursor: 'pointer', fontWeight: 600 }}>Add properties first.</span>
+                    </div>
+                  ) : properties.map(p => (
+                    <button key={p.id} onClick={() => selectProperty(p)} style={{
+                      display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: 'pointer',
+                      border: '2px solid rgba(0,0,0,0.06)', background: 'white', textAlign: 'left', transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)'; }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{p.name}</div>
+                        {p.address && <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{p.address}{p.city ? `, ${p.city}` : ''}</div>}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#9B9490', background: W, padding: '4px 10px', borderRadius: 8 }}>
+                        {p.unitCount} {p.unitCount === 1 ? 'unit' : 'units'}
+                      </div>
+                    </button>
+                  ))}
+                  {workspaces.length > 1 && (
+                    <select value={selectedWorkspace} onChange={e => { setSelectedWorkspace(e.target.value); setSelectedProperty(null); }}
+                      style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 13, color: '#6B6560', cursor: 'pointer' }}>
+                      {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step: Category selection */}
+          {step === 'category' && (
+            <div>
+              <AssistantMsg text={`${selectedProperty?.name} selected. What do you need?`} />
+
+              <div style={{ marginLeft: 42, marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Repairs</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginBottom: 20 }}>
+                  {repairCats.map(c => (
+                    <button key={c.id} onClick={() => selectCategory(c)} style={{
+                      padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
+                      background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; }}
+                    >
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>{c.icon}</div>
+                      <div>{c.label}</div>
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Services</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+                  {serviceCats.map(c => (
+                    <button key={c.id} onClick={() => selectCategory(c)} style={{
+                      padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
+                      background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = G; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; }}
+                    >
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>{c.icon}</div>
+                      <div>{c.label}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Chat messages */}
+          {step !== 'property' && step !== 'category' && (
+            <>
+              {messages.map((m, i) => (
+                m.role === 'user' ? <UserMsg key={i} text={m.content} /> : <AssistantMsg key={i} text={m.content} />
+              ))}
+              {streaming && <StreamingMsg text={streamText} />}
+            </>
+          )}
+
+          {/* Q1 options */}
+          {step === 'q1' && category && !streaming && (
+            <div style={{ marginLeft: 42, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16 }}>
+              {category.q1.options.map(opt => (
+                <button key={opt} onClick={() => handleQ1(opt)} style={{
+                  padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
+                  background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = O; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; }}
+                >{opt}</button>
+              ))}
+            </div>
+          )}
+
+          {/* Extra details input + dispatch button */}
+          {step === 'extra' && !streaming && (
+            <div style={{ marginLeft: 42 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <input value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder="Add more details..."
+                  onKeyDown={e => { if (e.key === 'Enter' && inputVal.trim()) handleUserInput(inputVal.trim()); }}
+                  style={{ flex: 1, padding: '12px 16px', borderRadius: 100, fontSize: 15, border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: D }}
+                  onFocus={e => e.target.style.borderColor = O}
+                  onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
+                />
+                <button onClick={() => { if (inputVal.trim()) handleUserInput(inputVal.trim()); }}
+                  style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: inputVal.trim() ? O : 'rgba(0,0,0,0.06)', color: 'white', fontSize: 18, cursor: inputVal.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  ↑
+                </button>
+              </div>
+              <button onClick={handleGenerateSummary} style={{
+                padding: '12px 24px', borderRadius: 10, border: 'none', background: G, color: '#fff',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%',
+              }}>
+                {category?.group === 'service' ? 'Confirm Scope & Dispatch' : 'Generate Diagnosis & Dispatch'}
+              </button>
+            </div>
+          )}
+
+          {/* Tier selection */}
+          {step === 'tier' && !streaming && (
+            <div style={{ marginLeft: 42, marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: D, marginBottom: 12 }}>Select outreach tier:</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {TIERS.map(t => (
+                  <button key={t.id} onClick={() => handleDispatch(t.id)} disabled={dispatching} style={{
+                    display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: dispatching ? 'default' : 'pointer',
+                    border: t.popular ? `2px solid ${O}` : '2px solid rgba(0,0,0,0.06)',
+                    background: t.popular ? 'rgba(232,99,43,0.03)' : 'white', textAlign: 'left', position: 'relative',
+                    opacity: dispatching ? 0.6 : 1,
+                  }}>
+                    {t.popular && <div style={{ position: 'absolute', top: -9, right: 14, background: O, color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 100 }}>RECOMMENDED</div>}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>{t.time}</span></div>
+                      <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
+                    </div>
+                    <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : D }}>{t.price}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Outreach live status */}
+          {step === 'outreach' && outreachStatus && (
+            <div style={{ marginLeft: 42, background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 20, marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: D, marginBottom: 12 }}>Outreach in progress...</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: O }}>{outreachStatus.providers_contacted}</div>
+                  <div style={{ fontSize: 12, color: '#9B9490' }}>Contacted</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: G }}>{outreachStatus.providers_responded}</div>
+                  <div style={{ fontSize: 12, color: '#9B9490' }}>Responded</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: D }}>{outreachStatus.providers_accepted}</div>
+                  <div style={{ fontSize: 12, color: '#9B9490' }}>Quoted</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['voice', 'sms', 'web'].map(ch => {
+                  const stats = outreachStatus.outreach_channels[ch as keyof typeof outreachStatus.outreach_channels];
+                  return (
+                    <div key={ch} style={{ flex: 1, background: W, padding: '8px 12px', borderRadius: 8, textAlign: 'center' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', textTransform: 'uppercase' }}>{ch}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{stats.connected}/{stats.attempted}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {step === 'results' && (
+            <div style={{ marginLeft: 42 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: D, marginBottom: 12 }}>
+                {responses.length > 0 ? `${responses.length} quote${responses.length > 1 ? 's' : ''} received!` : 'No quotes received yet.'}
+              </div>
+              {responses.map(r => (
+                <div key={r.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 16, marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: D }}>{r.provider.name}</div>
+                      <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>
+                        {r.provider.google_rating && `${r.provider.google_rating} stars (${r.provider.review_count} reviews)`}
+                        {r.channel && ` via ${r.channel}`}
+                      </div>
+                    </div>
+                    {r.quoted_price && (
+                      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: G }}>{r.quoted_price}</div>
+                    )}
+                  </div>
+                  {r.availability && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 8 }}>Available: {r.availability}</div>}
+                  {r.message && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 4, fontStyle: 'italic' }}>{r.message}</div>}
+                  <button onClick={() => {
+                    jobService.bookProvider(jobId!, r.id, r.provider.id, selectedProperty?.address || undefined);
+                  }} style={{
+                    marginTop: 12, padding: '10px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff',
+                    fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%',
+                  }}>
+                    Book {r.provider.name}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div ref={chatEndRef} />
+        </div>
+      </div>
+
+      {/* CSS animations */}
+      <style>{`
+        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+      `}</style>
+    </div>
+  );
+}

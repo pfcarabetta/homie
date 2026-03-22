@@ -673,6 +673,74 @@ export interface ProviderSearchResult {
   categories: string[] | null;
 }
 
+export const businessChatService = {
+  sendMessage(
+    message: string,
+    mode: 'repair' | 'service',
+    callbacks: DiagnosticStreamCallbacks,
+    options?: {
+      history?: { role: 'user' | 'assistant'; content: string }[];
+      images?: string[];
+      propertyContext?: string;
+    },
+  ): AbortController {
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/business-chat/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify({
+            message,
+            mode,
+            ...(options?.history?.length ? { history: options.history } : {}),
+            ...(options?.images?.length ? { images: options.images } : {}),
+            ...(options?.propertyContext ? { property_context: options.propertyContext } : {}),
+          }),
+          signal: controller.signal,
+        });
+
+        if (!res.ok || !res.body) {
+          const text = await res.text();
+          callbacks.onError(new Error(text || `SSE failed: ${res.status}`));
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const payload = line.slice(6);
+            if (payload === '[DONE]') { callbacks.onDone(); return; }
+            try {
+              const parsed = JSON.parse(payload) as { token?: string; error?: string };
+              if (parsed.error) { callbacks.onError(new Error(parsed.error)); return; }
+              if (parsed.token) callbacks.onToken(parsed.token);
+            } catch { callbacks.onToken(payload); }
+          }
+        }
+        callbacks.onDone();
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+        }
+      }
+    })();
+
+    return controller;
+  },
+};
+
 export const businessService = {
   // Workspaces
   listWorkspaces: () => fetchAPI<Workspace[]>('/api/v1/business'),

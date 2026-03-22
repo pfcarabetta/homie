@@ -966,10 +966,16 @@ export default function BusinessPortal() {
                   </span>
                 )}
               </div>
-              <button onClick={() => setShowCreate(true)}
-                style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D, fontWeight: 500 }}>
-                + New Workspace
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => navigate(`/business/chat?workspace=${selectedId}`)}
+                  style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+                  New Dispatch
+                </button>
+                <button onClick={() => setShowCreate(true)}
+                  style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D, fontWeight: 500 }}>
+                  + New Workspace
+                </button>
+              </div>
             </div>
 
             {/* Tabs */}
