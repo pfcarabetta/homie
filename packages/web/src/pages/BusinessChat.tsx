@@ -97,6 +97,15 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
   );
 }
 
+/* ── Markdown bold helper ───────────────────────────────────────────────── */
+
+function renderBold(text: string) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+  );
+}
+
 /* ── Chat message components ────────────────────────────────────────────── */
 
 function AssistantMsg({ text, animate = false }: { text: string; animate?: boolean }) {
@@ -121,7 +130,7 @@ function AssistantMsg({ text, animate = false }: { text: string; animate?: boole
       <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
       </div>
-      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D }}>{text}</div>
+      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D }}>{renderBold(text)}</div>
     </div>
   );
 }
@@ -141,7 +150,7 @@ function StreamingMsg({ text }: { text: string }) {
         <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
       </div>
       <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D }}>
-        {text}<span style={{ display: 'inline-block', width: 6, height: 16, background: O, marginLeft: 2, animation: 'blink 1s infinite' }} />
+        {renderBold(text)}<span style={{ display: 'inline-block', width: 6, height: 16, background: O, marginLeft: 2, animation: 'blink 1s infinite' }} />
       </div>
     </div>
   );
