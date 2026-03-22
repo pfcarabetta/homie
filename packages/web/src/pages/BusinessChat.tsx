@@ -36,8 +36,10 @@ const B2B_CATEGORIES: CatDef[] = [
   // Service (B2B-specific)
   { id: 'cleaning', icon: '✨', label: 'Turnover Clean', group: 'service',
     q1: { text: 'What type of clean?', options: ['Standard turnover', 'Deep clean', 'Post-construction', 'Laundry/linens', 'Other'] } },
-  { id: 'hot_tub', icon: '🏊', label: 'Hot Tub / Pool', group: 'service',
-    q1: { text: 'What do you need?', options: ['Chemical balance', 'Filter cleaning', 'Drain & refill', 'Equipment repair', 'Other'] } },
+  { id: 'pool', icon: '🏊', label: 'Pool', group: 'service',
+    q1: { text: 'What do you need?', options: ['Chemical balance', 'Filter cleaning', 'Green/cloudy water', 'Equipment repair', 'Leak detection', 'Opening/closing'] } },
+  { id: 'hot_tub', icon: '♨️', label: 'Hot Tub', group: 'service',
+    q1: { text: 'What do you need?', options: ['Chemical balance', 'Filter cleaning', 'Drain & refill', 'Jets not working', 'Heater issue', 'Cover replacement'] } },
   { id: 'restocking', icon: '📦', label: 'Supplies Restock', group: 'service',
     q1: { text: 'What needs restocking?', options: ['Toiletries', 'Kitchen supplies', 'Linens', 'Welcome items', 'Full restock', 'Other'] } },
   { id: 'inspection', icon: '🔍', label: 'Inspection', group: 'service',
