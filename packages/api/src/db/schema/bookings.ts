@@ -13,6 +13,7 @@ export const bookings = pgTable('bookings', {
     .notNull()
     .references(() => providers.id, { onDelete: 'cascade' }),
   responseId: uuid('response_id').references(() => providerResponses.id, { onDelete: 'set null' }),
+  serviceAddress: text('service_address'),
   status: text('status').notNull().default('confirmed'),
   confirmedAt: timestamp('confirmed_at', { withTimezone: true }).notNull().defaultNow(),
 });

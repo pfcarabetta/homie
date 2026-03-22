@@ -361,10 +361,16 @@ router.post('/:id/book', async (req: Request, res: Response) => {
 
     const [booking] = await db
       .insert(bookings)
-      .values({ jobId: id, homeownerId: req.homeownerId, providerId: p.id, responseId: r.id })
+      .values({
+        jobId: id,
+        homeownerId: req.homeownerId,
+        providerId: p.id,
+        responseId: r.id,
+        serviceAddress: typeof body.service_address === 'string' ? body.service_address : null,
+      })
       .returning();
 
-    void sendBookingNotifications(id, p.id, booking.id);
+    void sendBookingNotifications(id, p.id, booking.id, booking.serviceAddress);
 
     const out: ApiResponse<BookJobResponse> = {
       data: {

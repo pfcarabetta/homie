@@ -321,6 +321,7 @@ export async function sendBookingNotifications(
   jobId: string,
   providerId: string,
   bookingId: string,
+  serviceAddress?: string | null,
 ): Promise<void> {
   logger.info(
     `[orchestration] booking confirmed — jobId=${jobId} providerId=${providerId} bookingId=${bookingId}`,
@@ -385,9 +386,11 @@ export async function sendBookingNotifications(
 
   if (provider.phone) {
     try {
+      const addressText = serviceAddress ? ` Address: ${serviceAddress}.` : '';
+      const homeownerContact = homeowner.phone ? ` Homeowner: ${homeowner.firstName ?? ''} ${homeowner.phone}.` : '';
       await sendSms(
         provider.phone,
-        `Homie: You've been booked! A homeowner selected you for their ${category} job. ${summary}. View details & manage: ${portalLink}`,
+        `Homie: You've been booked for a ${category} job!${addressText}${homeownerContact} Please contact the homeowner directly to confirm the appointment. Details: ${portalLink}`,
       );
     } catch (err) {
       logger.error({ err }, '[orchestration] provider booking SMS failed');
@@ -413,17 +416,25 @@ export async function sendBookingNotifications(
           <div style="background:#F9F5F2;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
             <div style="font-size:14px;font-weight:600;color:#2D2926;margin-bottom:8px">Job Details</div>
             <div style="font-size:14px;color:#6B6560;line-height:1.6">${summary}</div>
-            <div style="display:flex;gap:16px;margin-top:12px;font-size:13px;color:#9B9490">
+            <div style="display:flex;gap:16px;margin-top:12px;font-size:13px;color:#9B9490;flex-wrap:wrap">
               <span>Zip: ${job.zipCode}</span>
               <span>Category: ${category}</span>
+              ${serviceAddress ? `<span>Address: ${serviceAddress}</span>` : ''}
             </div>
           </div>
 
-          ${homeowner.phone ? `<div style="background:#F9F5F2;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
+          <div style="background:#F9F5F2;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
             <div style="font-size:14px;font-weight:600;color:#2D2926;margin-bottom:4px">Homeowner Contact</div>
             <div style="font-size:14px;color:#6B6560">${homeowner.firstName ? homeowner.firstName + (homeowner.lastName ? ' ' + homeowner.lastName : '') : 'Homeowner'}</div>
             ${homeowner.phone ? `<a href="tel:${homeowner.phone}" style="font-size:14px;color:#E8632B;text-decoration:none;font-weight:600">${homeowner.phone}</a>` : ''}
-          </div>` : ''}
+            ${homeowner.email ? `<div style="font-size:13px;color:#6B6560;margin-top:4px">${homeowner.email}</div>` : ''}
+            ${serviceAddress ? `<div style="font-size:13px;color:#6B6560;margin-top:4px">${serviceAddress}</div>` : ''}
+          </div>
+
+          <div style="background:#FFF7ED;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(232,99,43,0.1)">
+            <div style="font-size:14px;font-weight:600;color:#C2410C;margin-bottom:4px">Next Step</div>
+            <div style="font-size:14px;color:#6B6560;line-height:1.5">Please contact the homeowner directly to confirm the appointment details, including date, time, and scope of work.</div>
+          </div>
 
           <div style="text-align:center">
             <a href="${portalLink}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View in Pro Portal</a>

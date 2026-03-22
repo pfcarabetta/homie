@@ -73,6 +73,7 @@ export interface JobResponsesResponse {
 export interface BookJobBody {
   response_id: string;
   provider_id: string;
+  service_address?: string;
 }
 
 export interface BookJobResponse {

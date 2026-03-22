@@ -482,21 +482,37 @@ function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | nu
             </div>
             {p.note && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic', marginTop: 6 }}>"{p.note}"</div>}
             {selected === i && !booked && (
-              <button onClick={async () => {
-                if (isDemo) { setBooked(p as unknown as typeof MOCK_PROVIDERS[number]); return; }
-                if (jobId && 'responseId' in p) {
-                  try {
-                    await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id);
-                    setBooked(p as unknown as typeof MOCK_PROVIDERS[number]);
-                  } catch (err) {
-                    console.error('[GetQuotes] Booking failed:', err);
+              <div style={{ marginTop: 14 }}>
+                {!isDemo && (
+                  <input
+                    id={`addr-${i}`}
+                    placeholder="Enter your service address"
+                    style={{
+                      width: '100%', padding: '10px 14px', borderRadius: 10, fontSize: 14,
+                      border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: D,
+                      fontFamily: "'DM Sans', sans-serif", marginBottom: 8, boxSizing: 'border-box',
+                    }}
+                  />
+                )}
+                <button onClick={async () => {
+                  if (isDemo) { setBooked(p as unknown as typeof MOCK_PROVIDERS[number]); return; }
+                  const addrInput = document.getElementById(`addr-${i}`) as HTMLInputElement;
+                  const address = addrInput?.value?.trim();
+                  if (!address) { alert('Please enter your service address'); return; }
+                  if (jobId && 'responseId' in p) {
+                    try {
+                      await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id, address);
+                      setBooked(p as unknown as typeof MOCK_PROVIDERS[number]);
+                    } catch (err) {
+                      console.error('[GetQuotes] Booking failed:', err);
+                    }
                   }
-                }
-              }} style={{
-                marginTop: 14, width: '100%', padding: '13px 0', borderRadius: 100, border: 'none',
-                background: O, color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer',
-                fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40`,
+                }} style={{
+                  width: '100%', padding: '13px 0', borderRadius: 100, border: 'none',
+                  background: O, color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40`,
               }}>Book {p.name.split(' ')[0]}</button>
+              </div>
             )}
           </div>
         </div>

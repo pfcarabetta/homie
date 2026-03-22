@@ -451,12 +451,14 @@ export const jobService = {
     jobId: string,
     responseId: string,
     providerId: string,
+    serviceAddress?: string,
   ): Promise<ApiResponse<BookJobResponse>> {
     return fetchAPI<BookJobResponse>(`/api/v1/jobs/${jobId}/book`, {
       method: 'POST',
       body: JSON.stringify({
         response_id: responseId,
         provider_id: providerId,
+        ...(serviceAddress ? { service_address: serviceAddress } : {}),
       }),
     });
   },
