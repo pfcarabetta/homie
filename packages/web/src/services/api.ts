@@ -599,3 +599,68 @@ export const accountService = {
   getJobs: () => fetchAPI<{ jobs: AccountJob[] }>('/api/v1/account/jobs'),
   getBookings: () => fetchAPI<{ bookings: AccountBooking[] }>('/api/v1/account/bookings'),
 };
+
+// ── businessService ─────────────────────────────────────────────────────────
+
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface WorkspaceDetail extends Workspace {
+  member_count: number;
+  property_count: number;
+  user_role: string;
+  stripeCustomerId: string | null;
+  updatedAt: string;
+}
+
+export interface Property {
+  id: string;
+  workspaceId: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+  propertyType: string;
+  unitCount: number;
+  notes: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const businessService = {
+  // Workspaces
+  listWorkspaces: () => fetchAPI<Workspace[]>('/api/v1/business'),
+  getWorkspace: (id: string) => fetchAPI<WorkspaceDetail>(`/api/v1/business/${id}`),
+  createWorkspace: (data: { name: string; slug?: string }) =>
+    fetchAPI<Workspace>('/api/v1/business', { method: 'POST', body: JSON.stringify(data) }),
+  updateWorkspace: (id: string, data: { name?: string; slug?: string }) =>
+    fetchAPI<Workspace>(`/api/v1/business/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Properties
+  listProperties: (workspaceId: string) =>
+    fetchAPI<Property[]>(`/api/v1/business/${workspaceId}/properties`),
+  getProperty: (workspaceId: string, propertyId: string) =>
+    fetchAPI<Property>(`/api/v1/business/${workspaceId}/properties/${propertyId}`),
+  createProperty: (workspaceId: string, data: {
+    name: string; address?: string; city?: string; state?: string;
+    zip_code?: string; property_type?: string; unit_count?: number; notes?: string;
+  }) => fetchAPI<Property>(`/api/v1/business/${workspaceId}/properties`, {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  updateProperty: (workspaceId: string, propertyId: string, data: Record<string, unknown>) =>
+    fetchAPI<Property>(`/api/v1/business/${workspaceId}/properties/${propertyId}`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+  deleteProperty: (workspaceId: string, propertyId: string) =>
+    fetchAPI<{ deactivated: boolean }>(`/api/v1/business/${workspaceId}/properties/${propertyId}`, {
+      method: 'DELETE',
+    }),
+};

@@ -13,6 +13,7 @@ import adminRouter from './routes/admin';
 import { stripeWebhookHandler } from './routes/stripe-webhook';
 import providerAuthRouter from './routes/provider-auth';
 import providerPortalRouter from './routes/provider-portal';
+import businessRouter from './routes/business';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
 import { requireProviderAuth } from './middleware/provider-auth';
@@ -57,6 +58,7 @@ app.use('/api/v1/provider-auth', authLimiter, providerAuthRouter);
 app.use('/api/v1/portal', apiLimiter, requireProviderAuth, providerPortalRouter);
 app.use('/api/v1/webhooks', webhooksRouter);
 app.use('/api/v1/admin', requireAdmin, adminRouter);
+app.use('/api/v1/business', apiLimiter, requireAuth, businessRouter);
 
 // Sentry error handler — must be after all routes
 Sentry.setupExpressErrorHandler(app);

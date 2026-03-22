@@ -6,3 +6,7 @@ export * from './provider-responses';
 export * from './suppression-list';
 export * from './provider-scores';
 export * from './bookings';
+export * from './workspaces';
+export * from './properties';
+export * from './workspace-members';
+export * from './preferred-vendors';

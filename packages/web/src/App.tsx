@@ -11,6 +11,7 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ResetPassword from '@/pages/ResetPassword';
 import Account from '@/pages/Account';
+import BusinessPortal from '@/pages/BusinessPortal';
 import PaymentSuccess from '@/pages/PaymentSuccess';
 import VerifyEmail from '@/pages/VerifyEmail';
 import Terms from '@/pages/Terms';
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/business" element={<BusinessPortal />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/terms" element={<Terms />} />
