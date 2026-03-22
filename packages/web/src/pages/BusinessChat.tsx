@@ -158,7 +158,7 @@ function StreamingMsg({ text }: { text: string }) {
 
 /* ── Main component ─────────────────────────────────────────────────────── */
 
-type Step = 'property' | 'category' | 'q1' | 'chat' | 'extra' | 'summary' | 'outreach' | 'results';
+type Step = 'property' | 'category' | 'q1' | 'chat' | 'extra' | 'budget' | 'summary' | 'outreach' | 'results';
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -187,6 +187,7 @@ export default function BusinessChat() {
   const [exchangeCount, setExchangeCount] = useState(0);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showFreeInput, setShowFreeInput] = useState(false);
+  const [budget, setBudget] = useState('flexible');
 
   // Outreach state
   const [jobId, setJobId] = useState<string | null>(null);
@@ -370,10 +371,11 @@ export default function BusinessChat() {
       const newCount = exchangeCount + 1;
       setExchangeCount(newCount);
 
-      // AI signals readiness with a diagnosis block — go straight to summary
+      // AI signals readiness with a diagnosis block — go to budget then summary
       if (rawText.includes('<diagnosis>')) {
         setAiDiagnosis(aiText);
-        setStep('summary');
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
+        setStep('budget');
         return;
       }
 
@@ -410,14 +412,15 @@ export default function BusinessChat() {
           setStreaming(false);
           setStreamText('');
           setAiDiagnosis(full.trim());
-          setStep('summary');
+          setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
+          setStep('budget');
         },
         onError: () => {
           setStreaming(false);
           setStreamText('');
-          // Fallback: use what we have
           setAiDiagnosis(`${category?.label}: ${q1Answer}`);
-          setStep('summary');
+          setMessages(prev => [...prev, { role: 'assistant', content: 'Would you like to set a budget for this dispatch?' }]);
+          setStep('budget');
         },
       },
       {
@@ -425,6 +428,13 @@ export default function BusinessChat() {
         propertyContext: getPropertyContext(),
       },
     );
+  }
+
+  // Handle budget selection
+  function handleBudget(selected: string) {
+    setBudget(selected);
+    setMessages(prev => [...prev, { role: 'user', content: selected === 'flexible' ? 'No budget preference' : selected }]);
+    setStep('summary');
   }
 
   // Handle dispatch (no tier selection — B2B subscription covers it)
@@ -445,7 +455,7 @@ export default function BusinessChat() {
       const res = await jobService.createJob({
         diagnosis,
         timing: 'asap',
-        budget: 'flexible',
+        budget: budget,
         tier: 'priority',
         zipCode,
         workspaceId: selectedWorkspace || undefined,
@@ -684,6 +694,30 @@ export default function BusinessChat() {
                   {category?.group === 'service' ? 'Confirm Scope & Dispatch' : 'Generate Diagnosis & Dispatch'}
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Budget selection */}
+          {step === 'budget' && !streaming && (
+            <div style={{ marginLeft: 42, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+              {['Under $100', '$100–$250', '$250–$500', '$500–$1,000', '$1,000+'].map(b => (
+                <button key={b} onClick={() => handleBudget(b)} style={{
+                  padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
+                  background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                >{b}</button>
+              ))}
+              <button onClick={() => handleBudget('flexible')} style={{
+                padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px dashed rgba(0,0,0,0.12)',
+                background: 'white', fontSize: 14, color: '#9B9490', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#9B9490'; }}
+              >Skip</button>
             </div>
           )}
 
