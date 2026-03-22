@@ -6,6 +6,13 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
+function renderBold(text: string) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+  );
+}
+
 const VENDOR_CATEGORIES: { value: string; label: string }[] = [
   { value: 'plumbing', label: 'Plumbing' },
   { value: 'electrical', label: 'Electrical' },
@@ -939,7 +946,7 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
                 </div>
                 <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
               </div>
-              {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>{j.diagnosis.summary}</div>}
+              {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>{renderBold(j.diagnosis.summary)}</div>}
               <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#9B9490', flexWrap: 'wrap' }}>
                 {j.propertyName && <span>🏠 {j.propertyName}</span>}
                 <span>{j.zipCode}</span>
