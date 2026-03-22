@@ -67,7 +67,7 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
       <div style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>{category.icon} {category.label}</div>
         <div style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap' }}>
-          {summary.slice(0, 300)}{summary.length > 300 ? '...' : ''}
+          {renderBold(summary.slice(0, 300))}{summary.length > 300 ? '...' : ''}
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
@@ -275,7 +275,11 @@ export default function BusinessChat() {
         if (tagBuf && !insideTag) { full += tagBuf; }
         setStreaming(false);
         setStreamText('');
-        setMessages(prev => [...prev, { role: 'assistant', content: full.trim() }]);
+        // If AI included a diagnosis, don't add the message to chat — scope card will show it
+        const hasDiagnosis = raw.includes('<diagnosis>');
+        if (!hasDiagnosis) {
+          setMessages(prev => [...prev, { role: 'assistant', content: full.trim() }]);
+        }
         onDone?.(full.trim(), raw);
       },
       onError: (err: Error) => {
