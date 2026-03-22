@@ -636,6 +636,9 @@ export default function HomePage() {
             </div>
           ))}
         </div>
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#9B9490', marginTop: 20, maxWidth: 480, margin: '20px auto 0', lineHeight: 1.5 }}>
+          Quote response times may be longer outside of normal business hours, on weekends, and during holidays.
+        </p>
       </section>
 
       {/* CTA */}
