@@ -183,6 +183,8 @@ export default function BusinessChat() {
   const [q1Answer, setQ1Answer] = useState('');
   const [aiDiagnosis, setAiDiagnosis] = useState('');
   const [inputVal, setInputVal] = useState('');
+  const [readyToDispatch, setReadyToDispatch] = useState(false);
+  const [exchangeCount, setExchangeCount] = useState(0);
 
   // Outreach state
   const [jobId, setJobId] = useState<string | null>(null);
@@ -234,10 +236,11 @@ export default function BusinessChat() {
   }
 
   // Stream AI response
-  function streamAI(userMsg: string, history: Message[], onDone?: (fullText: string) => void) {
+  function streamAI(userMsg: string, history: Message[], onDone?: (fullText: string, rawText: string) => void) {
     setStreaming(true);
     setStreamText('');
     let full = '';
+    let raw = '';
 
     // Filter out XML tags from visible text
     let insideTag = false;
@@ -245,6 +248,7 @@ export default function BusinessChat() {
 
     const callbacks: DiagnosticStreamCallbacks = {
       onToken: (token: string) => {
+        raw += token;
         for (const ch of token) {
           if (insideTag) {
             tagBuf += ch;
@@ -272,7 +276,7 @@ export default function BusinessChat() {
         setStreaming(false);
         setStreamText('');
         setMessages(prev => [...prev, { role: 'assistant', content: full.trim() }]);
-        onDone?.(full.trim());
+        onDone?.(full.trim(), raw);
       },
       onError: (err: Error) => {
         setStreaming(false);
@@ -325,7 +329,12 @@ export default function BusinessChat() {
       ? `I need ${category.label} service. Specifically: ${answer}`
       : `I have a ${category?.label} issue. ${answer}`;
 
-    streamAI(userContext, [], (text) => {
+    streamAI(userContext, [], (_text, rawText) => {
+      setExchangeCount(1);
+      // AI signals readiness with a diagnosis or job_summary block
+      if (rawText.includes('<diagnosis>') || rawText.includes('<job_summary>')) {
+        setReadyToDispatch(true);
+      }
       setStep('extra');
     });
   }
@@ -336,14 +345,23 @@ export default function BusinessChat() {
     setMessages(newMsgs);
     setInputVal('');
 
-    streamAI(text, newMsgs.slice(0, -1), (aiText) => {
-      // Check if AI included a diagnosis block
-      if (aiText.includes('"category"') && aiText.includes('"severity"')) {
+    streamAI(text, newMsgs.slice(0, -1), (aiText, rawText) => {
+      const newCount = exchangeCount + 1;
+      setExchangeCount(newCount);
+
+      // AI signals readiness with a diagnosis block
+      if (rawText.includes('<diagnosis>')) {
         setAiDiagnosis(aiText);
         setStep('summary');
-      } else {
-        setStep('extra');
+        return;
       }
+
+      // Mark ready if AI included a job_summary or we've had enough exchanges
+      if (rawText.includes('<job_summary>') || newCount >= 2) {
+        setReadyToDispatch(true);
+      }
+
+      setStep('extra');
     });
   }
 
@@ -607,13 +625,15 @@ export default function BusinessChat() {
                     transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>↑</button>
               </div>
-              <button onClick={handleGenerateSummary} style={{
-                padding: '13px 0', borderRadius: 100, border: 'none', background: G, color: '#fff',
-                fontSize: 15, fontWeight: 600, cursor: 'pointer', width: '100%',
-                fontFamily: "'DM Sans', sans-serif",
-              }}>
-                {category?.group === 'service' ? 'Confirm Scope & Dispatch' : 'Generate Diagnosis & Dispatch'}
-              </button>
+              {readyToDispatch && (
+                <button onClick={handleGenerateSummary} style={{
+                  padding: '13px 0', borderRadius: 100, border: 'none', background: G, color: '#fff',
+                  fontSize: 15, fontWeight: 600, cursor: 'pointer', width: '100%',
+                  fontFamily: "'DM Sans', sans-serif", animation: 'fadeSlide 0.3s ease',
+                }}>
+                  {category?.group === 'service' ? 'Confirm Scope & Dispatch' : 'Generate Diagnosis & Dispatch'}
+                </button>
+              )}
             </div>
           )}
 
