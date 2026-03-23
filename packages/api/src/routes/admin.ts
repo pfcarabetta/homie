@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { count, desc, eq, sql } from 'drizzle-orm';
+import { count, desc, eq, sql, or, ilike, and } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList, workspaces, workspaceMembers, properties } from '../db/schema';
@@ -42,10 +42,17 @@ router.get('/stats', async (_req: Request, res: Response) => {
 router.get('/homeowners', async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
   const offset = Number(req.query.offset) || 0;
+  const q = (req.query.q as string || '').trim();
 
   try {
+    const searchFilter = q ? or(
+      ilike(homeowners.email, `%${q}%`),
+      sql`${homeowners.phone} ILIKE ${'%' + q + '%'}`,
+      ilike(homeowners.zipCode, `%${q}%`),
+    ) : undefined;
+
     const [[{ value: total }], rows] = await Promise.all([
-      db.select({ value: count() }).from(homeowners),
+      db.select({ value: count() }).from(homeowners).where(searchFilter),
       db
         .select({
           id: homeowners.id,
@@ -56,6 +63,7 @@ router.get('/homeowners', async (req: Request, res: Response) => {
           createdAt: homeowners.createdAt,
         })
         .from(homeowners)
+        .where(searchFilter)
         .orderBy(desc(homeowners.createdAt))
         .limit(limit)
         .offset(offset),
@@ -73,12 +81,21 @@ router.get('/jobs', async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
   const offset = Number(req.query.offset) || 0;
   const statusFilter = req.query.status as string | undefined;
+  const q = (req.query.q as string || '').trim();
 
   try {
-    const where = statusFilter ? eq(jobs.status, statusFilter) : undefined;
+    const conditions = [];
+    if (statusFilter) conditions.push(eq(jobs.status, statusFilter));
+    if (q) conditions.push(or(
+      sql`${jobs.id}::text ILIKE ${'%' + q + '%'}`,
+      sql`${homeowners.email} ILIKE ${'%' + q + '%'}`,
+      ilike(jobs.zipCode, `%${q}%`),
+      sql`${jobs.diagnosis}->>'category' ILIKE ${'%' + q + '%'}`,
+    ));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [[{ value: total }], rows] = await Promise.all([
-      db.select({ value: count() }).from(jobs).where(where),
+      db.select({ value: count() }).from(jobs).leftJoin(homeowners, eq(jobs.homeownerId, homeowners.id)).where(where),
       db
         .select({
           id: jobs.id,
@@ -203,10 +220,18 @@ router.get('/jobs/:id', async (req: Request, res: Response) => {
 router.get('/providers', async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
   const offset = Number(req.query.offset) || 0;
+  const q = (req.query.q as string || '').trim();
 
   try {
+    const searchFilter = q ? or(
+      ilike(providers.name, `%${q}%`),
+      sql`${providers.phone} ILIKE ${'%' + q + '%'}`,
+      sql`${providers.email} ILIKE ${'%' + q + '%'}`,
+      sql`array_to_string(${providers.categories}, ',') ILIKE ${'%' + q + '%'}`,
+    ) : undefined;
+
     const [[{ value: total }], rows] = await Promise.all([
-      db.select({ value: count() }).from(providers),
+      db.select({ value: count() }).from(providers).where(searchFilter),
       db
         .select({
           id: providers.id,
@@ -224,6 +249,7 @@ router.get('/providers', async (req: Request, res: Response) => {
         })
         .from(providers)
         .leftJoin(providerScores, eq(providers.id, providerScores.providerId))
+        .where(searchFilter)
         .orderBy(desc(providers.discoveredAt))
         .limit(limit)
         .offset(offset),
@@ -335,10 +361,21 @@ router.get('/providers/:id', async (req: Request, res: Response) => {
 router.get('/bookings', async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
   const offset = Number(req.query.offset) || 0;
+  const q = (req.query.q as string || '').trim();
 
   try {
+    const searchFilter = q ? or(
+      sql`${bookings.id}::text ILIKE ${'%' + q + '%'}`,
+      sql`${bookings.jobId}::text ILIKE ${'%' + q + '%'}`,
+      ilike(providers.name, `%${q}%`),
+      sql`${homeowners.email} ILIKE ${'%' + q + '%'}`,
+    ) : undefined;
+
     const [[{ value: total }], rows] = await Promise.all([
-      db.select({ value: count() }).from(bookings),
+      db.select({ value: count() }).from(bookings)
+        .leftJoin(providers, eq(bookings.providerId, providers.id))
+        .leftJoin(homeowners, eq(bookings.homeownerId, homeowners.id))
+        .where(searchFilter),
       db
         .select({
           id: bookings.id,
@@ -351,6 +388,7 @@ router.get('/bookings', async (req: Request, res: Response) => {
         .from(bookings)
         .leftJoin(providers, eq(bookings.providerId, providers.id))
         .leftJoin(homeowners, eq(bookings.homeownerId, homeowners.id))
+        .where(searchFilter)
         .orderBy(desc(bookings.confirmedAt))
         .limit(limit)
         .offset(offset),

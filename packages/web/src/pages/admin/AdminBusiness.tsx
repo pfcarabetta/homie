@@ -209,11 +209,10 @@ export default function AdminBusiness() {
             {loading ? (
               <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">Loading...</td></tr>
             ) : (() => {
-              const filtered = accounts.filter(a => {
-                if (!search) return true;
-                const q = search.toLowerCase();
-                return a.name.toLowerCase().includes(q) || (a.ownerName ?? '').toLowerCase().includes(q) || (a.ownerEmail ?? '').toLowerCase().includes(q) || a.plan.toLowerCase().includes(q) || a.slug.toLowerCase().includes(q);
-              });
+              const q = search.toLowerCase();
+              const filtered = search ? accounts.filter(a =>
+                a.name.toLowerCase().includes(q) || (a.ownerName ?? '').toLowerCase().includes(q) || (a.ownerEmail ?? '').toLowerCase().includes(q) || a.plan.toLowerCase().includes(q) || a.slug.toLowerCase().includes(q)
+              ) : accounts;
               return filtered.length === 0 ? (
               <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No business accounts yet'}</td></tr>
             ) : (

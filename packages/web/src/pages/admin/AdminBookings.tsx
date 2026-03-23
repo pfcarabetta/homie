@@ -22,14 +22,14 @@ export default function AdminBookings() {
 
   useEffect(() => {
     setLoading(true);
-    adminService.getBookings({ limit: PAGE_SIZE, offset })
+    adminService.getBookings({ limit: PAGE_SIZE, offset, q: search || undefined })
       .then((res) => {
         setRows(res.data ?? []);
         setTotal((res.meta.total as number) ?? 0);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [offset]);
+  }, [offset, search]);
 
   if (error) return <div className="text-red-600">{error}</div>;
 
@@ -40,7 +40,7 @@ export default function AdminBookings() {
         <span className="text-sm text-dark/50">{total} total</span>
       </div>
 
-      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by provider, homeowner email, or job ID..."
+      <input value={search} onChange={e => { setSearch(e.target.value); setOffset(0); }} placeholder="Search by provider, homeowner email, or job ID..."
         className="w-full px-4 py-2.5 mb-4 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 bg-white" />
 
       <div className="bg-white rounded-xl border border-dark/10 overflow-hidden">
@@ -58,16 +58,10 @@ export default function AdminBookings() {
           <tbody>
             {loading ? (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-dark/40">Loading...</td></tr>
-            ) : (() => {
-              const filtered = rows.filter(b => {
-                if (!search) return true;
-                const q = search.toLowerCase();
-                return b.id.toLowerCase().includes(q) || b.jobId.toLowerCase().includes(q) || (b.providerName ?? '').toLowerCase().includes(q) || (b.homeownerEmail ?? '').toLowerCase().includes(q) || b.status.toLowerCase().includes(q);
-              });
-              return filtered.length === 0 ? (
+            ) : rows.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No bookings yet'}</td></tr>
             ) : (
-              filtered.map((b) => (
+              rows.map((b) => (
                 <tr key={b.id} className="border-b border-dark/5 hover:bg-warm/50">
                   <td className="px-4 py-3 text-dark/60 font-mono text-xs">{b.id.slice(0, 8)}</td>
                   <td className="px-4 py-3 text-dark/60 font-mono text-xs">{b.jobId.slice(0, 8)}</td>
@@ -77,7 +71,7 @@ export default function AdminBookings() {
                   <td className="px-4 py-3 text-dark/60">{new Date(b.confirmedAt).toLocaleDateString()}</td>
                 </tr>
               ))
-            ); })()}
+            )}
           </tbody>
         </table>
       </div>

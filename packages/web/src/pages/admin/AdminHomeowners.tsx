@@ -22,14 +22,14 @@ export default function AdminHomeowners() {
 
   useEffect(() => {
     setLoading(true);
-    adminService.getHomeowners({ limit: PAGE_SIZE, offset })
+    adminService.getHomeowners({ limit: PAGE_SIZE, offset, q: search || undefined })
       .then((res) => {
         setRows(res.data ?? []);
         setTotal((res.meta.total as number) ?? 0);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [offset]);
+  }, [offset, search]);
 
   if (error) return <div className="text-red-600">{error}</div>;
 
@@ -40,7 +40,7 @@ export default function AdminHomeowners() {
         <span className="text-sm text-dark/50">{total} total</span>
       </div>
 
-      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by email, phone, or zip..."
+      <input value={search} onChange={e => { setSearch(e.target.value); setOffset(0); }} placeholder="Search by email, phone, or zip..."
         className="w-full px-4 py-2.5 mb-4 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 bg-white" />
 
       <div className="bg-white rounded-xl border border-dark/10 overflow-hidden">
@@ -57,18 +57,10 @@ export default function AdminHomeowners() {
           <tbody>
             {loading ? (
               <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">Loading...</td></tr>
-            ) : rows.filter(h => {
-              if (!search) return true;
-              const q = search.toLowerCase();
-              return h.email.toLowerCase().includes(q) || (h.phone ?? '').includes(q) || h.zipCode.includes(q) || h.membershipTier.toLowerCase().includes(q);
-            }).length === 0 ? (
+            ) : rows.length === 0 ? (
               <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No homeowners yet'}</td></tr>
             ) : (
-              rows.filter(h => {
-                if (!search) return true;
-                const q = search.toLowerCase();
-                return h.email.toLowerCase().includes(q) || (h.phone ?? '').includes(q) || h.zipCode.includes(q) || h.membershipTier.toLowerCase().includes(q);
-              }).map((h) => (
+              rows.map((h) => (
                 <tr key={h.id} className="border-b border-dark/5 hover:bg-warm/50">
                   <td className="px-4 py-3 text-dark">{h.email}</td>
                   <td className="px-4 py-3 text-dark/60">{h.phone ?? '-'}</td>

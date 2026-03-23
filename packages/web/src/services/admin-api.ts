@@ -41,10 +41,11 @@ export const adminService = {
     }>('/api/v1/admin/stats');
   },
 
-  async getHomeowners(params?: { limit?: number; offset?: number }) {
+  async getHomeowners(params?: { limit?: number; offset?: number; q?: string }) {
     const q = new URLSearchParams();
     if (params?.limit) q.set('limit', String(params.limit));
     if (params?.offset) q.set('offset', String(params.offset));
+    if (params?.q) q.set('q', params.q);
     return fetchAdmin<Array<{
       id: string;
       email: string;
@@ -55,11 +56,12 @@ export const adminService = {
     }>>(`/api/v1/admin/homeowners?${q}`);
   },
 
-  async getJobs(params?: { limit?: number; offset?: number; status?: string }) {
+  async getJobs(params?: { limit?: number; offset?: number; status?: string; q?: string }) {
     const q = new URLSearchParams();
     if (params?.limit) q.set('limit', String(params.limit));
     if (params?.offset) q.set('offset', String(params.offset));
     if (params?.status) q.set('status', params.status);
+    if (params?.q) q.set('q', params.q);
     return fetchAdmin<Array<{
       id: string;
       homeownerEmail: string | null;
@@ -148,10 +150,11 @@ export const adminService = {
     }>(`/api/v1/admin/jobs/${jobId}`);
   },
 
-  async getProviders(params?: { limit?: number; offset?: number }) {
+  async getProviders(params?: { limit?: number; offset?: number; q?: string }) {
     const q = new URLSearchParams();
     if (params?.limit) q.set('limit', String(params.limit));
     if (params?.offset) q.set('offset', String(params.offset));
+    if (params?.q) q.set('q', params.q);
     return fetchAdmin<Array<{
       id: string;
       name: string;
@@ -168,10 +171,11 @@ export const adminService = {
     }>>(`/api/v1/admin/providers?${q}`);
   },
 
-  async getBookings(params?: { limit?: number; offset?: number }) {
+  async getBookings(params?: { limit?: number; offset?: number; q?: string }) {
     const q = new URLSearchParams();
     if (params?.limit) q.set('limit', String(params.limit));
     if (params?.offset) q.set('offset', String(params.offset));
+    if (params?.q) q.set('q', params.q);
     return fetchAdmin<Array<{
       id: string;
       jobId: string;
