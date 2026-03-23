@@ -7,6 +7,7 @@ import { providers } from '../db/schema/providers';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerScores } from '../db/schema/provider-scores';
 import { preferredVendors } from '../db/schema/preferred-vendors';
+import { providerResponses } from '../db/schema/provider-responses';
 import { discoverProviders } from './providers/discovery';
 import { generateScripts } from './scripts/generation';
 import { VoiceAdapter } from './outreach/voice';
@@ -364,23 +365,92 @@ export async function dispatchJob(jobId: string): Promise<void> {
 
   const adapters = createAdapters();
 
-  // Fan out outreach in parallel across all eligible providers
-  const results = await Promise.allSettled(
-    eligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters)),
-  );
+  // ── Cascading dispatch for B2B with preferred vendors ─────────────────
+  const PREFERRED_CASCADE_DELAY_MS = 15 * 60 * 1000; // 15 minutes
+  const hasPreferredVendors = preferredProviderIds.length > 0 && job.workspaceId;
+  const preferredEligible = hasPreferredVendors
+    ? eligible.filter(p => preferredProviderIds.includes(p.id))
+    : [];
+  const marketplaceEligible = hasPreferredVendors
+    ? eligible.filter(p => !preferredProviderIds.includes(p.id))
+    : eligible;
 
-  const failed = results.filter((r) => r.status === 'rejected');
-  if (failed.length > 0) {
-    logger.error(
-      `[orchestration] dispatchJob: ${failed.length}/${eligible.length} provider outreach(es) failed for job ${jobId}`,
+  if (hasPreferredVendors && preferredEligible.length > 0) {
+    // Phase 1: Contact preferred vendors first
+    logger.info(`[orchestration] dispatchJob: Phase 1 — contacting ${preferredEligible.length} preferred vendors for job ${jobId}`);
+
+    const preferredResults = await Promise.allSettled(
+      preferredEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters)),
     );
+    const preferredFailed = preferredResults.filter((r) => r.status === 'rejected');
+    if (preferredFailed.length > 0) {
+      logger.error(`[orchestration] dispatchJob: ${preferredFailed.length}/${preferredEligible.length} preferred outreach(es) failed for job ${jobId}`);
+    }
+    await incrementOutreachCounts(preferredEligible.map((p) => p.id));
+
+    logger.info(`[orchestration] dispatchJob: preferred vendors contacted for job ${jobId}, marketplace cascade in 15 minutes`);
+
+    // Phase 2: After 15 minutes, check for responses and contact marketplace if needed
+    if (marketplaceEligible.length > 0) {
+      setTimeout(async () => {
+        try {
+          // Check if any preferred vendor responded
+          const responseRows = await db
+            .select({ id: providerResponses.id })
+            .from(providerResponses)
+            .where(and(
+              eq(providerResponses.jobId, jobId),
+              inArray(providerResponses.providerId, preferredProviderIds),
+            ));
+
+          if (responseRows.length > 0) {
+            logger.info(`[orchestration] dispatchJob: ${responseRows.length} preferred vendor(s) responded for job ${jobId}, skipping marketplace`);
+            return;
+          }
+
+          // No preferred vendor responded — contact marketplace
+          logger.info(`[orchestration] dispatchJob: Phase 2 — no preferred vendor response after 15min, contacting ${marketplaceEligible.length} marketplace providers for job ${jobId}`);
+
+          // Re-check job is still active
+          const [currentJob] = await db.select({ status: jobs.status }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
+          if (!currentJob || !['collecting', 'dispatching'].includes(currentJob.status)) {
+            logger.info(`[orchestration] dispatchJob: job ${jobId} no longer active (${currentJob?.status}), skipping marketplace cascade`);
+            return;
+          }
+
+          const marketplaceAdapters = createAdapters();
+          const marketplaceResults = await Promise.allSettled(
+            marketplaceEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, marketplaceAdapters)),
+          );
+          const marketplaceFailed = marketplaceResults.filter((r) => r.status === 'rejected');
+          if (marketplaceFailed.length > 0) {
+            logger.error(`[orchestration] dispatchJob: ${marketplaceFailed.length}/${marketplaceEligible.length} marketplace outreach(es) failed for job ${jobId}`);
+          }
+          await incrementOutreachCounts(marketplaceEligible.map((p) => p.id));
+          logger.info(`[orchestration] dispatchJob: marketplace cascade complete for job ${jobId}, contacted ${marketplaceEligible.length} providers`);
+        } catch (err) {
+          logger.error({ err }, `[orchestration] dispatchJob: marketplace cascade failed for job ${jobId}`);
+        }
+      }, PREFERRED_CASCADE_DELAY_MS);
+    }
+  } else {
+    // No preferred vendors — contact all eligible providers immediately (consumer flow)
+    const results = await Promise.allSettled(
+      eligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters)),
+    );
+
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length > 0) {
+      logger.error(
+        `[orchestration] dispatchJob: ${failed.length}/${eligible.length} provider outreach(es) failed for job ${jobId}`,
+      );
+    }
+
+    await incrementOutreachCounts(eligible.map((p) => p.id));
   }
 
-  // Record that these providers were outreached (feeds the ranking algorithm)
-  await incrementOutreachCounts(eligible.map((p) => p.id));
-
   logger.info(
-    `[orchestration] dispatchJob: contacted ${eligible.length} providers for job ${jobId}`,
+    `[orchestration] dispatchJob: initial outreach complete for job ${jobId} (${eligible.length} total eligible)`,
   );
 }
 
