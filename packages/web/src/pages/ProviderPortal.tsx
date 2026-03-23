@@ -664,10 +664,24 @@ export default function ProviderPortal() {
   const { provider, isProviderAuthenticated, logout } = useProviderAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as Tab) || 'dashboard';
+  const [incomingCount, setIncomingCount] = useState(0);
+  const [bookingsCount, setBookingsCount] = useState(0);
 
   useEffect(() => {
     if (!isProviderAuthenticated) navigate('/portal/login');
   }, [isProviderAuthenticated, navigate]);
+
+  // Fetch notification counts
+  useEffect(() => {
+    if (!isProviderAuthenticated) return;
+    portalService.getIncomingJobs().then(r => {
+      setIncomingCount(r.data?.jobs?.length ?? 0);
+    }).catch(() => {});
+    portalService.getBookings().then(r => {
+      const confirmed = r.data?.bookings?.filter(b => b.status === 'confirmed') ?? [];
+      setBookingsCount(confirmed.length);
+    }).catch(() => {});
+  }, [isProviderAuthenticated]);
 
   if (!isProviderAuthenticated || !provider) return null;
 
@@ -697,14 +711,26 @@ export default function ProviderPortal() {
         </h1>
 
         <div style={{ display: 'flex', gap: 2, marginBottom: 28, borderBottom: '1px solid rgba(0,0,0,0.06)', overflowX: 'auto' }}>
-          {TABS.map(tab => (
-            <button key={tab} onClick={() => setSearchParams({ tab })} style={{
-              padding: '10px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
-              background: 'none', border: 'none', borderBottom: activeTab === tab ? `2px solid ${O}` : '2px solid transparent',
-              color: activeTab === tab ? O : '#9B9490', fontFamily: "'DM Sans', sans-serif",
-              transition: 'all 0.15s', marginBottom: -1,
-            }}>{TAB_LABELS[tab]}</button>
-          ))}
+          {TABS.map(tab => {
+            const badgeCount = tab === 'jobs' ? incomingCount : tab === 'bookings' ? bookingsCount : 0;
+            return (
+              <button key={tab} onClick={() => setSearchParams({ tab })} style={{
+                padding: '10px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+                background: 'none', border: 'none', borderBottom: activeTab === tab ? `2px solid ${O}` : '2px solid transparent',
+                color: activeTab === tab ? O : '#9B9490', fontFamily: "'DM Sans', sans-serif",
+                transition: 'all 0.15s', marginBottom: -1, position: 'relative',
+              }}>
+                {TAB_LABELS[tab]}
+                {badgeCount > 0 && activeTab !== tab && (
+                  <span style={{
+                    position: 'absolute', top: 4, right: 2,
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: '#DC2626',
+                  }} />
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {activeTab === 'dashboard' && <DashboardTab />}
