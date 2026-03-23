@@ -28,12 +28,24 @@ function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: number }
   return <div ref={ref} style={{ opacity: v ? 1 : 0, transform: v ? "translateY(0)" : "translateY(20px)", transition: `opacity 0.6s ease ${delay}s, transform 0.6s ease ${delay}s` }}>{children}</div>;
 }
 
+const ALL_CATEGORIES = [
+  "Plumbing", "Electrical", "HVAC", "Appliance Repair", "Roofing", "General Contractor",
+  "Handyman", "Garage Door", "Cleaning", "Landscaping", "Pool", "Hot Tub",
+  "Pest Control", "Painting", "Locksmith", "Pressure Washing", "Moving",
+  "Flooring", "Fencing", "Tree Trimming", "Gutter Cleaning", "Carpet Cleaning",
+  "Window Cleaning", "Steam Cleaning", "Concrete", "Masonry", "Siding",
+  "Insulation", "Solar", "Security Systems", "Furniture Assembly", "Concierge",
+];
+
 function SignupForm() {
   const [formStep, setFormStep] = useState(0);
-  const [formData, setFormData] = useState({ name: "", business: "", phone: "", email: "", zip: "", category: "" });
+  const [formData, setFormData] = useState({ name: "", business: "", phone: "", email: "", zip: "" });
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
 
-  const categories = ["Plumbing", "Electrical", "HVAC", "Appliance repair", "General handyman", "Cleaning services", "Landscaping", "Pest control", "Roofing", "Pool / hot tub", "Locksmith", "Painting", "Other"];
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
+  };
 
   const update = (k: string, v: string) => setFormData(prev => ({ ...prev, [k]: v }));
 
@@ -47,7 +59,7 @@ function SignupForm() {
           <span style={{ color: C.green, fontSize: 28, fontWeight: 700 }}>✓</span>
         </div>
         <h3 style={{ ...fr, fontSize: 28, fontWeight: 700, color: C.dark, margin: "0 0 12px" }}>Welcome to the crew</h3>
-        <p style={{ ...dm, fontSize: 16, color: C.darkMid, lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>You're in, {formData.name.split(" ")[0]}. We'll start sending you pre-qualified leads as homeowners in your area request {formData.category.toLowerCase()} services.</p>
+        <p style={{ ...dm, fontSize: 16, color: C.darkMid, lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>You're in, {formData.name.split(" ")[0]}. We'll start sending you pre-qualified leads as homeowners in your area request {selectedCategories.length > 1 ? `${selectedCategories.slice(0, -1).join(', ')} and ${selectedCategories[selectedCategories.length - 1]}` : selectedCategories[0]?.toLowerCase()} services.</p>
       </div>
     );
   }
@@ -98,16 +110,22 @@ function SignupForm() {
       {formStep === 2 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <label style={labelStyle}>Primary service category</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {categories.map(cat => (
-                <div key={cat} onClick={() => update("category", cat)} style={{ ...dm, fontSize: 13, fontWeight: 500, padding: "8px 16px", borderRadius: 100, border: formData.category === cat ? `2px solid ${C.orange}` : `1px solid ${C.grayLight}`, background: formData.category === cat ? C.warm : C.white, color: formData.category === cat ? C.orange : C.darkMid, cursor: "pointer", transition: "all 0.15s" }}>{cat}</div>
-              ))}
+            <label style={labelStyle}>Service categories <span style={{ fontWeight: 400, color: C.gray }}>(select all that apply)</span></label>
+            {selectedCategories.length > 0 && (
+              <div style={{ ...dm, fontSize: 13, color: C.green, fontWeight: 600, marginBottom: 8 }}>{selectedCategories.length} selected</div>
+            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, maxHeight: 240, overflowY: "auto" }}>
+              {ALL_CATEGORIES.map(cat => {
+                const active = selectedCategories.includes(cat);
+                return (
+                  <div key={cat} onClick={() => toggleCategory(cat)} style={{ ...dm, fontSize: 13, fontWeight: 500, padding: "8px 16px", borderRadius: 100, border: active ? `2px solid ${C.orange}` : `1px solid ${C.grayLight}`, background: active ? C.warm : C.white, color: active ? C.orange : C.darkMid, cursor: "pointer", transition: "all 0.15s" }}>{cat}</div>
+                );
+              })}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
             <button onClick={() => setFormStep(1)} style={{ ...dm, flex: 1, padding: "14px 0", fontSize: 16, fontWeight: 600, color: C.darkMid, background: C.warm, border: `1px solid ${C.grayLight}`, borderRadius: 12, cursor: "pointer" }}>Back</button>
-            <button onClick={() => setSubmitted(true)} disabled={!formData.category} style={{ ...dm, flex: 2, padding: "14px 0", fontSize: 16, fontWeight: 600, color: C.white, background: !formData.category ? C.grayLight : C.orange, border: "none", borderRadius: 12, cursor: !formData.category ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Join Homie Pro — it's free</button>
+            <button onClick={() => setSubmitted(true)} disabled={selectedCategories.length === 0} style={{ ...dm, flex: 2, padding: "14px 0", fontSize: 16, fontWeight: 600, color: C.white, background: selectedCategories.length === 0 ? C.grayLight : C.orange, border: "none", borderRadius: 12, cursor: selectedCategories.length === 0 ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Join Homie Pro — it's free</button>
           </div>
         </div>
       )}
