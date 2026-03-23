@@ -1140,7 +1140,7 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
           const isExpanded = expandedId === j.id;
           const jobResponses = responses[j.id] ?? [];
           const isActive = ['open', 'dispatching', 'collecting'].includes(j.status);
-          const catLabel = j.diagnosis?.category ? j.diagnosis.category.charAt(0).toUpperCase() + j.diagnosis.category.slice(1) : 'Dispatch';
+          const catLabel = j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Dispatch';
 
           // Response status line
           let responseStatus = '';
