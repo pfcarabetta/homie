@@ -234,8 +234,9 @@ export async function dispatchJob(jobId: string): Promise<void> {
   const preferredProviderIds: string[] = [];
   if (job.workspaceId) {
     try {
+      const jobCategory = diagnosis.category.toLowerCase();
       const pvRows = await db
-        .select({ providerId: preferredVendors.providerId })
+        .select({ providerId: preferredVendors.providerId, categories: preferredVendors.categories })
         .from(preferredVendors)
         .where(and(
           eq(preferredVendors.workspaceId, job.workspaceId),
@@ -244,6 +245,8 @@ export async function dispatchJob(jobId: string): Promise<void> {
           job.propertyId
             ? sql`(${preferredVendors.propertyId} = ${job.propertyId} OR ${preferredVendors.propertyId} IS NULL)`
             : sql`${preferredVendors.propertyId} IS NULL`,
+          // Match category: vendor categories contain the job category, or vendor has no categories (matches all)
+          sql`(${preferredVendors.categories} IS NULL OR ${jobCategory} = ANY(${preferredVendors.categories}))`,
         ))
         .orderBy(asc(preferredVendors.priority));
 
