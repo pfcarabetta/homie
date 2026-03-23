@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { accountService, jobService, type AccountProfile, type AccountJob, type AccountBooking, type ProviderResponseItem } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
@@ -459,6 +460,7 @@ function PaymentTab() {
 
 /* -- Main Account Page -- */
 export default function Account() {
+  useDocumentTitle('My Account');
   const navigate = useNavigate();
   const { isAuthenticated, homeowner } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();

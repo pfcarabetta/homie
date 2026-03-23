@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 export default function Privacy() {
+  useDocumentTitle('Privacy Policy');
   return (
     <div style={{ minHeight: '100vh', background: '#F9F5F2', fontFamily: "'DM Sans', sans-serif" }}>
       <header style={{ padding: '24px 0', textAlign: 'center' }}>

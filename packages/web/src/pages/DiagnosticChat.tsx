@@ -442,7 +442,7 @@ export default function DiagnosticChat() {
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useDocumentTitle('Diagnostic Chat');
+  useDocumentTitle('Free DIY Home Repair Diagnostic');
 
   // Auto-scroll to bottom when messages change (skip if only welcome/empty)
   useEffect(() => {

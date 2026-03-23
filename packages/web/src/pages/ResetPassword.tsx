@@ -5,7 +5,7 @@ import { fetchAPI } from '@/services/api';
 import { Spinner } from '@/components/Skeleton';
 
 export default function ResetPassword() {
-  useDocumentTitle('Reset password');
+  useDocumentTitle('Reset Password');
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');

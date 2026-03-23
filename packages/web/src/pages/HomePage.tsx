@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 const ORANGE = '#E8632B';
 const GREEN = '#1B9E77';
@@ -275,6 +276,7 @@ function BackgroundMosaic() {
 
 /* -- Main page -- */
 export default function HomePage() {
+  useDocumentTitle('AI-Powered Home Maintenance & Repair Quotes');
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 

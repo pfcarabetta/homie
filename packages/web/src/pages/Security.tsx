@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -32,6 +33,7 @@ function SectionCard({ icon, title, items }: { icon: string; title: string; item
 }
 
 export default function Security() {
+  useDocumentTitle('Security');
   return (
     <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
       <header style={{ padding: '24px 0', textAlign: 'center' }}>

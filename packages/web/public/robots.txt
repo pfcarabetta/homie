@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://homiepro.ai/sitemap.xml
+
+# Disallow private/auth pages
+Disallow: /account
+Disallow: /business
+Disallow: /business/chat
+Disallow: /portal
+Disallow: /admin
+Disallow: /payment
+Disallow: /results
+Disallow: /verify-email
+Disallow: /reset-password

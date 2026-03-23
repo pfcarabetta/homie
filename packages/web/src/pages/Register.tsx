@@ -5,7 +5,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Spinner } from '@/components/Skeleton';
 
 export default function Register() {
-  useDocumentTitle('Create account');
+  useDocumentTitle('Create Account');
   const { register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

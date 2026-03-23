@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { businessService, jobService, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
@@ -1525,6 +1526,7 @@ type Tab = typeof TABS[number];
 const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', dispatches: 'Dispatches', bookings: 'Bookings', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
 
 export default function BusinessPortal() {
+  useDocumentTitle('Business Portal');
   const { homeowner } = useAuth();
   const navigate = useNavigate();
 

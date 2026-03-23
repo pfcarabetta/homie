@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
@@ -551,6 +552,7 @@ function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | nu
 
 /* -- MAIN COMPONENT -- */
 export default function GetQuotes() {
+  useDocumentTitle('Get Home Repair Quotes in Minutes');
   const navigate = useNavigate();
   const isDemo = new URLSearchParams(window.location.search).has('demo');
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);

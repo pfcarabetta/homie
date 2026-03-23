@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import {
   businessService, businessChatService, jobService, connectJobSocket,
   type Property, type Workspace, type DiagnosticStreamCallbacks,
@@ -182,6 +183,7 @@ type Step = 'property' | 'category' | 'q1' | 'chat' | 'extra' | 'budget' | 'summ
 interface Message { role: 'user' | 'assistant'; content: string }
 
 export default function BusinessChat() {
+  useDocumentTitle('Business Dispatch');
   const { homeowner } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

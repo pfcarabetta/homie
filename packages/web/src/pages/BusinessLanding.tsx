@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 const COLORS = {
   orange: "#E8632B",
@@ -748,6 +749,7 @@ function OutreachEngine() {
 }
 
 export default function BusinessLanding() {
+  useDocumentTitle('Homie for Business — Property Management Maintenance Platform');
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: COLORS.white, minHeight: "100vh" }}>
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />

@@ -5,7 +5,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Spinner } from '@/components/Skeleton';
 
 export default function Login() {
-  useDocumentTitle('Sign in');
+  useDocumentTitle('Sign In');
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
