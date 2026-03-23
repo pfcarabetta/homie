@@ -672,8 +672,8 @@ export default function HomePage() {
               {[
                 { label: 'For homeowners', href: '/' },
                 { label: 'For business', href: '/business/landing' },
-                { label: 'Pricing', href: '/#pricing' },
-                { label: 'How it works', href: '/#how-it-works' },
+                { label: 'Pricing', href: '#pricing' },
+                { label: 'How it works', href: '#how' },
               ].map(l => (
                 <a key={l.label} href={l.href} style={{ display: 'block', fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>{l.label}</a>
               ))}
