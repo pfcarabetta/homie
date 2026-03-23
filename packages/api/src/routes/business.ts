@@ -722,6 +722,57 @@ router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRol
 
 // ── Dispatches (workspace jobs) ─────────────────────────────────────────────
 
+// ── Billing & Usage ─────────────────────────────────────────────────────────
+
+const PLAN_LIMITS: Record<string, { searches: number; extraCost: string }> = {
+  starter: { searches: 10, extraCost: '$6.99' },
+  professional: { searches: 30, extraCost: '$4.99' },
+  business: { searches: 75, extraCost: '$3.49' },
+  enterprise: { searches: 200, extraCost: '$2.49' },
+};
+
+// GET /:workspaceId/usage
+router.get('/:workspaceId/usage', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const [ws] = await db
+      .select({
+        plan: workspaces.plan,
+        searchesUsed: workspaces.searchesUsed,
+        searchesLimit: workspaces.searchesLimit,
+        billingCycleStart: workspaces.billingCycleStart,
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, req.workspaceId))
+      .limit(1);
+
+    if (!ws) {
+      res.status(404).json({ data: null, error: 'Workspace not found', meta: {} });
+      return;
+    }
+
+    const planInfo = PLAN_LIMITS[ws.plan] || PLAN_LIMITS.starter;
+    const billingCycleEnd = new Date(ws.billingCycleStart);
+    billingCycleEnd.setMonth(billingCycleEnd.getMonth() + 1);
+
+    res.json({
+      data: {
+        plan: ws.plan,
+        searches_used: ws.searchesUsed,
+        searches_limit: ws.searchesLimit,
+        searches_remaining: Math.max(0, ws.searchesLimit - ws.searchesUsed),
+        extra_search_cost: planInfo.extraCost,
+        billing_cycle_start: ws.billingCycleStart,
+        billing_cycle_end: billingCycleEnd.toISOString(),
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/usage]');
+    res.status(500).json({ data: null, error: 'Failed to fetch usage', meta: {} });
+  }
+});
+
 // GET /:workspaceId/dispatches
 router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, res: Response) => {
   try {

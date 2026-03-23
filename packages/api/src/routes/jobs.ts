@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, count, desc } from 'drizzle-orm';
+import { eq, and, count, desc, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
-import { jobs, outreachAttempts, providerResponses, providers, bookings } from '../db/schema';
+import { jobs, outreachAttempts, providerResponses, providers, bookings, workspaces } from '../db/schema';
 import { dispatchJob, sendBookingNotifications } from '../services/orchestration';
 import { recordHomeownerRating } from '../services/providers/scores';
 import {
@@ -120,6 +120,27 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   try {
+    // B2B search credit check
+    if (body.workspace_id) {
+      const [ws] = await db
+        .select({ searchesUsed: workspaces.searchesUsed, searchesLimit: workspaces.searchesLimit })
+        .from(workspaces)
+        .where(eq(workspaces.id, body.workspace_id))
+        .limit(1);
+
+      if (ws && ws.searchesUsed >= ws.searchesLimit) {
+        res.status(403).json({ data: null, error: `Search limit reached (${ws.searchesLimit} per billing cycle). Upgrade your plan for more searches.`, meta: {} });
+        return;
+      }
+
+      // Increment search count
+      if (ws) {
+        await db.update(workspaces)
+          .set({ searchesUsed: sql`${workspaces.searchesUsed} + 1` } as Record<string, unknown>)
+          .where(eq(workspaces.id, body.workspace_id));
+      }
+    }
+
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.ip ?? '';
     const consentText = 'By proceeding, you authorize Homie to contact service providers on your behalf via phone call, text message, and email to obtain quotes for your request.';
 

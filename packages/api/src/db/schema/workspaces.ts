@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer } from 'drizzle-orm/pg-core';
 import { homeowners } from './homeowners';
 
 export const workspaces = pgTable('workspaces', {
@@ -7,6 +7,9 @@ export const workspaces = pgTable('workspaces', {
   slug: text('slug').unique().notNull(),
   plan: text('plan').notNull().default('starter'),
   stripeCustomerId: text('stripe_customer_id'),
+  searchesUsed: integer('searches_used').notNull().default(0),
+  searchesLimit: integer('searches_limit').notNull().default(10),
+  billingCycleStart: timestamp('billing_cycle_start', { withTimezone: true }).notNull().defaultNow(),
   ownerId: uuid('owner_id').notNull().references(() => homeowners.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -862,6 +862,18 @@ export const businessService = {
       method: 'DELETE',
     }),
 
+  // Usage
+  getUsage: (workspaceId: string) =>
+    fetchAPI<{
+      plan: string;
+      searches_used: number;
+      searches_limit: number;
+      searches_remaining: number;
+      extra_search_cost: string;
+      billing_cycle_start: string;
+      billing_cycle_end: string;
+    }>(`/api/v1/business/${workspaceId}/usage`),
+
   // Dispatches
   listDispatches: (workspaceId: string) =>
     fetchAPI<WorkspaceDispatch[]>(`/api/v1/business/${workspaceId}/dispatches`),

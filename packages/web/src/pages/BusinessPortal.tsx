@@ -497,6 +497,18 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
 /* ── Overview Tab ───────────────────────────────────────────────────────── */
 
 function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
+  const [usage, setUsage] = useState<{
+    plan: string; searches_used: number; searches_limit: number;
+    searches_remaining: number; extra_search_cost: string;
+    billing_cycle_start: string; billing_cycle_end: string;
+  } | null>(null);
+
+  useEffect(() => {
+    businessService.getUsage(workspace.id).then(res => {
+      if (res.data) setUsage(res.data);
+    }).catch(() => {});
+  }, [workspace.id]);
+
   const stats = [
     { label: 'Properties', value: workspace.property_count, icon: '🏠' },
     { label: 'Team Members', value: workspace.member_count, icon: '👥' },
@@ -504,9 +516,12 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
     { label: 'Your Role', value: workspace.user_role.charAt(0).toUpperCase() + workspace.user_role.slice(1), icon: '🔑' },
   ];
 
+  const usagePct = usage ? Math.min(100, Math.round((usage.searches_used / usage.searches_limit) * 100)) : 0;
+  const barColor = usagePct >= 90 ? '#DC2626' : usagePct >= 70 ? '#EF9F27' : G;
+
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 24 }}>
         {stats.map(s => (
           <div key={s.label} style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 20, textAlign: 'center' }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>{s.icon}</div>
@@ -515,6 +530,58 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
           </div>
         ))}
       </div>
+
+      {/* Search credits / billing */}
+      {usage && (
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24, marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: 0 }}>Outreach Credits</h4>
+            <span style={{ fontSize: 12, color: '#9B9490' }}>
+              Resets {new Date(usage.billing_cycle_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+              <span style={{ fontSize: 28, fontWeight: 700, color: D, fontFamily: "'Fraunces', serif" }}>
+                {usage.searches_remaining}
+              </span>
+              <span style={{ fontSize: 13, color: '#9B9490' }}>of {usage.searches_limit} remaining</span>
+            </div>
+            <div style={{ height: 8, borderRadius: 4, background: '#E0DAD4' }}>
+              <div style={{ height: '100%', borderRadius: 4, background: barColor, width: `${usagePct}%`, transition: 'width 0.5s ease' }} />
+            </div>
+            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>
+              {usage.searches_used} search{usage.searches_used !== 1 ? 'es' : ''} used this cycle
+            </div>
+          </div>
+
+          {/* Usage details */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Plan</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{usage.plan}</div>
+            </div>
+            <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Included</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{usage.searches_limit}/mo</div>
+            </div>
+            <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Extra search</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: O }}>{usage.extra_search_cost}</div>
+            </div>
+          </div>
+
+          {usagePct >= 90 && (
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
+              {usage.searches_remaining === 0
+                ? 'You\'ve used all your outreach credits for this cycle. Upgrade your plan for more.'
+                : `Only ${usage.searches_remaining} credit${usage.searches_remaining !== 1 ? 's' : ''} remaining. Consider upgrading.`}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24 }}>
         <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 16px' }}>Workspace Details</h4>
