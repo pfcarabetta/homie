@@ -14,6 +14,7 @@ import Account from '@/pages/Account';
 import BusinessPortal from '@/pages/BusinessPortal';
 import BusinessChat from '@/pages/BusinessChat';
 import BusinessLanding from '@/pages/BusinessLanding';
+import ProSignup from '@/pages/ProSignup';
 import PaymentSuccess from '@/pages/PaymentSuccess';
 import VerifyEmail from '@/pages/VerifyEmail';
 import Terms from '@/pages/Terms';
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/security" element={<Security />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
           <Route path="/portal/login" element={<ProviderLogin />} />
+          <Route path="/portal/signup" element={<ProSignup />} />
           <Route path="/portal" element={<ProviderPortal />} />
           <Route path="/admin" element={<AdminLogin />} />
           <Route element={<AdminLayout />}>
