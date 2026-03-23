@@ -670,6 +670,7 @@ export interface WorkspaceDispatch {
   preferredTiming: string | null;
   propertyId: string | null;
   propertyName: string | null;
+  responseCount: number;
   createdAt: string;
   expiresAt: string | null;
 }

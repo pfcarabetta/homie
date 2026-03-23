@@ -766,9 +766,22 @@ router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, re
       propertyMap = Object.fromEntries(propRows.map(p => [p.id, p.name]));
     }
 
+    // Get response counts per job
+    const jobIds = rows.map(r => r.id);
+    let responseCountMap: Record<string, number> = {};
+    if (jobIds.length > 0) {
+      const countRows = await db
+        .select({ jobId: providerResponses.jobId, count: sql<number>`count(*)::int` })
+        .from(providerResponses)
+        .where(sql`${providerResponses.jobId} IN (${sql.join(jobIds.map(id => sql`${id}`), sql`, `)})`)
+        .groupBy(providerResponses.jobId);
+      responseCountMap = Object.fromEntries(countRows.map(r => [r.jobId, r.count]));
+    }
+
     const enriched = rows.map(r => ({
       ...r,
       propertyName: r.propertyId ? propertyMap[r.propertyId] || null : null,
+      responseCount: responseCountMap[r.id] || 0,
     }));
 
     res.json({ data: enriched, error: null, meta: {} });
