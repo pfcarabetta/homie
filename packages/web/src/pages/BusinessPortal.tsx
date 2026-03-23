@@ -6,6 +6,21 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
+function HomieBizLogo({ size = 'default' }: { size?: 'default' | 'large' }) {
+  const isLarge = size === 'large';
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 0 }}>
+      <span style={{ fontFamily: "'Fraunces', serif", fontSize: isLarge ? 28 : 22, fontWeight: 700, color: O }}>homie</span>
+      <span style={{
+        fontFamily: "'DM Sans', sans-serif", fontSize: isLarge ? 11 : 9, fontWeight: 800,
+        color: '#fff', background: G, padding: isLarge ? '3px 8px' : '2px 6px',
+        borderRadius: 4, marginLeft: isLarge ? 10 : 7, letterSpacing: '0.08em',
+        textTransform: 'uppercase' as const, position: 'relative' as const, top: isLarge ? -2 : -1,
+      }}>Business</span>
+    </span>
+  );
+}
+
 function renderBold(text: string) {
   const parts = text.split(/\*\*(.+?)\*\*/g);
   return parts.map((part, i) =>
@@ -1365,9 +1380,8 @@ export default function BusinessPortal() {
       {/* Header */}
       <header style={{ background: '#fff', borderBottom: '1px solid #E0DAD4', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span onClick={() => navigate('/')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'baseline', gap: 0 }}>
-            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>homie</span>
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, color: G, marginLeft: 6 }}>for business</span>
+          <span onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
+            <HomieBizLogo />
           </span>
         </div>
         <AvatarDropdown />
@@ -1380,7 +1394,7 @@ export default function BusinessPortal() {
           /* Empty state — no workspaces */
           <div style={{ textAlign: 'center', padding: '80px 20px' }}>
             <div style={{ fontSize: 56, marginBottom: 16 }}>🏢</div>
-            <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: 28, color: D, marginBottom: 12 }}>Welcome to <span style={{ color: O }}>homie</span> <span style={{ fontSize: 20, color: G }}>for business</span></h2>
+            <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: 28, color: D, marginBottom: 12 }}>Welcome to <HomieBizLogo size="large" /></h2>
             <p style={{ fontSize: 16, color: '#6B6560', maxWidth: 480, margin: '0 auto 32px', lineHeight: 1.6 }}>
               Manage maintenance across all your properties with one dashboard. Create your first workspace to get started.
             </p>

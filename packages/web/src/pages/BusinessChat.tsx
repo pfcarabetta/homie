@@ -540,8 +540,15 @@ export default function BusinessChat() {
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span onClick={() => navigate('/business')} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: G, background: `${G}15`, padding: '3px 10px', borderRadius: 20 }}>Business</span>
+          <span onClick={() => navigate('/business')} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'baseline' }}>
+            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>homie</span>
+            <span style={{
+              fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 800,
+              color: '#fff', background: G, padding: '2px 6px',
+              borderRadius: 4, marginLeft: 7, letterSpacing: '0.08em',
+              textTransform: 'uppercase', position: 'relative', top: -1,
+            }}>Business</span>
+          </span>
           {selectedProperty && (
             <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>
               {selectedProperty.name}
