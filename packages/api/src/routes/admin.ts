@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { count, desc, eq, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
-import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList, workspaces, workspaceMembers } from '../db/schema';
+import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList, workspaces, workspaceMembers, properties } from '../db/schema';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -382,8 +382,9 @@ router.post('/business-accounts', async (req: Request, res: Response) => {
     return;
   }
 
-  const validPlans = ['starter', 'professional', 'business', 'enterprise'];
+  const validPlans = ['trial', 'starter', 'professional', 'business', 'enterprise'];
   const selectedPlan = plan && validPlans.includes(plan) ? plan : 'starter';
+  const planSearchLimits: Record<string, number> = { trial: 5, starter: 10, professional: 30, business: 75, enterprise: 200 };
 
   try {
     // Find user
@@ -408,6 +409,7 @@ router.post('/business-accounts', async (req: Request, res: Response) => {
         name: workspace_name.trim(),
         slug,
         plan: selectedPlan,
+        searchesLimit: planSearchLimits[selectedPlan] ?? 10,
         ownerId: user.id,
       })
       .returning();
@@ -447,6 +449,8 @@ router.get('/business-accounts', async (_req: Request, res: Response) => {
         name: workspaces.name,
         slug: workspaces.slug,
         plan: workspaces.plan,
+        searchesUsed: workspaces.searchesUsed,
+        searchesLimit: workspaces.searchesLimit,
         ownerEmail: homeowners.email,
         ownerName: sql`COALESCE(${homeowners.firstName} || ' ' || ${homeowners.lastName}, ${homeowners.email})`,
         createdAt: workspaces.createdAt,
@@ -459,6 +463,110 @@ router.get('/business-accounts', async (_req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /admin/business-accounts]');
     res.status(500).json({ data: null, error: 'Failed to fetch business accounts', meta: {} });
+  }
+});
+
+// GET /api/v1/admin/business-accounts/:id — Get workspace detail
+router.get('/business-accounts/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const [ws] = await db
+      .select({
+        id: workspaces.id, name: workspaces.name, slug: workspaces.slug,
+        plan: workspaces.plan, stripeCustomerId: workspaces.stripeCustomerId,
+        searchesUsed: workspaces.searchesUsed, searchesLimit: workspaces.searchesLimit,
+        billingCycleStart: workspaces.billingCycleStart,
+        ownerId: workspaces.ownerId, createdAt: workspaces.createdAt,
+        ownerEmail: homeowners.email,
+        ownerName: sql`COALESCE(${homeowners.firstName} || ' ' || ${homeowners.lastName}, ${homeowners.email})`,
+        ownerPhone: homeowners.phone,
+      })
+      .from(workspaces)
+      .leftJoin(homeowners, eq(workspaces.ownerId, homeowners.id))
+      .where(eq(workspaces.id, id))
+      .limit(1);
+
+    if (!ws) { res.status(404).json({ data: null, error: 'Not found', meta: {} }); return; }
+
+    // Team members
+    const members = await db
+      .select({
+        id: workspaceMembers.id, role: workspaceMembers.role,
+        email: homeowners.email,
+        name: sql<string>`COALESCE(${homeowners.firstName} || ' ' || ${homeowners.lastName}, ${homeowners.email})`,
+      })
+      .from(workspaceMembers)
+      .innerJoin(homeowners, eq(workspaceMembers.homeownerId, homeowners.id))
+      .where(eq(workspaceMembers.workspaceId, id));
+
+    // Properties
+    const props = await db
+      .select({ id: properties.id, name: properties.name, active: properties.active })
+      .from(properties)
+      .where(eq(properties.workspaceId, id));
+
+    // Dispatch stats
+    const [[{ value: totalDispatches }], [{ value: totalResponses }], [{ value: totalBookings }]] = await Promise.all([
+      db.select({ value: count() }).from(jobs).where(eq(jobs.workspaceId, id)),
+      db.select({ value: count() }).from(providerResponses)
+        .innerJoin(jobs, eq(providerResponses.jobId, jobs.id))
+        .where(eq(jobs.workspaceId, id)),
+      db.select({ value: count() }).from(bookings)
+        .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+        .where(eq(jobs.workspaceId, id)),
+    ]);
+
+    res.json({
+      data: {
+        workspace: ws,
+        members,
+        properties: props,
+        stats: {
+          total_dispatches: totalDispatches,
+          total_responses: totalResponses,
+          total_bookings: totalBookings,
+        },
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/business-accounts/:id]');
+    res.status(500).json({ data: null, error: 'Failed to fetch details', meta: {} });
+  }
+});
+
+// PATCH /api/v1/admin/business-accounts/:id — Update workspace (plan, credits)
+router.patch('/business-accounts/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const body = req.body as { plan?: string; searches_limit?: number; searches_used?: number; add_credits?: number };
+
+  const updates: Record<string, unknown> = {};
+
+  const validPlans = ['trial', 'starter', 'professional', 'business', 'enterprise'];
+  if (body.plan && validPlans.includes(body.plan)) {
+    updates.plan = body.plan;
+    // Auto-set limits based on plan
+    const planLimits: Record<string, number> = { trial: 5, starter: 10, professional: 30, business: 75, enterprise: 200 };
+    updates.searchesLimit = planLimits[body.plan] ?? 10;
+  }
+  if (body.searches_limit != null) updates.searchesLimit = body.searches_limit;
+  if (body.searches_used != null) updates.searchesUsed = body.searches_used;
+  if (body.add_credits != null) {
+    // Add bonus credits by increasing the limit
+    const [ws] = await db.select({ searchesLimit: workspaces.searchesLimit }).from(workspaces).where(eq(workspaces.id, id)).limit(1);
+    if (ws) updates.searchesLimit = ws.searchesLimit + body.add_credits;
+  }
+
+  updates.updatedAt = new Date();
+
+  try {
+    const [updated] = await db.update(workspaces).set(updates).where(eq(workspaces.id, id)).returning();
+    if (!updated) { res.status(404).json({ data: null, error: 'Not found', meta: {} }); return; }
+    res.json({ data: updated, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /admin/business-accounts/:id]');
+    res.status(500).json({ data: null, error: 'Failed to update', meta: {} });
   }
 });
 

@@ -725,6 +725,7 @@ router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRol
 // ── Billing & Usage ─────────────────────────────────────────────────────────
 
 const PLAN_LIMITS: Record<string, { searches: number; extraCost: string }> = {
+  trial: { searches: 5, extraCost: 'N/A' },
   starter: { searches: 10, extraCost: '$6.99' },
   professional: { searches: 30, extraCost: '$4.99' },
   business: { searches: 75, extraCost: '$3.49' },

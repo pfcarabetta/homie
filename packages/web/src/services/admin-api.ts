@@ -189,10 +189,33 @@ export const adminService = {
       name: string;
       slug: string;
       plan: string;
+      searchesUsed: number;
+      searchesLimit: number;
       ownerEmail: string | null;
       ownerName: string | null;
       createdAt: string;
     }>>('/api/v1/admin/business-accounts');
+  },
+
+  async getBusinessDetail(id: string) {
+    return fetchAdmin<{
+      workspace: {
+        id: string; name: string; slug: string; plan: string;
+        searchesUsed: number; searchesLimit: number;
+        billingCycleStart: string; createdAt: string;
+        ownerEmail: string | null; ownerName: string | null; ownerPhone: string | null;
+      };
+      members: Array<{ id: string; role: string; email: string; name: string }>;
+      properties: Array<{ id: string; name: string; active: boolean }>;
+      stats: { total_dispatches: number; total_responses: number; total_bookings: number };
+    }>(`/api/v1/admin/business-accounts/${id}`);
+  },
+
+  async updateBusiness(id: string, data: { plan?: string; searches_limit?: number; searches_used?: number; add_credits?: number }) {
+    return fetchAdmin<Record<string, unknown>>(`/api/v1/admin/business-accounts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   },
 
   async createBusinessAccount(data: { email: string; workspace_name: string; plan?: string }) {
