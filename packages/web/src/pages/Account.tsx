@@ -202,7 +202,7 @@ function QuotesTab() {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {jobs.map(j => {
         const sc = STATUS_COLORS[j.status] || STATUS_COLORS.expired;
         const sm = STATUS_MESSAGES[j.status] || STATUS_MESSAGES.open;
@@ -210,105 +210,145 @@ function QuotesTab() {
         const isExpanded = expandedId === j.id;
         const jobResponses = responses[j.id] ?? [];
         const isActive = ['open', 'dispatching', 'collecting'].includes(j.status);
+        const catLabel = j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Quote';
+
+        // Response status for collapsed card
+        const responseCount = jobResponses.length;
+        const hasLoaded = responses[j.id] !== undefined;
+        let responseStatus = '';
+        let responseColor = '#9B9490';
+        let responseDot = false;
+        if (j.status === 'completed' && hasLoaded && responseCount > 0) {
+          responseStatus = `${responseCount} quote${responseCount > 1 ? 's' : ''} received`;
+          responseColor = G;
+        } else if (j.status === 'completed' && hasLoaded) {
+          responseStatus = 'No quotes received';
+        } else if (isActive) {
+          responseStatus = 'Awaiting provider quotes';
+          responseColor = '#C2410C';
+          responseDot = true;
+        } else if (j.status === 'expired') {
+          responseStatus = 'Expired';
+        } else {
+          responseStatus = sm.label;
+        }
 
         return (
           <div key={j.id} onClick={() => toggleExpand(j.id)} style={{
-            background: 'white', borderRadius: 14, padding: '16px 18px',
+            background: 'white', borderRadius: 12,
             border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
-            cursor: 'pointer', transition: 'all 0.15s',
+            cursor: 'pointer', transition: 'all 0.15s', overflow: 'hidden',
           }}>
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontWeight: 600, fontSize: 15, color: D }}>
-                {j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Quote'}
+            {/* Collapsed card */}
+            <div style={{ padding: '14px 18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15, color: D }}>{catLabel}</span>
+                  <span style={{ background: sc.bg, color: sc.text, padding: '2px 10px', borderRadius: 100, fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
+                </div>
+                <span style={{ fontSize: 12, color: '#9B9490' }}>{isExpanded ? '▲' : '▼'}</span>
               </div>
-              <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
-            </div>
-            {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>{j.diagnosis.summary}</div>}
-            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#9B9490', flexWrap: 'wrap' }}>
-              <span>{j.tier} tier</span>
-              <span>{j.zip_code}</span>
-              <span>{new Date(j.created_at).toLocaleDateString()} {new Date(j.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-              <span>({timeAgo(j.created_at)})</span>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: '#6B6560', marginBottom: 10, flexWrap: 'wrap' }}>
+                <span>{j.zip_code}</span>
+                <span>{new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                <span style={{ textTransform: 'capitalize' }}>{j.tier}</span>
+              </div>
+
+              {/* Response status */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', borderRadius: 8,
+                background: (hasLoaded && responseCount > 0) ? `${G}08` : isActive ? '#FFF7ED' : W,
+                border: (hasLoaded && responseCount > 0) ? `1px solid ${G}20` : '1px solid rgba(0,0,0,0.04)',
+              }}>
+                {responseDot && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#C2410C', animation: 'pulse 1.5s infinite', flexShrink: 0 }} />}
+                {hasLoaded && responseCount > 0 && <span style={{ fontSize: 14 }}>✅</span>}
+                <span style={{ fontSize: 13, fontWeight: 600, color: responseColor }}>{responseStatus}</span>
+              </div>
             </div>
 
             {/* Expanded Detail */}
             {isExpanded && (
-              <div style={{ marginTop: 16, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(0,0,0,0.05)' }} onClick={e => e.stopPropagation()}>
+
+                {/* Full summary */}
+                {j.diagnosis?.summary && (
+                  <div style={{ padding: '14px 0', fontSize: 14, color: '#6B6560', lineHeight: 1.6 }}>
+                    {j.diagnosis.summary}
+                  </div>
+                )}
 
                 {/* Status Banner */}
-                <div style={{ background: isActive ? '#FFF7ED' : sc.bg, borderRadius: 10, padding: '14px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {isActive && <div style={{ width: 10, height: 10, borderRadius: '50%', background: O, animation: 'pulse 1.2s infinite' }} />}
-                  {!isActive && <span style={{ fontSize: 18 }}>{sm.icon}</span>}
+                <div style={{ background: isActive ? '#FFF7ED' : sc.bg, borderRadius: 10, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {isActive && <div style={{ width: 8, height: 8, borderRadius: '50%', background: O, animation: 'pulse 1.2s infinite' }} />}
+                  {!isActive && <span style={{ fontSize: 16 }}>{sm.icon}</span>}
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{sm.label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{sm.label}</div>
                     <div style={{ fontSize: 12, color: '#6B6560' }}>{sm.desc}</div>
                   </div>
                 </div>
 
-                {/* Job Details Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                  <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
-                    <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Category</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.category ?? 'General'}</div>
+                {/* Details grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+                  <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Category</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{catLabel}</div>
                   </div>
-                  <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
-                    <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Severity</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.severity ?? 'Medium'}</div>
+                  <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Severity</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.severity ?? 'Medium'}</div>
                   </div>
-                  <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
-                    <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Timing</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{j.preferred_timing ?? 'Flexible'}</div>
+                  <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Timing</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{j.preferred_timing ?? 'Flexible'}</div>
                   </div>
-                  <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
-                    <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Payment</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: pm.color }}>{pm.text}</div>
+                  <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Payment</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: pm.color }}>{pm.text}</div>
                   </div>
                 </div>
 
                 {j.expires_at && (
-                  <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 14 }}>
                     {isActive ? 'Expires' : 'Expired'}: {new Date(j.expires_at).toLocaleString()}
                   </div>
                 )}
 
                 {/* Provider Responses */}
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 10 }}>Provider Responses</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Provider Quotes</div>
 
                   {loadingResponses === j.id ? (
-                    <div style={{ color: '#9B9490', fontSize: 13 }}>Loading responses...</div>
+                    <div style={{ color: '#9B9490', fontSize: 13 }}>Loading quotes...</div>
                   ) : jobResponses.length === 0 ? (
-                    <div style={{ background: W, borderRadius: 10, padding: '16px', textAlign: 'center' }}>
+                    <div style={{ background: W, borderRadius: 8, padding: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: 13, color: '#9B9490' }}>
-                        {isActive ? 'Waiting for providers to respond...' : 'No providers responded to this request'}
+                        {isActive ? 'Waiting for providers to respond...' : 'No providers responded'}
                       </div>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {jobResponses.map(r => (
                         <div key={r.id} style={{
-                          background: W, borderRadius: 12, padding: '14px 16px',
+                          background: W, borderRadius: 10, padding: '12px 14px',
                           border: '1px solid rgba(0,0,0,0.04)',
                         }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                             <div>
-                              <span style={{ fontWeight: 600, fontSize: 15, color: D }}>{r.provider.name}</span>
-                              <span style={{ color: '#9B9490', fontSize: 12, marginLeft: 8 }}>{'\u2605'} {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
+                              <span style={{ fontWeight: 600, fontSize: 14, color: D }}>{r.provider.name}</span>
+                              <span style={{ color: '#9B9490', fontSize: 11, marginLeft: 6 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
                             </div>
                             {r.quoted_price && (
-                              <div style={{ textAlign: 'right' }}>
-                                <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>{r.quoted_price}</span>
-                                <div style={{ fontSize: 10, color: '#9B9490' }}>estimate</div>
-                              </div>
+                              <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
                             )}
                           </div>
-                          {r.availability && <div style={{ fontSize: 13, color: D, marginBottom: 4 }}>{'\uD83D\uDCC5'} {r.availability}</div>}
-                          {r.message && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic' }}>"{r.message}"</div>}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                          {r.availability && <div style={{ fontSize: 12, color: D, marginBottom: 3 }}>📅 {r.availability}</div>}
+                          {r.message && <div style={{ fontSize: 12, color: '#6B6560', fontStyle: 'italic' }}>"{r.message}"</div>}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
                             <span style={{ fontSize: 11, color: '#9B9490' }}>via {r.channel} · {timeAgo(r.responded_at)}</span>
                             {r.provider.phone && (
-                              <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>{'\uD83D\uDCDE'} Call</a>
+                              <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
                             )}
                           </div>
                           {j.status !== 'completed' && (
@@ -320,7 +360,7 @@ function QuotesTab() {
                                 style={{
                                   width: '100%', padding: '10px 14px', borderRadius: 10, fontSize: 14,
                                   border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: D,
-                                  fontFamily: "'DM Sans', sans-serif", marginBottom: 8, boxSizing: 'border-box',
+                                  fontFamily: "'DM Sans', sans-serif", marginBottom: 8, boxSizing: 'border-box' as const,
                                 }}
                               />
                               <button onClick={async (e) => {
@@ -335,7 +375,7 @@ function QuotesTab() {
                                   alert((err as Error).message || 'Booking failed');
                                 }
                               }} style={{
-                                width: '100%', padding: '11px 0', borderRadius: 100, border: 'none',
+                                width: '100%', padding: '10px 0', borderRadius: 100, border: 'none',
                                 background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
                                 fontFamily: "'DM Sans', sans-serif",
                               }}>Book {r.provider.name.split(' ')[0]}</button>
@@ -351,6 +391,8 @@ function QuotesTab() {
           </div>
         );
       })}
+
+      <style>{`@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }`}</style>
     </div>
   );
 }
