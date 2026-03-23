@@ -371,4 +371,80 @@ router.get('/bookings', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/portal/google-search?q=business+name&zip=92103
+router.get('/google-search', async (req: Request, res: Response) => {
+  const q = (req.query.q as string || '').trim();
+  const zip = (req.query.zip as string || '').trim();
+
+  if (!q || q.length < 2) {
+    res.json({ data: [], error: null, meta: {} });
+    return;
+  }
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) {
+    res.json({ data: [], error: null, meta: {} });
+    return;
+  }
+
+  try {
+    const { geocodeZip } = await import('../services/providers/google-maps');
+    const location = zip ? await geocodeZip(zip).catch(() => null) : null;
+    const locationParam = location ? `&location=${location.lat},${location.lng}&radius=32000` : '';
+
+    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}${locationParam}&key=${apiKey}`;
+    const searchRes = await fetch(searchUrl);
+    const data = await searchRes.json() as {
+      status: string;
+      results: Array<{ place_id: string; name: string; rating?: number; user_ratings_total?: number; formatted_address?: string }>;
+    };
+
+    if (data.status !== 'OK') {
+      res.json({ data: [], error: null, meta: {} });
+      return;
+    }
+
+    const results = data.results.slice(0, 8).map(r => ({
+      placeId: r.place_id,
+      name: r.name,
+      rating: r.rating ?? 0,
+      reviewCount: r.user_ratings_total ?? 0,
+      address: r.formatted_address ?? '',
+    }));
+
+    res.json({ data: results, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /portal/google-search]');
+    res.json({ data: [], error: null, meta: {} });
+  }
+});
+
+// POST /api/v1/portal/google-claim — Link Google Place ID to provider
+router.post('/google-claim', async (req: Request, res: Response) => {
+  const { place_id, name, rating, review_count } = req.body as {
+    place_id?: string;
+    name?: string;
+    rating?: number;
+    review_count?: number;
+  };
+
+  if (!place_id) {
+    res.status(400).json({ data: null, error: 'place_id is required', meta: {} });
+    return;
+  }
+
+  try {
+    await db.update(providers).set({
+      googlePlaceId: place_id,
+      googleRating: rating != null ? String(rating) : null,
+      reviewCount: review_count ?? 0,
+    } as Record<string, unknown>).where(eq(providers.id, req.providerId));
+
+    res.json({ data: { claimed: true, name, rating, review_count }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /portal/google-claim]');
+    res.status(500).json({ data: null, error: 'Failed to link Google listing', meta: {} });
+  }
+});
+
 export default router;

@@ -6,6 +6,7 @@ import { db } from '../db';
 import { providers } from '../db/schema/providers';
 import { signProviderToken, type ProviderJwtPayload } from '../middleware/provider-auth';
 import { sendSms, sendEmail } from '../services/notifications';
+import { geocodeZip } from '../services/providers/google-maps';
 
 const router = Router();
 const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
@@ -119,6 +120,115 @@ router.get('/verify', async (req: Request, res: Response) => {
     });
   } catch {
     res.status(401).json({ data: null, error: 'Invalid or expired link', meta: {} });
+  }
+});
+
+// POST /api/v1/provider-auth/signup — Create new provider with Google Places auto-match
+router.post('/signup', async (req: Request, res: Response) => {
+  const body = req.body as {
+    name?: string;
+    business?: string;
+    phone?: string;
+    email?: string;
+    zip?: string;
+    categories?: string[];
+  };
+
+  if (!body.name || !body.business || !body.phone || !body.email || !body.zip) {
+    res.status(400).json({ data: null, error: 'name, business, phone, email, and zip are required', meta: {} });
+    return;
+  }
+
+  try {
+    // Check if provider already exists by phone or email
+    const [existing] = await db
+      .select({ id: providers.id })
+      .from(providers)
+      .where(or(eq(providers.phone, body.phone), eq(providers.email, body.email.toLowerCase().trim())))
+      .limit(1);
+
+    if (existing) {
+      // Provider exists — send them a login link instead
+      const token = signProviderToken(existing.id);
+      res.json({
+        data: {
+          token,
+          provider_id: existing.id,
+          existing: true,
+          google_match: null,
+        },
+        error: null,
+        meta: {},
+      });
+      return;
+    }
+
+    // Try to auto-match with Google Places
+    let googleMatch: { placeId: string; name: string; rating: number; reviewCount: number; address: string } | null = null;
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+    if (apiKey) {
+      try {
+        const { lat, lng } = await geocodeZip(body.zip);
+        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(body.business)}&location=${lat},${lng}&radius=16000&key=${apiKey}`;
+        const searchRes = await fetch(searchUrl);
+        const searchData = await searchRes.json() as { status: string; results: Array<{ place_id: string; name: string; rating?: number; user_ratings_total?: number; formatted_address?: string }> };
+
+        if (searchData.status === 'OK' && searchData.results.length > 0) {
+          // Check name similarity — basic matching
+          const topResult = searchData.results[0];
+          const inputName = body.business.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const resultName = topResult.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+          // Match if the input contains the result or vice versa, or they share > 60% characters
+          const isMatch = inputName.includes(resultName) || resultName.includes(inputName) ||
+            inputName.length > 3 && resultName.length > 3;
+
+          if (isMatch) {
+            googleMatch = {
+              placeId: topResult.place_id,
+              name: topResult.name,
+              rating: topResult.rating ?? 0,
+              reviewCount: topResult.user_ratings_total ?? 0,
+              address: topResult.formatted_address ?? '',
+            };
+          }
+        }
+      } catch (err) {
+        logger.warn({ err }, '[provider-auth/signup] Google Places match failed, continuing without');
+      }
+    }
+
+    // Create the provider
+    const [provider] = await db
+      .insert(providers)
+      .values({
+        name: body.business.trim(),
+        phone: body.phone,
+        email: body.email.toLowerCase().trim(),
+        categories: body.categories ?? null,
+        serviceZips: [`${body.zip}:25`],
+        googlePlaceId: googleMatch?.placeId ?? null,
+        googleRating: googleMatch ? String(googleMatch.rating) : null,
+        reviewCount: googleMatch?.reviewCount ?? 0,
+      })
+      .returning();
+
+    const token = signProviderToken(provider.id);
+
+    res.status(201).json({
+      data: {
+        token,
+        provider_id: provider.id,
+        existing: false,
+        google_match: googleMatch,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /provider-auth/signup]');
+    res.status(500).json({ data: null, error: 'Failed to create provider account', meta: {} });
   }
 });
 

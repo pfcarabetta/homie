@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { fetchAPI } from "@/services/api";
 
 const C = {
   orange: "#E8632B", orangeDark: "#C8531E", orangeLight: "#F0997B",
@@ -37,17 +38,70 @@ const ALL_CATEGORIES = [
   "Insulation", "Solar", "Security Systems", "Furniture Assembly", "Concierge",
 ];
 
+interface GoogleMatch {
+  placeId: string;
+  name: string;
+  rating: number;
+  reviewCount: number;
+  address: string;
+}
+
 function SignupForm() {
   const [formStep, setFormStep] = useState(0);
   const [formData, setFormData] = useState({ name: "", business: "", phone: "", email: "", zip: "" });
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [googleMatch, setGoogleMatch] = useState<GoogleMatch | null>(null);
+  const [providerName, setProviderName] = useState("");
 
   const toggleCategory = (cat: string) => {
     setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
   };
 
   const update = (k: string, v: string) => setFormData(prev => ({ ...prev, [k]: v }));
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetchAPI<{
+        token: string;
+        provider_id: string;
+        existing: boolean;
+        google_match: GoogleMatch | null;
+      }>("/api/v1/provider-auth/signup", {
+        method: "POST",
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          business: formData.business.trim(),
+          phone: formData.phone.trim(),
+          email: formData.email.trim(),
+          zip: formData.zip.trim(),
+          categories: selectedCategories,
+        }),
+      });
+
+      if (res.data) {
+        localStorage.setItem("homie_provider_token", res.data.token);
+        setProviderName(formData.name.split(" ")[0]);
+
+        if (res.data.existing) {
+          setSubmitted(true);
+        } else if (res.data.google_match) {
+          setGoogleMatch(res.data.google_match);
+          setFormStep(3); // Google match confirmation
+        } else {
+          setSubmitted(true);
+        }
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Signup failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const inputStyle: React.CSSProperties = { ...dm, width: "100%", padding: "14px 16px", fontSize: 16, border: `1px solid ${C.grayLight}`, borderRadius: 12, outline: "none", color: C.dark, background: C.white, transition: "border-color 0.2s", boxSizing: "border-box" };
   const labelStyle: React.CSSProperties = { ...dm, fontSize: 13, fontWeight: 600, color: C.darkMid, display: "block", marginBottom: 6 };
@@ -59,7 +113,17 @@ function SignupForm() {
           <span style={{ color: C.green, fontSize: 28, fontWeight: 700 }}>✓</span>
         </div>
         <h3 style={{ ...fr, fontSize: 28, fontWeight: 700, color: C.dark, margin: "0 0 12px" }}>Welcome to the crew</h3>
-        <p style={{ ...dm, fontSize: 16, color: C.darkMid, lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>You're in, {formData.name.split(" ")[0]}. We'll start sending you pre-qualified leads as homeowners in your area request {selectedCategories.length > 1 ? `${selectedCategories.slice(0, -1).join(', ')} and ${selectedCategories[selectedCategories.length - 1]}` : selectedCategories[0]?.toLowerCase()} services.</p>
+        <p style={{ ...dm, fontSize: 16, color: C.darkMid, lineHeight: 1.6, maxWidth: 360, margin: "0 auto 20px" }}>
+          You're in, {providerName}. We'll start sending you pre-qualified leads as homeowners in your area request services.
+        </p>
+        {googleMatch && (
+          <div style={{ background: C.greenLight, borderRadius: 12, padding: "12px 16px", marginBottom: 16, textAlign: "left" }}>
+            <div style={{ ...dm, fontSize: 12, fontWeight: 600, color: C.green, marginBottom: 4 }}>Linked to Google Business</div>
+            <div style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.dark }}>{googleMatch.name}</div>
+            <div style={{ ...dm, fontSize: 12, color: C.gray }}>★ {googleMatch.rating} ({googleMatch.reviewCount} reviews) · {googleMatch.address}</div>
+          </div>
+        )}
+        <a href="/portal" style={{ ...dm, display: "inline-block", padding: "12px 32px", borderRadius: 100, background: C.orange, color: C.white, fontSize: 15, fontWeight: 600, textDecoration: "none" }}>Go to your portal →</a>
       </div>
     );
   }
@@ -67,7 +131,7 @@ function SignupForm() {
   return (
     <div>
       <div style={{ display: "flex", gap: 4, marginBottom: 28 }}>
-        {[0, 1, 2].map(i => (
+        {[0, 1, 2, 3].map(i => (
           <div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: formStep >= i ? C.orange : C.grayLight, transition: "all 0.3s" }} />
         ))}
       </div>
@@ -123,10 +187,34 @@ function SignupForm() {
               })}
             </div>
           </div>
+          {error && <div style={{ ...dm, fontSize: 14, color: "#DC2626" }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
             <button onClick={() => setFormStep(1)} style={{ ...dm, flex: 1, padding: "14px 0", fontSize: 16, fontWeight: 600, color: C.darkMid, background: C.warm, border: `1px solid ${C.grayLight}`, borderRadius: 12, cursor: "pointer" }}>Back</button>
-            <button onClick={() => setSubmitted(true)} disabled={selectedCategories.length === 0} style={{ ...dm, flex: 2, padding: "14px 0", fontSize: 16, fontWeight: 600, color: C.white, background: selectedCategories.length === 0 ? C.grayLight : C.orange, border: "none", borderRadius: 12, cursor: selectedCategories.length === 0 ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Join Homie Pro — it's free</button>
+            <button onClick={handleSubmit} disabled={selectedCategories.length === 0 || submitting} style={{ ...dm, flex: 2, padding: "14px 0", fontSize: 16, fontWeight: 600, color: C.white, background: (selectedCategories.length === 0 || submitting) ? C.grayLight : C.orange, border: "none", borderRadius: 12, cursor: (selectedCategories.length === 0 || submitting) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>{submitting ? "Creating account..." : "Join Homie Pro — it's free"}</button>
           </div>
+        </div>
+      )}
+
+      {/* Step 3: Google match confirmation */}
+      {formStep === 3 && googleMatch && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ textAlign: "center", marginBottom: 4 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📍</div>
+            <h3 style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, margin: "0 0 8px" }}>Is this your business?</h3>
+            <p style={{ ...dm, fontSize: 14, color: C.gray, margin: 0 }}>We found a Google listing that matches</p>
+          </div>
+
+          <div style={{ background: C.warm, borderRadius: 16, padding: "20px", border: `1px solid ${C.grayLight}` }}>
+            <div style={{ ...dm, fontSize: 17, fontWeight: 700, color: C.dark, marginBottom: 6 }}>{googleMatch.name}</div>
+            <div style={{ ...dm, fontSize: 14, color: C.darkMid, marginBottom: 8 }}>{googleMatch.address}</div>
+            <div style={{ display: "flex", gap: 16, ...dm, fontSize: 14, color: C.gray }}>
+              <span>★ {googleMatch.rating}</span>
+              <span>{googleMatch.reviewCount} reviews</span>
+            </div>
+          </div>
+
+          <button onClick={() => { setSubmitted(true); }} style={{ ...dm, width: "100%", padding: "14px 0", fontSize: 16, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 12, cursor: "pointer", transition: "all 0.2s" }}>Yes, that's me</button>
+          <button onClick={() => { setGoogleMatch(null); setSubmitted(true); }} style={{ ...dm, width: "100%", padding: "14px 0", fontSize: 16, fontWeight: 600, color: C.darkMid, background: C.white, border: `1px solid ${C.grayLight}`, borderRadius: 12, cursor: "pointer" }}>That's not me — skip</button>
         </div>
       )}
     </div>

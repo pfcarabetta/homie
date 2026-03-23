@@ -113,4 +113,11 @@ export const portalService = {
     fetchProviderAPI<{ updated: true }>('/api/v1/portal/settings', { method: 'PATCH', body: JSON.stringify(data) }),
   optOut: () => fetchProviderAPI<{ opted_out: true }>('/api/v1/portal/opt-out', { method: 'POST' }),
   getBookings: () => fetchProviderAPI<{ bookings: ProviderBooking[] }>('/api/v1/portal/bookings'),
+  searchGoogle: (q: string, zip?: string) => {
+    const params = new URLSearchParams({ q });
+    if (zip) params.set('zip', zip);
+    return fetchProviderAPI<Array<{ placeId: string; name: string; rating: number; reviewCount: number; address: string }>>(`/api/v1/portal/google-search?${params}`);
+  },
+  claimGoogle: (data: { place_id: string; name: string; rating: number; review_count: number }) =>
+    fetchProviderAPI<{ claimed: boolean }>('/api/v1/portal/google-claim', { method: 'POST', body: JSON.stringify(data) }),
 };

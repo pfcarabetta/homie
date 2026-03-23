@@ -400,6 +400,132 @@ const ALL_CATEGORIES = [
 
 const RADIUS_OPTIONS = [5, 10, 15, 25, 50];
 
+/* -- Google Business Link -- */
+function GoogleBusinessLink({ profile }: { profile: ProviderProfile | null }) {
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Array<{ placeId: string; name: string; rating: number; reviewCount: number; address: string }>>([]);
+  const [linked, setLinked] = useState(false);
+  const [linkedName, setLinkedName] = useState('');
+  const [linkedRating, setLinkedRating] = useState(0);
+  const [showSearch, setShowSearch] = useState(false);
+
+  // Already linked via google_rating
+  if (profile?.google_rating && !linked) {
+    return (
+      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14, marginTop: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 8 }}>Google Business</div>
+        <div style={{ background: '#E1F5EE', borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 18 }}>✅</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: D }}>Linked to Google</div>
+            <div style={{ fontSize: 13, color: '#9B9490' }}>★ {profile.google_rating} ({profile.review_count} reviews)</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (linked) {
+    return (
+      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14, marginTop: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 8 }}>Google Business</div>
+        <div style={{ background: '#E1F5EE', borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 18 }}>✅</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{linkedName}</div>
+            <div style={{ fontSize: 13, color: '#9B9490' }}>★ {linkedRating} — Successfully linked</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  async function handleSearch() {
+    if (!query.trim()) return;
+    setSearching(true);
+    try {
+      const zip = profile?.service_zips?.[0]?.split(':')?.[0] ?? '';
+      const res = await portalService.searchGoogle(query.trim(), zip);
+      setResults(res.data ?? []);
+    } catch { setResults([]); }
+    setSearching(false);
+  }
+
+  async function handleClaim(r: { placeId: string; name: string; rating: number; reviewCount: number }) {
+    try {
+      await portalService.claimGoogle({ place_id: r.placeId, name: r.name, rating: r.rating, review_count: r.reviewCount });
+      setLinked(true);
+      setLinkedName(r.name);
+      setLinkedRating(r.rating);
+      setShowSearch(false);
+    } catch { /* ignore */ }
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14, marginTop: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: D }}>Google Business</div>
+        {!showSearch && (
+          <button onClick={() => { setShowSearch(true); setQuery(profile?.name ?? ''); }} style={{
+            fontSize: 13, fontWeight: 600, color: O, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+          }}>Link your listing</button>
+        )}
+      </div>
+
+      {!showSearch ? (
+        <div style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 12, padding: '16px', textAlign: 'center', color: '#9B9490', fontSize: 13 }}>
+          Link your Google Business listing to display your rating and reviews to homeowners.
+        </div>
+      ) : (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search your business name..."
+              onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+              style={{ flex: 1, padding: '10px 14px', borderRadius: 10, border: '2px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none', color: D, fontFamily: "'DM Sans', sans-serif" }}
+              onFocus={e => e.currentTarget.style.borderColor = O}
+              onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'}
+            />
+            <button onClick={handleSearch} disabled={searching} style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none', background: O, color: '#fff',
+              fontSize: 14, fontWeight: 600, cursor: searching ? 'default' : 'pointer', opacity: searching ? 0.6 : 1,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>{searching ? '...' : 'Search'}</button>
+          </div>
+
+          {results.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto' }}>
+              {results.map(r => (
+                <div key={r.placeId} style={{
+                  background: W, borderRadius: 10, padding: '12px 14px', border: '1px solid rgba(0,0,0,0.04)',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{r.name}</div>
+                    <div style={{ fontSize: 12, color: '#9B9490' }}>★ {r.rating} ({r.reviewCount}) · {r.address}</div>
+                  </div>
+                  <button onClick={() => handleClaim(r)} style={{
+                    padding: '6px 14px', borderRadius: 8, border: 'none', background: G, color: '#fff',
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+                  }}>This is me</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {results.length === 0 && !searching && query.length > 0 && (
+            <div style={{ textAlign: 'center', padding: 16, color: '#9B9490', fontSize: 13 }}>No results found. Try a different name.</div>
+          )}
+
+          <button onClick={() => setShowSearch(false)} style={{
+            marginTop: 8, fontSize: 13, color: '#9B9490', background: 'none', border: 'none', cursor: 'pointer',
+          }}>Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfileTab() {
   const [profile, setProfile] = useState<ProviderProfile | null>(null);
   const [name, setName] = useState('');
@@ -560,6 +686,8 @@ function ProfileTab() {
             </div>
           )}
         </div>
+
+        <GoogleBusinessLink profile={profile} />
 
         <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14, marginTop: 4 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 8 }}>Calendar Integration</div>
