@@ -675,6 +675,28 @@ export interface WorkspaceDispatch {
   expiresAt: string | null;
 }
 
+export interface WorkspaceBooking {
+  id: string;
+  status: string;
+  serviceAddress: string | null;
+  confirmedAt: string;
+  jobId: string;
+  providerId: string;
+  providerName: string;
+  providerPhone: string | null;
+  providerEmail: string | null;
+  providerRating: string | null;
+  providerReviewCount: number;
+  diagnosis: DiagnosisPayload | null;
+  zipCode: string;
+  preferredTiming: string | null;
+  propertyId: string | null;
+  propertyName: string | null;
+  jobCreatedAt: string;
+  quotedPrice: string | null;
+  availability: string | null;
+}
+
 export interface PreferredVendor {
   id: string;
   providerId: string;
@@ -843,4 +865,8 @@ export const businessService = {
   // Dispatches
   listDispatches: (workspaceId: string) =>
     fetchAPI<WorkspaceDispatch[]>(`/api/v1/business/${workspaceId}/dispatches`),
+
+  // Bookings
+  listBookings: (workspaceId: string) =>
+    fetchAPI<{ bookings: WorkspaceBooking[] }>(`/api/v1/business/${workspaceId}/bookings`),
 };

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { businessService, jobService, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type ProviderResponseItem } from '@/services/api';
+import { businessService, jobService, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -1311,6 +1311,158 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
   );
 }
 
+/* ── Bookings Tab ─────────────────────────────────────────────────────── */
+
+function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
+  const [bookingsList, setBookingsList] = useState<WorkspaceBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    businessService.listBookings(workspaceId).then(res => {
+      setBookingsList(res.data?.bookings ?? []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [workspaceId]);
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading bookings...</div>;
+
+  if (bookingsList.length === 0) return (
+    <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+      <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No bookings yet</div>
+      <div style={{ fontSize: 14, color: '#9B9490' }}>When you book a provider from a dispatch, it will appear here.</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 20px' }}>Bookings</h3>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {bookingsList.map(b => {
+          const isExpanded = expandedId === b.id;
+          const catLabel = b.diagnosis?.category ? b.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Service';
+
+          return (
+            <div key={b.id} onClick={() => setExpandedId(isExpanded ? null : b.id)} style={{
+              background: 'white', borderRadius: 12,
+              border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
+              cursor: 'pointer', transition: 'all 0.15s', overflow: 'hidden',
+            }}>
+              {/* Collapsed */}
+              <div style={{ padding: '14px 18px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontWeight: 700, fontSize: 15, color: D }}>{b.providerName}</span>
+                    <span style={{
+                      padding: '2px 10px', borderRadius: 100, fontSize: 11, fontWeight: 600, textTransform: 'capitalize',
+                      background: b.status === 'confirmed' ? '#F0FDF4' : b.status === 'completed' ? '#EFF6FF' : '#F5F5F5',
+                      color: b.status === 'confirmed' ? '#16A34A' : b.status === 'completed' ? '#2563EB' : '#9B9490',
+                    }}>{b.status}</span>
+                  </div>
+                  <span style={{ fontSize: 12, color: '#9B9490' }}>{isExpanded ? '▲' : '▼'}</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: '#6B6560', marginBottom: 10, flexWrap: 'wrap' }}>
+                  <span>{catLabel}</span>
+                  {b.propertyName && <span>🏠 {b.propertyName}</span>}
+                  <span>{new Date(b.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                </div>
+
+                {/* Quote + contact summary */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '8px 12px', borderRadius: 8, background: `${G}08`, border: `1px solid ${G}20`,
+                }}>
+                  {b.quotedPrice && <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: O }}>{b.quotedPrice}</span>}
+                  {b.providerPhone && <span style={{ fontSize: 13, color: G, fontWeight: 600 }}>📞 {b.providerPhone}</span>}
+                  {!b.quotedPrice && !b.providerPhone && <span style={{ fontSize: 13, color: G, fontWeight: 600 }}>✅ Booked</span>}
+                </div>
+              </div>
+
+              {/* Expanded */}
+              {isExpanded && (
+                <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(0,0,0,0.05)' }} onClick={e => e.stopPropagation()}>
+
+                  {/* Summary */}
+                  {b.diagnosis?.summary && (
+                    <div style={{ padding: '14px 0', fontSize: 14, color: '#6B6560', lineHeight: 1.6 }}>
+                      {renderBold(b.diagnosis.summary)}
+                    </div>
+                  )}
+
+                  {/* Details grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Provider</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.providerName}</div>
+                    </div>
+                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Category</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{catLabel}</div>
+                    </div>
+                    {b.propertyName && (
+                      <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Property</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.propertyName}</div>
+                      </div>
+                    )}
+                    {b.quotedPrice && (
+                      <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Quoted Price</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: O }}>{b.quotedPrice}</div>
+                      </div>
+                    )}
+                    {b.availability && (
+                      <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Availability</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.availability}</div>
+                      </div>
+                    )}
+                    {b.serviceAddress && (
+                      <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Service Address</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.serviceAddress}</div>
+                      </div>
+                    )}
+                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Booked</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{new Date(b.confirmedAt).toLocaleString()}</div>
+                    </div>
+                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
+                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Timing</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.preferredTiming ?? 'ASAP'}</div>
+                    </div>
+                  </div>
+
+                  {/* Provider contact */}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {b.providerPhone && (
+                      <a href={`tel:${b.providerPhone}`} style={{
+                        flex: 1, padding: '10px 0', borderRadius: 100, border: 'none',
+                        background: O, color: 'white', fontSize: 14, fontWeight: 600,
+                        textAlign: 'center', textDecoration: 'none', display: 'block',
+                      }}>📞 Call {b.providerName.split(' ')[0]}</a>
+                    )}
+                    {b.providerEmail && (
+                      <a href={`mailto:${b.providerEmail}`} style={{
+                        flex: 1, padding: '10px 0', borderRadius: 100,
+                        border: `2px solid ${O}`, background: 'white', color: O,
+                        fontSize: 14, fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'block',
+                      }}>✉️ Email</a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ── Settings Tab ──────────────────────────────────────────────────────── */
 
 function SettingsTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUpdated: (w: WorkspaceDetail) => void }) {
@@ -1368,9 +1520,9 @@ function SettingsTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onU
 
 /* ── Main Page ──────────────────────────────────────────────────────────── */
 
-const TABS = ['overview', 'dispatches', 'properties', 'vendors', 'team', 'settings'] as const;
+const TABS = ['overview', 'dispatches', 'bookings', 'properties', 'vendors', 'team', 'settings'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', dispatches: 'Dispatches', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', dispatches: 'Dispatches', bookings: 'Bookings', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
 
 export default function BusinessPortal() {
   const { homeowner } = useAuth();
@@ -1477,6 +1629,9 @@ export default function BusinessPortal() {
             {workspace && tab === 'overview' && <OverviewTab workspace={workspace} />}
             {workspace && tab === 'dispatches' && (
               <DispatchesTab workspaceId={workspace.id} />
+            )}
+            {workspace && tab === 'bookings' && (
+              <BusinessBookingsTab workspaceId={workspace.id} />
             )}
             {workspace && tab === 'properties' && (
               <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} />

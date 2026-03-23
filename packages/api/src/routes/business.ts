@@ -791,4 +791,58 @@ router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, re
   }
 });
 
+// GET /:workspaceId/bookings
+router.get('/:workspaceId/bookings', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: bookings.id,
+        status: bookings.status,
+        serviceAddress: bookings.serviceAddress,
+        confirmedAt: bookings.confirmedAt,
+        jobId: bookings.jobId,
+        providerId: bookings.providerId,
+        providerName: providers.name,
+        providerPhone: providers.phone,
+        providerEmail: providers.email,
+        providerRating: providers.googleRating,
+        providerReviewCount: providers.reviewCount,
+        diagnosis: jobs.diagnosis,
+        zipCode: jobs.zipCode,
+        preferredTiming: jobs.preferredTiming,
+        propertyId: jobs.propertyId,
+        jobCreatedAt: jobs.createdAt,
+        quotedPrice: providerResponses.quotedPrice,
+        availability: providerResponses.availability,
+      })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .innerJoin(providers, eq(bookings.providerId, providers.id))
+      .leftJoin(providerResponses, eq(bookings.responseId, providerResponses.id))
+      .where(eq(jobs.workspaceId, req.workspaceId))
+      .orderBy(desc(bookings.confirmedAt));
+
+    // Enrich with property names
+    const propertyIds = [...new Set(rows.filter(r => r.propertyId).map(r => r.propertyId!))];
+    let propertyMap: Record<string, string> = {};
+    if (propertyIds.length > 0) {
+      const propRows = await db
+        .select({ id: properties.id, name: properties.name })
+        .from(properties)
+        .where(sql`${properties.id} IN (${sql.join(propertyIds.map(id => sql`${id}`), sql`, `)})`);
+      propertyMap = Object.fromEntries(propRows.map(p => [p.id, p.name]));
+    }
+
+    const enriched = rows.map(r => ({
+      ...r,
+      propertyName: r.propertyId ? propertyMap[r.propertyId] || null : null,
+    }));
+
+    res.json({ data: { bookings: enriched }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/bookings]');
+    res.status(500).json({ data: null, error: 'Failed to fetch bookings', meta: {} });
+  }
+});
+
 export default router;
