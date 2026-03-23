@@ -18,6 +18,7 @@ import PaymentSuccess from '@/pages/PaymentSuccess';
 import VerifyEmail from '@/pages/VerifyEmail';
 import Terms from '@/pages/Terms';
 import Privacy from '@/pages/Privacy';
+import Security from '@/pages/Security';
 import AdminLogin from '@/pages/admin/AdminLogin';
 import AdminLayout from '@/pages/admin/AdminLayout';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/security" element={<Security />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
           <Route path="/portal/login" element={<ProviderLogin />} />
           <Route path="/portal" element={<ProviderPortal />} />

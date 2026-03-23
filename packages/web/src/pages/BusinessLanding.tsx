@@ -363,8 +363,12 @@ function Footer() {
           </div>
           <div>
             <h4 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, color: COLORS.grayLight, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Legal</h4>
-            {["Privacy", "Terms", "Security"].map(l => (
-              <a key={l} href="#" style={{ display: "block", fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.gray, textDecoration: "none", marginBottom: 10, transition: "color 0.2s" }} onMouseEnter={e => (e.target as HTMLElement).style.color = COLORS.white} onMouseLeave={e => (e.target as HTMLElement).style.color = COLORS.gray}>{l}</a>
+            {[
+              { label: "Privacy", href: "/privacy" },
+              { label: "Terms", href: "/terms" },
+              { label: "Security", href: "/security" },
+            ].map(l => (
+              <a key={l.label} href={l.href} style={{ display: "block", fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.gray, textDecoration: "none", marginBottom: 10, transition: "color 0.2s" }} onMouseEnter={e => (e.target as HTMLElement).style.color = COLORS.white} onMouseLeave={e => (e.target as HTMLElement).style.color = COLORS.gray}>{l.label}</a>
             ))}
           </div>
         </div>
