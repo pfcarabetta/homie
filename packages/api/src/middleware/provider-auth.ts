@@ -18,7 +18,7 @@ export interface ProviderJwtPayload {
 export function signProviderToken(providerId: string): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error('JWT_SECRET is not set');
-  return jwt.sign({ sub: providerId, type: 'provider' }, secret, { expiresIn: '30d', algorithm: 'HS256' });
+  return jwt.sign({ sub: providerId, type: 'provider' }, secret, { expiresIn: '7d', algorithm: 'HS256' });
 }
 
 export function requireProviderAuth(req: Request, res: Response, next: NextFunction): void {

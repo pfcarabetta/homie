@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { eq, and } from 'drizzle-orm';
+import logger from '../logger';
 import { db } from '../db';
 import { workspaces } from '../db/schema/workspaces';
 import { workspaceMembers } from '../db/schema/workspace-members';
@@ -19,14 +20,14 @@ declare global {
  * Expects req.homeownerId to be set (run after requireAuth).
  * Reads workspace ID from req.params.workspaceId.
  */
-export function requireWorkspace(req: Request, res: Response, next: NextFunction): void {
+export async function requireWorkspace(req: Request, res: Response, next: NextFunction): Promise<void> {
   const workspaceId = req.params.workspaceId;
   if (!workspaceId) {
     res.status(400).json({ data: null, error: 'Workspace ID required', meta: {} });
     return;
   }
 
-  (async () => {
+  try {
     // Check if user is workspace owner
     const [workspace] = await db
       .select({ ownerId: workspaces.ownerId })
@@ -64,9 +65,10 @@ export function requireWorkspace(req: Request, res: Response, next: NextFunction
     req.workspaceId = workspaceId;
     req.workspaceRole = member.role;
     next();
-  })().catch(() => {
+  } catch (err) {
+    logger.error({ err }, '[workspace-auth] requireWorkspace failed');
     res.status(500).json({ data: null, error: 'Workspace auth error', meta: {} });
-  });
+  }
 }
 
 /**

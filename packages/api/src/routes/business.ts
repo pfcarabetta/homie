@@ -710,7 +710,7 @@ router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRol
         categories: providers.categories,
       })
       .from(providers)
-      .where(sql`LOWER(${providers.name}) LIKE ${'%' + q.toLowerCase() + '%'}`)
+      .where(sql`LOWER(${providers.name}) LIKE ${`%${q.toLowerCase().replace(/[%_\\]/g, '\\$&')}%`}`)
       .limit(20);
 
     res.json({ data: rows, error: null, meta: {} });

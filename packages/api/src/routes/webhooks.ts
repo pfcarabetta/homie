@@ -99,10 +99,13 @@ const router = Router();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Returns true if the Twilio signature header is valid (or if auth token is not configured). */
+/** Returns true if the Twilio signature header is valid. Fails closed if auth token is missing. */
 function isTwilioRequestValid(req: Request): boolean {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
-  if (!authToken) return true; // Skip validation in development
+  if (!authToken) {
+    logger.warn('[webhooks] TWILIO_AUTH_TOKEN not set — rejecting webhook request');
+    return false;
+  }
 
   const signature = req.headers['x-twilio-signature'] as string | undefined;
   if (!signature) return false;

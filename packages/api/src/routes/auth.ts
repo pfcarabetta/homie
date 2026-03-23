@@ -234,6 +234,7 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
 
 interface ResetPasswordBody {
   email?: unknown;
+  current_password?: unknown;
   new_password?: unknown;
 }
 
@@ -245,6 +246,11 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     res.status(400).json(out);
     return;
   }
+  if (!body.current_password || typeof body.current_password !== 'string') {
+    const out: ApiResponse<null> = { data: null, error: 'current_password is required', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
   if (!body.new_password || typeof body.new_password !== 'string' || body.new_password.length < 8) {
     const out: ApiResponse<null> = { data: null, error: 'new_password must be at least 8 characters', meta: {} };
     res.status(400).json(out);
@@ -253,15 +259,23 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
   try {
     const [homeowner] = await db
-      .select({ id: homeowners.id })
+      .select({ id: homeowners.id, passwordHash: homeowners.passwordHash })
       .from(homeowners)
       .where(eq(homeowners.email, body.email.toLowerCase().trim()))
       .limit(1);
 
-    // Always return success to prevent email enumeration
+    // Always return generic error to prevent email enumeration
     if (!homeowner) {
-      const out: ApiResponse<{ reset: true }> = { data: { reset: true }, error: null, meta: {} };
-      res.json(out);
+      const out: ApiResponse<null> = { data: null, error: 'Invalid email or password', meta: {} };
+      res.status(401).json(out);
+      return;
+    }
+
+    // Verify current password before allowing reset
+    const valid = await bcrypt.compare(body.current_password, homeowner.passwordHash);
+    if (!valid) {
+      const out: ApiResponse<null> = { data: null, error: 'Invalid email or password', meta: {} };
+      res.status(401).json(out);
       return;
     }
 
