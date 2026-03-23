@@ -76,6 +76,53 @@ router.get('/homeowners', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/admin/homeowners/:id
+router.get('/homeowners/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const [ho] = await db
+      .select({
+        id: homeowners.id,
+        firstName: homeowners.firstName,
+        lastName: homeowners.lastName,
+        email: homeowners.email,
+        phone: homeowners.phone,
+        zipCode: homeowners.zipCode,
+        membershipTier: homeowners.membershipTier,
+        stripeCustomerId: homeowners.stripeCustomerId,
+        emailVerified: homeowners.emailVerified,
+        createdAt: homeowners.createdAt,
+      })
+      .from(homeowners)
+      .where(eq(homeowners.id, id))
+      .limit(1);
+
+    if (!ho) { res.status(404).json({ data: null, error: 'Not found', meta: {} }); return; }
+
+    const jobRows = await db
+      .select({ id: jobs.id, status: jobs.status, tier: jobs.tier, diagnosis: jobs.diagnosis, zipCode: jobs.zipCode, workspaceId: jobs.workspaceId, createdAt: jobs.createdAt })
+      .from(jobs).where(eq(jobs.homeownerId, id)).orderBy(desc(jobs.createdAt)).limit(20);
+
+    const bookingRows = await db
+      .select({ id: bookings.id, jobId: bookings.jobId, providerName: providers.name, status: bookings.status, confirmedAt: bookings.confirmedAt })
+      .from(bookings).leftJoin(providers, eq(bookings.providerId, providers.id)).where(eq(bookings.homeownerId, id)).orderBy(desc(bookings.confirmedAt)).limit(20);
+
+    const wsMemberships = await db
+      .select({ workspaceId: workspaceMembers.workspaceId, role: workspaceMembers.role, workspaceName: workspaces.name, workspacePlan: workspaces.plan })
+      .from(workspaceMembers).innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id)).where(eq(workspaceMembers.homeownerId, id));
+
+    const [[{ value: totalJobs }], [{ value: totalBookings }]] = await Promise.all([
+      db.select({ value: count() }).from(jobs).where(eq(jobs.homeownerId, id)),
+      db.select({ value: count() }).from(bookings).where(eq(bookings.homeownerId, id)),
+    ]);
+
+    res.json({ data: { homeowner: ho, jobs: jobRows, bookings: bookingRows, workspaces: wsMemberships, stats: { total_jobs: totalJobs, total_bookings: totalBookings } }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/homeowners/:id]');
+    res.status(500).json({ data: null, error: 'Failed to fetch details', meta: {} });
+  }
+});
+
 // GET /api/v1/admin/jobs
 router.get('/jobs', async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);

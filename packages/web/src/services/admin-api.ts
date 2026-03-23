@@ -56,6 +56,20 @@ export const adminService = {
     }>>(`/api/v1/admin/homeowners?${q}`);
   },
 
+  async getHomeownerDetail(id: string) {
+    return fetchAdmin<{
+      homeowner: {
+        id: string; firstName: string | null; lastName: string | null; email: string;
+        phone: string | null; zipCode: string; membershipTier: string;
+        stripeCustomerId: string | null; emailVerified: boolean; createdAt: string;
+      };
+      jobs: Array<{ id: string; status: string; tier: string; diagnosis: { category?: string; summary?: string } | null; zipCode: string; workspaceId: string | null; createdAt: string }>;
+      bookings: Array<{ id: string; jobId: string; providerName: string | null; status: string; confirmedAt: string }>;
+      workspaces: Array<{ workspaceId: string; role: string; workspaceName: string; workspacePlan: string }>;
+      stats: { total_jobs: number; total_bookings: number };
+    }>(`/api/v1/admin/homeowners/${id}`);
+  },
+
   async getJobs(params?: { limit?: number; offset?: number; status?: string; q?: string }) {
     const q = new URLSearchParams();
     if (params?.limit) q.set('limit', String(params.limit));
