@@ -1,6 +1,8 @@
-import { and, lte, inArray, eq } from 'drizzle-orm';
+import { and, lte, inArray, eq, sql, count } from 'drizzle-orm';
 import { db } from '../db';
 import { jobs } from '../db/schema/jobs';
+import { providerResponses } from '../db/schema/provider-responses';
+import { workspaces } from '../db/schema/workspaces';
 import { cancelPayment } from './stripe';
 import logger from '../logger';
 
@@ -20,7 +22,7 @@ export function startJobExpiryWorker(): void {
             lte(jobs.expiresAt, now),
           ),
         )
-        .returning({ id: jobs.id, paymentStatus: jobs.paymentStatus, stripePaymentIntentId: jobs.stripePaymentIntentId });
+        .returning({ id: jobs.id, paymentStatus: jobs.paymentStatus, stripePaymentIntentId: jobs.stripePaymentIntentId, workspaceId: jobs.workspaceId });
 
       for (const job of expired) {
         // Release authorized payments for expired jobs with no results
@@ -31,6 +33,25 @@ export function startJobExpiryWorker(): void {
             logger.info(`[job-expiry] Released payment hold for job ${job.id}`);
           } catch (err) {
             logger.error({ err }, `[job-expiry] Failed to cancel payment for job ${job.id}`);
+          }
+        }
+
+        // Refund search credit for B2B jobs that expired with zero responses
+        if (job.workspaceId) {
+          try {
+            const [{ value: responseCount }] = await db
+              .select({ value: count() })
+              .from(providerResponses)
+              .where(eq(providerResponses.jobId, job.id));
+
+            if (responseCount === 0) {
+              await db.update(workspaces)
+                .set({ searchesUsed: sql`GREATEST(${workspaces.searchesUsed} - 1, 0)` } as Record<string, unknown>)
+                .where(eq(workspaces.id, job.workspaceId));
+              logger.info(`[job-expiry] Refunded search credit for B2B job ${job.id} (zero responses)`);
+            }
+          } catch (err) {
+            logger.error({ err }, `[job-expiry] Failed to refund search credit for job ${job.id}`);
           }
         }
       }
