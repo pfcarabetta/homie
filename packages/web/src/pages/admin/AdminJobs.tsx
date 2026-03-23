@@ -146,8 +146,8 @@ export default function AdminJobs() {
                   <tr key={j.id} onClick={() => selectJob(j.id)} className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === j.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
                     <td className="px-4 py-3 text-dark/60 font-mono text-xs">{j.id.slice(0, 8)}</td>
                     <td className="px-4 py-3 text-dark">{j.homeownerEmail ?? '-'}</td>
-                    <td className="px-4 py-3 text-dark/60 capitalize">
-                      {j.diagnosis?.category ?? '-'}
+                    <td className="px-4 py-3 text-dark/60">
+                      {j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-'}
                       {j.workspaceId && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase tracking-wide">Business</span>}
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={j.status} /></td>
