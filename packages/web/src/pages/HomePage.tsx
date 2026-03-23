@@ -660,15 +660,42 @@ export default function HomePage() {
       </section>
 
       {/* FOOTER */}
-      <footer style={{ padding: '36px 20px', background: DARK, textAlign: 'center' }}>
-        <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: ORANGE }}>homie</span>
-        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, marginTop: 8 }}>
-          Your home's best friend. &copy; {new Date().getFullYear()} Homie Technologies, Inc.
-        </p>
-        <p style={{ marginTop: 8 }}>
-          <a href="/terms" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, textDecoration: 'none', marginRight: 16 }}>Terms of Service</a>
-          <a href="/privacy" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, textDecoration: 'none' }}>Privacy Policy</a>
-        </p>
+      <footer style={{ background: DARK, padding: '64px 24px 40px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 40, marginBottom: 48 }}>
+            <div>
+              <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 24, color: ORANGE }}>homie</span>
+              <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#9B9490', lineHeight: 1.6, marginTop: 12 }}>AI-powered home services for property managers, hosts, and homeowners.</p>
+            </div>
+            <div>
+              <h4 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, color: '#D3CEC9', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 16px' }}>Product</h4>
+              {[
+                { label: 'For homeowners', href: '/' },
+                { label: 'For business', href: '/business/landing' },
+                { label: 'Pricing', href: '/#pricing' },
+                { label: 'How it works', href: '/#how-it-works' },
+              ].map(l => (
+                <a key={l.label} href={l.href} style={{ display: 'block', fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>{l.label}</a>
+              ))}
+            </div>
+            <div>
+              <h4 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, color: '#D3CEC9', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 16px' }}>Company</h4>
+              {['About', 'Blog', 'Careers', 'Contact'].map(l => (
+                <a key={l} href="#" style={{ display: 'block', fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>{l}</a>
+              ))}
+            </div>
+            <div>
+              <h4 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, color: '#D3CEC9', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 16px' }}>Legal</h4>
+              <a href="/privacy" style={{ display: 'block', fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>Privacy</a>
+              <a href="/terms" style={{ display: 'block', fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>Terms</a>
+              <a href="#" style={{ display: 'block', fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>Security</a>
+            </div>
+          </div>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#9B9490' }}>&copy; {new Date().getFullYear()} Homie. Your home's best friend.</span>
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#9B9490' }}>Made with love in San Diego 🌴</span>
+          </div>
+        </div>
       </footer>
     </div>
   );
