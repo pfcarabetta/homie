@@ -385,17 +385,14 @@ function HistoryTab() {
 /* -- Profile Tab -- */
 const ALL_CATEGORIES = [
   // Repair
-  'Plumbing', 'Electrical', 'HVAC', 'Appliance Repair', 'Roofing', 'Garage Door',
-  'Drywall Repair', 'Window Repair', 'Door Repair', 'Foundation Repair',
+  'Plumbing', 'Electrical', 'HVAC', 'Appliance Repair', 'Roofing', 'General Contractor',
+  'Handyman', 'Garage Door',
   // Services
-  'House Cleaning', 'Landscaping', 'Pool Service', 'Pest Control', 'Painting',
-  'Pressure Washing', 'Locksmith', 'Moving', 'Tree Trimming', 'Gutter Cleaning',
-  'Carpet Cleaning', 'Window Cleaning', 'Fence Install/Repair', 'Deck/Patio',
-  'Flooring', 'Tile Work', 'Concrete', 'Masonry', 'Siding',
-  // Specialty
-  'Handyman', 'Home Inspection', 'Insulation', 'Water Damage', 'Mold Remediation',
-  'Security Systems', 'Smart Home', 'Solar Panel', 'EV Charger Install',
-  'Furniture Assembly', 'Junk Removal', 'Snow Removal',
+  'Cleaning', 'Landscaping', 'Pool', 'Hot Tub', 'Pest Control', 'Painting',
+  'Locksmith', 'Pressure Washing', 'Moving', 'Flooring', 'Fencing',
+  'Tree Trimming', 'Gutter Cleaning', 'Carpet Cleaning', 'Window Cleaning',
+  'Steam Cleaning', 'Concrete', 'Masonry', 'Siding', 'Insulation', 'Solar',
+  'Security Systems', 'Furniture Assembly', 'Concierge',
 ];
 
 const RADIUS_OPTIONS = [5, 10, 15, 25, 50];
