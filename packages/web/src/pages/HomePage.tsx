@@ -674,6 +674,7 @@ export default function HomePage() {
               {[
                 { label: 'For homeowners', href: '/' },
                 { label: 'For business', href: '/business/landing' },
+                { label: 'Become a Homie Pro', href: '/portal/signup' },
                 { label: 'Pricing', href: '#pricing' },
                 { label: 'How it works', href: '#how' },
               ].map(l => (

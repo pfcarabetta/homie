@@ -433,13 +433,41 @@ export default function ProSignup() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer style={{ background: C.dark, padding: "40px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ ...fr, fontWeight: 700, fontSize: 22, color: C.orange }}>homie</span>
-            <span style={{ ...dm, fontSize: 12, color: C.gray }}>pro</span>
+      <footer style={{ background: C.dark, padding: "64px 24px 40px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 40, marginBottom: 48 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+                <span style={{ ...fr, fontWeight: 700, fontSize: 24, color: C.orange }}>homie</span>
+                <span style={{ ...dm, fontSize: 12, color: C.gray }}>pro</span>
+              </div>
+              <p style={{ ...dm, fontSize: 14, color: C.gray, lineHeight: 1.6 }}>AI-powered leads for local service providers. No fees, no bidding, no catch.</p>
+            </div>
+            <div>
+              <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: C.grayLight, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Product</h4>
+              <a href="/" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>For homeowners</a>
+              <a href="/business/landing" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>For business</a>
+              <a href="/portal/signup" style={{ display: "block", ...dm, fontSize: 14, color: C.orange, textDecoration: "none", marginBottom: 10, fontWeight: 600 }}>Become a Homie Pro</a>
+              <a href="/portal/login" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>Pro sign in</a>
+            </div>
+            <div>
+              <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: C.grayLight, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Company</h4>
+              <a href="#" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>About</a>
+              <a href="#" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>Blog</a>
+              <a href="#" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>Careers</a>
+              <a href="#" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>Contact</a>
+            </div>
+            <div>
+              <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: C.grayLight, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Legal</h4>
+              <a href="/privacy" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>Privacy</a>
+              <a href="/terms" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>Terms</a>
+              <a href="/security" style={{ display: "block", ...dm, fontSize: 14, color: C.gray, textDecoration: "none", marginBottom: 10 }}>Security</a>
+            </div>
           </div>
-          <span style={{ ...dm, fontSize: 13, color: C.gray }}>© 2026 Homie. Your home's best friend.</span>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <span style={{ ...dm, fontSize: 13, color: C.gray }}>© 2026 Homie. Your home's best friend.</span>
+            <span style={{ ...dm, fontSize: 13, color: C.gray }}>Made with love in San Diego 🌴</span>
+          </div>
         </div>
       </footer>
     </div>
