@@ -13,12 +13,14 @@ export function clearAdminKey(): void {
   sessionStorage.removeItem(ADMIN_KEY_STORAGE);
 }
 
-async function fetchAdmin<T>(path: string): Promise<{ data: T | null; error: string | null; meta: Record<string, unknown> }> {
+async function fetchAdmin<T>(path: string, options?: RequestInit): Promise<{ data: T | null; error: string | null; meta: Record<string, unknown> }> {
   const key = getAdminKey();
   const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(key ? { 'x-admin-key': key } : {}),
+      ...(options?.headers as Record<string, string> | undefined),
     },
   });
 
@@ -178,5 +180,28 @@ export const adminService = {
       status: string;
       confirmedAt: string;
     }>>(`/api/v1/admin/bookings?${q}`);
+  },
+
+  // Business accounts
+  async getBusinessAccounts() {
+    return fetchAdmin<Array<{
+      id: string;
+      name: string;
+      slug: string;
+      plan: string;
+      ownerEmail: string | null;
+      ownerName: string | null;
+      createdAt: string;
+    }>>('/api/v1/admin/business-accounts');
+  },
+
+  async createBusinessAccount(data: { email: string; workspace_name: string; plan?: string }) {
+    return fetchAdmin<{
+      workspace: { id: string; name: string; slug: string; plan: string };
+      owner: { id: string; email: string; firstName: string | null; lastName: string | null };
+    }>('/api/v1/admin/business-accounts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };

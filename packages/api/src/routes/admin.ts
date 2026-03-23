@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { count, desc, eq, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
-import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList } from '../db/schema';
+import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList, workspaces, workspaceMembers } from '../db/schema';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -360,6 +360,105 @@ router.get('/bookings', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /admin/bookings]');
     res.status(500).json({ data: null, error: 'Failed to fetch bookings', meta: {} });
+  }
+});
+
+// ── Business Account Management ─────────────────────────────────────────────
+
+// POST /api/v1/admin/business-accounts — Create a business account for a user
+router.post('/business-accounts', async (req: Request, res: Response) => {
+  const { email, workspace_name, plan } = req.body as {
+    email?: string;
+    workspace_name?: string;
+    plan?: string;
+  };
+
+  if (!email || typeof email !== 'string') {
+    res.status(400).json({ data: null, error: 'email is required', meta: {} });
+    return;
+  }
+  if (!workspace_name || typeof workspace_name !== 'string') {
+    res.status(400).json({ data: null, error: 'workspace_name is required', meta: {} });
+    return;
+  }
+
+  const validPlans = ['starter', 'professional', 'business', 'enterprise'];
+  const selectedPlan = plan && validPlans.includes(plan) ? plan : 'starter';
+
+  try {
+    // Find user
+    const [user] = await db
+      .select({ id: homeowners.id, email: homeowners.email, firstName: homeowners.firstName, lastName: homeowners.lastName })
+      .from(homeowners)
+      .where(eq(homeowners.email, email.toLowerCase().trim()))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).json({ data: null, error: 'No user found with that email', meta: {} });
+      return;
+    }
+
+    // Create slug from workspace name
+    const slug = workspace_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    // Create workspace
+    const [workspace] = await db
+      .insert(workspaces)
+      .values({
+        name: workspace_name.trim(),
+        slug,
+        plan: selectedPlan,
+        ownerId: user.id,
+      })
+      .returning();
+
+    // Add user as admin member
+    await db.insert(workspaceMembers).values({
+      workspaceId: workspace.id,
+      homeownerId: user.id,
+      role: 'admin',
+      acceptedAt: new Date(),
+    });
+
+    res.status(201).json({
+      data: {
+        workspace,
+        owner: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName },
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes('unique')) {
+      res.status(409).json({ data: null, error: 'A workspace with that slug already exists', meta: {} });
+      return;
+    }
+    logger.error({ err }, '[POST /admin/business-accounts]');
+    res.status(500).json({ data: null, error: 'Failed to create business account', meta: {} });
+  }
+});
+
+// GET /api/v1/admin/business-accounts — List all business workspaces
+router.get('/business-accounts', async (_req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        slug: workspaces.slug,
+        plan: workspaces.plan,
+        ownerEmail: homeowners.email,
+        ownerName: sql`COALESCE(${homeowners.firstName} || ' ' || ${homeowners.lastName}, ${homeowners.email})`,
+        createdAt: workspaces.createdAt,
+      })
+      .from(workspaces)
+      .leftJoin(homeowners, eq(workspaces.ownerId, homeowners.id))
+      .orderBy(desc(workspaces.createdAt));
+
+    res.json({ data: rows, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/business-accounts]');
+    res.status(500).json({ data: null, error: 'Failed to fetch business accounts', meta: {} });
   }
 });
 

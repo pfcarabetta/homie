@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: '/admin/jobs', label: 'Jobs' },
   { to: '/admin/providers', label: 'Providers' },
   { to: '/admin/bookings', label: 'Bookings' },
+  { to: '/admin/business', label: 'Business' },
 ];
 
 export default function AdminLayout() {
