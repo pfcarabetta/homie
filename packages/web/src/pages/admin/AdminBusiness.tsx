@@ -49,6 +49,7 @@ export default function AdminBusiness() {
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<BusinessDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -189,6 +190,9 @@ export default function AdminBusiness() {
         </div>
       )}
 
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by business name, owner, or plan..."
+        className="w-full px-4 py-2.5 mb-4 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 bg-white" />
+
       {/* Accounts table */}
       <div className="bg-white rounded-xl border border-dark/10 overflow-hidden">
         <table className="w-full text-sm">
@@ -204,10 +208,16 @@ export default function AdminBusiness() {
           <tbody>
             {loading ? (
               <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">Loading...</td></tr>
-            ) : accounts.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">No business accounts yet</td></tr>
+            ) : (() => {
+              const filtered = accounts.filter(a => {
+                if (!search) return true;
+                const q = search.toLowerCase();
+                return a.name.toLowerCase().includes(q) || (a.ownerName ?? '').toLowerCase().includes(q) || (a.ownerEmail ?? '').toLowerCase().includes(q) || a.plan.toLowerCase().includes(q) || a.slug.toLowerCase().includes(q);
+              });
+              return filtered.length === 0 ? (
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No business accounts yet'}</td></tr>
             ) : (
-              accounts.map(a => (
+              filtered.map(a => (
                 <>
                   <tr key={a.id} onClick={() => selectAccount(a.id)}
                     className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === a.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
@@ -243,7 +253,7 @@ export default function AdminBusiness() {
                   )}
                 </>
               ))
-            )}
+            ); })()}
           </tbody>
         </table>
       </div>

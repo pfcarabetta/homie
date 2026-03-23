@@ -78,6 +78,7 @@ export default function AdminJobs() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -122,6 +123,9 @@ export default function AdminJobs() {
         </div>
       </div>
 
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by email, category, zip, or ID..."
+        className="w-full px-4 py-2.5 mb-4 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 bg-white" />
+
       <div className="bg-white rounded-xl border border-dark/10 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -138,10 +142,16 @@ export default function AdminJobs() {
           <tbody>
             {loading ? (
               <tr><td colSpan={7} className="px-4 py-8 text-center text-dark/40">Loading...</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-dark/40">No jobs found</td></tr>
+            ) : (() => {
+              const filtered = rows.filter(j => {
+                if (!search) return true;
+                const q = search.toLowerCase();
+                return j.id.toLowerCase().includes(q) || (j.homeownerEmail ?? '').toLowerCase().includes(q) || (j.diagnosis?.category ?? '').toLowerCase().includes(q) || j.zipCode.includes(q) || j.tier.toLowerCase().includes(q);
+              });
+              return filtered.length === 0 ? (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No jobs found'}</td></tr>
             ) : (
-              rows.map((j) => (
+              filtered.map((j) => (
                 <>
                   <tr key={j.id} onClick={() => selectJob(j.id)} className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === j.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
                     <td className="px-4 py-3 text-dark/60 font-mono text-xs">{j.id.slice(0, 8)}</td>
@@ -170,7 +180,7 @@ export default function AdminJobs() {
                   )}
                 </>
               ))
-            )}
+            ); })()}
           </tbody>
         </table>
       </div>

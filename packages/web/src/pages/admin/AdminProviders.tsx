@@ -27,6 +27,7 @@ export default function AdminProviders() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Awaited<ReturnType<typeof adminService.getProviderDetail>>['data']>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -59,6 +60,9 @@ export default function AdminProviders() {
         <span className="text-sm text-dark/50">{total} total</span>
       </div>
 
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, phone, email, or category..."
+        className="w-full px-4 py-2.5 mb-4 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 bg-white" />
+
       <div className="bg-white rounded-xl border border-dark/10 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -75,10 +79,16 @@ export default function AdminProviders() {
           <tbody>
             {loading ? (
               <tr><td colSpan={7} className="px-4 py-8 text-center text-dark/40">Loading...</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-dark/40">No providers yet</td></tr>
+            ) : (() => {
+              const filtered = rows.filter(p => {
+                if (!search) return true;
+                const q = search.toLowerCase();
+                return p.name.toLowerCase().includes(q) || (p.phone ?? '').includes(q) || (p.email ?? '').toLowerCase().includes(q) || (p.categories ?? []).join(' ').toLowerCase().includes(q);
+              });
+              return filtered.length === 0 ? (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No providers yet'}</td></tr>
             ) : (
-              rows.map((p) => (
+              filtered.map((p) => (
                 <>
                   <tr key={p.id} onClick={() => selectProvider(p.id)} className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === p.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
                     <td className="px-4 py-3 text-dark font-medium">{p.name}</td>
@@ -104,7 +114,7 @@ export default function AdminProviders() {
                   )}
                 </>
               ))
-            )}
+            ); })()}
           </tbody>
         </table>
       </div>
