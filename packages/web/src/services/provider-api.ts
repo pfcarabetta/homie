@@ -72,6 +72,27 @@ export interface ProviderSettings {
   vacationMode: boolean;
 }
 
+export interface ProviderBooking {
+  id: string;
+  status: string;
+  serviceAddress: string | null;
+  confirmedAt: string;
+  jobId: string;
+  jobStatus: string;
+  diagnosis: { category?: string; severity?: string; summary?: string } | null;
+  zipCode: string;
+  preferredTiming: string | null;
+  tier: string;
+  jobCreatedAt: string;
+  homeownerFirstName: string | null;
+  homeownerLastName: string | null;
+  homeownerEmail: string;
+  homeownerPhone: string | null;
+  quotedPrice: string | null;
+  availability: string | null;
+  responseMessage: string | null;
+}
+
 export const portalService = {
   getDashboard: () => fetchProviderAPI<DashboardStats>('/api/v1/portal/dashboard'),
   getIncomingJobs: () => fetchProviderAPI<{ jobs: IncomingJob[] }>('/api/v1/portal/jobs/incoming'),
@@ -91,4 +112,5 @@ export const portalService = {
   updateSettings: (data: Partial<{ notification_pref: string; vacation_mode: boolean }>) =>
     fetchProviderAPI<{ updated: true }>('/api/v1/portal/settings', { method: 'PATCH', body: JSON.stringify(data) }),
   optOut: () => fetchProviderAPI<{ opted_out: true }>('/api/v1/portal/opt-out', { method: 'POST' }),
+  getBookings: () => fetchProviderAPI<{ bookings: ProviderBooking[] }>('/api/v1/portal/bookings'),
 };

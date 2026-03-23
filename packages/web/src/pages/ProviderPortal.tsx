@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useProviderAuth } from '@/contexts/ProviderAuthContext';
-import { portalService, type DashboardStats, type IncomingJob, type HistoryJob, type ProviderProfile, type ProviderSettings } from '@/services/provider-api';
+import { portalService, type DashboardStats, type IncomingJob, type HistoryJob, type ProviderProfile, type ProviderSettings, type ProviderBooking } from '@/services/provider-api';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
-const TABS = ['dashboard', 'jobs', 'history', 'profile', 'settings'] as const;
+const TABS = ['dashboard', 'jobs', 'bookings', 'history', 'profile', 'settings'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', jobs: 'Incoming', history: 'History', profile: 'Profile', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', jobs: 'Incoming', bookings: 'Bookings', history: 'History', profile: 'Profile', settings: 'Settings' };
 
 const BADGE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   'top-rated': { bg: '#FFF7ED', text: '#C2410C', label: 'Top Rated' },
@@ -141,6 +141,194 @@ function IncomingJobsTab() {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/* -- Bookings Tab -- */
+function BookingsTab() {
+  const [bookingsList, setBookingsList] = useState<ProviderBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    portalService.getBookings().then(r => {
+      setBookingsList(r.data?.bookings ?? []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ color: '#9B9490', padding: 20 }}>Loading...</div>;
+  if (bookingsList.length === 0) return (
+    <div style={{ textAlign: 'center', padding: '40px 0', color: '#9B9490' }}>
+      <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+      <div style={{ fontSize: 15, fontWeight: 500 }}>No bookings yet</div>
+      <div style={{ fontSize: 13, marginTop: 4 }}>When a homeowner books you, it will appear here</div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {bookingsList.map(b => {
+        const isExpanded = expandedId === b.id;
+        const customerName = [b.homeownerFirstName, b.homeownerLastName].filter(Boolean).join(' ') || b.homeownerEmail;
+
+        return (
+          <div key={b.id} onClick={() => setExpandedId(isExpanded ? null : b.id)} style={{
+            background: 'white', borderRadius: 14, padding: '16px 18px',
+            border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
+            cursor: 'pointer', transition: 'all 0.15s',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <div style={{ fontWeight: 600, fontSize: 15, color: D }}>
+                {b.diagnosis?.category ? b.diagnosis.category.charAt(0).toUpperCase() + b.diagnosis.category.slice(1) : 'Job'}
+              </div>
+              <span style={{
+                padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600,
+                background: b.status === 'confirmed' ? '#F0FDF4' : b.status === 'completed' ? '#EFF6FF' : '#F5F5F5',
+                color: b.status === 'confirmed' ? '#16A34A' : b.status === 'completed' ? '#2563EB' : '#9B9490',
+                textTransform: 'capitalize',
+              }}>{b.status}</span>
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 4 }}>{customerName}</div>
+            {b.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 6 }}>{b.diagnosis.summary.slice(0, 120)}{b.diagnosis.summary.length > 120 ? '...' : ''}</div>}
+            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#9B9490', flexWrap: 'wrap' }}>
+              {b.quotedPrice && <span>Quote: {b.quotedPrice}</span>}
+              <span>{b.zipCode}</span>
+              <span>Booked {timeAgo(b.confirmedAt)}</span>
+            </div>
+
+            {/* Expanded detail */}
+            {isExpanded && (
+              <div style={{ marginTop: 16, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }} onClick={e => e.stopPropagation()}>
+
+                {/* Action banner */}
+                <div style={{
+                  background: '#FFF7ED', borderRadius: 10, padding: '14px 16px', marginBottom: 16,
+                  border: '1px solid rgba(232,99,43,0.15)',
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: O, marginBottom: 4 }}>Action Required</div>
+                  <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6 }}>
+                    Please reach out to the homeowner to coordinate the appointment. All payment for the work is between you and the homeowner directly.
+                  </div>
+                </div>
+
+                {/* Customer contact */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Customer Contact</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Name</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{customerName}</div>
+                    </div>
+                    <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Email</div>
+                      <a href={`mailto:${b.homeownerEmail}`} style={{ fontSize: 14, fontWeight: 600, color: O, textDecoration: 'none' }}>{b.homeownerEmail}</a>
+                    </div>
+                    {b.homeownerPhone && (
+                      <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                        <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Phone</div>
+                        <a href={`tel:${b.homeownerPhone}`} style={{ fontSize: 14, fontWeight: 600, color: O, textDecoration: 'none' }}>{b.homeownerPhone}</a>
+                      </div>
+                    )}
+                    {b.serviceAddress && (
+                      <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                        <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Service Address</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{b.serviceAddress}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Job details */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Job Details</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Category</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{b.diagnosis?.category ?? 'General'}</div>
+                    </div>
+                    <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Severity</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{b.diagnosis?.severity ?? 'Medium'}</div>
+                    </div>
+                    <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Timing</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{b.preferredTiming ?? 'ASAP'}</div>
+                    </div>
+                    <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Requested</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{new Date(b.jobCreatedAt).toLocaleDateString()} {new Date(b.jobCreatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Diagnosis summary */}
+                {b.diagnosis?.summary && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Description</div>
+                    <div style={{ background: W, borderRadius: 10, padding: '12px 14px', fontSize: 14, color: '#6B6560', lineHeight: 1.6 }}>
+                      {b.diagnosis.summary}
+                    </div>
+                  </div>
+                )}
+
+                {/* Your quote */}
+                {(b.quotedPrice || b.availability || b.responseMessage) && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Your Quote</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      {b.quotedPrice && (
+                        <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                          <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Price</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: O }}>{b.quotedPrice}</div>
+                        </div>
+                      )}
+                      {b.availability && (
+                        <div style={{ background: W, borderRadius: 10, padding: '10px 14px' }}>
+                          <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Availability</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{b.availability}</div>
+                        </div>
+                      )}
+                    </div>
+                    {b.responseMessage && (
+                      <div style={{ background: W, borderRadius: 10, padding: '10px 14px', marginTop: 8, fontSize: 13, color: '#6B6560', fontStyle: 'italic' }}>
+                        "{b.responseMessage}"
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Payment note */}
+                <div style={{
+                  background: '#EFF6FF', borderRadius: 10, padding: '12px 16px',
+                  border: '1px solid rgba(37,99,235,0.1)', fontSize: 13, color: '#6B6560', lineHeight: 1.6,
+                }}>
+                  <span style={{ fontWeight: 600, color: '#2563EB' }}>Payment note:</span> All payment for this job is between you and the homeowner. Homie does not process or collect payment on your behalf.
+                </div>
+
+                {/* Contact buttons */}
+                <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                  {b.homeownerPhone && (
+                    <a href={`tel:${b.homeownerPhone}`} style={{
+                      flex: 1, padding: '12px 0', borderRadius: 100, border: 'none',
+                      background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                      textAlign: 'center', textDecoration: 'none', display: 'block',
+                    }}>📞 Call {b.homeownerFirstName || 'Customer'}</a>
+                  )}
+                  <a href={`mailto:${b.homeownerEmail}`} style={{
+                    flex: 1, padding: '12px 0', borderRadius: 100,
+                    border: `2px solid ${O}`, background: 'white', color: O,
+                    fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                    textAlign: 'center', textDecoration: 'none', display: 'block',
+                  }}>✉️ Email {b.homeownerFirstName || 'Customer'}</a>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -521,6 +709,7 @@ export default function ProviderPortal() {
 
         {activeTab === 'dashboard' && <DashboardTab />}
         {activeTab === 'jobs' && <IncomingJobsTab />}
+        {activeTab === 'bookings' && <BookingsTab />}
         {activeTab === 'history' && <HistoryTab />}
         {activeTab === 'profile' && <ProfileTab />}
         {activeTab === 'settings' && <SettingsTab />}

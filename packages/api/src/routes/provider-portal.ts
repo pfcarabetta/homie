@@ -8,6 +8,7 @@ import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerResponses } from '../db/schema/provider-responses';
 import { jobs } from '../db/schema/jobs';
 import { bookings } from '../db/schema/bookings';
+import { homeowners } from '../db/schema/homeowners';
 import { suppressionList } from '../db/schema/suppression-list';
 import { recordProviderResponse } from '../services/providers/scores';
 
@@ -326,6 +327,47 @@ router.post('/opt-out', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[POST /portal/opt-out]');
     res.status(500).json({ data: null, error: 'Failed to opt out', meta: {} });
+  }
+});
+
+// GET /api/v1/portal/bookings
+router.get('/bookings', async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: bookings.id,
+        status: bookings.status,
+        serviceAddress: bookings.serviceAddress,
+        confirmedAt: bookings.confirmedAt,
+        // Job details
+        jobId: jobs.id,
+        jobStatus: jobs.status,
+        diagnosis: jobs.diagnosis,
+        zipCode: jobs.zipCode,
+        preferredTiming: jobs.preferredTiming,
+        tier: jobs.tier,
+        jobCreatedAt: jobs.createdAt,
+        // Homeowner contact
+        homeownerFirstName: homeowners.firstName,
+        homeownerLastName: homeowners.lastName,
+        homeownerEmail: homeowners.email,
+        homeownerPhone: homeowners.phone,
+        // Quote details
+        quotedPrice: providerResponses.quotedPrice,
+        availability: providerResponses.availability,
+        responseMessage: providerResponses.message,
+      })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .innerJoin(homeowners, eq(bookings.homeownerId, homeowners.id))
+      .leftJoin(providerResponses, eq(bookings.responseId, providerResponses.id))
+      .where(eq(bookings.providerId, req.providerId))
+      .orderBy(desc(bookings.confirmedAt));
+
+    res.json({ data: { bookings: rows }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /portal/bookings]');
+    res.status(500).json({ data: null, error: 'Failed to fetch bookings', meta: {} });
   }
 });
 
