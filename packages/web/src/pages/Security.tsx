@@ -143,11 +143,11 @@ export default function Security() {
             If you discover a security vulnerability, we want to hear from you. We're committed to working with security researchers to resolve issues quickly and responsibly.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-            <a href="mailto:security@homiepro.ai" style={{
+            <a href="mailto:yo@homiepro.ai" style={{
               display: 'inline-block', padding: '12px 32px', borderRadius: 100,
               background: G, color: '#fff', fontSize: 15, fontWeight: 600,
               textDecoration: 'none', transition: 'opacity 0.2s',
-            }}>security@homiepro.ai</a>
+            }}>yo@homiepro.ai</a>
             <p style={{ fontSize: 13, color: '#9B9490', margin: 0 }}>We commit to responding within 48 hours</p>
           </div>
         </div>

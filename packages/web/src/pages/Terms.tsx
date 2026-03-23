@@ -33,7 +33,7 @@ export default function Terms() {
           <p>Homie is not liable for the quality, safety, or legality of services provided by third-party service providers. Homie does not guarantee that providers will respond to outreach attempts or that quotes will be received within any specific timeframe.</p>
 
           <h2 style={{ fontSize: 20, fontWeight: 600, color: '#2D2926', marginTop: 32, marginBottom: 12 }}>8. Contact</h2>
-          <p>For questions about these terms, contact us at support@homiepro.ai.</p>
+          <p>For questions about these terms, contact us at yo@homiepro.ai.</p>
         </div>
       </div>
     </div>

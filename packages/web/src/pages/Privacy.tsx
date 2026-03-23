@@ -58,7 +58,7 @@ export default function Privacy() {
           <p>Service provider information (business name, phone number, ratings) is collected from publicly available sources including Google Maps and Yelp. Providers can opt out of receiving Homie outreach through our provider portal or by contacting us.</p>
 
           <h2 style={{ fontSize: 20, fontWeight: 600, color: '#2D2926', marginTop: 32, marginBottom: 12 }}>9. Contact</h2>
-          <p>For privacy-related questions or data requests, contact us at privacy@homiepro.ai.</p>
+          <p>For privacy-related questions or data requests, contact us at yo@homiepro.ai.</p>
         </div>
       </div>
     </div>
