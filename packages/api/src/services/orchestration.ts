@@ -24,8 +24,8 @@ import { Job } from '../db/schema/jobs';
 
 const TIER_PROVIDER_LIMITS: Record<JobTier, number> = {
   standard: 5,
-  priority: 7,
-  emergency: 10,
+  priority: 10,
+  emergency: 15,
 };
 
 // Fetch extra from discovery so we still hit the limit after suppressed/rate-limited filtering
