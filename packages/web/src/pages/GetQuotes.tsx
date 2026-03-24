@@ -973,7 +973,7 @@ export default function GetQuotes() {
                 <span style={{ fontSize: 13, color: '#1B9E77', fontWeight: 600 }}>Online</span>
               </div>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'default' }} title="Some businesses may not be reachable outside business hours. Quotes may take longer as a result.">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'default' }} title="Some businesses may not be reachable outside business hours. Responses may be limited and take longer.">
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF9F27', boxShadow: '0 0 0 3px rgba(239,159,39,0.15)' }} />
                 <span style={{ fontSize: 12, color: '#EF9F27', fontWeight: 600 }}>After hours</span>
               </div>
@@ -1009,7 +1009,7 @@ export default function GetQuotes() {
             fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center',
           }}>
             <span style={{ fontSize: 16, flexShrink: 0 }}>{'\uD83C\uDF19'}</span>
-            <span>Some businesses may not be reachable outside business hours (8 AM – 6 PM). Quotes may take longer as a result.</span>
+            <span>Some businesses may not be reachable outside business hours (8 AM – 6 PM). Responses may be limited and take longer.</span>
           </div>
         ) : null;
       })()}
