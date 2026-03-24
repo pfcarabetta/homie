@@ -19,6 +19,7 @@ export const providers = pgTable(
     businessHours: jsonb('business_hours'),
     licenseInfo: jsonb('license_info'),
     serviceZips: text('service_zips').array(),
+    passwordHash: text('password_hash'),
     discoveredAt: timestamp('discovered_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

@@ -21,6 +21,7 @@ const BASE_PROVIDER: Provider = {
   businessHours: null,
   licenseInfo: null,
   serviceZips: null,
+  passwordHash: null,
   discoveredAt: new Date(),
 };
 

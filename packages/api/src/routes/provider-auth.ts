@@ -1,12 +1,15 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { eq, or } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { providers } from '../db/schema/providers';
-import { signProviderToken, type ProviderJwtPayload } from '../middleware/provider-auth';
+import { signProviderToken, requireProviderAuth, type ProviderJwtPayload } from '../middleware/provider-auth';
 import { sendSms, sendEmail } from '../services/notifications';
 import { geocodeZip } from '../services/providers/google-maps';
+
+const BCRYPT_ROUNDS = 12;
 
 const router = Router();
 const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
@@ -229,6 +232,67 @@ router.post('/signup', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[POST /provider-auth/signup]');
     res.status(500).json({ data: null, error: 'Failed to create provider account', meta: {} });
+  }
+});
+
+// POST /api/v1/provider-auth/login — Password login for providers
+router.post('/login', async (req: Request, res: Response) => {
+  const { email, password } = req.body as { email?: string; password?: string };
+
+  if (!email || !password) {
+    res.status(400).json({ data: null, error: 'email and password are required', meta: {} });
+    return;
+  }
+
+  try {
+    const [provider] = await db
+      .select({ id: providers.id, name: providers.name, phone: providers.phone, email: providers.email, categories: providers.categories, passwordHash: providers.passwordHash })
+      .from(providers)
+      .where(eq(providers.email, email.toLowerCase().trim()))
+      .limit(1);
+
+    if (!provider || !provider.passwordHash) {
+      res.status(401).json({ data: null, error: 'Invalid email or password', meta: {} });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, provider.passwordHash);
+    if (!valid) {
+      res.status(401).json({ data: null, error: 'Invalid email or password', meta: {} });
+      return;
+    }
+
+    const token = signProviderToken(provider.id);
+    res.json({
+      data: {
+        token,
+        provider: { id: provider.id, name: provider.name, phone: provider.phone, email: provider.email, categories: provider.categories },
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /provider-auth/login]');
+    res.status(500).json({ data: null, error: 'Login failed', meta: {} });
+  }
+});
+
+// POST /api/v1/provider-auth/set-password — Set password (requires auth)
+router.post('/set-password', requireProviderAuth, async (req: Request, res: Response) => {
+  const { password } = req.body as { password?: string };
+
+  if (!password || password.length < 8) {
+    res.status(400).json({ data: null, error: 'Password must be at least 8 characters', meta: {} });
+    return;
+  }
+
+  try {
+    const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    await db.update(providers).set({ passwordHash: hash } as Record<string, unknown>).where(eq(providers.id, req.providerId));
+    res.json({ data: { set: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /provider-auth/set-password]');
+    res.status(500).json({ data: null, error: 'Failed to set password', meta: {} });
   }
 });
 

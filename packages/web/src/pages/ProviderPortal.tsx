@@ -707,6 +707,56 @@ function ProfileTab() {
 }
 
 /* -- Settings Tab -- */
+function SetPasswordSection() {
+  const [pw, setPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  async function handleSet() {
+    setMsg(null);
+    if (pw.length < 8) { setMsg({ type: 'error', text: 'Password must be at least 8 characters' }); return; }
+    if (pw !== confirmPw) { setMsg({ type: 'error', text: 'Passwords do not match' }); return; }
+    setSaving(true);
+    try {
+      await portalService.setPassword(pw);
+      setMsg({ type: 'success', text: 'Password set! You can now sign in with your email and password.' });
+      setPw(''); setConfirmPw('');
+    } catch (err) {
+      setMsg({ type: 'error', text: (err as Error).message || 'Failed to set password' });
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 20 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 4 }}>Set a Password</div>
+      <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 12, lineHeight: 1.5 }}>Set a password so you can sign in directly with your email instead of using a magic link each time.</div>
+      {msg && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10, marginBottom: 12, fontSize: 14,
+          background: msg.type === 'success' ? '#F0FDF4' : '#FEF2F2',
+          color: msg.type === 'success' ? '#16A34A' : '#DC2626',
+          border: `1px solid ${msg.type === 'success' ? '#BBF7D0' : '#FECACA'}`,
+        }}>{msg.text}</div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+        <input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="New password (min 8 characters)"
+          style={inputStyle} />
+        <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Confirm password"
+          style={inputStyle} />
+      </div>
+      <button onClick={handleSet} disabled={saving || !pw || !confirmPw} style={{
+        padding: '11px 24px', borderRadius: 100, border: 'none',
+        background: pw && confirmPw && !saving ? O : 'rgba(0,0,0,0.08)',
+        color: pw && confirmPw && !saving ? 'white' : '#9B9490',
+        fontSize: 14, fontWeight: 600, cursor: pw && confirmPw && !saving ? 'pointer' : 'default',
+        fontFamily: "'DM Sans', sans-serif",
+      }}>{saving ? 'Saving...' : 'Set Password'}</button>
+    </div>
+  );
+}
+
 function SettingsTab() {
   const [settings, setSettings] = useState<ProviderSettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -772,6 +822,8 @@ function SettingsTab() {
           </button>
         </div>
       </div>
+
+      <SetPasswordSection />
 
       <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 20 }}>
         {optedOut ? (

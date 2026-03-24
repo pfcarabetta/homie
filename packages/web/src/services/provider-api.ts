@@ -113,6 +113,9 @@ export const portalService = {
     fetchProviderAPI<{ updated: true }>('/api/v1/portal/settings', { method: 'PATCH', body: JSON.stringify(data) }),
   optOut: () => fetchProviderAPI<{ opted_out: true }>('/api/v1/portal/opt-out', { method: 'POST' }),
   getBookings: () => fetchProviderAPI<{ bookings: ProviderBooking[] }>('/api/v1/portal/bookings'),
+  setPassword: (password: string) => fetchProviderAPI<{ set: boolean }>('/api/v1/provider-auth/set-password', {
+    method: 'POST', body: JSON.stringify({ password }),
+  }),
   searchGoogle: (q: string, zip?: string) => {
     const params = new URLSearchParams({ q });
     if (zip) params.set('zip', zip);
