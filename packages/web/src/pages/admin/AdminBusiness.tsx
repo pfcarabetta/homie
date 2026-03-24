@@ -36,11 +36,11 @@ const PLAN_COLORS: Record<string, string> = {
 };
 
 const PLAN_LABELS: Record<string, string> = {
-  trial: '14-day Trial (5 credits)',
-  starter: 'Starter ($29 + $5/property)',
-  professional: 'Professional ($49 + $8/property)',
-  business: 'Business ($99 + $10/property)',
-  enterprise: 'Enterprise (custom)',
+  trial: 'Trial',
+  starter: 'Starter',
+  professional: 'Professional',
+  business: 'Business',
+  enterprise: 'Enterprise',
 };
 
 export default function AdminBusiness() {
