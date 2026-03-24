@@ -652,7 +652,8 @@ router.get('/web/respond', async (req: Request, res: Response) => {
       <input type="hidden" name="token" value="${token}" />
 
       <label style="display:block;font-size:13px;font-weight:600;color:#2D2926;margin-bottom:6px">Your Price Estimate</label>
-      <input name="quoted_price" placeholder="e.g. $150-200" required style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid rgba(0,0,0,0.08);font-size:15px;margin-bottom:16px;box-sizing:border-box;outline:none" />
+      <label style="font-size:13px;font-weight:600;color:#2D2926;display:block;margin-bottom:6px">Quoted Price — Estimate</label>
+      <input name="quoted_price" placeholder="e.g. $150-200" required inputmode="decimal" style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid rgba(0,0,0,0.08);font-size:15px;margin-bottom:16px;box-sizing:border-box;outline:none" />
 
       <label style="display:block;font-size:13px;font-weight:600;color:#2D2926;margin-bottom:6px">Your Availability</label>
       <input name="availability" placeholder="e.g. Tomorrow 9-11 AM" required style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid rgba(0,0,0,0.08);font-size:15px;margin-bottom:16px;box-sizing:border-box;outline:none" />

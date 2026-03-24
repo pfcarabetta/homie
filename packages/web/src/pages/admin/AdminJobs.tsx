@@ -216,7 +216,7 @@ function JobDetailView({ detail }: { detail: JobDetail }) {
         provider_name: qName.trim(),
         provider_phone: qPhone.trim() || undefined,
         provider_email: qEmail.trim() || undefined,
-        quoted_price: qPrice.trim() || undefined,
+        quoted_price: qPrice.trim() ? `$${qPrice.trim().replace(/^\$/, '')}` : undefined,
         availability: qAvail.trim() || undefined,
         message: qMsg.trim() || undefined,
       });
@@ -370,9 +370,12 @@ function JobDetailView({ detail }: { detail: JobDetail }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-dark/50 mb-1">Quoted Price</label>
-                    <input value={qPrice} onChange={e => setQPrice(e.target.value)} placeholder="$185"
-                      className="w-full px-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400" />
+                    <label className="block text-xs font-semibold text-dark/50 mb-1">Quoted Price — Estimate</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-dark/40 text-sm">$</span>
+                      <input value={qPrice} onChange={e => setQPrice(e.target.value.replace(/[^0-9.,\-]/g, ''))} placeholder="185" inputMode="decimal"
+                        className="w-full pl-7 pr-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400" />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-dark/50 mb-1">Availability</label>

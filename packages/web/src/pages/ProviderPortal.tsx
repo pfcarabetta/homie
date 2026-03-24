@@ -93,7 +93,7 @@ function IncomingJobsTab() {
   async function respond(attemptId: string, action: 'accept' | 'decline') {
     setResponding(true);
     try {
-      await portalService.respondToJob(attemptId, { action, quoted_price: quote || undefined, availability: avail || undefined, message: msg || undefined });
+      await portalService.respondToJob(attemptId, { action, quoted_price: quote ? `$${quote.replace(/^\$/, '')}` : undefined, availability: avail || undefined, message: msg || undefined });
       setJobs(j => j.filter(x => x.attempt_id !== attemptId));
       setExpanded(null);
       setQuote(''); setAvail(''); setMsg('');
@@ -130,7 +130,14 @@ function IncomingJobsTab() {
           {expanded === j.attempt_id && (
             <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14 }} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-                <input value={quote} onChange={e => setQuote(e.target.value)} placeholder="Your price estimate (e.g. $150-200)" style={inputStyle} />
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: D, display: 'block', marginBottom: 6 }}>Quoted Price — Estimate</label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 16, top: 13, color: '#9B9490', fontSize: 15 }}>$</span>
+                    <input value={quote} onChange={e => setQuote(e.target.value.replace(/[^0-9.,\-]/g, ''))} placeholder="150-200" inputMode="decimal"
+                      style={{ ...inputStyle, paddingLeft: 30 }} />
+                  </div>
+                </div>
                 <input value={avail} onChange={e => setAvail(e.target.value)} placeholder="Your availability (e.g. Tomorrow 9-11 AM)" style={inputStyle} />
                 <textarea value={msg} onChange={e => setMsg(e.target.value)} placeholder="Message to homeowner (optional)" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
               </div>
