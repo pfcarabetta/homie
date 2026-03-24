@@ -1188,6 +1188,8 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     businessService.listDispatches(workspaceId).then(res => {
@@ -1405,12 +1407,75 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
                       </div>
                     )}
                   </div>
+
+                  {/* Cancel button — only for active dispatches */}
+                  {isActive && (
+                    <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 14 }}>
+                      <button onClick={() => setShowCancelConfirm(j.id)} disabled={cancellingId === j.id} style={{
+                        width: '100%', padding: '10px 0', borderRadius: 100,
+                        border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#DC2626',
+                        fontSize: 13, fontWeight: 600, cursor: cancellingId === j.id ? 'default' : 'pointer',
+                        opacity: cancellingId === j.id ? 0.6 : 1,
+                      }}>{cancellingId === j.id ? 'Cancelling...' : 'Cancel Dispatch'}</button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+
+      {/* Cancel confirmation modal */}
+      {showCancelConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowCancelConfirm(null)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <span style={{ fontSize: 22 }}>⚠️</span>
+              </div>
+              <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: '0 0 8px' }}>Cancel this dispatch?</h3>
+              <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, margin: 0 }}>
+                This will stop all outreach for this dispatch.
+                {(() => {
+                  const job = dispatches.find(d => d.id === showCancelConfirm);
+                  return job && job.responseCount > 0
+                    ? ' Any booked providers will be notified of the cancellation via SMS and email.'
+                    : ' If no providers have responded, your outreach credit will be refunded.';
+                })()}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowCancelConfirm(null)} style={{
+                flex: 1, padding: '12px 0', borderRadius: 100, border: '1px solid #E0DAD4',
+                background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}>Keep dispatch</button>
+              <button onClick={async () => {
+                const jobId = showCancelConfirm;
+                setShowCancelConfirm(null);
+                setCancellingId(jobId);
+                try {
+                  const res = await businessService.cancelDispatch(workspaceId, jobId);
+                  setDispatches(prev => prev.map(d => d.id === jobId ? { ...d, status: 'expired' } : d));
+                  if (res.data?.credit_refunded) {
+                    alert('Dispatch cancelled. 1 outreach credit was refunded.');
+                  } else if (res.data?.providers_notified && res.data.providers_notified > 0) {
+                    alert(`Dispatch cancelled. ${res.data.providers_notified} booked provider${res.data.providers_notified > 1 ? 's were' : ' was'} notified.`);
+                  } else {
+                    alert('Dispatch cancelled.');
+                  }
+                } catch (err) {
+                  alert((err as Error).message || 'Failed to cancel');
+                }
+                setCancellingId(null);
+              }} style={{
+                flex: 1, padding: '12px 0', borderRadius: 100, border: 'none',
+                background: '#DC2626', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}>Yes, cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }

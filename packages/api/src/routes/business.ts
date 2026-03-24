@@ -1045,6 +1045,93 @@ router.get('/:workspaceId/reports/vendors', requireWorkspace, async (req: Reques
   }
 });
 
+// POST /:workspaceId/dispatches/:jobId/cancel
+router.post('/:workspaceId/dispatches/:jobId/cancel', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+
+  try {
+    // Verify job belongs to workspace
+    const [job] = await db
+      .select({ id: jobs.id, status: jobs.status, workspaceId: jobs.workspaceId })
+      .from(jobs)
+      .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Dispatch not found', meta: {} });
+      return;
+    }
+
+    if (job.status === 'expired' || job.status === 'refunded') {
+      res.status(400).json({ data: null, error: 'Dispatch is already expired/cancelled', meta: {} });
+      return;
+    }
+
+    // Check if there's a booking — if so, notify the provider
+    const bookingRows = await db
+      .select({
+        id: bookings.id,
+        providerId: bookings.providerId,
+        providerName: providers.name,
+        providerPhone: providers.phone,
+        providerEmail: providers.email,
+      })
+      .from(bookings)
+      .innerJoin(providers, eq(bookings.providerId, providers.id))
+      .where(eq(bookings.jobId, jobId));
+
+    // Cancel the job
+    await db.update(jobs).set({ status: 'expired' } as Record<string, unknown>).where(eq(jobs.id, jobId));
+
+    // Refund credit if no responses
+    const [{ value: responseCount }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(providerResponses)
+      .where(eq(providerResponses.jobId, jobId));
+
+    let creditRefunded = false;
+    if (responseCount === 0) {
+      await db.update(workspaces)
+        .set({ searchesUsed: sql`GREATEST(${workspaces.searchesUsed} - 1, 0)` } as Record<string, unknown>)
+        .where(eq(workspaces.id, req.workspaceId));
+      creditRefunded = true;
+    }
+
+    // Notify booked providers of cancellation
+    const { sendSms, sendEmail } = await import('../services/notifications');
+    for (const booking of bookingRows) {
+      if (booking.providerPhone) {
+        void sendSms(booking.providerPhone, `Hi ${booking.providerName}, a job you were booked for through Homie has been cancelled by the property manager. No action needed on your end. Thank you for your time.`);
+      }
+      if (booking.providerEmail) {
+        void sendEmail(booking.providerEmail, 'Booking Cancelled — Homie',
+          `<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
+            <h1 style="color: #E8632B; font-size: 24px;">homie</h1>
+            <p style="font-size: 16px; color: #2D2926;">Hi ${booking.providerName},</p>
+            <p style="font-size: 15px; color: #6B6560; line-height: 1.6;">A job you were booked for has been cancelled by the property manager. No further action is needed on your end.</p>
+            <p style="font-size: 13px; color: #9B9490; margin-top: 24px;">Thank you for being a Homie Pro.</p>
+          </div>`);
+      }
+
+      // Update booking status
+      await db.update(bookings).set({ status: 'cancelled' } as Record<string, unknown>).where(eq(bookings.id, booking.id));
+    }
+
+    res.json({
+      data: {
+        cancelled: true,
+        credit_refunded: creditRefunded,
+        providers_notified: bookingRows.length,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/dispatches/:jobId/cancel]');
+    res.status(500).json({ data: null, error: 'Failed to cancel dispatch', meta: {} });
+  }
+});
+
 // GET /:workspaceId/dispatches
 router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, res: Response) => {
   try {
