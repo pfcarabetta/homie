@@ -875,6 +875,19 @@ export const businessService = {
       line_items: Array<{ jobId: string; propertyName: string; category: string; providerName: string; quotedPrice: string | null; cost: number; confirmedAt: string }>;
     }>(`/api/v1/business/${workspaceId}/reports/costs`),
 
+  // Vendor scorecards
+  getVendorScorecards: (workspaceId: string) =>
+    fetchAPI<{
+      vendors: Array<{
+        id: string; name: string; phone: string | null;
+        google_rating: string | null; review_count: number; categories: string[] | null;
+        total_outreach: number; response_rate: number; acceptance_rate: number;
+        avg_response_sec: number | null; avg_quote: number | null;
+        total_bookings: number; booking_rate: number;
+        overall_score: number; grade: string; badges: string[];
+      }>;
+    }>(`/api/v1/business/${workspaceId}/reports/vendors`),
+
   // Usage
   getUsage: (workspaceId: string) =>
     fetchAPI<{

@@ -10,6 +10,7 @@ import { workspaceMembers } from '../db/schema/workspace-members';
 import { properties } from '../db/schema/properties';
 import { homeowners } from '../db/schema/homeowners';
 import { providers } from '../db/schema/providers';
+import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { preferredVendors } from '../db/schema/preferred-vendors';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 
@@ -883,6 +884,149 @@ router.get('/:workspaceId/reports/costs', requireWorkspace, async (req: Request,
   } catch (err) {
     logger.error({ err }, '[GET /business/:id/reports/costs]');
     res.status(500).json({ data: null, error: 'Failed to generate cost report', meta: {} });
+  }
+});
+
+// GET /:workspaceId/reports/vendors — Vendor scorecards
+router.get('/:workspaceId/reports/vendors', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    // Get all outreach attempts for this workspace's jobs
+    const attempts = await db
+      .select({
+        providerId: outreachAttempts.providerId,
+        providerName: providers.name,
+        providerPhone: providers.phone,
+        providerRating: providers.googleRating,
+        providerReviewCount: providers.reviewCount,
+        providerCategories: providers.categories,
+        channel: outreachAttempts.channel,
+        status: outreachAttempts.status,
+        attemptedAt: outreachAttempts.attemptedAt,
+        respondedAt: outreachAttempts.respondedAt,
+      })
+      .from(outreachAttempts)
+      .innerJoin(jobs, eq(outreachAttempts.jobId, jobs.id))
+      .innerJoin(providers, eq(outreachAttempts.providerId, providers.id))
+      .where(eq(jobs.workspaceId, req.workspaceId));
+
+    // Get all responses
+    const responses = await db
+      .select({
+        providerId: providerResponses.providerId,
+        quotedPrice: providerResponses.quotedPrice,
+        createdAt: providerResponses.createdAt,
+      })
+      .from(providerResponses)
+      .innerJoin(jobs, eq(providerResponses.jobId, jobs.id))
+      .where(eq(jobs.workspaceId, req.workspaceId));
+
+    // Get bookings
+    const bookingRows = await db
+      .select({
+        providerId: bookings.providerId,
+        status: bookings.status,
+      })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .where(eq(jobs.workspaceId, req.workspaceId));
+
+    // Build scorecards per provider
+    const vendors: Record<string, {
+      id: string; name: string; phone: string | null; rating: string | null;
+      reviewCount: number; categories: string[] | null;
+      totalOutreach: number; totalResponded: number; totalAccepted: number;
+      totalDeclined: number; totalBookings: number;
+      responseTimes: number[]; quotes: number[];
+    }> = {};
+
+    for (const a of attempts) {
+      if (!vendors[a.providerId]) {
+        vendors[a.providerId] = {
+          id: a.providerId, name: a.providerName, phone: a.providerPhone,
+          rating: a.providerRating, reviewCount: a.providerReviewCount,
+          categories: a.providerCategories,
+          totalOutreach: 0, totalResponded: 0, totalAccepted: 0,
+          totalDeclined: 0, totalBookings: 0, responseTimes: [], quotes: [],
+        };
+      }
+      const v = vendors[a.providerId];
+      v.totalOutreach++;
+      if (a.status === 'accepted' || a.status === 'responded') {
+        v.totalResponded++;
+        v.totalAccepted++;
+        if (a.respondedAt && a.attemptedAt) {
+          v.responseTimes.push((new Date(a.respondedAt).getTime() - new Date(a.attemptedAt).getTime()) / 1000);
+        }
+      }
+      if (a.status === 'declined') { v.totalResponded++; v.totalDeclined++; }
+    }
+
+    for (const r of responses) {
+      if (vendors[r.providerId] && r.quotedPrice) {
+        const match = r.quotedPrice.replace(/[^0-9.,]/g, '').match(/[\d,.]+/);
+        if (match) vendors[r.providerId].quotes.push(parseFloat(match[0].replace(/,/g, '')));
+      }
+    }
+
+    for (const b of bookingRows) {
+      if (vendors[b.providerId]) vendors[b.providerId].totalBookings++;
+    }
+
+    // Calculate scores and grades
+    function grade(score: number): string {
+      if (score >= 90) return 'A';
+      if (score >= 75) return 'B';
+      if (score >= 60) return 'C';
+      if (score >= 40) return 'D';
+      return 'F';
+    }
+
+    function badges(v: typeof vendors[string]): string[] {
+      const b: string[] = [];
+      const responseRate = v.totalOutreach > 0 ? v.totalResponded / v.totalOutreach : 0;
+      const avgTime = v.responseTimes.length > 0 ? v.responseTimes.reduce((a, b) => a + b, 0) / v.responseTimes.length : 0;
+      if (responseRate >= 0.8) b.push('Reliable');
+      if (avgTime > 0 && avgTime < 300) b.push('Fast Responder');
+      if (v.totalBookings >= 5) b.push('Veteran');
+      if (v.rating && parseFloat(v.rating) >= 4.5) b.push('Top Rated');
+      return b;
+    }
+
+    const scorecards = Object.values(vendors)
+      .filter(v => v.totalOutreach >= 1)
+      .map(v => {
+        const responseRate = v.totalOutreach > 0 ? v.totalResponded / v.totalOutreach : 0;
+        const acceptanceRate = v.totalResponded > 0 ? v.totalAccepted / v.totalResponded : 0;
+        const avgResponseSec = v.responseTimes.length > 0 ? v.responseTimes.reduce((a, b) => a + b, 0) / v.responseTimes.length : null;
+        const avgQuote = v.quotes.length > 0 ? v.quotes.reduce((a, b) => a + b, 0) / v.quotes.length : null;
+        const bookingRate = v.totalAccepted > 0 ? v.totalBookings / v.totalAccepted : 0;
+        const overallScore = Math.round(responseRate * 40 + acceptanceRate * 30 + bookingRate * 30);
+
+        return {
+          id: v.id,
+          name: v.name,
+          phone: v.phone,
+          google_rating: v.rating,
+          review_count: v.reviewCount,
+          categories: v.categories,
+          total_outreach: v.totalOutreach,
+          response_rate: Math.round(responseRate * 100),
+          acceptance_rate: Math.round(acceptanceRate * 100),
+          avg_response_sec: avgResponseSec ? Math.round(avgResponseSec) : null,
+          avg_quote: avgQuote ? Math.round(avgQuote) : null,
+          total_bookings: v.totalBookings,
+          booking_rate: Math.round(bookingRate * 100),
+          overall_score: overallScore,
+          grade: grade(overallScore),
+          badges: badges(v),
+        };
+      })
+      .sort((a, b) => b.overall_score - a.overall_score);
+
+    res.json({ data: { vendors: scorecards }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/reports/vendors]');
+    res.status(500).json({ data: null, error: 'Failed to generate vendor scorecards', meta: {} });
   }
 });
 
