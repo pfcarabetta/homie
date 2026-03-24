@@ -655,6 +655,23 @@ router.patch('/business-accounts/:id', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/admin/jobs/:jobId/cancel — Force cancel a job
+router.post('/jobs/:jobId/cancel', async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+  try {
+    const [job] = await db.select({ id: jobs.id, status: jobs.status }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
+    if (!job) { res.status(404).json({ data: null, error: 'Job not found', meta: {} }); return; }
+    if (job.status === 'expired' || job.status === 'refunded') {
+      res.status(400).json({ data: null, error: `Job is already ${job.status}`, meta: {} }); return;
+    }
+    await db.update(jobs).set({ status: 'expired' } as Record<string, unknown>).where(eq(jobs.id, jobId));
+    res.json({ data: { cancelled: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/jobs/:jobId/cancel]');
+    res.status(500).json({ data: null, error: 'Failed to cancel job', meta: {} });
+  }
+});
+
 // POST /api/v1/admin/jobs/:jobId/quotes — Manually add a provider quote
 router.post('/jobs/:jobId/quotes', async (req: Request, res: Response) => {
   const { jobId } = req.params;

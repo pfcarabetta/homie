@@ -236,6 +236,10 @@ export const adminService = {
     });
   },
 
+  async cancelJob(jobId: string) {
+    return fetchAdmin<{ cancelled: boolean }>(`/api/v1/admin/jobs/${jobId}/cancel`, { method: 'POST' });
+  },
+
   async addManualQuote(jobId: string, data: {
     provider_name: string; provider_phone?: string; provider_email?: string;
     quoted_price?: string; availability?: string; message?: string;

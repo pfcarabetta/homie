@@ -167,7 +167,9 @@ export default function AdminJobs() {
                         {detailLoading ? (
                           <div className="px-6 py-8 text-center text-dark/40">Loading details...</div>
                         ) : detail ? (
-                          <JobDetailView detail={detail} />
+                          <JobDetailView detail={detail} onStatusChange={newStatus => {
+                            setRows(prev => prev.map(r => r.id === j.id ? { ...r, status: newStatus } : r));
+                          }} />
                         ) : (
                           <div className="px-6 py-8 text-center text-dark/40">Failed to load details</div>
                         )}
@@ -192,10 +194,12 @@ export default function AdminJobs() {
   );
 }
 
-function JobDetailView({ detail }: { detail: JobDetail }) {
+function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatusChange?: (status: string) => void }) {
   const { job, outreach_attempts, bookings } = detail;
   const [providerResponses, setProviderResponses] = useState(detail.provider_responses);
   const [showAddQuote, setShowAddQuote] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [jobStatus, setJobStatus] = useState(job.status);
 
   // Add quote form state
   const [qName, setQName] = useState('');
@@ -421,6 +425,30 @@ function JobDetailView({ detail }: { detail: JobDetail }) {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Cancel Job */}
+      {!['expired', 'refunded'].includes(jobStatus) && (
+        <div className="border-t border-dark/5 pt-4">
+          <button onClick={async () => {
+            if (!confirm('Are you sure you want to cancel this job? This will force it into expired status.')) return;
+            setCancelling(true);
+            try {
+              await adminService.cancelJob(job.id);
+              setJobStatus('expired');
+              onStatusChange?.('expired');
+            } catch (err) {
+              alert((err as Error).message || 'Failed to cancel');
+            }
+            setCancelling(false);
+          }} disabled={cancelling}
+            className="px-4 py-2 rounded-lg text-xs font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors">
+            {cancelling ? 'Cancelling...' : 'Cancel Job'}
+          </button>
+        </div>
+      )}
+      {jobStatus === 'expired' && job.status !== 'expired' && (
+        <div className="text-sm text-red-600 font-medium mt-2">Job has been cancelled.</div>
       )}
     </div>
   );
