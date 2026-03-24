@@ -862,6 +862,19 @@ export const businessService = {
       method: 'DELETE',
     }),
 
+  // Reports
+  getCostReport: (workspaceId: string) =>
+    fetchAPI<{
+      total_cost: number;
+      total_bookings: number;
+      avg_cost: number;
+      by_property: Array<{ id: string; name: string; cost: number; count: number }>;
+      by_category: Array<{ category: string; cost: number; count: number }>;
+      by_vendor: Array<{ id: string; name: string; cost: number; count: number }>;
+      by_month: Array<{ month: string; cost: number; count: number }>;
+      line_items: Array<{ jobId: string; propertyName: string; category: string; providerName: string; quotedPrice: string | null; cost: number; confirmedAt: string }>;
+    }>(`/api/v1/business/${workspaceId}/reports/costs`),
+
   // Usage
   getUsage: (workspaceId: string) =>
     fetchAPI<{

@@ -774,6 +774,118 @@ router.get('/:workspaceId/usage', requireWorkspace, async (req: Request, res: Re
   }
 });
 
+// GET /:workspaceId/reports/costs
+router.get('/:workspaceId/reports/costs', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    // Get all booked jobs for this workspace with quoted prices
+    const rows = await db
+      .select({
+        jobId: jobs.id,
+        propertyId: jobs.propertyId,
+        category: sql<string>`${jobs.diagnosis}->>'category'`,
+        jobCreatedAt: jobs.createdAt,
+        providerId: bookings.providerId,
+        providerName: providers.name,
+        quotedPrice: providerResponses.quotedPrice,
+        confirmedAt: bookings.confirmedAt,
+      })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .innerJoin(providers, eq(bookings.providerId, providers.id))
+      .leftJoin(providerResponses, eq(bookings.responseId, providerResponses.id))
+      .where(eq(jobs.workspaceId, req.workspaceId))
+      .orderBy(desc(bookings.confirmedAt));
+
+    // Enrich with property names
+    const propertyIds = [...new Set(rows.filter(r => r.propertyId).map(r => r.propertyId!))];
+    let propertyMap: Record<string, string> = {};
+    if (propertyIds.length > 0) {
+      const propRows = await db
+        .select({ id: properties.id, name: properties.name })
+        .from(properties)
+        .where(sql`${properties.id} IN (${sql.join(propertyIds.map(id => sql`${id}`), sql`, `)})`);
+      propertyMap = Object.fromEntries(propRows.map(p => [p.id, p.name]));
+    }
+
+    // Parse costs and build aggregations
+    function parseCost(price: string | null): number {
+      if (!price) return 0;
+      const match = price.replace(/[^0-9.,\-]/g, '').match(/[\d,.]+/);
+      return match ? parseFloat(match[0].replace(/,/g, '')) : 0;
+    }
+
+    const enriched = rows.map(r => ({
+      ...r,
+      propertyName: r.propertyId ? propertyMap[r.propertyId] || 'Unknown' : 'No property',
+      cost: parseCost(r.quotedPrice),
+    }));
+
+    const totalCost = enriched.reduce((sum, r) => sum + r.cost, 0);
+    const totalBookings = enriched.length;
+
+    // By property
+    const byProperty: Record<string, { name: string; cost: number; count: number }> = {};
+    for (const r of enriched) {
+      const key = r.propertyId || 'none';
+      if (!byProperty[key]) byProperty[key] = { name: r.propertyName, cost: 0, count: 0 };
+      byProperty[key].cost += r.cost;
+      byProperty[key].count++;
+    }
+
+    // By category
+    const byCategory: Record<string, { cost: number; count: number }> = {};
+    for (const r of enriched) {
+      const cat = r.category || 'general';
+      if (!byCategory[cat]) byCategory[cat] = { cost: 0, count: 0 };
+      byCategory[cat].cost += r.cost;
+      byCategory[cat].count++;
+    }
+
+    // By vendor
+    const byVendor: Record<string, { name: string; cost: number; count: number }> = {};
+    for (const r of enriched) {
+      if (!byVendor[r.providerId]) byVendor[r.providerId] = { name: r.providerName, cost: 0, count: 0 };
+      byVendor[r.providerId].cost += r.cost;
+      byVendor[r.providerId].count++;
+    }
+
+    // By month
+    const byMonth: Record<string, { cost: number; count: number }> = {};
+    for (const r of enriched) {
+      const month = new Date(r.confirmedAt).toISOString().slice(0, 7); // YYYY-MM
+      if (!byMonth[month]) byMonth[month] = { cost: 0, count: 0 };
+      byMonth[month].cost += r.cost;
+      byMonth[month].count++;
+    }
+
+    res.json({
+      data: {
+        total_cost: totalCost,
+        total_bookings: totalBookings,
+        avg_cost: totalBookings > 0 ? totalCost / totalBookings : 0,
+        by_property: Object.entries(byProperty).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.cost - a.cost),
+        by_category: Object.entries(byCategory).map(([category, v]) => ({ category, ...v })).sort((a, b) => b.cost - a.cost),
+        by_vendor: Object.entries(byVendor).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.cost - a.cost),
+        by_month: Object.entries(byMonth).map(([month, v]) => ({ month, ...v })).sort((a, b) => a.month.localeCompare(b.month)),
+        line_items: enriched.map(r => ({
+          jobId: r.jobId,
+          propertyName: r.propertyName,
+          category: r.category,
+          providerName: r.providerName,
+          quotedPrice: r.quotedPrice,
+          cost: r.cost,
+          confirmedAt: r.confirmedAt,
+        })),
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/reports/costs]');
+    res.status(500).json({ data: null, error: 'Failed to generate cost report', meta: {} });
+  }
+});
+
 // GET /:workspaceId/dispatches
 router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, res: Response) => {
   try {
