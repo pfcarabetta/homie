@@ -233,9 +233,9 @@ function Categories() {
 function Pricing() {
   const [annual, setAnnual] = useState(false);
   const tiers = [
-    { name: "Starter", price: 79, annual: 67, properties: "Up to 10", members: "1 user", searches: "10 / month", extra: "$6.99", features: ["PMS import", "Preferred vendors (5)", "Basic cost tracking"], popular: false },
-    { name: "Professional", price: 199, annual: 169, properties: "Up to 30", members: "5 team members", searches: "30 / month", extra: "$4.99", features: ["PMS import + weekly sync", "Unlimited preferred vendors", "B2B job categories", "Full cost reporting", "Vendor scorecards", "Human outreach manager"], popular: true },
-    { name: "Business", price: 499, annual: 424, properties: "Up to 100", members: "15 team members", searches: "75 / month", extra: "$3.49", features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Vendor scorecards", "Human outreach manager", "All Professional features"], popular: false },
+    { name: "Starter", price: 29, annual: 25, perProperty: 5, annualPerProperty: 4, properties: "Unlimited", members: "1 user", searches: "2 per property / month", extra: "$6.99", features: ["PMS import", "Preferred vendors (5)", "Basic cost tracking"], popular: false },
+    { name: "Professional", price: 49, annual: 42, perProperty: 8, annualPerProperty: 7, properties: "Unlimited", members: "5 team members", searches: "3 per property / month", extra: "$4.99", features: ["PMS import + weekly sync", "Unlimited preferred vendors", "B2B job categories", "Full cost reporting", "Vendor scorecards", "Human outreach manager"], popular: true },
+    { name: "Business", price: 99, annual: 84, perProperty: 10, annualPerProperty: 9, properties: "Unlimited", members: "15 team members", searches: "5 per property / month", extra: "$3.49", features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Vendor scorecards", "Human outreach manager", "All Professional features"], popular: false },
   ];
   return (
     <section id="pricing" style={{ background: COLORS.warm, padding: "96px 24px" }}>
@@ -257,10 +257,15 @@ function Pricing() {
               <div style={{ background: COLORS.white, borderRadius: 24, padding: 36, position: "relative", border: t.popular ? `2px solid ${COLORS.orange}` : `1px solid ${COLORS.grayLight}`, transition: "transform 0.2s, box-shadow 0.2s" }} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 16px 48px rgba(0,0,0,0.08)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
                 {t.popular && <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: COLORS.orange, color: COLORS.white, fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, padding: "5px 16px", borderRadius: 100 }}>Most popular</div>}
                 <h3 style={{ fontFamily: "Fraunces, serif", fontSize: 24, fontWeight: 700, color: COLORS.dark, margin: "0 0 4px" }}>{t.name}</h3>
-                <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.gray, margin: "0 0 20px" }}>{t.properties}</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 24 }}>
-                  <span style={{ fontFamily: "Fraunces, serif", fontSize: 48, fontWeight: 700, color: COLORS.dark }}>${annual ? t.annual : t.price}</span>
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, color: COLORS.gray }}>/month</span>
+                <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.gray, margin: "0 0 20px" }}>Unlimited properties</p>
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                    <span style={{ fontFamily: "Fraunces, serif", fontSize: 48, fontWeight: 700, color: COLORS.dark }}>${annual ? t.annual : t.price}</span>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, color: COLORS.gray }}>/mo base</span>
+                  </div>
+                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, color: COLORS.darkMid, marginTop: 4 }}>
+                    + <strong>${annual ? (t as Record<string, unknown>).annualPerProperty as number : (t as Record<string, unknown>).perProperty as number}</strong>/property/mo
+                  </div>
                 </div>
                 <button style={{ width: "100%", fontFamily: "'DM Sans', sans-serif", fontSize: 16, fontWeight: 600, color: t.popular ? COLORS.white : COLORS.dark, background: t.popular ? COLORS.orange : COLORS.warm, border: t.popular ? "none" : `1px solid ${COLORS.grayLight}`, borderRadius: 12, padding: "14px 0", cursor: "pointer", transition: "all 0.2s", marginBottom: 28 }} onMouseEnter={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orangeDark; else (e.target as HTMLElement).style.background = COLORS.grayLight; }} onMouseLeave={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orange; else (e.target as HTMLElement).style.background = COLORS.warm; }}>Start free trial</button>
                 <div style={{ borderTop: `1px solid ${COLORS.warm}`, paddingTop: 20 }}>

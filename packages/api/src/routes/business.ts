@@ -725,12 +725,12 @@ router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRol
 
 // ── Billing & Usage ─────────────────────────────────────────────────────────
 
-const PLAN_LIMITS: Record<string, { searches: number; extraCost: string }> = {
-  trial: { searches: 5, extraCost: 'N/A' },
-  starter: { searches: 10, extraCost: '$6.99' },
-  professional: { searches: 30, extraCost: '$4.99' },
-  business: { searches: 75, extraCost: '$3.49' },
-  enterprise: { searches: 200, extraCost: '$2.49' },
+const PLAN_LIMITS: Record<string, { base: number; perProperty: number; searchesPerProperty: number; extraCost: string }> = {
+  trial: { base: 0, perProperty: 0, searchesPerProperty: 0, extraCost: 'N/A' },
+  starter: { base: 29, perProperty: 5, searchesPerProperty: 2, extraCost: '$6.99' },
+  professional: { base: 49, perProperty: 8, searchesPerProperty: 3, extraCost: '$4.99' },
+  business: { base: 99, perProperty: 10, searchesPerProperty: 5, extraCost: '$3.49' },
+  enterprise: { base: 299, perProperty: 10, searchesPerProperty: 10, extraCost: '$2.49' },
 };
 
 // GET /:workspaceId/usage
@@ -756,13 +756,26 @@ router.get('/:workspaceId/usage', requireWorkspace, async (req: Request, res: Re
     const billingCycleEnd = new Date(ws.billingCycleStart);
     billingCycleEnd.setMonth(billingCycleEnd.getMonth() + 1);
 
+    // Count active properties to calculate dynamic search limit
+    const [{ value: propertyCount }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(properties)
+      .where(and(eq(properties.workspaceId, req.workspaceId), eq(properties.active, true)));
+
+    const dynamicLimit = ws.plan === 'trial' ? 5 : Math.max(planInfo.searchesPerProperty * propertyCount, planInfo.searchesPerProperty);
+    const effectiveLimit = Math.max(ws.searchesLimit, dynamicLimit);
+
     res.json({
       data: {
         plan: ws.plan,
         searches_used: ws.searchesUsed,
-        searches_limit: ws.searchesLimit,
-        searches_remaining: Math.max(0, ws.searchesLimit - ws.searchesUsed),
+        searches_limit: effectiveLimit,
+        searches_remaining: Math.max(0, effectiveLimit - ws.searchesUsed),
         extra_search_cost: planInfo.extraCost,
+        base_price: planInfo.base,
+        per_property_price: planInfo.perProperty,
+        searches_per_property: planInfo.searchesPerProperty,
+        property_count: propertyCount,
         billing_cycle_start: ws.billingCycleStart,
         billing_cycle_end: billingCycleEnd.toISOString(),
       },

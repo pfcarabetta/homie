@@ -469,7 +469,7 @@ router.post('/business-accounts', async (req: Request, res: Response) => {
 
   const validPlans = ['trial', 'starter', 'professional', 'business', 'enterprise'];
   const selectedPlan = plan && validPlans.includes(plan) ? plan : 'starter';
-  const planSearchLimits: Record<string, number> = { trial: 5, starter: 10, professional: 30, business: 75, enterprise: 200 };
+  const planSearchLimits: Record<string, number> = { trial: 5, starter: 2, professional: 3, business: 5, enterprise: 10 }; // per-property defaults
 
   try {
     // Find user
@@ -632,7 +632,7 @@ router.patch('/business-accounts/:id', async (req: Request, res: Response) => {
   if (body.plan && validPlans.includes(body.plan)) {
     updates.plan = body.plan;
     // Auto-set limits based on plan
-    const planLimits: Record<string, number> = { trial: 5, starter: 10, professional: 30, business: 75, enterprise: 200 };
+    const planLimits: Record<string, number> = { trial: 5, starter: 2, professional: 3, business: 5, enterprise: 10 }; // per-property defaults
     updates.searchesLimit = planLimits[body.plan] ?? 10;
   }
   if (body.searches_limit != null) updates.searchesLimit = body.searches_limit;

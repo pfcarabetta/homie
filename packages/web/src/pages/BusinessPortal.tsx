@@ -500,6 +500,8 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
   const [usage, setUsage] = useState<{
     plan: string; searches_used: number; searches_limit: number;
     searches_remaining: number; extra_search_cost: string;
+    base_price: number; per_property_price: number;
+    searches_per_property: number; property_count: number;
     billing_cycle_start: string; billing_cycle_end: string;
   } | null>(null);
 
@@ -558,10 +560,14 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
           </div>
 
           {/* Usage details */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Plan</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{usage.plan}</div>
+            </div>
+            <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Properties</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{usage.property_count}</div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Included</div>
