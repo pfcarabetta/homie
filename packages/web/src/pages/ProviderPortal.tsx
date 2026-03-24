@@ -5,6 +5,13 @@ import { portalService, type DashboardStats, type IncomingJob, type HistoryJob, 
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
+function renderBold(text: string) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+  );
+}
+
 const TABS = ['dashboard', 'jobs', 'bookings', 'history', 'profile', 'settings'] as const;
 type Tab = typeof TABS[number];
 const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', jobs: 'Incoming', bookings: 'Bookings', history: 'History', profile: 'Profile', settings: 'Settings' };
@@ -112,7 +119,7 @@ function IncomingJobsTab() {
             <span style={{ fontWeight: 600, fontSize: 15, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.category ?? 'Job Request'}</span>
             <span style={{ fontSize: 12, color: '#9B9490' }}>{new Date(j.attempted_at).toLocaleDateString()} {new Date(j.attempted_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ({timeAgo(j.attempted_at)})</span>
           </div>
-          {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 6 }}>{j.diagnosis.summary}</div>}
+          {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 6 }}>{renderBold(j.diagnosis.summary)}</div>}
           <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#9B9490' }}>
             <span>{j.zip_code}</span>
             <span>{j.tier} tier</span>
@@ -195,7 +202,7 @@ function BookingsTab() {
               </div>
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 4 }}>{customerName}</div>
-            {b.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 6 }}>{b.diagnosis.summary.slice(0, 120)}{b.diagnosis.summary.length > 120 ? '...' : ''}</div>}
+            {b.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 6 }}>{renderBold(b.diagnosis.summary.slice(0, 120))}{b.diagnosis.summary.length > 120 ? '...' : ''}</div>}
             <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#9B9490', flexWrap: 'wrap' }}>
               {b.quotedPrice && <span>Quote: {b.quotedPrice}</span>}
               <span>{b.zipCode}</span>
@@ -272,7 +279,7 @@ function BookingsTab() {
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Description</div>
                     <div style={{ background: W, borderRadius: 10, padding: '12px 14px', fontSize: 14, color: '#6B6560', lineHeight: 1.6 }}>
-                      {b.diagnosis.summary}
+                      {renderBold(b.diagnosis.summary)}
                     </div>
                   </div>
                 )}
@@ -370,7 +377,7 @@ function HistoryTab() {
                   <span style={{ fontWeight: 600, fontSize: 14, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.category ?? 'Job'}</span>
                   <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
                 </div>
-                {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.4 }}>{j.diagnosis.summary}</div>}
+                {j.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.4 }}>{renderBold(j.diagnosis.summary)}</div>}
                 <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#9B9490', marginTop: 6 }}>
                   <span>{j.zip_code}</span>
                   <span>via {j.channel}</span>
