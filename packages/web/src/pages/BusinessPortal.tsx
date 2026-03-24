@@ -927,7 +927,16 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
 
             <div style={{ maxHeight: 300, overflow: 'auto' }}>
               {results.map(p => (
-                <div key={p.id} onClick={() => setSelectedProvider(p)}
+                <div key={p.id} onClick={() => {
+                  setSelectedProvider(p);
+                  // Auto-select categories from provider's existing categories
+                  if (p.categories && p.categories.length > 0) {
+                    const matched = VENDOR_CATEGORIES
+                      .filter(vc => p.categories!.some(pc => pc.toLowerCase() === vc.value.toLowerCase() || vc.label.toLowerCase() === pc.toLowerCase()))
+                      .map(vc => vc.value);
+                    setSelectedCats(matched);
+                  }
+                }}
                   style={{ padding: '12px 16px', borderRadius: 8, border: '1px solid #E0DAD4', marginBottom: 6, cursor: 'pointer', background: '#fff' }}
                   onMouseOver={e => (e.currentTarget.style.background = '#FAFAF8')}
                   onMouseOut={e => (e.currentTarget.style.background = '#fff')}>
