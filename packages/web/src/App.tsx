@@ -10,6 +10,7 @@ import ProviderLogin from '@/pages/ProviderLogin';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ResetPassword from '@/pages/ResetPassword';
+import ResetPasswordConfirm from '@/pages/ResetPasswordConfirm';
 import Account from '@/pages/Account';
 import BusinessPortal from '@/pages/BusinessPortal';
 import BusinessChat from '@/pages/BusinessChat';
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/reset-password/confirm" element={<ResetPasswordConfirm />} />
           <Route path="/account" element={<Account />} />
           <Route path="/business" element={<BusinessPortal />} />
           <Route path="/business/landing" element={<BusinessLanding />} />

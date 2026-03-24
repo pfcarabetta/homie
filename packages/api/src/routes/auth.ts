@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import logger from '../logger';
@@ -7,6 +8,7 @@ import { homeowners } from '../db/schema/homeowners';
 import { signToken } from '../middleware/auth';
 import { ApiResponse } from '../types/api';
 import { generateVerifyToken, sendVerificationEmail, verifyEmail } from '../services/email-verify';
+import { sendEmail } from '../services/notifications';
 
 const router = Router();
 
@@ -232,62 +234,103 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
 
 // ── POST /api/v1/auth/reset-password ─────────────────────────────────────────
 
-interface ResetPasswordBody {
-  email?: unknown;
-  current_password?: unknown;
-  new_password?: unknown;
-}
+const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
+// POST /api/v1/auth/reset-password — Request a password reset link
 router.post('/reset-password', async (req: Request, res: Response) => {
-  const body = req.body as ResetPasswordBody;
+  const { email } = req.body as { email?: unknown };
 
-  if (!body.email || typeof body.email !== 'string' || !EMAIL_RE.test(body.email)) {
-    const out: ApiResponse<null> = { data: null, error: 'email must be a valid email address', meta: {} };
-    res.status(400).json(out);
-    return;
-  }
-  if (!body.current_password || typeof body.current_password !== 'string') {
-    const out: ApiResponse<null> = { data: null, error: 'current_password is required', meta: {} };
-    res.status(400).json(out);
-    return;
-  }
-  if (!body.new_password || typeof body.new_password !== 'string' || body.new_password.length < 8) {
-    const out: ApiResponse<null> = { data: null, error: 'new_password must be at least 8 characters', meta: {} };
-    res.status(400).json(out);
+  if (!email || typeof email !== 'string' || !EMAIL_RE.test(email)) {
+    res.status(400).json({ data: null, error: 'email must be a valid email address', meta: {} });
     return;
   }
 
   try {
     const [homeowner] = await db
-      .select({ id: homeowners.id, passwordHash: homeowners.passwordHash })
+      .select({ id: homeowners.id, firstName: homeowners.firstName })
       .from(homeowners)
-      .where(eq(homeowners.email, body.email.toLowerCase().trim()))
+      .where(eq(homeowners.email, email.toLowerCase().trim()))
       .limit(1);
 
-    // Always return generic error to prevent email enumeration
+    // Always return success to prevent email enumeration
     if (!homeowner) {
-      const out: ApiResponse<null> = { data: null, error: 'Invalid email or password', meta: {} };
-      res.status(401).json(out);
+      res.json({ data: { sent: true }, error: null, meta: {} });
       return;
     }
 
-    // Verify current password before allowing reset
-    const valid = await bcrypt.compare(body.current_password, homeowner.passwordHash);
-    if (!valid) {
-      const out: ApiResponse<null> = { data: null, error: 'Invalid email or password', meta: {} };
-      res.status(401).json(out);
-      return;
-    }
+    // Generate a secure random token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
 
-    const passwordHash = await bcrypt.hash(body.new_password, BCRYPT_ROUNDS);
-    await db.update(homeowners).set({ passwordHash }).where(eq(homeowners.id, homeowner.id));
+    await db.update(homeowners).set({
+      passwordResetToken: token,
+      passwordResetExpiresAt: expiresAt,
+    } as Record<string, unknown>).where(eq(homeowners.id, homeowner.id));
 
-    const out: ApiResponse<{ reset: true }> = { data: { reset: true }, error: null, meta: {} };
-    res.json(out);
+    const resetLink = `${APP_URL}/reset-password/confirm?token=${token}`;
+    const name = homeowner.firstName || 'there';
+
+    void sendEmail(
+      email.toLowerCase().trim(),
+      'Reset your Homie password',
+      `<div style="font-family: 'DM Sans', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
+        <h1 style="font-family: serif; color: #E8632B; font-size: 28px; margin: 0 0 24px;">homie</h1>
+        <p style="font-size: 16px; color: #2D2926;">Hey ${name}!</p>
+        <p style="font-size: 15px; color: #6B6560; line-height: 1.6;">We received a request to reset your password. Click the button below to choose a new one:</p>
+        <a href="${resetLink}" style="display: inline-block; background: #E8632B; color: white; padding: 14px 32px; border-radius: 100px; text-decoration: none; font-weight: 600; font-size: 16px; margin: 24px 0;">Reset Password</a>
+        <p style="font-size: 13px; color: #9B9490; line-height: 1.6;">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
+      </div>`,
+    );
+
+    res.json({ data: { sent: true }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[POST /auth/reset-password]');
-    const out: ApiResponse<null> = { data: null, error: 'Password reset failed', meta: {} };
-    res.status(500).json(out);
+    res.status(500).json({ data: null, error: 'Password reset failed', meta: {} });
+  }
+});
+
+// POST /api/v1/auth/reset-password/confirm — Set new password with token
+router.post('/reset-password/confirm', async (req: Request, res: Response) => {
+  const { token, new_password } = req.body as { token?: unknown; new_password?: unknown };
+
+  if (!token || typeof token !== 'string') {
+    res.status(400).json({ data: null, error: 'Reset token is required', meta: {} });
+    return;
+  }
+  if (!new_password || typeof new_password !== 'string' || new_password.length < 8) {
+    res.status(400).json({ data: null, error: 'Password must be at least 8 characters', meta: {} });
+    return;
+  }
+
+  try {
+    const [homeowner] = await db
+      .select({ id: homeowners.id, passwordResetExpiresAt: homeowners.passwordResetExpiresAt })
+      .from(homeowners)
+      .where(eq(homeowners.passwordResetToken, token))
+      .limit(1);
+
+    if (!homeowner) {
+      res.status(400).json({ data: null, error: 'Invalid or expired reset link', meta: {} });
+      return;
+    }
+
+    if (!homeowner.passwordResetExpiresAt || homeowner.passwordResetExpiresAt < new Date()) {
+      res.status(400).json({ data: null, error: 'Reset link has expired. Please request a new one.', meta: {} });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(new_password, BCRYPT_ROUNDS);
+    await db.update(homeowners).set({
+      passwordHash,
+      passwordResetToken: null,
+      passwordResetExpiresAt: null,
+    } as Record<string, unknown>).where(eq(homeowners.id, homeowner.id));
+
+    res.json({ data: { reset: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /auth/reset-password/confirm]');
+    res.status(500).json({ data: null, error: 'Password reset failed', meta: {} });
   }
 });
 

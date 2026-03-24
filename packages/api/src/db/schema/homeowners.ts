@@ -12,6 +12,8 @@ export const homeowners = pgTable('homeowners', {
   stripeCustomerId: text('stripe_customer_id'),
   emailVerified: boolean('email_verified').notNull().default(false),
   emailVerifyToken: text('email_verify_token'),
+  passwordResetToken: text('password_reset_token'),
+  passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
