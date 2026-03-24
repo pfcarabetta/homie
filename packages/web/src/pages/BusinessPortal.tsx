@@ -1753,6 +1753,8 @@ function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
   const [bookingsList, setBookingsList] = useState<WorkspaceBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [addedToPreferred, setAddedToPreferred] = useState<Set<string>>(new Set());
+  const [addingProvider, setAddingProvider] = useState<string | null>(null);
 
   useEffect(() => {
     businessService.listBookings(workspaceId).then(res => {
@@ -1873,7 +1875,7 @@ function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
                   </div>
 
                   {/* Provider contact */}
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                     {b.providerPhone && (
                       <a href={`tel:${b.providerPhone}`} style={{
                         flex: 1, padding: '10px 0', borderRadius: 100, border: 'none',
@@ -1889,6 +1891,38 @@ function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
                       }}>✉️ Email</a>
                     )}
                   </div>
+
+                  {/* Add to preferred vendors */}
+                  {addedToPreferred.has(b.providerId) ? (
+                    <div style={{
+                      padding: '10px 0', borderRadius: 100, textAlign: 'center',
+                      background: `${G}10`, border: `1px solid ${G}30`,
+                      fontSize: 13, fontWeight: 600, color: G,
+                    }}>✅ Added to preferred vendors</div>
+                  ) : (
+                    <button onClick={async () => {
+                      setAddingProvider(b.providerId);
+                      try {
+                        const categories = b.diagnosis?.category ? [b.diagnosis.category] : undefined;
+                        await businessService.addVendor(workspaceId, {
+                          provider_id: b.providerId,
+                          property_id: b.propertyId,
+                          categories,
+                          priority: 1,
+                        });
+                        setAddedToPreferred(prev => new Set(prev).add(b.providerId));
+                      } catch { /* ignore if already added */
+                        setAddedToPreferred(prev => new Set(prev).add(b.providerId));
+                      }
+                      setAddingProvider(null);
+                    }} disabled={addingProvider === b.providerId} style={{
+                      width: '100%', padding: '10px 0', borderRadius: 100,
+                      border: `1px solid ${G}`, background: 'white', color: G,
+                      fontSize: 13, fontWeight: 600, cursor: addingProvider === b.providerId ? 'default' : 'pointer',
+                      opacity: addingProvider === b.providerId ? 0.6 : 1,
+                      transition: 'all 0.2s',
+                    }}>{addingProvider === b.providerId ? 'Adding...' : `⭐ Add ${b.providerName.split(' ')[0]} to Preferred Vendors`}</button>
+                  )}
                 </div>
               )}
             </div>
