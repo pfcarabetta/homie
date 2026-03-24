@@ -652,15 +652,16 @@ export default function GetQuotes() {
       return;
     }
 
-    // Check if returning from login with pending quote
+    // Check if returning from login with pending quote — resume at tier selection
     const pending = sessionStorage.getItem('homie_pending_quote');
     if (pending && authService.isAuthenticated()) {
       sessionStorage.removeItem('homie_pending_quote');
       try {
         const saved = JSON.parse(pending) as QuoteData;
         setData(saved);
-        addAssistant("Welcome back! Let me launch your quote search now \uD83D\uDE80");
-        setTimeout(() => void launchOutreach(saved.tier ?? 'priority', saved), 500);
+        addAssistant("Welcome back! Now let's set up payment to launch your search.");
+        setPhase('tier');
+        scrollDown();
         return;
       } catch { /* ignore bad data */ }
     }
