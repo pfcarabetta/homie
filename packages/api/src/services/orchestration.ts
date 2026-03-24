@@ -548,41 +548,43 @@ export async function sendBookingNotifications(
       const emailHtml = `
       <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
         <div style="background:#2D2926;padding:20px 32px;text-align:center">
-          <span style="color:#E8632B;font-size:24px;font-weight:700;font-family:Georgia,serif">homie</span>
-          <span style="background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px;vertical-align:super">PRO</span>
+          <span style="color:#E8632B;font-size:24px;font-weight:bold;font-family:Georgia,serif">homie</span>
+          <span style="background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-size:10px;font-weight:bold;padding:2px 8px;border-radius:4px;margin-left:8px;vertical-align:super">PRO</span>
         </div>
         <div style="background:white;padding:32px">
-          <div style="width:56px;height:56px;border-radius:50%;background:rgba(27,158,119,0.12);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
-            <span style="color:#1B9E77;font-size:28px">&#10003;</span>
-          </div>
-          <h1 style="color:#2D2926;font-size:22px;font-weight:700;text-align:center;margin:0 0 8px">You've been booked!</h1>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-bottom:16px">
+            <div style="width:56px;height:56px;border-radius:50%;background:rgba(27,158,119,0.12);text-align:center;line-height:56px;margin:0 auto">
+              <span style="color:#1B9E77;font-size:28px;vertical-align:middle">&#10003;</span>
+            </div>
+          </td></tr></table>
+          <h1 style="color:#2D2926;font-size:22px;font-weight:bold;text-align:center;margin:0 0 8px">You've been booked!</h1>
           <p style="color:#6B6560;font-size:15px;text-align:center;margin:0 0 24px">A homeowner has selected you for their ${category} job.</p>
 
           <div style="background:#F9F5F2;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
-            <div style="font-size:14px;font-weight:600;color:#2D2926;margin-bottom:8px">Job Details</div>
+            <div style="font-size:14px;font-weight:bold;color:#2D2926;margin-bottom:8px">Job Details</div>
             <div style="font-size:14px;color:#6B6560;line-height:1.6">${summary}</div>
-            <div style="display:flex;gap:16px;margin-top:12px;font-size:13px;color:#9B9490;flex-wrap:wrap">
-              <span>Zip: ${job.zipCode}</span>
-              <span>Category: ${category}</span>
-              ${serviceAddress ? `<span>Address: ${serviceAddress}</span>` : ''}
+            <div style="margin-top:12px;font-size:13px;color:#9B9490">
+              <span>Zip: <b>${job.zipCode}</b></span> &nbsp;&middot;&nbsp;
+              <span>Category: <b>${category}</b></span>
+              ${serviceAddress ? ` &nbsp;&middot;&nbsp; <span>Address: <b>${serviceAddress}</b></span>` : ''}
             </div>
           </div>
 
           <div style="background:#F9F5F2;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
-            <div style="font-size:14px;font-weight:600;color:#2D2926;margin-bottom:4px">Homeowner Contact</div>
-            <div style="font-size:14px;color:#6B6560">${homeowner.firstName ? homeowner.firstName + (homeowner.lastName ? ' ' + homeowner.lastName : '') : 'Homeowner'}</div>
-            ${homeowner.phone ? `<a href="tel:${homeowner.phone}" style="font-size:14px;color:#E8632B;text-decoration:none;font-weight:600">${homeowner.phone}</a>` : ''}
+            <div style="font-size:14px;font-weight:bold;color:#2D2926;margin-bottom:4px">Homeowner Contact</div>
+            <div style="font-size:14px;color:#6B6560"><b>${homeowner.firstName ? homeowner.firstName + (homeowner.lastName ? ' ' + homeowner.lastName : '') : 'Homeowner'}</b></div>
+            ${homeowner.phone ? `<div style="margin-top:4px"><a href="tel:${homeowner.phone}" style="font-size:14px;color:#E8632B;text-decoration:none;font-weight:bold">${homeowner.phone}</a></div>` : ''}
             ${homeowner.email ? `<div style="font-size:13px;color:#6B6560;margin-top:4px">${homeowner.email}</div>` : ''}
             ${serviceAddress ? `<div style="font-size:13px;color:#6B6560;margin-top:4px">${serviceAddress}</div>` : ''}
           </div>
 
           <div style="background:#FFF7ED;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(232,99,43,0.1)">
-            <div style="font-size:14px;font-weight:600;color:#C2410C;margin-bottom:4px">Next Step</div>
-            <div style="font-size:14px;color:#6B6560;line-height:1.5">Please contact the homeowner directly to confirm the appointment details, including date, time, and scope of work.</div>
+            <div style="font-size:14px;font-weight:bold;color:#C2410C;margin-bottom:4px">Next Step</div>
+            <div style="font-size:14px;color:#6B6560;line-height:1.5">Please contact the homeowner directly to confirm the appointment details, including date, time, and scope of work. <b>All payment is between you and the homeowner.</b></div>
           </div>
 
           <div style="text-align:center">
-            <a href="${portalLink}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View in Pro Portal</a>
+            <a href="${portalLink}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:bold;font-size:16px">View in Pro Portal</a>
           </div>
         </div>
         <div style="padding:20px 32px;text-align:center">
