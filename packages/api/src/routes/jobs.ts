@@ -144,8 +144,7 @@ router.post('/', async (req: Request, res: Response) => {
             .select({ value: sql<number>`count(*)::int` })
             .from(properties)
             .where(and(eq(properties.workspaceId, body.workspace_id), eq(properties.active, true)));
-          const dynamicLimit = Math.max(perProp * propCount, perProp);
-          const effectiveLimit = Math.max(ws.searchesLimit, dynamicLimit);
+          const effectiveLimit = Math.max(perProp * propCount, perProp);
 
           if (ws.searchesUsed >= effectiveLimit) {
             res.status(403).json({ data: null, error: `Outreach credit limit reached (${effectiveLimit} this cycle). Add more properties or upgrade your plan.`, meta: {} });

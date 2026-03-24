@@ -762,8 +762,10 @@ router.get('/:workspaceId/usage', requireWorkspace, async (req: Request, res: Re
       .from(properties)
       .where(and(eq(properties.workspaceId, req.workspaceId), eq(properties.active, true)));
 
-    const dynamicLimit = ws.plan === 'trial' ? 5 : Math.max(planInfo.searchesPerProperty * propertyCount, planInfo.searchesPerProperty);
-    const effectiveLimit = Math.max(ws.searchesLimit, dynamicLimit);
+    // Trial uses fixed DB limit; all other plans calculate dynamically from property count
+    const effectiveLimit = ws.plan === 'trial'
+      ? ws.searchesLimit
+      : Math.max(planInfo.searchesPerProperty * propertyCount, planInfo.searchesPerProperty);
 
     res.json({
       data: {
