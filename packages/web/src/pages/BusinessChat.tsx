@@ -252,6 +252,10 @@ export default function BusinessChat() {
   function getPropertyContext(): string {
     if (!selectedProperty) return '';
     const p = selectedProperty;
+    // Strip access codes, door codes, gate codes from notes before sending to AI
+    const safeNotes = p.notes
+      ? p.notes.replace(/\b(door|gate|lock|access|entry|wifi|password|code|pin)\s*(code|number|#|:)?\s*[:\-]?\s*\S+/gi, '[access info redacted]').trim()
+      : null;
     const parts = [
       `Property: ${p.name}`,
       p.address && `Address: ${p.address}${p.city ? `, ${p.city}` : ''}${p.state ? `, ${p.state}` : ''} ${p.zipCode || ''}`,
@@ -261,7 +265,7 @@ export default function BusinessChat() {
       p.bathrooms != null && +p.bathrooms > 0 && `Bathrooms: ${p.bathrooms}`,
       p.sqft != null && p.sqft > 0 && `Square footage: ${p.sqft.toLocaleString()} sqft`,
       p.beds && p.beds.length > 0 && `Beds: ${p.beds.map(b => `${b.count}× ${b.type}`).join(', ')}`,
-      p.notes && `Notes: ${p.notes}`,
+      safeNotes && `Notes: ${safeNotes}`,
     ].filter(Boolean);
     return parts.join('\n');
   }
