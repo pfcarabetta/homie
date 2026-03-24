@@ -542,6 +542,10 @@ export default function BusinessChat() {
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => navigate('/business')} style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
+            fontSize: 18, color: '#9B9490', display: 'flex', alignItems: 'center',
+          }} title="Back to portal">←</button>
           <span onClick={() => navigate('/business')} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'baseline' }}>
             <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>homie</span>
             <span style={{
@@ -557,7 +561,38 @@ export default function BusinessChat() {
             </span>
           )}
         </div>
-        <AvatarDropdown />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => {
+            setStep('property');
+            setSelectedProperty(null);
+            setCategory(null);
+            setMessages([]);
+            setStreamText('');
+            setStreaming(false);
+            setQ1Answer('');
+            setAiDiagnosis('');
+            setInputVal('');
+            setReadyToDispatch(false);
+            setExchangeCount(0);
+            setSuggestions([]);
+            setShowFreeInput(false);
+            setShowQ1Input(false);
+            setQ1InputVal('');
+            setBudget('flexible');
+            setJobId(null);
+            setOutreachStatus(null);
+            setResponses([]);
+            setDispatching(false);
+            setSelectedResponse(null);
+            setBookedName(null);
+            sessionIdRef.current = `b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          }} style={{
+            background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
+            padding: '5px 12px', fontSize: 13, fontWeight: 600, color: '#6B6560',
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}>+ New</button>
+          <AvatarDropdown />
+        </div>
       </nav>
 
       {/* Chat area */}
