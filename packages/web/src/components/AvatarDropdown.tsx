@@ -64,21 +64,23 @@ export default function AvatarDropdown() {
             <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{homeowner.membership_tier} plan</div>
           </div>
           {hasWorkspaces && (
-            <button onClick={() => { setOpen(false); navigate('/business'); }} style={{
-              width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-              fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
-              fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}
-              onMouseEnter={e => e.currentTarget.style.background = '#F0FDF4'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}
-            >
-              <span style={{ fontFamily: "'Fraunces', serif", fontSize: 14, fontWeight: 700, color: '#E8632B' }}>homie</span>
-              <span style={{
-                fontSize: 8, fontWeight: 800, color: '#fff', background: G,
-                padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.08em', textTransform: 'uppercase',
-              }}>Business</span>
-            </button>
+            <div style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+              <button onClick={() => { setOpen(false); navigate('/business'); }} style={{
+                width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
+                fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = '#F0FDF4'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <span style={{ fontFamily: "'Fraunces', serif", fontSize: 14, fontWeight: 700, color: '#E8632B' }}>homie</span>
+                <span style={{
+                  fontSize: 8, fontWeight: 800, color: '#fff', background: G,
+                  padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.08em', textTransform: 'uppercase',
+                }}>Business</span>
+              </button>
+            </div>
           )}
           <button onClick={() => { setOpen(false); navigate('/account'); }} style={{
             width: '100%', padding: '12px 16px', background: 'none', border: 'none',
