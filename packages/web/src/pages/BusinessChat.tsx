@@ -562,6 +562,21 @@ export default function BusinessChat() {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {(() => {
+            const hour = new Date().getHours();
+            const isBusinessHours = hour >= 8 && hour < 18;
+            return isBusinessHours ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: G, boxShadow: `0 0 0 3px ${G}25` }} />
+                <span style={{ fontSize: 13, color: G, fontWeight: 600 }}>Online</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'default' }} title="Some providers may not be reachable outside business hours. Responses may take longer.">
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF9F27', boxShadow: '0 0 0 3px rgba(239,159,39,0.15)' }} />
+                <span style={{ fontSize: 12, color: '#EF9F27', fontWeight: 600 }}>After hours</span>
+              </div>
+            );
+          })()}
           <button onClick={() => {
             setStep('property');
             setSelectedProperty(null);
@@ -594,6 +609,21 @@ export default function BusinessChat() {
           <AvatarDropdown />
         </div>
       </nav>
+
+      {/* After hours notice */}
+      {(() => {
+        const hour = new Date().getHours();
+        return (hour < 8 || hour >= 18) ? (
+          <div style={{
+            background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
+            padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center',
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>🌙</span>
+            <span>Some providers may not be reachable outside business hours (8 AM – 6 PM). Responses may take longer.</span>
+          </div>
+        ) : null;
+      })()}
 
       {/* Chat area */}
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
