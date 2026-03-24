@@ -533,57 +533,74 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
         ))}
       </div>
 
-      {/* Search credits / billing */}
+      {/* Outreach credits / billing */}
       {usage && (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24, marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: 0 }}>Outreach Credits</h4>
             <span style={{ fontSize: 12, color: '#9B9490' }}>
               Resets {new Date(usage.billing_cycle_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
           </div>
 
-          {/* Progress bar */}
-          <div style={{ marginBottom: 16 }}>
+          {/* Credit pool progress */}
+          <div style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-              <span style={{ fontSize: 28, fontWeight: 700, color: D, fontFamily: "'Fraunces', serif" }}>
-                {usage.searches_remaining}
-              </span>
-              <span style={{ fontSize: 13, color: '#9B9490' }}>of {usage.searches_limit} remaining</span>
+              <div>
+                <span style={{ fontSize: 32, fontWeight: 700, color: D, fontFamily: "'Fraunces', serif" }}>{usage.searches_remaining}</span>
+                <span style={{ fontSize: 14, color: '#9B9490', marginLeft: 8 }}>credits remaining</span>
+              </div>
+              <span style={{ fontSize: 13, color: '#9B9490' }}>{usage.searches_used} of {usage.searches_limit} used</span>
             </div>
-            <div style={{ height: 8, borderRadius: 4, background: '#E0DAD4' }}>
-              <div style={{ height: '100%', borderRadius: 4, background: barColor, width: `${usagePct}%`, transition: 'width 0.5s ease' }} />
-            </div>
-            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>
-              {usage.searches_used} search{usage.searches_used !== 1 ? 'es' : ''} used this cycle
+            <div style={{ height: 10, borderRadius: 5, background: '#E0DAD4' }}>
+              <div style={{ height: '100%', borderRadius: 5, background: barColor, width: `${usagePct}%`, transition: 'width 0.5s ease' }} />
             </div>
           </div>
 
-          {/* Usage details */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+          {/* How credits are calculated */}
+          <div style={{ background: W, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: D, marginBottom: 8 }}>Your credit pool</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#6B6560' }}>
+              <span style={{ fontWeight: 700, color: D }}>{usage.property_count}</span>
+              <span>properties</span>
+              <span style={{ color: '#9B9490' }}>×</span>
+              <span style={{ fontWeight: 700, color: D }}>{usage.searches_per_property}</span>
+              <span>credits each</span>
+              <span style={{ color: '#9B9490' }}>=</span>
+              <span style={{ fontWeight: 700, color: O, fontSize: 16 }}>{usage.searches_limit} credits/mo</span>
+            </div>
+            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>Credits are shared across your entire portfolio — use them on any property.</div>
+          </div>
+
+          {/* Plan & pricing details */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Plan</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{usage.plan}</div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Properties</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{usage.property_count}</div>
+              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Base</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>${usage.base_price}/mo</div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Included</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{usage.searches_limit}/mo</div>
+              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Per property</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>${usage.per_property_price}/mo</div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Extra search</div>
+              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Est. monthly</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: O }}>${usage.base_price + usage.per_property_price * usage.property_count}/mo</div>
+            </div>
+            <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Extra credit</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: O }}>{usage.extra_search_cost}</div>
             </div>
           </div>
 
           {usagePct >= 90 && (
-            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
+            <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
               {usage.searches_remaining === 0
-                ? 'You\'ve used all your outreach credits for this cycle. Upgrade your plan for more.'
-                : `Only ${usage.searches_remaining} credit${usage.searches_remaining !== 1 ? 's' : ''} remaining. Consider upgrading.`}
+                ? 'You\'ve used all your outreach credits this cycle. Add more properties or upgrade your plan.'
+                : `Only ${usage.searches_remaining} credit${usage.searches_remaining !== 1 ? 's' : ''} remaining. Add properties to increase your pool.`}
             </div>
           )}
         </div>
