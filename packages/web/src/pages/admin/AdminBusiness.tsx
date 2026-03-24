@@ -271,6 +271,14 @@ function DetailView({ detail, onChangePlan, onResetCredits, onAddCredits, action
   const [newPlan, setNewPlan] = useState(ws.plan);
   const [bonusCredits, setBonusCredits] = useState(5);
 
+  // Calculate dynamic credit limit from property count
+  const perPropCredits: Record<string, number> = { trial: 0, starter: 2, professional: 3, business: 5, enterprise: 10 };
+  const searchesPerProp = perPropCredits[ws.plan] ?? 2;
+  const activeProps = props.filter(p => p.active).length;
+  const dynamicLimit = ws.plan === 'trial' ? ws.searchesLimit : Math.max(searchesPerProp * activeProps, searchesPerProp);
+  const remaining = Math.max(0, dynamicLimit - ws.searchesUsed);
+  const usagePct = dynamicLimit > 0 ? Math.round((ws.searchesUsed / dynamicLimit) * 100) : 0;
+
   return (
     <div className="px-6 py-5 space-y-5">
       {actionMsg && (
@@ -294,14 +302,15 @@ function DetailView({ detail, onChangePlan, onResetCredits, onAddCredits, action
       {/* Plan & Credits */}
       <div>
         <h3 className="text-sm font-bold text-dark mb-3">Plan & Credits</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div className="bg-white rounded-lg border border-dark/5 px-3 py-2">
             <div className="text-[10px] font-semibold text-dark/40 uppercase tracking-wide">Current Plan</div>
             <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize mt-1 inline-block ${PLAN_COLORS[ws.plan] ?? 'bg-dark/5 text-dark/50'}`}>{ws.plan}</span>
           </div>
-          <InfoCard label="Credits Used" value={`${ws.searchesUsed} / ${ws.searchesLimit}`} />
-          <InfoCard label="Remaining" value={String(Math.max(0, ws.searchesLimit - ws.searchesUsed))} />
-          <InfoCard label="Usage" value={`${Math.round((ws.searchesUsed / ws.searchesLimit) * 100)}%`} />
+          <InfoCard label="Properties" value={`${activeProps} active`} />
+          <InfoCard label="Credits/Property" value={String(searchesPerProp)} />
+          <InfoCard label="Credit Pool" value={`${ws.searchesUsed} / ${dynamicLimit} used`} />
+          <InfoCard label="Remaining" value={String(remaining)} />
         </div>
 
         {/* Actions */}
