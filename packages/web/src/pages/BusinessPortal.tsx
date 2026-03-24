@@ -1253,6 +1253,9 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
           } else if (j.responseCount > 0) {
             responseStatus = `${j.responseCount} provider response${j.responseCount > 1 ? 's' : ''}`;
             responseColor = G;
+          } else if (j.status === 'expired' && j.responseCount === 0) {
+            responseStatus = 'No responses — 1 credit refunded';
+            responseColor = '#9B9490';
           } else {
             responseStatus = 'No responses';
           }
@@ -1303,7 +1306,7 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
                   )}
 
                   {/* Status Banner */}
-                  <div style={{ background: isActive ? '#FFF7ED' : sc.bg, borderRadius: 10, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ background: isActive ? '#FFF7ED' : sc.bg, borderRadius: 10, padding: '12px 14px', marginBottom: j.status === 'expired' && j.responseCount === 0 ? 8 : 14, display: 'flex', alignItems: 'center', gap: 10 }}>
                     {isActive && <div style={{ width: 8, height: 8, borderRadius: '50%', background: O, animation: 'pulse 1.2s infinite' }} />}
                     {!isActive && <span style={{ fontSize: 16 }}>{sm.icon}</span>}
                     <div>
@@ -1311,6 +1314,12 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
                       <div style={{ fontSize: 12, color: '#6B6560' }}>{sm.desc}</div>
                     </div>
                   </div>
+                  {j.status === 'expired' && j.responseCount === 0 && (
+                    <div style={{ background: '#EFF6FF', borderRadius: 8, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(37,99,235,0.1)' }}>
+                      <span style={{ fontSize: 14 }}>💰</span>
+                      <span style={{ fontSize: 13, color: '#2563EB', fontWeight: 500 }}>1 outreach credit was refunded — no charge for dispatches with zero responses.</span>
+                    </div>
+                  )}
 
                   {/* Details grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
