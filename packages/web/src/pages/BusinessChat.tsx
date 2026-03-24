@@ -670,7 +670,7 @@ export default function BusinessChat() {
           {/* Step: Category selection */}
           {step === 'category' && (
             <div>
-              <AssistantMsg text={`${selectedProperty?.name} selected. What do you need?`} animate />
+              <AssistantMsg text={`How can Homie help at ${selectedProperty?.name}?`} animate />
 
               <div style={{ marginLeft: 42, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6 }}>REPAIR</div>
