@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { adminService } from '@/services/admin-api';
 
 interface Homeowner {
@@ -212,7 +213,7 @@ function HomeownerDetailView({ detail }: { detail: HomeownerDetail }) {
               <tbody>
                 {jobRows.map(j => (
                   <tr key={j.id} className="border-b border-dark/3">
-                    <td className="px-3 py-2 text-dark/60 font-mono">{j.id.slice(0, 8)}</td>
+                    <td className="px-3 py-2 font-mono"><Link to={`/admin/jobs?q=${j.id.slice(0, 8)}`} className="text-orange-500 hover:underline">{j.id.slice(0, 8)}</Link></td>
                     <td className="px-3 py-2 text-dark capitalize">{j.diagnosis?.category?.replace(/_/g, ' ') ?? '-'}</td>
                     <td className="px-3 py-2">
                       <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${STATUS_COLORS[j.status] ?? 'bg-dark/5 text-dark/50'}`}>{j.status}</span>
@@ -240,7 +241,7 @@ function HomeownerDetailView({ detail }: { detail: HomeownerDetail }) {
               <div key={b.id} className="bg-white rounded-lg border border-dark/5 p-3 flex justify-between items-center">
                 <div>
                   <span className="text-sm font-semibold text-dark">{b.providerName ?? 'Unknown'}</span>
-                  <span className="text-xs text-dark/40 ml-2">Job {b.jobId.slice(0, 8)}</span>
+                  <Link to={`/admin/jobs?q=${b.jobId.slice(0, 8)}`} className="text-xs text-orange-500 hover:underline ml-2">Job {b.jobId.slice(0, 8)}</Link>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${STATUS_COLORS[b.status] ?? 'bg-dark/5 text-dark/50'}`}>{b.status}</span>

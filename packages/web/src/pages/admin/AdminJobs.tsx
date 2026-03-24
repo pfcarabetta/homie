@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { adminService } from '@/services/admin-api';
 
 function renderBold(text: string) {
@@ -69,6 +70,7 @@ const PAGE_SIZE = 25;
 const STATUSES = ['all', 'open', 'dispatching', 'collecting', 'completed', 'expired', 'refunded'];
 
 export default function AdminJobs() {
+  const [searchParams] = useSearchParams();
   const [rows, setRows] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -78,7 +80,7 @@ export default function AdminJobs() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('q') ?? '');
 
   useEffect(() => {
     setLoading(true);
