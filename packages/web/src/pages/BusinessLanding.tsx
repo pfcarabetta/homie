@@ -162,6 +162,7 @@ function Features() {
     { title: "PMS import", desc: "Connect Guesty, Hostaway, or AppFolio and import your properties in one click. No double entry. Weekly sync keeps everything current.", color: COLORS.green },
     { title: "16 job categories", desc: "Plumbing, HVAC, turnover cleaning, hot tub service, supplies restocking, concierge, home inspections, trash valet, and more. If your property needs it, Homie handles it.", color: COLORS.orange },
     { title: "Cost tracking", desc: "See total spend by property, category, and vendor. Know which properties are money pits and which vendors are over-quoting. Export to CSV for your accountant.", color: COLORS.green },
+    { title: "Human outreach manager", desc: "On Professional and Business plans, a dedicated human outreach manager works alongside the AI engine to follow up with providers, negotiate quotes, and ensure you get the best response rate.", color: COLORS.orange },
   ];
   return (
     <section id="features" style={{ background: COLORS.warm, padding: "96px 24px" }}>
@@ -233,8 +234,8 @@ function Pricing() {
   const [annual, setAnnual] = useState(false);
   const tiers = [
     { name: "Starter", price: 79, annual: 67, properties: "Up to 10", members: "1 user", searches: "10 / month", extra: "$6.99", features: ["PMS import", "Preferred vendors (5)", "Basic cost tracking"], popular: false },
-    { name: "Professional", price: 199, annual: 169, properties: "Up to 30", members: "5 team members", searches: "30 / month", extra: "$4.99", features: ["PMS import + weekly sync", "Unlimited preferred vendors", "B2B job categories", "Full cost reporting", "Vendor scorecards"], popular: true },
-    { name: "Business", price: 499, annual: 424, properties: "Up to 100", members: "15 team members", searches: "75 / month", extra: "$3.49", features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Vendor scorecards", "All Professional features"], popular: false },
+    { name: "Professional", price: 199, annual: 169, properties: "Up to 30", members: "5 team members", searches: "30 / month", extra: "$4.99", features: ["PMS import + weekly sync", "Unlimited preferred vendors", "B2B job categories", "Full cost reporting", "Vendor scorecards", "Human outreach manager"], popular: true },
+    { name: "Business", price: 499, annual: 424, properties: "Up to 100", members: "15 team members", searches: "75 / month", extra: "$3.49", features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Vendor scorecards", "Human outreach manager", "All Professional features"], popular: false },
   ];
   return (
     <section id="pricing" style={{ background: COLORS.warm, padding: "96px 24px" }}>
