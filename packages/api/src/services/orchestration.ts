@@ -508,7 +508,7 @@ export async function sendBookingNotifications(
 
   if (!homeowner || !provider) return;
 
-  const category = (job.diagnosis as DiagnosisPayload | null)?.category ?? 'home maintenance';
+  const category = ((job.diagnosis as DiagnosisPayload | null)?.category ?? 'home maintenance').replace(/_/g, ' ');
 
   // SMS confirmation to homeowner
   if (homeowner.phone) {
