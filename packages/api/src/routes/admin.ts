@@ -655,4 +655,100 @@ router.patch('/business-accounts/:id', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/admin/jobs/:jobId/quotes — Manually add a provider quote
+router.post('/jobs/:jobId/quotes', async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+  const body = req.body as {
+    provider_name?: string;
+    provider_phone?: string;
+    provider_email?: string;
+    quoted_price?: string;
+    availability?: string;
+    message?: string;
+  };
+
+  if (!body.provider_name) {
+    res.status(400).json({ data: null, error: 'provider_name is required', meta: {} });
+    return;
+  }
+
+  try {
+    // Check job exists
+    const [job] = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Job not found', meta: {} });
+      return;
+    }
+
+    // Find or create provider
+    let providerId: string;
+    if (body.provider_phone || body.provider_email) {
+      const conditions = [];
+      if (body.provider_phone) conditions.push(eq(providers.phone, body.provider_phone));
+      if (body.provider_email) conditions.push(eq(providers.email, body.provider_email.toLowerCase()));
+      const [existing] = await db
+        .select({ id: providers.id })
+        .from(providers)
+        .where(conditions.length > 1 ? or(...conditions) : conditions[0])
+        .limit(1);
+
+      if (existing) {
+        providerId = existing.id;
+      } else {
+        const [newProvider] = await db
+          .insert(providers)
+          .values({
+            name: body.provider_name.trim(),
+            phone: body.provider_phone ?? null,
+            email: body.provider_email?.toLowerCase() ?? null,
+          })
+          .returning();
+        providerId = newProvider.id;
+      }
+    } else {
+      // No phone or email — create new provider
+      const [newProvider] = await db
+        .insert(providers)
+        .values({ name: body.provider_name.trim() })
+        .returning();
+      providerId = newProvider.id;
+    }
+
+    // Create the provider response
+    const [response] = await db
+      .insert(providerResponses)
+      .values({
+        jobId,
+        providerId,
+        channel: 'manual',
+        quotedPrice: body.quoted_price ?? null,
+        availability: body.availability ?? null,
+        message: body.message ?? null,
+      })
+      .returning();
+
+    // Update job status to collecting if still dispatching
+    await db.update(jobs)
+      .set({ status: 'collecting' } as Record<string, unknown>)
+      .where(and(eq(jobs.id, jobId), eq(jobs.status, 'dispatching')));
+
+    res.status(201).json({
+      data: {
+        id: response.id,
+        providerId,
+        providerName: body.provider_name,
+        quotedPrice: body.quoted_price,
+        availability: body.availability,
+        message: body.message,
+        channel: 'manual',
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/jobs/:jobId/quotes]');
+    res.status(500).json({ data: null, error: 'Failed to add quote', meta: {} });
+  }
+});
+
 export default router;

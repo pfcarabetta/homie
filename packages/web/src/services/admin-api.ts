@@ -236,6 +236,20 @@ export const adminService = {
     });
   },
 
+  async addManualQuote(jobId: string, data: {
+    provider_name: string; provider_phone?: string; provider_email?: string;
+    quoted_price?: string; availability?: string; message?: string;
+  }) {
+    return fetchAdmin<{
+      id: string; providerId: string; providerName: string;
+      quotedPrice: string | null; availability: string | null;
+      message: string | null; channel: string;
+    }>(`/api/v1/admin/jobs/${jobId}/quotes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   async createBusinessAccount(data: { email: string; workspace_name: string; plan?: string }) {
     return fetchAdmin<{
       workspace: { id: string; name: string; slug: string; plan: string };

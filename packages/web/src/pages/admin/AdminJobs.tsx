@@ -193,7 +193,54 @@ export default function AdminJobs() {
 }
 
 function JobDetailView({ detail }: { detail: JobDetail }) {
-  const { job, outreach_attempts, provider_responses, bookings } = detail;
+  const { job, outreach_attempts, bookings } = detail;
+  const [providerResponses, setProviderResponses] = useState(detail.provider_responses);
+  const [showAddQuote, setShowAddQuote] = useState(false);
+
+  // Add quote form state
+  const [qName, setQName] = useState('');
+  const [qPhone, setQPhone] = useState('');
+  const [qEmail, setQEmail] = useState('');
+  const [qPrice, setQPrice] = useState('');
+  const [qAvail, setQAvail] = useState('');
+  const [qMsg, setQMsg] = useState('');
+  const [qSaving, setQSaving] = useState(false);
+  const [qError, setQError] = useState('');
+
+  async function handleAddQuote() {
+    if (!qName.trim()) { setQError('Provider name is required'); return; }
+    setQSaving(true);
+    setQError('');
+    try {
+      const res = await adminService.addManualQuote(job.id, {
+        provider_name: qName.trim(),
+        provider_phone: qPhone.trim() || undefined,
+        provider_email: qEmail.trim() || undefined,
+        quoted_price: qPrice.trim() || undefined,
+        availability: qAvail.trim() || undefined,
+        message: qMsg.trim() || undefined,
+      });
+      if (res.data) {
+        setProviderResponses(prev => [...prev, {
+          id: res.data!.id,
+          providerName: res.data!.providerName,
+          providerPhone: qPhone.trim() || null,
+          channel: 'manual',
+          quotedPrice: res.data!.quotedPrice,
+          availability: res.data!.availability,
+          message: res.data!.message,
+          createdAt: new Date().toISOString(),
+        }]);
+        setShowAddQuote(false);
+        setQName(''); setQPhone(''); setQEmail(''); setQPrice(''); setQAvail(''); setQMsg('');
+      }
+    } catch (err: unknown) {
+      setQError(err instanceof Error ? err.message : 'Failed to add quote');
+    } finally {
+      setQSaving(false);
+    }
+  }
+
   return (
     <div className="px-6 py-5 space-y-5">
       {/* Job Info */}
@@ -267,17 +314,21 @@ function JobDetailView({ detail }: { detail: JobDetail }) {
 
       {/* Provider Responses */}
       <div>
-        <h3 className="text-sm font-bold text-dark mb-3">Provider Quotes ({provider_responses.length})</h3>
-        {provider_responses.length === 0 ? (
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-bold text-dark">Provider Quotes ({providerResponses.length})</h3>
+          <button onClick={() => setShowAddQuote(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors">+ Add Quote</button>
+        </div>
+        {providerResponses.length === 0 ? (
           <div className="text-sm text-dark/40">No quotes received</div>
         ) : (
           <div className="space-y-2">
-            {provider_responses.map(r => (
+            {providerResponses.map(r => (
               <div key={r.id} className="bg-white rounded-lg border border-dark/5 p-3">
                 <div className="flex justify-between items-center mb-2">
                   <div>
                     <span className="text-sm font-semibold text-dark">{r.providerName ?? 'Unknown'}</span>
                     {r.providerPhone && <span className="text-xs text-dark/40 ml-2">{r.providerPhone}</span>}
+                    {r.channel === 'manual' && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 uppercase">Manual</span>}
                   </div>
                   {r.quotedPrice && <span className="text-lg font-bold text-orange-500">{r.quotedPrice}</span>}
                 </div>
@@ -289,6 +340,64 @@ function JobDetailView({ detail }: { detail: JobDetail }) {
                 {r.message && <div className="mt-2 text-sm text-dark/60 italic">"{r.message}"</div>}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Add Quote Modal */}
+        {showAddQuote && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddQuote(false)}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-dark mb-1">Add Manual Quote</h3>
+              <p className="text-sm text-dark/50 mb-5">Enter the provider details and quote information.</p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-dark/50 mb-1">Provider Name *</label>
+                  <input value={qName} onChange={e => setQName(e.target.value)} placeholder="ABC Plumbing"
+                    className="w-full px-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-dark/50 mb-1">Phone</label>
+                    <input value={qPhone} onChange={e => setQPhone(e.target.value)} placeholder="(555) 123-4567"
+                      className="w-full px-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-dark/50 mb-1">Email</label>
+                    <input value={qEmail} onChange={e => setQEmail(e.target.value)} placeholder="pro@email.com" type="email"
+                      className="w-full px-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-dark/50 mb-1">Quoted Price</label>
+                    <input value={qPrice} onChange={e => setQPrice(e.target.value)} placeholder="$185"
+                      className="w-full px-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-dark/50 mb-1">Availability</label>
+                    <input value={qAvail} onChange={e => setQAvail(e.target.value)} placeholder="Tomorrow 9-11 AM"
+                      className="w-full px-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-dark/50 mb-1">Message / Notes</label>
+                  <textarea value={qMsg} onChange={e => setQMsg(e.target.value)} rows={2} placeholder="Any notes from the provider..."
+                    className="w-full px-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 resize-none" />
+                </div>
+              </div>
+
+              {qError && <div className="text-red-600 text-sm mt-3">{qError}</div>}
+
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => setShowAddQuote(false)}
+                  className="flex-1 py-2.5 rounded-lg border border-dark/10 text-sm font-semibold text-dark hover:bg-dark/5 transition-colors">Cancel</button>
+                <button onClick={handleAddQuote} disabled={qSaving}
+                  className="flex-1 py-2.5 rounded-lg bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 disabled:opacity-50 transition-colors">
+                  {qSaving ? 'Adding...' : 'Add Quote'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
