@@ -233,9 +233,9 @@ function Categories() {
 function Pricing() {
   const [annual, setAnnual] = useState(false);
   const tiers = [
-    { name: "Starter", price: 29, annual: 25, perProperty: 5, annualPerProperty: 4, properties: "Unlimited", members: "1 user", searches: "2 per property / month", extra: "$6.99", features: ["PMS import", "Preferred vendors (5)", "Basic cost tracking"], popular: false },
-    { name: "Professional", price: 49, annual: 42, perProperty: 8, annualPerProperty: 7, properties: "Unlimited", members: "5 team members", searches: "3 per property / month", extra: "$4.99", features: ["PMS import + weekly sync", "Unlimited preferred vendors", "B2B job categories", "Full cost reporting", "Vendor scorecards", "Human outreach manager"], popular: true },
-    { name: "Business", price: 99, annual: 84, perProperty: 10, annualPerProperty: 9, properties: "Unlimited", members: "15 team members", searches: "5 per property / month", extra: "$3.49", features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Vendor scorecards", "Human outreach manager", "All Professional features"], popular: false },
+    { name: "Starter", price: 29, annual: 25, perProperty: 5, annualPerProperty: 4, properties: "Unlimited", members: "1 user", searches: "2 credits per property", extra: "$6.99", features: ["PMS import", "Preferred vendors (5)", "Basic cost tracking", "Credits shared across portfolio"], popular: false },
+    { name: "Professional", price: 49, annual: 42, perProperty: 8, annualPerProperty: 7, properties: "Unlimited", members: "5 team members", searches: "3 credits per property", extra: "$4.99", features: ["PMS import + weekly sync", "Unlimited preferred vendors", "B2B job categories", "Full cost reporting", "Vendor scorecards", "Human outreach manager", "Credits shared across portfolio"], popular: true },
+    { name: "Business", price: 99, annual: 84, perProperty: 10, annualPerProperty: 9, properties: "Unlimited", members: "15 team members", searches: "5 credits per property", extra: "$3.49", features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Vendor scorecards", "Human outreach manager", "Credits shared across portfolio", "All Professional features"], popular: false },
   ];
   return (
     <section id="pricing" style={{ background: COLORS.warm, padding: "96px 24px" }}>

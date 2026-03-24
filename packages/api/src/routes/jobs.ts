@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { eq, and, count, desc, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
-import { jobs, outreachAttempts, providerResponses, providers, bookings, workspaces } from '../db/schema';
+import { jobs, outreachAttempts, providerResponses, providers, bookings, workspaces, properties } from '../db/schema';
 import { dispatchJob, sendBookingNotifications } from '../services/orchestration';
 import { recordHomeownerRating } from '../services/providers/scores';
 import {
@@ -120,21 +120,40 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   try {
-    // B2B search credit check
+    // B2B search credit check — credits are a portfolio-wide pool
     if (body.workspace_id) {
       const [ws] = await db
-        .select({ searchesUsed: workspaces.searchesUsed, searchesLimit: workspaces.searchesLimit })
+        .select({ searchesUsed: workspaces.searchesUsed, searchesLimit: workspaces.searchesLimit, plan: workspaces.plan })
         .from(workspaces)
         .where(eq(workspaces.id, body.workspace_id))
         .limit(1);
 
-      if (ws && ws.searchesUsed >= ws.searchesLimit) {
-        res.status(403).json({ data: null, error: `Search limit reached (${ws.searchesLimit} per billing cycle). Upgrade your plan for more searches.`, meta: {} });
-        return;
-      }
-
-      // Increment search count
       if (ws) {
+        // Calculate dynamic limit: searchesPerProperty × active properties
+        const planSearches: Record<string, number> = { trial: 0, starter: 2, professional: 3, business: 5, enterprise: 10 };
+        const perProp = planSearches[ws.plan] ?? 2;
+
+        if (ws.plan === 'trial') {
+          // Trial uses fixed limit from DB
+          if (ws.searchesUsed >= ws.searchesLimit) {
+            res.status(403).json({ data: null, error: `Trial credits exhausted (${ws.searchesLimit}). Upgrade to continue.`, meta: {} });
+            return;
+          }
+        } else {
+          const [{ value: propCount }] = await db
+            .select({ value: sql<number>`count(*)::int` })
+            .from(properties)
+            .where(and(eq(properties.workspaceId, body.workspace_id), eq(properties.active, true)));
+          const dynamicLimit = Math.max(perProp * propCount, perProp);
+          const effectiveLimit = Math.max(ws.searchesLimit, dynamicLimit);
+
+          if (ws.searchesUsed >= effectiveLimit) {
+            res.status(403).json({ data: null, error: `Outreach credit limit reached (${effectiveLimit} this cycle). Add more properties or upgrade your plan.`, meta: {} });
+            return;
+          }
+        }
+
+        // Increment search count — deducted from portfolio-wide pool
         await db.update(workspaces)
           .set({ searchesUsed: sql`${workspaces.searchesUsed} + 1` } as Record<string, unknown>)
           .where(eq(workspaces.id, body.workspace_id));
