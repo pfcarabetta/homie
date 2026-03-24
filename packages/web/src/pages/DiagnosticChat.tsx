@@ -1228,9 +1228,9 @@ function ProviderModal({
 
 function TierStep({ state, dispatch }: { state: State; dispatch: React.Dispatch<Action> }) {
   const tiers = [
-    { id: 'standard' as JobTier, name: 'Standard', price: '$9.99', icon: '📱', desc: 'Homie contacts 5-8 local pros via text & web', time: 'Results in ~2 hours', providers: '5-8 pros contacted' },
-    { id: 'priority' as JobTier, name: 'Priority', price: '$19.99', icon: '⚡', desc: 'Homie calls & texts 10+ pros simultaneously', time: 'Results in ~30 min', providers: '10+ pros contacted', popular: true },
-    { id: 'emergency' as JobTier, name: 'Emergency', price: '$29.99', icon: '🚨', desc: 'Homie blitzes every available pro for same-day service', time: 'Results in ~15 min', providers: '15+ pros contacted' },
+    { id: 'standard' as JobTier, name: 'Standard', price: '$9.99', icon: '📱', desc: 'Homie contacts 5 local pros via text & web', time: 'Results in ~2 hours', providers: '5 pros contacted' },
+    { id: 'priority' as JobTier, name: 'Priority', price: '$19.99', icon: '⚡', desc: 'Homie calls & texts 10 pros simultaneously', time: 'Results in ~30 min', providers: '10 pros contacted', popular: true },
+    { id: 'emergency' as JobTier, name: 'Emergency', price: '$29.99', icon: '🚨', desc: 'Homie blitzes every available pro for same-day service', time: 'Results in ~15 min', providers: '15 pros contacted' },
   ];
 
   return (

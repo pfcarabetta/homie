@@ -15,9 +15,9 @@ interface TierOption {
 }
 
 const TIERS: TierOption[] = [
-  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', providers: '5-8 providers' },
-  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', providers: '10+ providers', popular: true },
-  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', providers: '15+ providers' },
+  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', providers: '5 providers' },
+  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', providers: '10 providers', popular: true },
+  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', providers: '15 providers' },
 ];
 
 export default function TierSelector({ selected, onSelect }: TierSelectorProps) {

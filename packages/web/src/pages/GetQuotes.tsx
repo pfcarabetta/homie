@@ -108,9 +108,9 @@ const CATEGORY_FLOWS: Record<string, {
 };
 
 const TIERS = [
-  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', detail: '5\u20138 pros via SMS + web' },
-  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', detail: '10+ pros via voice + SMS + web', popular: true },
-  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', detail: '15+ pros, all channels blitz' },
+  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', detail: '5 pros via SMS + web' },
+  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', detail: '10 pros via voice + SMS + web', popular: true },
+  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', detail: '15 pros, all channels blitz' },
 ];
 
 const MOCK_PROVIDERS = [

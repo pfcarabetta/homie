@@ -599,9 +599,9 @@ export default function HomePage() {
 
         <div className="hp-pricing-grid">
           {[
-            { tier: 'Standard', price: '$9.99', time: '~2 hours', providers: '5-8 contacted', channels: 'SMS + Web', popular: false },
-            { tier: 'Priority', price: '$19.99', time: '~30 minutes', providers: '10+ contacted', channels: 'Voice + SMS + Web', popular: true },
-            { tier: 'Emergency', price: '$29.99', time: '~15 minutes', providers: '15+ contacted', channels: 'All channels (blitz)', popular: false },
+            { tier: 'Standard', price: '$9.99', time: '~2 hours', providers: '5 pros contacted', channels: 'SMS + Web', popular: false },
+            { tier: 'Priority', price: '$19.99', time: '~30 minutes', providers: '10 pros contacted', channels: 'Voice + SMS + Web', popular: true },
+            { tier: 'Emergency', price: '$29.99', time: '~15 minutes', providers: '15 pros contacted', channels: 'All channels (blitz)', popular: false },
           ].map((t, i) => (
             <div key={i} style={{
               background: t.popular ? DARK : 'white', borderRadius: 20, padding: '32px 24px',
