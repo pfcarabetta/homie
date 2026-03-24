@@ -527,7 +527,9 @@ export async function sendBookingNotifications(
   const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
   const portalLink = `${APP_URL}/portal/login?token=${signProviderToken(providerId)}`;
   const diagnosis = job.diagnosis as DiagnosisPayload | null;
-  const summary = diagnosis?.summary ?? 'Home service request';
+  const rawSummary = diagnosis?.summary ?? 'Home service request';
+  // Convert **bold** markdown to <b> tags for email HTML
+  const summary = rawSummary.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 
   if (provider.phone) {
     try {
