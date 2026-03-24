@@ -184,12 +184,15 @@ function BookingsTab() {
               <div style={{ fontWeight: 600, fontSize: 15, color: D }}>
                 {b.diagnosis?.category ? b.diagnosis.category.charAt(0).toUpperCase() + b.diagnosis.category.slice(1) : 'Job'}
               </div>
-              <span style={{
-                padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600,
-                background: b.status === 'confirmed' ? '#F0FDF4' : b.status === 'completed' ? '#EFF6FF' : '#F5F5F5',
-                color: b.status === 'confirmed' ? '#16A34A' : b.status === 'completed' ? '#2563EB' : '#9B9490',
-                textTransform: 'capitalize',
-              }}>{b.status}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600,
+                  background: b.status === 'confirmed' ? '#F0FDF4' : b.status === 'completed' ? '#EFF6FF' : '#F5F5F5',
+                  color: b.status === 'confirmed' ? '#16A34A' : b.status === 'completed' ? '#2563EB' : '#9B9490',
+                  textTransform: 'capitalize',
+                }}>{b.status}</span>
+                <span style={{ fontSize: 12, color: '#9B9490' }}>{isExpanded ? '▲' : '▼'}</span>
+              </div>
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 4 }}>{customerName}</div>
             {b.diagnosis?.summary && <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 6 }}>{b.diagnosis.summary.slice(0, 120)}{b.diagnosis.summary.length > 120 ? '...' : ''}</div>}
