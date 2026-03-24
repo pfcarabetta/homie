@@ -930,7 +930,7 @@ export default function GetQuotes() {
         });
       }).catch(err => {
         console.error('[GetQuotes] Job creation failed:', err);
-        addAssistant('Something went wrong. Please try again.');
+        addAssistant(`Something went wrong: ${(err as Error).message || 'Unknown error'}. Please try again.`);
         setPhase('tier');
         scrollDown();
       });
