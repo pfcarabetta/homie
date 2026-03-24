@@ -1097,18 +1097,32 @@ router.post('/:workspaceId/dispatches/:jobId/cancel', requireWorkspace, requireW
       creditRefunded = true;
     }
 
+    // Get job details for notification
+    const [jobDetail] = await db
+      .select({ diagnosis: jobs.diagnosis, zipCode: jobs.zipCode })
+      .from(jobs).where(eq(jobs.id, jobId)).limit(1);
+    const diagInfo = jobDetail?.diagnosis as { category?: string; summary?: string } | null;
+    const category = diagInfo?.category?.replace(/_/g, ' ') ?? 'service';
+    const summaryText = diagInfo?.summary?.replace(/\*\*(.+?)\*\*/g, '$1')?.slice(0, 150) ?? '';
+
     // Notify booked providers of cancellation
     const { sendSms, sendEmail } = await import('../services/notifications');
     for (const booking of bookingRows) {
       if (booking.providerPhone) {
-        void sendSms(booking.providerPhone, `Hi ${booking.providerName}, a job you were booked for through Homie has been cancelled by the property manager. No action needed on your end. Thank you for your time.`);
+        void sendSms(booking.providerPhone, `Hi ${booking.providerName}, your ${category} booking via Homie (${jobDetail?.zipCode ?? ''}) has been cancelled by the property manager.${summaryText ? ` Job: ${summaryText}` : ''} No action needed on your end.`);
       }
       if (booking.providerEmail) {
-        void sendEmail(booking.providerEmail, 'Booking Cancelled — Homie',
+        void sendEmail(booking.providerEmail, `Booking Cancelled — ${category} job via Homie`,
           `<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
             <h1 style="color: #E8632B; font-size: 24px;">homie</h1>
             <p style="font-size: 16px; color: #2D2926;">Hi ${booking.providerName},</p>
-            <p style="font-size: 15px; color: #6B6560; line-height: 1.6;">A job you were booked for has been cancelled by the property manager. No further action is needed on your end.</p>
+            <p style="font-size: 15px; color: #6B6560; line-height: 1.6;">Your <b>${category}</b> booking has been cancelled by the property manager.</p>
+            ${summaryText ? `<div style="background: #F9F5F2; border-radius: 10px; padding: 14px 16px; margin: 16px 0; border: 1px solid rgba(0,0,0,0.04)">
+              <div style="font-size: 12px; font-weight: bold; color: #9B9490; margin-bottom: 4px">Job Details</div>
+              <div style="font-size: 14px; color: #6B6560; line-height: 1.5">${summaryText}</div>
+              <div style="font-size: 12px; color: #9B9490; margin-top: 8px">Zip: <b>${jobDetail?.zipCode ?? ''}</b></div>
+            </div>` : ''}
+            <p style="font-size: 15px; color: #6B6560; line-height: 1.6;">No further action is needed on your end.</p>
             <p style="font-size: 13px; color: #9B9490; margin-top: 24px;">Thank you for being a Homie Pro.</p>
           </div>`);
       }
@@ -1229,20 +1243,34 @@ router.post('/:workspaceId/bookings/:bookingId/cancel', requireWorkspace, requir
       return;
     }
 
+    // Get job details for notification
+    const [jobInfo] = await db
+      .select({ diagnosis: jobs.diagnosis, zipCode: jobs.zipCode })
+      .from(jobs).where(eq(jobs.id, booking.jobId)).limit(1);
+    const bDiag = jobInfo?.diagnosis as { category?: string; summary?: string } | null;
+    const bCategory = bDiag?.category?.replace(/_/g, ' ') ?? 'service';
+    const bSummary = bDiag?.summary?.replace(/\*\*(.+?)\*\*/g, '$1')?.slice(0, 150) ?? '';
+
     // Cancel the booking
     await db.update(bookings).set({ status: 'cancelled' } as Record<string, unknown>).where(eq(bookings.id, bookingId));
 
     // Notify the provider
     const { sendSms, sendEmail } = await import('../services/notifications');
     if (booking.providerPhone) {
-      void sendSms(booking.providerPhone, `Hi ${booking.providerName}, a booking you had through Homie has been cancelled by the property manager. No action needed on your end. Thank you for your time.`);
+      void sendSms(booking.providerPhone, `Hi ${booking.providerName}, your ${bCategory} booking via Homie (${jobInfo?.zipCode ?? ''}) has been cancelled by the property manager.${bSummary ? ` Job: ${bSummary}` : ''} No action needed on your end.`);
     }
     if (booking.providerEmail) {
-      void sendEmail(booking.providerEmail, 'Booking Cancelled — Homie',
+      void sendEmail(booking.providerEmail, `Booking Cancelled — ${bCategory} job via Homie`,
         `<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
           <h1 style="color: #E8632B; font-size: 24px;">homie</h1>
           <p style="font-size: 16px; color: #2D2926;">Hi ${booking.providerName},</p>
-          <p style="font-size: 15px; color: #6B6560; line-height: 1.6;">A booking you had has been cancelled by the property manager. No further action is needed on your end.</p>
+          <p style="font-size: 15px; color: #6B6560; line-height: 1.6;">Your <b>${bCategory}</b> booking has been cancelled by the property manager.</p>
+          ${bSummary ? `<div style="background: #F9F5F2; border-radius: 10px; padding: 14px 16px; margin: 16px 0; border: 1px solid rgba(0,0,0,0.04)">
+            <div style="font-size: 12px; font-weight: bold; color: #9B9490; margin-bottom: 4px">Job Details</div>
+            <div style="font-size: 14px; color: #6B6560; line-height: 1.5">${bSummary}</div>
+            <div style="font-size: 12px; color: #9B9490; margin-top: 8px">Zip: <b>${jobInfo?.zipCode ?? ''}</b></div>
+          </div>` : ''}
+          <p style="font-size: 15px; color: #6B6560; line-height: 1.6;">No further action is needed on your end.</p>
           <p style="font-size: 13px; color: #9B9490; margin-top: 24px;">Thank you for being a Homie Pro.</p>
         </div>`);
     }
