@@ -1376,7 +1376,10 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
                                 <span style={{ color: '#9B9490', fontSize: 11, marginLeft: 6 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
                               </div>
                               {r.quoted_price && (
-                                <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                                <div style={{ textAlign: 'right' }}>
+                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                                  <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price — estimate</div>
+                                </div>
                               )}
                             </div>
                             {r.availability && <div style={{ fontSize: 12, color: D, marginBottom: 3 }}>📅 {r.availability}</div>}
