@@ -866,9 +866,12 @@ export default function DiagnosticChat() {
         padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
-        <span onClick={() => navigate('/')}
-          style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', fontSize: 18, color: '#9B9490', display: 'flex', alignItems: 'center' }} title="Back to home">←</button>
+          <span onClick={() => navigate('/')}
+            style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {(() => {
             const hour = new Date().getHours();
             const isBusinessHours = hour >= 8 && hour < 18;
@@ -884,6 +887,11 @@ export default function DiagnosticChat() {
               </div>
             );
           })()}
+          <button onClick={() => { window.location.href = '/chat'; }} style={{
+            background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
+            padding: '5px 12px', fontSize: 13, fontWeight: 600, color: '#6B6560',
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}>+ New</button>
           <AvatarDropdown />
         </div>
       </nav>
