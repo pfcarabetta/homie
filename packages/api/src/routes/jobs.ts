@@ -347,7 +347,7 @@ router.post('/:id/book', async (req: Request, res: Response) => {
 
   try {
     const [job] = await db
-      .select({ status: jobs.status, homeownerId: jobs.homeownerId, paymentStatus: jobs.paymentStatus })
+      .select({ status: jobs.status, homeownerId: jobs.homeownerId, paymentStatus: jobs.paymentStatus, workspaceId: jobs.workspaceId })
       .from(jobs)
       .where(eq(jobs.id, id))
       .limit(1);
@@ -356,12 +356,15 @@ router.post('/:id/book', async (req: Request, res: Response) => {
       res.status(404).json(out);
       return;
     }
-    if (job.homeownerId !== req.homeownerId) {
+    const isB2B = !!job.workspaceId;
+    // B2B jobs: any workspace member can book. Consumer jobs: only the job creator.
+    if (!isB2B && job.homeownerId !== req.homeownerId) {
       const out: ApiResponse<null> = { data: null, error: 'Job not found', meta: {} };
       res.status(404).json(out);
       return;
     }
-    if (job.paymentStatus !== 'paid' && job.paymentStatus !== 'authorized') {
+    // B2B jobs skip payment check (covered by subscription)
+    if (!isB2B && job.paymentStatus !== 'paid' && job.paymentStatus !== 'authorized') {
       const out: ApiResponse<null> = { data: null, error: 'Payment required before booking', meta: {} };
       res.status(402).json(out);
       return;

@@ -1387,12 +1387,15 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
                                 <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
                               )}
                             </div>
-                            {isActive && (
+                            {j.status !== 'expired' && j.status !== 'refunded' && (
                               <button onClick={async (e) => {
                                 e.stopPropagation();
                                 try {
-                                  await jobService.bookProvider(j.id, r.id, r.provider.id);
+                                  // Find property address for this job
+                                  const propertyAddr = j.propertyName || undefined;
+                                  await jobService.bookProvider(j.id, r.id, r.provider.id, propertyAddr);
                                   setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'completed' } : d));
+                                  alert(`${r.provider.name} has been booked! They will receive an SMS and email with the job details.`);
                                 } catch (err) {
                                   alert((err as Error).message || 'Booking failed');
                                 }
@@ -1400,6 +1403,7 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
                                 width: '100%', padding: '10px 0', borderRadius: 100, border: 'none', marginTop: 10,
                                 background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
                                 fontFamily: "'DM Sans', sans-serif",
+                                boxShadow: `0 4px 16px ${O}40`,
                               }}>Book {r.provider.name.split(' ')[0]}</button>
                             )}
                           </div>
