@@ -1201,6 +1201,59 @@ router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, re
   }
 });
 
+// POST /:workspaceId/bookings/:bookingId/cancel
+router.post('/:workspaceId/bookings/:bookingId/cancel', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { bookingId } = req.params;
+
+  try {
+    // Verify booking belongs to workspace
+    const [booking] = await db
+      .select({
+        id: bookings.id, jobId: bookings.jobId, status: bookings.status,
+        providerId: bookings.providerId,
+        providerName: providers.name, providerPhone: providers.phone, providerEmail: providers.email,
+      })
+      .from(bookings)
+      .innerJoin(providers, eq(bookings.providerId, providers.id))
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .where(and(eq(bookings.id, bookingId), eq(jobs.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!booking) {
+      res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
+      return;
+    }
+
+    if (booking.status === 'cancelled') {
+      res.status(400).json({ data: null, error: 'Booking is already cancelled', meta: {} });
+      return;
+    }
+
+    // Cancel the booking
+    await db.update(bookings).set({ status: 'cancelled' } as Record<string, unknown>).where(eq(bookings.id, bookingId));
+
+    // Notify the provider
+    const { sendSms, sendEmail } = await import('../services/notifications');
+    if (booking.providerPhone) {
+      void sendSms(booking.providerPhone, `Hi ${booking.providerName}, a booking you had through Homie has been cancelled by the property manager. No action needed on your end. Thank you for your time.`);
+    }
+    if (booking.providerEmail) {
+      void sendEmail(booking.providerEmail, 'Booking Cancelled — Homie',
+        `<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
+          <h1 style="color: #E8632B; font-size: 24px;">homie</h1>
+          <p style="font-size: 16px; color: #2D2926;">Hi ${booking.providerName},</p>
+          <p style="font-size: 15px; color: #6B6560; line-height: 1.6;">A booking you had has been cancelled by the property manager. No further action is needed on your end.</p>
+          <p style="font-size: 13px; color: #9B9490; margin-top: 24px;">Thank you for being a Homie Pro.</p>
+        </div>`);
+    }
+
+    res.json({ data: { cancelled: true, provider_notified: booking.providerName }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/bookings/:bid/cancel]');
+    res.status(500).json({ data: null, error: 'Failed to cancel booking', meta: {} });
+  }
+});
+
 // GET /:workspaceId/bookings
 router.get('/:workspaceId/bookings', requireWorkspace, async (req: Request, res: Response) => {
   try {

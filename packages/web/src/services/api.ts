@@ -914,4 +914,6 @@ export const businessService = {
   // Bookings
   listBookings: (workspaceId: string) =>
     fetchAPI<{ bookings: WorkspaceBooking[] }>(`/api/v1/business/${workspaceId}/bookings`),
+  cancelBooking: (workspaceId: string, bookingId: string) =>
+    fetchAPI<{ cancelled: boolean; provider_notified: string }>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/cancel`, { method: 'POST' }),
 };

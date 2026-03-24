@@ -1829,6 +1829,8 @@ function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [addedToPreferred, setAddedToPreferred] = useState<Set<string>>(new Set());
   const [addingProvider, setAddingProvider] = useState<string | null>(null);
+  const [cancellingBooking, setCancellingBooking] = useState<string | null>(null);
+  const [showCancelBooking, setShowCancelBooking] = useState<string | null>(null);
 
   useEffect(() => {
     businessService.listBookings(workspaceId).then(res => {
@@ -1997,12 +1999,69 @@ function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
                       transition: 'all 0.2s',
                     }}>{addingProvider === b.providerId ? 'Adding...' : `⭐ Add ${b.providerName.split(' ')[0]} to Preferred Vendors`}</button>
                   )}
+
+                  {/* Cancel booking */}
+                  {b.status === 'confirmed' && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 10 }}>
+                      <button onClick={() => setShowCancelBooking(b.id)} disabled={cancellingBooking === b.id} style={{
+                        width: '100%', padding: '10px 0', borderRadius: 100,
+                        border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#DC2626',
+                        fontSize: 13, fontWeight: 600, cursor: cancellingBooking === b.id ? 'default' : 'pointer',
+                        opacity: cancellingBooking === b.id ? 0.6 : 1,
+                      }}>{cancellingBooking === b.id ? 'Cancelling...' : 'Cancel Booking'}</button>
+                    </div>
+                  )}
+                  {b.status === 'cancelled' && (
+                    <div style={{ marginTop: 10, textAlign: 'center', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>Booking cancelled</div>
+                  )}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+
+      {/* Cancel booking confirmation modal */}
+      {showCancelBooking && (() => {
+        const booking = bookingsList.find(b => b.id === showCancelBooking);
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowCancelBooking(null)}>
+            <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+              <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                  <span style={{ fontSize: 22 }}>⚠️</span>
+                </div>
+                <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: '0 0 8px' }}>Cancel this booking?</h3>
+                <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, margin: 0 }}>
+                  {booking?.providerName} will be notified of the cancellation via SMS and email.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setShowCancelBooking(null)} style={{
+                  flex: 1, padding: '12px 0', borderRadius: 100, border: '1px solid #E0DAD4',
+                  background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}>Keep booking</button>
+                <button onClick={async () => {
+                  const bookingId = showCancelBooking;
+                  setShowCancelBooking(null);
+                  setCancellingBooking(bookingId);
+                  try {
+                    const res = await businessService.cancelBooking(workspaceId, bookingId);
+                    setBookingsList(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
+                    alert(`Booking cancelled. ${res.data?.provider_notified} was notified.`);
+                  } catch (err) {
+                    alert((err as Error).message || 'Failed to cancel');
+                  }
+                  setCancellingBooking(null);
+                }} style={{
+                  flex: 1, padding: '12px 0', borderRadius: 100, border: 'none',
+                  background: '#DC2626', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}>Yes, cancel</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
