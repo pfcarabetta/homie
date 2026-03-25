@@ -1377,27 +1377,51 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
   const authHeader = 'Basic ' + Buffer.from(`${body.api_key}:${body.api_secret}`).toString('base64');
 
   try {
-    // Fetch units from Track PMS API
+    // Fetch units from Track PMS API with pagination
     // Track API base is typically https://company.trackhs.com/api — endpoint is /pms/units
     const base = domain.includes('/api') ? `https://${domain}` : `https://${domain}/api`;
-    const trackUrl = `${base}/pms/units?size=500`;
-    const trackRes = await fetch(trackUrl, {
-      headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
-    });
+    const units: TrackUnit[] = [];
+    let nextUrl: string | null = `${base}/pms/units?size=50`;
 
-    if (!trackRes.ok) {
-      const errText = await trackRes.text().catch(() => '');
-      logger.error({ status: trackRes.status, body: errText }, '[Track import] API call failed');
-      res.status(trackRes.status === 401 ? 401 : 502).json({
-        data: null,
-        error: trackRes.status === 401 ? 'Invalid Track API credentials' : `Track API returned ${trackRes.status}`,
-        meta: {},
+    while (nextUrl) {
+      const trackRes = await fetch(nextUrl, {
+        headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
       });
-      return;
-    }
 
-    const trackData = await trackRes.json() as { contents?: TrackUnit[]; results?: TrackUnit[] } | TrackUnit[];
-    const units: TrackUnit[] = Array.isArray(trackData) ? trackData : (trackData.contents ?? trackData.results ?? []);
+      if (!trackRes.ok) {
+        const errText = await trackRes.text().catch(() => '');
+        logger.error({ status: trackRes.status, body: errText }, '[Track import] API call failed');
+        res.status(trackRes.status === 401 ? 401 : 502).json({
+          data: null,
+          error: trackRes.status === 401 ? 'Invalid Track API credentials' : `Track API returned ${trackRes.status}`,
+          meta: {},
+        });
+        return;
+      }
+
+      const trackData = await trackRes.json() as {
+        contents?: TrackUnit[];
+        results?: TrackUnit[];
+        next?: string;
+        links?: { next?: string };
+        _links?: { next?: { href?: string } };
+      } | TrackUnit[];
+
+      if (Array.isArray(trackData)) {
+        units.push(...trackData);
+        nextUrl = null;
+      } else {
+        const pageUnits = trackData.contents ?? trackData.results ?? [];
+        units.push(...pageUnits);
+        // Follow pagination links
+        nextUrl = trackData.next ?? trackData.links?.next ?? trackData._links?.next?.href ?? null;
+        if (nextUrl && !nextUrl.startsWith('http')) {
+          nextUrl = `${base}${nextUrl.startsWith('/') ? '' : '/'}${nextUrl}`;
+        }
+        // Stop if no more results
+        if (pageUnits.length === 0) nextUrl = null;
+      }
+    }
 
     if (units.length === 0) {
       res.json({ data: { imported: 0, skipped: 0, total: 0 }, error: null, meta: {} });
