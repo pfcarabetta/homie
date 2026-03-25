@@ -1475,14 +1475,19 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
-    // Try to fetch images for first unit
-    if (units.length > 0) {
-      const u0 = units[0];
+    // Fetch cover image for each unit from /pms/units/{id}/images
+    for (const u of units) {
       try {
-        const imgUrl = `${base}/pms/units/${u0.id}/images?size=50`;
+        const imgUrl = `${base}/pms/units/${u.id}/images?size=1`;
         const imgRes = await fetch(imgUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-        const imgRaw = await imgRes.text();
-        logger.info({ status: imgRes.status, body: imgRaw.slice(0, 800) }, '[Track] unit images response');
+        if (imgRes.ok) {
+          const imgData = await imgRes.json() as Record<string, unknown>;
+          const embedded = imgData._embedded as Record<string, unknown> | undefined;
+          const images = (embedded?.images ?? []) as Array<{ url?: string; order?: number }>;
+          if (images.length > 0 && images[0].url) {
+            u.coverImage = images[0].url;
+          }
+        }
       } catch { /* skip */ }
     }
 
