@@ -787,7 +787,7 @@ router.get('/google-search', async (req: Request, res: Response) => {
   try {
     const { geocodeZip } = await import('../services/providers/google-maps');
     const location = zip ? await geocodeZip(zip).catch(() => null) : null;
-    const locationParam = location ? `&location=${location.lat},${location.lng}&radius=32000` : '';
+    const locationParam = location ? `&location=${location.lat},${location.lng}&radius=40234` : ''; // ~25 miles
 
     const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}${locationParam}&key=${apiKey}`;
     const searchRes = await fetch(searchUrl);
