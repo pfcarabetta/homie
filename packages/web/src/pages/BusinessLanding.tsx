@@ -152,7 +152,7 @@ function Logos() {
       <div style={{ maxWidth: 1200, margin: "0 auto", textAlign: "center" }}>
         <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: COLORS.gray, fontWeight: 500, letterSpacing: 1, textTransform: "uppercase", marginBottom: 20 }}>Integrates with your property management tools</p>
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 48, flexWrap: "wrap", opacity: 0.4 }}>
-          {["Guesty", "Hostaway", "AppFolio", "Lodgify", "Breezeway"].map(name => (
+          {["Guesty", "Hostaway", "AppFolio", "Lodgify", "Track", "Streamline"].map(name => (
             <span key={name} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 20, fontWeight: 700, color: COLORS.dark }}>{name}</span>
           ))}
         </div>
