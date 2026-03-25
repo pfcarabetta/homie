@@ -821,8 +821,8 @@ export const businessService = {
     }),
 
   // Track PMS Import
-  importFromTrack: (workspaceId: string, data: { track_domain: string; api_key: string; api_secret: string }) =>
-    fetchAPI<{ imported: number; skipped: number; total: number }>(`/api/v1/business/${workspaceId}/import/track`, {
+  importFromTrack: (workspaceId: string, data: { track_domain: string; api_key: string; api_secret: string; update_existing?: boolean }) =>
+    fetchAPI<{ imported: number; updated: number; skipped: number; total: number }>(`/api/v1/business/${workspaceId}/import/track`, {
       method: 'POST', body: JSON.stringify(data),
     }),
 

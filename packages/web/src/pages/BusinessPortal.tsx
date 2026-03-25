@@ -441,8 +441,9 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
   const [trackKey, setTrackKey] = useState('');
   const [trackSecret, setTrackSecret] = useState('');
   const [trackImporting, setTrackImporting] = useState(false);
-  const [trackResult, setTrackResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
+  const [trackResult, setTrackResult] = useState<{ imported: number; updated: number; skipped: number; total: number } | null>(null);
   const [trackError, setTrackError] = useState('');
+  const [trackUpdateExisting, setTrackUpdateExisting] = useState(false);
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
@@ -574,9 +575,14 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
               <div>
                 <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 20, textAlign: 'center', marginBottom: 16 }}>
                   <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: D, marginBottom: 4 }}>{trackResult.imported} properties imported</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: D, marginBottom: 4 }}>
+                    {trackResult.imported > 0 && `${trackResult.imported} imported`}
+                    {trackResult.imported > 0 && trackResult.updated > 0 && ', '}
+                    {trackResult.updated > 0 && `${trackResult.updated} updated`}
+                    {trackResult.imported === 0 && trackResult.updated === 0 && 'No changes needed'}
+                  </div>
                   {trackResult.skipped > 0 && (
-                    <div style={{ fontSize: 13, color: '#6B6560' }}>{trackResult.skipped} already existed (skipped)</div>
+                    <div style={{ fontSize: 13, color: '#6B6560' }}>{trackResult.skipped} unchanged (skipped)</div>
                   )}
                   <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>{trackResult.total} total found in Track</div>
                 </div>
@@ -610,6 +616,12 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
                   </div>
                 </div>
 
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, color: D }}>
+                  <input type="checkbox" checked={trackUpdateExisting} onChange={e => setTrackUpdateExisting(e.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: O }} />
+                  Update existing properties with latest data from Track
+                </label>
+
                 {trackError && (
                   <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#B91C1C', marginBottom: 12 }}>
                     {trackError}
@@ -630,6 +642,7 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
                           track_domain: trackDomain.trim(),
                           api_key: trackKey.trim(),
                           api_secret: trackSecret.trim(),
+                          update_existing: trackUpdateExisting,
                         });
                         if (res.error) { setTrackError(res.error); }
                         else if (res.data) {

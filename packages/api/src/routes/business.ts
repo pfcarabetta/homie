@@ -1401,6 +1401,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
     track_domain?: string;
     api_key?: string;
     api_secret?: string;
+    update_existing?: boolean;
   };
 
   if (!body.track_domain || !body.api_key || !body.api_secret) {
@@ -1493,89 +1494,103 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       return;
     }
 
+    // Map a Track unit to Homie property fields
+    function mapUnit(u: TrackUnit) {
+      const totalBathrooms = (u.fullBathrooms ?? 0) + (u.threeQuarterBathrooms ?? 0) * 0.75 + (u.halfBathrooms ?? 0) * 0.5;
+      const bathroomStr = totalBathrooms > 0 ? String(totalBathrooms) : (u.bathrooms ? String(u.bathrooms) : null);
+
+      let bedConfig: { type: string; count: number }[] | null = null;
+      if (u.rooms && u.rooms.length > 0) {
+        const allBeds: { type: string; count: number }[] = [];
+        for (const room of u.rooms) {
+          if (room.beds && room.beds.length > 0) {
+            for (const bed of room.beds) {
+              const bedType = (bed.name ?? 'other').toLowerCase().replace(/\s+/g, '_');
+              const bedCount = typeof bed.count === 'string' ? parseInt(bed.count, 10) || 1 : (bed.count ?? 1);
+              const existing = allBeds.find(b => b.type === bedType);
+              if (existing) { existing.count += bedCount; }
+              else { allBeds.push({ type: bedType, count: bedCount }); }
+            }
+          }
+        }
+        if (allBeds.length > 0) bedConfig = allBeds;
+      }
+      if (!bedConfig && u.bedTypes && u.bedTypes.length > 0) {
+        bedConfig = u.bedTypes.map(b => ({
+          type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'),
+          count: typeof b.count === 'string' ? parseInt(b.count, 10) || 1 : (b.count ?? 1),
+        }));
+      }
+      if (!bedConfig && u.bed_types && u.bed_types.length > 0) {
+        bedConfig = u.bed_types.map(b => ({
+          type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'),
+          count: typeof b.count === 'string' ? parseInt(b.count, 10) || 1 : (b.count ?? 1),
+        }));
+      }
+
+      const roomNotes = u.rooms?.filter(r => r.name)
+        .map(r => `${r.name}${r.type ? ` (${r.type})` : ''}${r.sleeps ? ` — sleeps ${r.sleeps}` : ''}`)
+        .join('; ');
+
+      return {
+        name: u.name || u.shortName || `Unit ${u.id}`,
+        address: u.streetAddress ?? u.address?.street ?? null,
+        city: u.locality ?? u.address?.city ?? null,
+        state: u.region ?? u.address?.state ?? null,
+        zipCode: u.postal ?? u.address?.zip ?? null,
+        propertyType: u.property_type ?? u.unit_type ?? 'vacation_rental',
+        unitCount: 1,
+        bedrooms: u.bedrooms ?? null,
+        bathrooms: bathroomStr,
+        sqft: u.square_feet ?? null,
+        beds: bedConfig,
+        notes: roomNotes || null,
+      };
+    }
+
     // Check which units are already imported (by pmsExternalId)
     const existingProps = await db
-      .select({ pmsExternalId: properties.pmsExternalId })
+      .select({ id: properties.id, pmsExternalId: properties.pmsExternalId })
       .from(properties)
       .where(and(
         eq(properties.workspaceId, req.workspaceId),
         eq(properties.pmsSource, 'track'),
       ));
-    const existingIds = new Set(existingProps.map(p => p.pmsExternalId));
+    const existingMap = new Map(existingProps.map(p => [p.pmsExternalId, p.id]));
 
-    const toInsert = units
-      .filter(u => !existingIds.has(String(u.id)))
-      .map(u => {
-        // Calculate total bathrooms: full + 0.75 * threeQuarter + 0.5 * half
-        const totalBathrooms = (u.fullBathrooms ?? 0) + (u.threeQuarterBathrooms ?? 0) * 0.75 + (u.halfBathrooms ?? 0) * 0.5;
-        const bathroomStr = totalBathrooms > 0 ? String(totalBathrooms) : (u.bathrooms ? String(u.bathrooms) : null);
-
-        // Build bed config from rooms → beds, falling back to top-level bedTypes
-        let bedConfig: { type: string; count: number }[] | null = null;
-        if (u.rooms && u.rooms.length > 0) {
-          // Collect all beds from all rooms
-          const allBeds: { type: string; count: number }[] = [];
-          for (const room of u.rooms) {
-            if (room.beds && room.beds.length > 0) {
-              for (const bed of room.beds) {
-                const bedType = (bed.name ?? 'other').toLowerCase().replace(/\s+/g, '_');
-                const bedCount = typeof bed.count === 'string' ? parseInt(bed.count, 10) || 1 : (bed.count ?? 1);
-                // Merge with existing same-type entry
-                const existing = allBeds.find(b => b.type === bedType);
-                if (existing) { existing.count += bedCount; }
-                else { allBeds.push({ type: bedType, count: bedCount }); }
-              }
-            }
-          }
-          if (allBeds.length > 0) bedConfig = allBeds;
-        }
-        if (!bedConfig && u.bedTypes && u.bedTypes.length > 0) {
-          bedConfig = u.bedTypes.map(b => ({
-            type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'),
-            count: typeof b.count === 'string' ? parseInt(b.count, 10) || 1 : (b.count ?? 1),
-          }));
-        }
-        if (!bedConfig && u.bed_types && u.bed_types.length > 0) {
-          bedConfig = u.bed_types.map(b => ({
-            type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'),
-            count: typeof b.count === 'string' ? parseInt(b.count, 10) || 1 : (b.count ?? 1),
-          }));
-        }
-
-        // Build notes from room descriptions
-        const roomNotes = u.rooms?.filter(r => r.name)
-          .map(r => `${r.name}${r.type ? ` (${r.type})` : ''}${r.sleeps ? ` — sleeps ${r.sleeps}` : ''}`)
-          .join('; ');
-
-        return {
-          workspaceId: req.workspaceId,
-          name: u.name || u.shortName || `Unit ${u.id}`,
-          address: u.streetAddress ?? u.address?.street ?? null,
-          city: u.locality ?? u.address?.city ?? null,
-          state: u.region ?? u.address?.state ?? null,
-          zipCode: u.postal ?? u.address?.zip ?? null,
-          propertyType: u.property_type ?? u.unit_type ?? 'vacation_rental',
-          unitCount: 1,
-          bedrooms: u.bedrooms ?? null,
-          bathrooms: bathroomStr,
-          sqft: u.square_feet ?? null,
-          beds: bedConfig,
-          pmsSource: 'track' as const,
-          pmsExternalId: String(u.id),
-          notes: roomNotes || null,
-        };
-      });
-
+    // Insert new properties
+    const newUnits = units.filter(u => !existingMap.has(String(u.id)));
     let imported = 0;
-    if (toInsert.length > 0) {
+    if (newUnits.length > 0) {
+      const toInsert = newUnits.map(u => ({
+        workspaceId: req.workspaceId,
+        pmsSource: 'track' as const,
+        pmsExternalId: String(u.id),
+        ...mapUnit(u),
+      }));
       const inserted = await db.insert(properties).values(toInsert as unknown as typeof properties.$inferInsert[]).returning();
       imported = inserted.length;
+    }
+
+    // Update existing properties if requested
+    let updated = 0;
+    if (body.update_existing) {
+      const existingUnits = units.filter(u => existingMap.has(String(u.id)));
+      for (const u of existingUnits) {
+        const propId = existingMap.get(String(u.id))!;
+        const mapped = mapUnit(u);
+        await db.update(properties)
+          .set({ ...mapped, updatedAt: new Date() } as Record<string, unknown>)
+          .where(eq(properties.id, propId));
+        updated++;
+      }
     }
 
     res.json({
       data: {
         imported,
-        skipped: units.length - imported,
+        updated,
+        skipped: units.length - imported - updated,
         total: units.length,
       },
       error: null,
