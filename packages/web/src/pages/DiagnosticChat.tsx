@@ -578,9 +578,9 @@ export default function DiagnosticChat() {
 
   const sendMessage = useCallback(
     (text: string, image?: string) => {
-      if (!text.trim() || state.streaming) return;
+      if ((!text.trim() && !image) || state.streaming) return;
 
-      dispatch({ type: 'ADD_USER_MESSAGE', content: text.trim() });
+      dispatch({ type: 'ADD_USER_MESSAGE', content: text.trim() || '📷 Photo uploaded' });
 
       const msgId = nextId();
       dispatch({ type: 'START_STREAMING', messageId: msgId });
@@ -601,9 +601,10 @@ export default function DiagnosticChat() {
         .filter((m) => m.id !== 'welcome' && m.content.length > 0)
         .map((m) => ({ role: m.role, content: m.content }));
 
+      const messageText = text.trim() || (image ? 'What do you see in this photo? What might be wrong and how can I fix it?' : '');
       abortRef.current = diagnosticService.sendMessage(
         sessionIdRef.current,
-        text.trim(),
+        messageText,
         callbacks,
         image ? [image] : undefined,
         history,
@@ -614,7 +615,7 @@ export default function DiagnosticChat() {
 
   const handleSend = useCallback(() => {
     const text = textareaRef.current?.value ?? '';
-    if (!text.trim()) return;
+    if (!text.trim() && !imgPreview) return;
     sendMessage(text, imgPreview ?? undefined);
     if (textareaRef.current) textareaRef.current.value = '';
     resetTextareaHeight();
@@ -833,7 +834,18 @@ export default function DiagnosticChat() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => setImgPreview(ev.target?.result as string);
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const text = textareaRef.current?.value?.trim() ?? '';
+      if (!text) {
+        // No text typed — send photo immediately
+        sendMessage('', dataUrl);
+        if (fileRef.current) fileRef.current.value = '';
+      } else {
+        // Text is present — attach photo and let user send
+        setImgPreview(dataUrl);
+      }
+    };
     reader.readAsDataURL(file);
   }
 
