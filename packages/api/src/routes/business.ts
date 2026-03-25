@@ -1467,7 +1467,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
 
     // Log first unit's bed-related fields for debugging
     if (units.length > 0) {
-      const sample = units[0] as Record<string, unknown>;
+      const sample = units[0] as unknown as Record<string, unknown>;
       logger.info({
         unitKeys: Object.keys(sample),
         bedrooms: sample.bedrooms,
