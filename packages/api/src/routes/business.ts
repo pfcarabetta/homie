@@ -1408,8 +1408,10 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
         units.push(...(trackData as unknown as TrackUnit[]));
         nextUrl = null;
       } else {
-        // Try all known Track response wrapper keys
+        // Track uses HAL+JSON: data is in _embedded.{collection} or top-level keys
+        const embedded = trackData._embedded as Record<string, unknown> | undefined;
         const pageUnits = (
+          embedded?.units ?? embedded?.unit ?? embedded?.properties ??
           trackData.contents ?? trackData.results ?? trackData.data ??
           trackData.units ?? trackData.items ?? trackData.records ?? []
         ) as TrackUnit[];
@@ -1435,15 +1437,27 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       });
       const debugData = await debugRes.json().catch(() => ({})) as Record<string, unknown>;
       const debugKeys = Object.keys(debugData);
-      // Check if the data is nested one level deeper
       let hint = '';
+      // Check top-level arrays
       for (const key of debugKeys) {
         const val = debugData[key];
         if (Array.isArray(val) && val.length > 0) {
-          hint = `Found array at key "${key}" with ${val.length} items`;
+          hint = `Found array at "${key}" with ${val.length} items`;
           break;
         }
+        // Check nested objects for arrays (like _embedded.units)
+        if (val && typeof val === 'object' && !Array.isArray(val)) {
+          const nested = val as Record<string, unknown>;
+          for (const nk of Object.keys(nested)) {
+            if (Array.isArray(nested[nk]) && (nested[nk] as unknown[]).length > 0) {
+              hint = `Found array at "${key}.${nk}" with ${(nested[nk] as unknown[]).length} items`;
+              break;
+            }
+          }
+          if (hint) break;
+        }
       }
+      logger.info({ debugKeys, hint, embedded: debugData._embedded ? Object.keys(debugData._embedded as object) : null }, '[Track import] Debug 0 results');
       res.json({ data: { imported: 0, skipped: 0, total: 0 }, error: null, meta: { debug_keys: debugKeys, hint } });
       return;
     }
