@@ -486,43 +486,43 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
           <div style={{ fontSize: 14, color: '#9B9490' }}>Add your first property to start managing maintenance.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div className="bp-prop-grid" style={{ display: 'grid', gap: 12 }}>
           {properties.map(p => (
-            <div key={p.id} style={{
+            <div key={p.id} className="bp-prop-card" style={{
               background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', overflow: 'hidden',
               opacity: p.active ? 1 : 0.5, display: 'flex',
             }}>
               {p.photoUrls && p.photoUrls.length > 0 && (
-                <div style={{ width: 120, minHeight: 100, flexShrink: 0 }}>
+                <div className="bp-prop-img" style={{ width: 120, minHeight: 100, flexShrink: 0 }}>
                   <img src={p.photoUrls[0]} alt={p.name}
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                 </div>
               )}
-              <div style={{ padding: 20, flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: D }}>{p.name}</div>
+              <div className="bp-prop-body" style={{ padding: 20, flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="bp-prop-name" style={{ fontSize: 16, fontWeight: 600, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
                   {p.address && (
-                    <div style={{ fontSize: 14, color: '#6B6560', marginTop: 4 }}>
+                    <div className="bp-prop-addr" style={{ fontSize: 14, color: '#6B6560', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.address}{p.city ? `, ${p.city}` : ''}{p.state ? `, ${p.state}` : ''} {p.zipCode || ''}
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div className="bp-prop-actions" style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
                   {canEdit && (
                     <button onClick={() => setEditingProperty(p)} style={{
                       padding: '4px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff',
                       fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 500,
                     }}>Edit</button>
                   )}
-                  <span style={{
+                  <span className="bp-prop-badge" style={{
                     fontSize: 12, padding: '4px 10px', borderRadius: 20, fontWeight: 600,
                     background: p.active ? '#F0FDF4' : '#F5F5F5',
                     color: p.active ? '#16A34A' : '#9B9490',
                   }}>
                     {p.active ? 'Active' : 'Inactive'}
                   </span>
-                  <span style={{
+                  <span className="bp-prop-badge bp-prop-type" style={{
                     fontSize: 12, padding: '4px 10px', borderRadius: 20,
                     background: '#EFF6FF', color: '#2563EB', fontWeight: 500,
                   }}>
@@ -532,26 +532,16 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
               </div>
 
               {/* Detail chips */}
-              <div style={{ display: 'flex', gap: 12, marginTop: 12, fontSize: 13, color: '#9B9490', flexWrap: 'wrap' }}>
-                <span>{p.unitCount} {p.unitCount === 1 ? 'unit' : 'units'}</span>
+              <div className="bp-prop-details" style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 13, color: '#9B9490', flexWrap: 'wrap' }}>
                 {p.bedrooms != null && p.bedrooms > 0 && <span>{p.bedrooms} bd</span>}
                 {p.bathrooms != null && +p.bathrooms > 0 && <span>{p.bathrooms} ba</span>}
                 {p.sqft != null && p.sqft > 0 && <span>{p.sqft.toLocaleString()} sqft</span>}
-                <span>Added {new Date(p.createdAt).toLocaleDateString()}</span>
+                {p.beds && p.beds.length > 0 && (
+                  <span>{p.beds.map(b => `${b.count} ${BED_TYPES.find(bt => bt.value === b.type)?.label || b.type}`).join(', ')}</span>
+                )}
               </div>
 
-              {/* Bed config */}
-              {p.beds && p.beds.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  {p.beds.map((b, i) => (
-                    <span key={i} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, background: '#F5F3FF', color: '#7C3AED', fontWeight: 500 }}>
-                      {b.count}× {BED_TYPES.find(bt => bt.value === b.type)?.label || b.type}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {p.notes && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 8, fontStyle: 'italic' }}>{p.notes}</div>}
+              {p.notes && <div className="bp-prop-notes" style={{ fontSize: 13, color: '#6B6560', marginTop: 8, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.notes}</div>}
               </div>
             </div>
           ))}
@@ -2781,6 +2771,20 @@ export default function BusinessPortal() {
 
   return (
     <div style={{ minHeight: '100vh', background: W }}>
+      <style>{`
+        @media (max-width: 640px) {
+          .bp-prop-card { flex-direction: column !important; }
+          .bp-prop-img { width: 100% !important; height: 140px !important; min-height: auto !important; }
+          .bp-prop-body { padding: 14px !important; }
+          .bp-prop-name { font-size: 14px !important; }
+          .bp-prop-addr { font-size: 12px !important; margin-top: 2px !important; }
+          .bp-prop-actions { gap: 4px !important; }
+          .bp-prop-badge { font-size: 10px !important; padding: 2px 8px !important; }
+          .bp-prop-type { display: none !important; }
+          .bp-prop-details { font-size: 12px !important; gap: 6px !important; margin-top: 6px !important; }
+          .bp-prop-notes { font-size: 12px !important; margin-top: 6px !important; }
+        }
+      `}</style>
       {/* Header */}
       <header style={{ background: '#fff', borderBottom: '1px solid #E0DAD4', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
