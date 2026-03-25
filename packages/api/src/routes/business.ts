@@ -23,7 +23,7 @@ function slugify(text: string): string {
 // ── POST / — Create workspace ────────────────────────────────────────────────
 
 router.post('/', async (req: Request, res: Response) => {
-  const { name, slug } = req.body as { name?: string; slug?: string };
+  const { name, slug, plan } = req.body as { name?: string; slug?: string; plan?: string };
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     res.status(400).json({ data: null, error: 'name is required', meta: {} });
@@ -31,11 +31,20 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const finalSlug = slug ? slugify(slug) : slugify(name);
+  const validPlans = ['trial', 'starter', 'professional', 'business', 'enterprise'];
+  const selectedPlan = plan && validPlans.includes(plan) ? plan : 'starter';
+  const planSearchLimits: Record<string, number> = { trial: 5, starter: 2, professional: 3, business: 5, enterprise: 10 };
 
   try {
     const [workspace] = await db
       .insert(workspaces)
-      .values({ name: name.trim(), slug: finalSlug, ownerId: req.homeownerId })
+      .values({
+        name: name.trim(),
+        slug: finalSlug,
+        plan: selectedPlan,
+        searchesLimit: planSearchLimits[selectedPlan] ?? 2,
+        ownerId: req.homeownerId,
+      })
       .returning();
 
     // Add owner as admin member

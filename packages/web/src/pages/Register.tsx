@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { fetchAPI } from '@/services/api';
 import { Spinner } from '@/components/Skeleton';
 
 export default function Register() {
@@ -10,6 +11,7 @@ export default function Register() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get('redirect') ?? null;
+  const isBusiness = returnTo === '/business';
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -17,6 +19,7 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [phone, setPhone] = useState('');
+  const [businessName, setBusinessName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -36,15 +39,33 @@ export default function Register() {
       setError('Enter a valid 5-digit zip code');
       return;
     }
+    if (isBusiness && !businessName.trim()) {
+      setError('Business name is required');
+      return;
+    }
 
     setLoading(true);
     const err = await register({ firstName: firstName.trim(), lastName: lastName.trim(), email, password, zipCode, phone: phone || undefined });
-    setLoading(false);
     if (err) {
+      setLoading(false);
       setError(err);
-    } else {
-      setShowVerify(true);
+      return;
     }
+
+    // If business signup, auto-create workspace with trial plan
+    if (isBusiness && businessName.trim()) {
+      try {
+        await fetchAPI('/api/v1/business', {
+          method: 'POST',
+          body: JSON.stringify({ name: businessName.trim(), plan: 'trial' }),
+        });
+      } catch {
+        // Workspace creation failed — user can create manually later
+      }
+    }
+
+    setLoading(false);
+    setShowVerify(true);
   }
 
   const [showVerify, setShowVerify] = useState(false);
@@ -62,8 +83,13 @@ export default function Register() {
             <p className="text-dark/50 text-sm mb-2">We sent a verification link to</p>
             <p className="text-dark font-semibold mb-6">{email}</p>
             <p className="text-dark/40 text-xs mb-8">Click the link in the email to verify your account. You can start using Homie right away — just verify when you get a chance.</p>
+            {isBusiness && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-700 mb-6">
+                Your business workspace <strong>{businessName}</strong> has been created with a free 14-day trial.
+              </div>
+            )}
             <Link to={returnTo ?? '/'} className="inline-block bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-8 rounded-full transition-colors">
-              {returnTo ? 'Continue' : 'Continue to Homie'}
+              {isBusiness ? 'Go to Business Portal' : returnTo ? 'Continue' : 'Continue to Homie'}
             </Link>
           </div>
         </div>
@@ -81,8 +107,8 @@ export default function Register() {
 
       <div className="flex-1 flex items-start justify-center px-4 pt-4">
         <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-bold text-center mb-1">Let's be homies!</h1>
-          <p className="text-dark/50 text-sm text-center mb-8">Get started with Homie in seconds</p>
+          <h1 className="text-2xl font-bold text-center mb-1">{isBusiness ? 'Start your free trial' : "Let's be homies!"}</h1>
+          <p className="text-dark/50 text-sm text-center mb-8">{isBusiness ? 'Create your account to get started with Homie for Business' : 'Get started with Homie in seconds'}</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
@@ -119,6 +145,21 @@ export default function Register() {
                 />
               </div>
             </div>
+
+            {isBusiness && (
+              <div>
+                <label htmlFor="businessName" className="block text-sm font-semibold text-dark mb-1.5">Business name</label>
+                <input
+                  id="businessName"
+                  type="text"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  required
+                  className="w-full bg-white border border-dark/15 rounded-xl px-4 py-3 text-sm text-dark placeholder:text-dark/30 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+                  placeholder="Acme Property Management"
+                />
+              </div>
+            )}
 
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-dark mb-1.5">Email</label>
