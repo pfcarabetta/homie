@@ -943,7 +943,7 @@ export default function DiagnosticChat() {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', textAlign: 'center', padding: '24px 8px 0' }}>
               <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 32, fontWeight: 700, color: D, marginBottom: 8 }}>How can Homie help?</h1>
               <p style={{ fontSize: 17, color: '#9B9490', maxWidth: 340, lineHeight: 1.5, marginBottom: 32, fontWeight: 500 }}>
-                Tap an issue below or type your own
+                Tap an issue below, type your own, or upload a photo
               </p>
               <IssueMosaic onSelect={(text) => sendMessage(text)} />
             </div>
