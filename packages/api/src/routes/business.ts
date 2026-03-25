@@ -1378,7 +1378,9 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
 
   try {
     // Fetch units from Track PMS API
-    const trackUrl = `https://${domain}/api/v1/pms/units?size=500`;
+    // Track API base is typically https://company.trackhs.com/api — endpoint is /pms/units
+    const base = domain.includes('/api') ? `https://${domain}` : `https://${domain}/api`;
+    const trackUrl = `${base}/pms/units?size=500`;
     const trackRes = await fetch(trackUrl, {
       headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
     });

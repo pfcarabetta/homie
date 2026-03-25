@@ -558,7 +558,7 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>Track Domain</label>
                     <input value={trackDomain} onChange={e => setTrackDomain(e.target.value)} placeholder="yourcompany.trackhs.com"
                       style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-                    <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>Your Track domain without https://</div>
+                    <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>e.g. yourcompany.trackhs.com or yourcompany.trackhs.com/api</div>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>API Key</label>
