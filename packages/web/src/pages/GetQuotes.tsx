@@ -600,7 +600,8 @@ export default function GetQuotes() {
       {
         onToken: (token: string) => {
           fullText += token;
-          setMessages(m => m.map(msg => ('id' in msg && (msg as { id?: string }).id === streamMsgId) ? { ...msg, text: fullText } : msg));
+          const display = fullText.replace(/<\/?ready>/g, '').replace(/<read$/g, '').replace(/<rea$/g, '').replace(/<re$/g, '').replace(/<r$/g, '').replace(/<$/g, '').trim();
+          setMessages(m => m.map(msg => ('id' in msg && (msg as { id?: string }).id === streamMsgId) ? { ...msg, text: display } : msg));
           scrollDown();
         },
         onDiagnosis: () => {},
@@ -717,14 +718,14 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
 - For simple/straightforward issues (e.g. "toilet running", "locked out right now"), you can include <ready> after just 1 question if you already have enough context.`,
         aiConvoRef.current,
         (aiText) => {
-          const cleaned = aiText.replace(/<ready>/g, '').trim();
+          const cleaned = aiText.replace(/<\/?ready>/g, '').trim();
           if (aiText.includes('<ready>') || questionCount >= 4) {
-            // AI says it has enough — collect the gathered details
+            // AI says it has enough — remove the empty/ready-only streamed bubble
+            if (!cleaned) {
+              setMessages(m => m.filter(msg => !('id' in msg)));
+            }
             const allUserDetails = aiConvoRef.current.filter(m => m.role === 'user').map(m => m.content).join('. ');
             setData(d => ({ ...d, extra: allUserDetails }));
-            if (cleaned) {
-              // AI included a final message before <ready> — unlikely but handle it
-            }
             setTimeout(() => {
               addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
               setPhase('extra');
