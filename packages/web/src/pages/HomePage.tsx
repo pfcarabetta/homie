@@ -603,7 +603,7 @@ export default function HomePage() {
             { tier: 'Priority', price: '$19.99', time: '~30 minutes', providers: '10 pros contacted', channels: 'Voice + SMS + Web', popular: true,
               features: ['Results in ~30 minutes', '10 pros contacted simultaneously', 'AI voice calls + SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
             { tier: 'Emergency', price: '$29.99', time: '~15 minutes', providers: '15 pros contacted', channels: 'All channels (blitz)', popular: false,
-              features: ['Results in ~15 minutes', '15 pros blitzed across all channels', 'Contacts closed businesses too', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
+              features: ['Results in ~15 minutes', '15 pros blitzed across all channels', 'Contacts closed businesses too', 'Human Outreach Manager gathers additional quotes', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
           ].map((t, i) => (
             <div key={i} style={{
               background: t.popular ? DARK : 'white', borderRadius: 20, padding: '32px 24px',
