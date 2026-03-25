@@ -1350,17 +1350,24 @@ router.get('/:workspaceId/bookings', requireWorkspace, async (req: Request, res:
 interface TrackBedType {
   id?: number;
   name?: string;
+  bedType?: string;
+  bedTypeName?: string;
+  type?: string;
   count?: string | number;
+  quantity?: string | number;
 }
 
 interface TrackRoom {
+  id?: number;
   name?: string;
   type?: string;
+  roomType?: string;
   description?: string;
   sleeps?: number;
   hasAttachedBathroom?: boolean;
   beds?: TrackBedType[];
   order?: number;
+  sortOrder?: number;
 }
 
 interface TrackUnit {
@@ -1465,67 +1472,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
-    // Fetch bed types and rooms for first unit to debug, then all
-    const firstUnit = units[0];
-    if (firstUnit) {
-      // Debug: try bed-types endpoint
-      try {
-        const bedUrl = `${base}/pms/units/${firstUnit.id}/bed-types?size=50`;
-        const bedRes = await fetch(bedUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-        const bedRaw = await bedRes.text();
-        logger.info({ unitId: firstUnit.id, status: bedRes.status, body: bedRaw.slice(0, 500) }, '[Track] bed-types response');
-      } catch (e) { logger.error({ err: e }, '[Track] bed-types fetch failed'); }
-
-      // Debug: try rooms endpoint
-      try {
-        const roomUrl = `${base}/pms/units/${firstUnit.id}/rooms?size=50`;
-        const roomRes = await fetch(roomUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-        const roomRaw = await roomRes.text();
-        logger.info({ unitId: firstUnit.id, status: roomRes.status, body: roomRaw.slice(0, 500) }, '[Track] rooms response');
-      } catch (e) { logger.error({ err: e }, '[Track] rooms fetch failed'); }
-
-      // Debug: try single unit detail (may include more data)
-      try {
-        const detailUrl = `${base}/pms/units/${firstUnit.id}`;
-        const detailRes = await fetch(detailUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-        if (detailRes.ok) {
-          const detail = await detailRes.json() as Record<string, unknown>;
-          const emb = detail._embedded as Record<string, unknown> | undefined;
-          logger.info({
-            unitId: firstUnit.id,
-            topBedTypes: detail.bedTypes,
-            topRooms: detail.rooms,
-            embeddedKeys: emb ? Object.keys(emb) : null,
-            embeddedBedTypes: emb?.bedTypes,
-            embeddedRooms: emb?.rooms,
-          }, '[Track] single unit detail');
-        }
-      } catch (e) { logger.error({ err: e }, '[Track] single unit fetch failed'); }
-    }
-
-    // Fetch bed types for each unit from the separate endpoint
-    for (const u of units) {
-      try {
-        const bedUrl = `${base}/pms/units/${u.id}/bed-types?size=50`;
-        const bedRes = await fetch(bedUrl, {
-          headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
-        });
-        if (bedRes.ok) {
-          const bedData = await bedRes.json() as Record<string, unknown>;
-          const embeddedBeds = bedData._embedded as Record<string, unknown> | undefined;
-          const bedList = (
-            embeddedBeds?.bedTypes ?? embeddedBeds?.bed_types ?? embeddedBeds?.['bed-types'] ??
-            bedData.bedTypes ?? bedData.bed_types ?? bedData.contents ?? bedData.results ?? bedData.data ??
-            (Array.isArray(bedData) ? bedData : [])
-          ) as TrackBedType[];
-          if (bedList.length > 0) {
-            u.bedTypes = bedList;
-          }
-        }
-      } catch { /* skip - beds will just be empty */ }
-    }
-
-    // Fetch rooms for each unit
+    // Fetch rooms (with nested beds) for each unit from /pms/units/{id}/rooms
     for (const u of units) {
       try {
         const roomUrl = `${base}/pms/units/${u.id}/rooms?size=50`;
@@ -1534,10 +1481,11 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
         });
         if (roomRes.ok) {
           const roomData = await roomRes.json() as Record<string, unknown>;
-          const embeddedRooms = roomData._embedded as Record<string, unknown> | undefined;
+          const embedded = roomData._embedded as Record<string, unknown> | undefined;
+          // Track uses _embedded.unitRooms
           const roomList = (
-            embeddedRooms?.rooms ?? embeddedRooms?.room ??
-            roomData.rooms ?? roomData.contents ?? roomData.results ?? roomData.data ??
+            embedded?.unitRooms ?? embedded?.rooms ?? embedded?.room ??
+            roomData.unitRooms ?? roomData.rooms ??
             (Array.isArray(roomData) ? roomData : [])
           ) as TrackRoom[];
           if (roomList.length > 0) {
@@ -1619,23 +1567,27 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
         else { allBeds.push({ type: bedType, count: bedCount }); }
       }
 
-      // Primary source: rooms with nested beds (check _embedded.rooms first, then top-level rooms)
-      const rooms = (embedded?.rooms ?? u.rooms) as TrackRoom[] | undefined;
+      // Primary source: rooms with nested beds
+      const rooms = u.rooms as TrackRoom[] | undefined;
       if (rooms && rooms.length > 0) {
         for (const room of rooms) {
           if (room.beds && room.beds.length > 0) {
             for (const bed of room.beds) {
-              addBed(bed.name ?? 'other', bed.count ?? 1);
+              const bedName = bed.name ?? bed.bedType ?? bed.bedTypeName ?? bed.type ?? 'other';
+              const bedCount = bed.count ?? bed.quantity ?? 1;
+              addBed(bedName, bedCount);
             }
           }
         }
       }
 
-      // Fallback: bedTypes from _embedded or top-level
+      // Fallback: top-level bedTypes
       if (allBeds.length === 0) {
-        const topBeds = (embedded?.bedTypes ?? embedded?.bed_types ?? u.bedTypes ?? u.bed_types ?? []) as TrackBedType[];
+        const topBeds = (u.bedTypes ?? u.bed_types ?? []) as TrackBedType[];
         for (const b of topBeds) {
-          addBed(b.name ?? 'other', b.count ?? 1);
+          const bedName = b.name ?? b.bedType ?? b.bedTypeName ?? b.type ?? 'other';
+          const bedCount = b.count ?? b.quantity ?? 1;
+          addBed(bedName, bedCount);
         }
       }
 
