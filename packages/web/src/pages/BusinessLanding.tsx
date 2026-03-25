@@ -105,6 +105,7 @@ function Nav() {
 }
 
 function Hero() {
+  const navigate = useNavigate();
   return (
     <section style={{ background: `linear-gradient(165deg, ${COLORS.warm} 0%, ${COLORS.white} 50%, ${COLORS.greenLight} 100%)`, paddingTop: 140, paddingBottom: 80, position: "relative", overflow: "hidden" }}>
       <div style={{ position: "absolute", top: -200, right: -200, width: 600, height: 600, borderRadius: "50%", background: COLORS.orange, opacity: 0.03 }} />
@@ -127,7 +128,7 @@ function Hero() {
         </FadeIn>
         <FadeIn delay={0.3}>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-            <button style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)" }} onMouseEnter={e => { (e.target as HTMLElement).style.background = COLORS.orangeDark; (e.target as HTMLElement).style.transform = "translateY(-2px)"; }} onMouseLeave={e => { (e.target as HTMLElement).style.background = COLORS.orange; (e.target as HTMLElement).style.transform = "translateY(0)"; }}>Start free trial</button>
+            <button onClick={() => navigate("/register?redirect=/business")} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)" }} onMouseEnter={e => { (e.target as HTMLElement).style.background = COLORS.orangeDark; (e.target as HTMLElement).style.transform = "translateY(-2px)"; }} onMouseLeave={e => { (e.target as HTMLElement).style.background = COLORS.orange; (e.target as HTMLElement).style.transform = "translateY(0)"; }}>Start free trial</button>
             <button style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, fontWeight: 600, color: COLORS.dark, background: "transparent", border: `2px solid ${COLORS.grayLight}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => (e.target as HTMLElement).style.borderColor = COLORS.orange} onMouseLeave={e => (e.target as HTMLElement).style.borderColor = COLORS.grayLight}>Watch demo</button>
           </div>
         </FadeIn>
@@ -270,7 +271,7 @@ function Categories() {
   );
 }
 
-function Pricing() {
+function Pricing({ onSignup }: { onSignup: () => void }) {
   const [annual, setAnnual] = useState(false);
   const tiers = [
     { name: "Starter", price: 29, annual: 25, perProperty: 5, annualPerProperty: 4, properties: "Unlimited", members: "1 user", searches: "2 credits per property", extra: "$6.99", features: ["PMS import", "Preferred vendors (5)", "Basic cost tracking", "Credits shared across portfolio"], popular: false },
@@ -307,7 +308,7 @@ function Pricing() {
                     + <strong>${annual ? (t as Record<string, unknown>).annualPerProperty as number : (t as Record<string, unknown>).perProperty as number}</strong>/property/mo
                   </div>
                 </div>
-                <button style={{ width: "100%", fontFamily: "'DM Sans', sans-serif", fontSize: 16, fontWeight: 600, color: t.popular ? COLORS.white : COLORS.dark, background: t.popular ? COLORS.orange : COLORS.warm, border: t.popular ? "none" : `1px solid ${COLORS.grayLight}`, borderRadius: 12, padding: "14px 0", cursor: "pointer", transition: "all 0.2s", marginBottom: 28 }} onMouseEnter={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orangeDark; else (e.target as HTMLElement).style.background = COLORS.grayLight; }} onMouseLeave={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orange; else (e.target as HTMLElement).style.background = COLORS.warm; }}>Start free trial</button>
+                <button onClick={onSignup} style={{ width: "100%", fontFamily: "'DM Sans', sans-serif", fontSize: 16, fontWeight: 600, color: t.popular ? COLORS.white : COLORS.dark, background: t.popular ? COLORS.orange : COLORS.warm, border: t.popular ? "none" : `1px solid ${COLORS.grayLight}`, borderRadius: 12, padding: "14px 0", cursor: "pointer", transition: "all 0.2s", marginBottom: 28 }} onMouseEnter={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orangeDark; else (e.target as HTMLElement).style.background = COLORS.grayLight; }} onMouseLeave={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orange; else (e.target as HTMLElement).style.background = COLORS.warm; }}>Start free trial</button>
                 <div style={{ borderTop: `1px solid ${COLORS.warm}`, paddingTop: 20 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                     <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: COLORS.gray }}>Team members</span>
@@ -367,14 +368,14 @@ function Testimonial() {
   );
 }
 
-function CTA() {
+function CTA({ onSignup }: { onSignup: () => void }) {
   return (
     <section style={{ background: `linear-gradient(165deg, ${COLORS.white} 0%, ${COLORS.warm} 100%)`, padding: "96px 24px" }}>
       <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
         <FadeIn>
           <h2 style={{ fontFamily: "Fraunces, serif", fontSize: "clamp(32px, 4vw, 52px)", fontWeight: 700, color: COLORS.dark, margin: "0 0 16px", lineHeight: 1.1 }}>Every property needs a Homie</h2>
           <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, color: COLORS.darkMid, lineHeight: 1.6, margin: "0 0 36px" }}>Start your 14-day free trial. Import your properties, dispatch your first job, and see why operators are switching to Homie.</p>
-          <button style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "18px 48px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.3)" }} onMouseEnter={e => { (e.target as HTMLElement).style.background = COLORS.orangeDark; (e.target as HTMLElement).style.transform = "translateY(-2px)"; }} onMouseLeave={e => { (e.target as HTMLElement).style.background = COLORS.orange; (e.target as HTMLElement).style.transform = "translateY(0)"; }}>Get started free</button>
+          <button onClick={onSignup} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "18px 48px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.3)" }} onMouseEnter={e => { (e.target as HTMLElement).style.background = COLORS.orangeDark; (e.target as HTMLElement).style.transform = "translateY(-2px)"; }} onMouseLeave={e => { (e.target as HTMLElement).style.background = COLORS.orange; (e.target as HTMLElement).style.transform = "translateY(0)"; }}>Get started free</button>
           <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.gray, marginTop: 16 }}>No credit card required. Setup takes 5 minutes.</p>
         </FadeIn>
       </div>
@@ -797,6 +798,8 @@ function OutreachEngine() {
 
 export default function BusinessLanding() {
   useDocumentTitle('Homie for Business — Property Management Maintenance Platform');
+  const navigate = useNavigate();
+  const handleSignup = () => navigate("/register?redirect=/business");
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: COLORS.white, minHeight: "100vh" }}>
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -809,8 +812,8 @@ export default function BusinessLanding() {
       <OutreachEngine />
       <Categories />
       <Testimonial />
-      <Pricing />
-      <CTA />
+      <Pricing onSignup={handleSignup} />
+      <CTA onSignup={handleSignup} />
       <Footer />
     </div>
   );
