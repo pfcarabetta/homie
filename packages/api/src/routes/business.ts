@@ -1475,10 +1475,15 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
-    // Debug: log coverImage from first unit
+    // Try to fetch images for first unit
     if (units.length > 0) {
-      const s = units[0] as unknown as Record<string, unknown>;
-      logger.info({ coverImage: s.coverImage, name: s.name, id: s.id }, '[Track] coverImage sample');
+      const u0 = units[0];
+      try {
+        const imgUrl = `${base}/pms/units/${u0.id}/images?size=50`;
+        const imgRes = await fetch(imgUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+        const imgRaw = await imgRes.text();
+        logger.info({ status: imgRes.status, body: imgRaw.slice(0, 800) }, '[Track] unit images response');
+      } catch { /* skip */ }
     }
 
     // Fetch bed type definitions to map bedTypeId → name
