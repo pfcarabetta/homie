@@ -420,7 +420,7 @@ export default function HomePage() {
               background: ORANGE, color: 'white', border: 'none', borderRadius: 100,
               padding: '16px 32px', fontSize: 17, fontWeight: 600, cursor: 'pointer',
               boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
-            }}>Get quotes in minutes</button>
+            }}>Get quotes now</button>
             <button onClick={() => navigate('/chat')} style={{
               background: 'transparent', color: DARK, border: '2px solid rgba(0,0,0,0.12)', borderRadius: 100,
               padding: '14px 28px', fontSize: 17, fontWeight: 500, cursor: 'pointer',
