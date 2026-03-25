@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { adminService } from '@/services/admin-api';
 
@@ -210,6 +210,41 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
   const [qMsg, setQMsg] = useState('');
   const [qSaving, setQSaving] = useState(false);
   const [qError, setQError] = useState('');
+  const [gSearch, setGSearch] = useState('');
+  const [gResults, setGResults] = useState<Array<{ placeId: string; name: string; rating: number; reviewCount: number; address: string }>>([]);
+  const [gLoading, setGLoading] = useState(false);
+  const [gSelected, setGSelected] = useState<{ placeId: string; name: string; rating: number; reviewCount: number; address: string } | null>(null);
+  const gTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleGoogleSearch(query: string) {
+    setGSearch(query);
+    setGSelected(null);
+    if (gTimerRef.current) clearTimeout(gTimerRef.current);
+    if (query.trim().length < 2) { setGResults([]); return; }
+    gTimerRef.current = setTimeout(async () => {
+      setGLoading(true);
+      try {
+        const zip = job.zipCode || '';
+        const res = await adminService.searchGoogle(query.trim(), zip);
+        setGResults(res.data ?? []);
+      } catch { setGResults([]); }
+      setGLoading(false);
+    }, 400);
+  }
+
+  function selectGoogleResult(result: typeof gResults[number]) {
+    setGSelected(result);
+    setQName(result.name);
+    setGSearch('');
+    setGResults([]);
+  }
+
+  function clearGoogleSelection() {
+    setGSelected(null);
+    setQName('');
+    setGSearch('');
+    setGResults([]);
+  }
 
   async function handleAddQuote() {
     if (!qName.trim()) { setQError('Provider name is required'); return; }
@@ -237,6 +272,7 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
         }]);
         setShowAddQuote(false);
         setQName(''); setQPhone(''); setQEmail(''); setQPrice(''); setQAvail(''); setQMsg('');
+        setGSearch(''); setGResults([]); setGSelected(null);
       }
     } catch (err: unknown) {
       setQError(err instanceof Error ? err.message : 'Failed to add quote');
@@ -352,12 +388,60 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddQuote(false)}>
             <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
               <h3 className="text-lg font-bold text-dark mb-1">Add Manual Quote</h3>
-              <p className="text-sm text-dark/50 mb-5">Enter the provider details and quote information.</p>
+              <p className="text-sm text-dark/50 mb-5">Search Google for a business or enter details manually.</p>
 
               <div className="space-y-3">
+                {/* Google Business Search */}
+                {!gSelected && (
+                  <div className="relative">
+                    <label className="block text-xs font-semibold text-dark/50 mb-1">Search Google Business</label>
+                    <div className="relative">
+                      <input value={gSearch} onChange={e => handleGoogleSearch(e.target.value)} placeholder="Search for a business..."
+                        className="w-full px-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 pr-8" />
+                      {gLoading && <div className="absolute right-3 top-2.5 text-dark/30 text-xs">...</div>}
+                    </div>
+                    {gResults.length > 0 && (
+                      <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-dark/10 rounded-lg shadow-lg max-h-48 overflow-auto">
+                        {gResults.map(r => (
+                          <button key={r.placeId} onClick={() => selectGoogleResult(r)}
+                            className="w-full text-left px-3 py-2.5 hover:bg-orange-50 transition-colors border-b border-dark/5 last:border-0">
+                            <div className="text-sm font-semibold text-dark">{r.name}</div>
+                            <div className="text-xs text-dark/40 flex gap-2 mt-0.5">
+                              <span>★ {r.rating}</span>
+                              <span>{r.reviewCount} reviews</span>
+                              <span className="truncate">{r.address}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Selected Google Business */}
+                {gSelected && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex justify-between items-start">
+                    <div>
+                      <div className="text-sm font-bold text-dark">{gSelected.name}</div>
+                      <div className="text-xs text-dark/50 mt-0.5">★ {gSelected.rating} · {gSelected.reviewCount} reviews</div>
+                      <div className="text-xs text-dark/40 mt-0.5">{gSelected.address}</div>
+                    </div>
+                    <button onClick={clearGoogleSelection} className="text-dark/30 hover:text-dark/60 text-sm ml-2 flex-shrink-0">✕</button>
+                  </div>
+                )}
+
+                {/* Divider with "or" */}
+                {!gSelected && (
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-px bg-dark/10" />
+                    <span className="text-xs text-dark/30 font-semibold">OR ENTER MANUALLY</span>
+                    <div className="flex-1 h-px bg-dark/10" />
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-xs font-semibold text-dark/50 mb-1">Provider Name *</label>
-                  <input value={qName} onChange={e => setQName(e.target.value)} placeholder="ABC Plumbing"
+                  <label className="block text-xs font-semibold text-dark/50 mb-1">Provider Name {!gSelected && '*'}</label>
+                  <input value={qName} onChange={e => { setQName(e.target.value); if (gSelected) setGSelected(null); }} placeholder="ABC Plumbing"
                     className="w-full px-3 py-2 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">

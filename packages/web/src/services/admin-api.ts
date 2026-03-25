@@ -254,6 +254,12 @@ export const adminService = {
     });
   },
 
+  async searchGoogle(query: string, zip?: string) {
+    const params = new URLSearchParams({ q: query });
+    if (zip) params.set('zip', zip);
+    return fetchAdmin<Array<{ placeId: string; name: string; rating: number; reviewCount: number; address: string }>>(`/api/v1/admin/google-search?${params}`);
+  },
+
   async createBusinessAccount(data: { email: string; workspace_name: string; plan?: string }) {
     return fetchAdmin<{
       workspace: { id: string; name: string; slug: string; plan: string };
