@@ -632,6 +632,11 @@ export default function BusinessChat() {
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
         @media (max-width: 480px) {
           .b2b-cat-grid { grid-template-columns: repeat(3, 1fr) !important; }
+          .b2b-chat-badge { display: none !important; }
+          .b2b-chat-status span { display: none !important; }
+        }
+        @media (max-width: 640px) {
+          .b2b-chat-status span { font-size: 0 !important; }
         }
       `}</style>
 
@@ -641,14 +646,14 @@ export default function BusinessChat() {
         padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
           <button onClick={() => navigate('/business')} style={{
             background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
-            fontSize: 18, color: '#9B9490', display: 'flex', alignItems: 'center',
+            fontSize: 18, color: '#9B9490', display: 'flex', alignItems: 'center', flexShrink: 0,
           }} title="Back to portal">←</button>
-          <span onClick={() => navigate('/business')} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'baseline' }}>
+          <span onClick={() => navigate('/business')} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'baseline', flexShrink: 0 }}>
             <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>homie</span>
-            <span style={{
+            <span className="b2b-chat-badge" style={{
               fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 800,
               color: '#fff', background: G, padding: '2px 6px',
               borderRadius: 4, marginLeft: 7, letterSpacing: '0.08em',
@@ -656,22 +661,22 @@ export default function BusinessChat() {
             }}>Business</span>
           </span>
           {selectedProperty && (
-            <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>
+            <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
               {selectedProperty.name}
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {(() => {
             const hour = new Date().getHours();
             const isBusinessHours = hour >= 8 && hour < 18;
             return isBusinessHours ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="b2b-chat-status" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: G, boxShadow: `0 0 0 3px ${G}25` }} />
                 <span style={{ fontSize: 13, color: G, fontWeight: 600 }}>Online</span>
               </div>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'default' }} title="Some providers may not be reachable outside business hours. Responses may be limited and take longer.">
+              <div className="b2b-chat-status" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'default' }} title="Some providers may not be reachable outside business hours. Responses may be limited and take longer.">
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF9F27', boxShadow: '0 0 0 3px rgba(239,159,39,0.15)' }} />
                 <span style={{ fontSize: 12, color: '#EF9F27', fontWeight: 600 }}>After hours</span>
               </div>
