@@ -6,105 +6,212 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
+/* -- Category tree: top-level groups → subcategories -- */
+interface SubCat { id: string; icon: string; label: string }
+interface CatGroup { icon: string; label: string; type: 'repair' | 'service'; subs: SubCat[] }
+
+const CATEGORY_TREE: CatGroup[] = [
+  // ── Repair ──
+  { icon: '🔧', label: 'Plumbing', type: 'repair', subs: [
+    { id: 'plumbing', icon: '🔧', label: 'General Plumbing' },
+    { id: 'septic_sewer', icon: '🕳️', label: 'Septic & Sewer' },
+    { id: 'water_heater', icon: '🔥', label: 'Water Heater' },
+    { id: 'sprinkler_irrigation', icon: '💦', label: 'Sprinkler & Irrigation' },
+  ]},
+  { icon: '⚡', label: 'Electrical', type: 'repair', subs: [
+    { id: 'electrical', icon: '⚡', label: 'General Electrical' },
+    { id: 'generator_install', icon: '🔋', label: 'Generator Install' },
+    { id: 'ev_charger_install', icon: '🔌', label: 'EV Charger Install' },
+    { id: 'solar', icon: '☀️', label: 'Solar' },
+  ]},
+  { icon: '❄️', label: 'HVAC', type: 'repair', subs: [
+    { id: 'hvac', icon: '❄️', label: 'AC & Heating' },
+    { id: 'chimney', icon: '🏠', label: 'Chimney' },
+    { id: 'insulation', icon: '🧱', label: 'Insulation' },
+  ]},
+  { icon: '🍳', label: 'Appliance', type: 'repair', subs: [
+    { id: 'appliance', icon: '🍳', label: 'Appliance Repair' },
+  ]},
+  { icon: '🏠', label: 'Roofing & Exterior', type: 'repair', subs: [
+    { id: 'roofing', icon: '🏠', label: 'Roofing' },
+    { id: 'gutter', icon: '🌧️', label: 'Gutter Cleaning' },
+    { id: 'siding', icon: '🪵', label: 'Siding' },
+    { id: 'window_door_install', icon: '🪟', label: 'Window & Door Install' },
+  ]},
+  { icon: '🔨', label: 'Handyman & Structural', type: 'repair', subs: [
+    { id: 'general', icon: '🔨', label: 'Handyman' },
+    { id: 'drywall', icon: '🪧', label: 'Drywall' },
+    { id: 'concrete', icon: '🧱', label: 'Concrete' },
+    { id: 'masonry', icon: '🏗️', label: 'Masonry' },
+    { id: 'foundation_waterproofing', icon: '💧', label: 'Foundation & Waterproofing' },
+    { id: 'welding_metal_work', icon: '⚒️', label: 'Welding & Metal Work' },
+    { id: 'furniture_assembly', icon: '🪑', label: 'Furniture Assembly' },
+    { id: 'tv_mounting', icon: '📺', label: 'TV Mounting' },
+  ]},
+  { icon: '🚨', label: 'Garage Door', type: 'repair', subs: [
+    { id: 'garage_door', icon: '🚨', label: 'Garage Door' },
+  ]},
+  { icon: '🔑', label: 'Locksmith & Security', type: 'repair', subs: [
+    { id: 'locksmith', icon: '🔑', label: 'Locksmith' },
+    { id: 'security_systems', icon: '📹', label: 'Security Systems' },
+  ]},
+  // ── Services ──
+  { icon: '✨', label: 'Cleaning', type: 'service', subs: [
+    { id: 'house_cleaning', icon: '✨', label: 'House Cleaning' },
+    { id: 'carpet_cleaning', icon: '🧹', label: 'Carpet Cleaning' },
+    { id: 'window_cleaning', icon: '🪟', label: 'Window Cleaning' },
+    { id: 'pressure_washing', icon: '💦', label: 'Pressure Washing' },
+    { id: 'steam_cleaning', icon: '♨️', label: 'Steam Cleaning' },
+  ]},
+  { icon: '🌿', label: 'Outdoor & Landscaping', type: 'service', subs: [
+    { id: 'landscaping', icon: '🌿', label: 'Landscaping' },
+    { id: 'tree_trimming', icon: '🌳', label: 'Tree Trimming' },
+    { id: 'stump_removal', icon: '🪵', label: 'Stump Removal' },
+    { id: 'fencing', icon: '🏡', label: 'Fencing' },
+    { id: 'deck_patio', icon: '🪵', label: 'Deck & Patio' },
+  ]},
+  { icon: '🏊', label: 'Pool & Spa', type: 'service', subs: [
+    { id: 'pool', icon: '🏊', label: 'Pool Service' },
+    { id: 'hot_tub', icon: '♨️', label: 'Hot Tub' },
+  ]},
+  { icon: '🐛', label: 'Pest Control', type: 'service', subs: [
+    { id: 'pest_control', icon: '🐛', label: 'Pest Control' },
+  ]},
+  { icon: '🎨', label: 'Painting & Flooring', type: 'service', subs: [
+    { id: 'painting', icon: '🎨', label: 'Painting' },
+    { id: 'flooring', icon: '🪵', label: 'Flooring' },
+    { id: 'tile', icon: '🔲', label: 'Tile' },
+  ]},
+  { icon: '🏗️', label: 'Remodeling', type: 'service', subs: [
+    { id: 'kitchen_remodel', icon: '🍽️', label: 'Kitchen Remodel' },
+    { id: 'bathroom_remodel', icon: '🛁', label: 'Bathroom Remodel' },
+    { id: 'general_contractor', icon: '🏗️', label: 'General Contractor' },
+  ]},
+  { icon: '🚚', label: 'Moving & Hauling', type: 'service', subs: [
+    { id: 'moving', icon: '🚚', label: 'Moving' },
+    { id: 'junk_removal', icon: '🗑️', label: 'Junk Removal' },
+  ]},
+];
+
 /* -- Category-specific follow-up questions -- */
 const CATEGORY_FLOWS: Record<string, {
   icon: string; label: string; group: 'repair' | 'service';
   q1: { text: string; options: string[] };
-  q2: { text: string; options: string[] };
-  q3: { text: string; options: string[] };
 }> = {
-  // ── Repair ──
-  plumbing: {
-    icon: '\uD83D\uDD27', label: 'Plumbing', group: 'repair',
-    q1: { text: "Where's the issue?", options: ['Kitchen', 'Bathroom', 'Laundry', 'Water heater', 'Outdoor', 'Other'] },
-    q2: { text: "What's happening?", options: ['Leaking/dripping', 'Clogged/slow drain', 'No hot water', 'Running toilet', 'Low pressure', 'Burst/flooding'] },
-    q3: { text: 'How urgent is this?', options: ['Water is actively leaking', "It works but something's wrong", 'Just noticed it', 'Been like this a while'] },
-  },
-  electrical: {
-    icon: '\u26A1', label: 'Electrical', group: 'repair',
-    q1: { text: "What's the problem?", options: ['Outlet not working', 'Lights flickering', 'Breaker tripping', 'Sparking/burning smell', 'Need new install', 'Other'] },
-    q2: { text: 'Where in the home?', options: ['One room', 'Multiple rooms', 'Whole house', 'Outdoor/garage', 'Panel/breaker box'] },
-    q3: { text: 'Is there any safety concern?', options: ['Burning smell or sparks', 'Exposed wires', 'Water near electrical', 'No safety concern'] },
-  },
-  hvac: {
-    icon: '\u2744\uFE0F', label: 'HVAC', group: 'repair',
-    q1: { text: "What's going on?", options: ['AC not cooling', 'Heat not working', 'Strange noises', 'Thermostat issue', 'Bad smell from vents', 'Maintenance/tune-up'] },
-    q2: { text: 'What type of system?', options: ['Central AC', 'Mini split', 'Window unit', 'Furnace', 'Heat pump', 'Not sure'] },
-    q3: { text: 'How old is the system?', options: ['Under 5 years', '5\u201310 years', '10\u201315 years', '15+ years', 'No idea'] },
-  },
-  appliance: {
-    icon: '\uD83C\uDF73', label: 'Appliance', group: 'repair',
-    q1: { text: 'Which appliance?', options: ['Washer', 'Dryer', 'Dishwasher', 'Refrigerator', 'Oven/stove', 'Garbage disposal', 'Other'] },
-    q2: { text: "What's it doing?", options: ["Won't turn on", 'Leaking water', 'Making noise', 'Not completing cycle', 'Error code showing', 'Other'] },
-    q3: { text: 'Do you know the brand?', options: ['GE', 'Whirlpool', 'Samsung', 'LG', 'Maytag', 'Bosch', 'Other', 'Not sure'] },
-  },
-  roofing: {
-    icon: '\uD83C\uDFE0', label: 'Roofing', group: 'repair',
-    q1: { text: "What's the concern?", options: ['Active leak inside', 'Missing/damaged shingles', 'Gutter issue', 'Storm damage', 'General inspection', 'Other'] },
-    q2: { text: 'Roof type?', options: ['Asphalt shingles', 'Tile', 'Metal', 'Flat/low slope', 'Not sure'] },
-    q3: { text: 'How old is the roof?', options: ['Under 5 years', '5\u201315 years', '15\u201325 years', '25+ years', 'No idea'] },
-  },
-  general: {
-    icon: '\uD83D\uDD28', label: 'Handyman', group: 'repair',
-    q1: { text: 'What kind of work?', options: ['Drywall repair', 'Door/window issue', 'Fence repair', 'Furniture assembly', 'Other'] },
-    q2: { text: 'How big is the job?', options: ['Quick fix (under 1 hour)', 'Half-day job', 'Full day or more', 'Not sure'] },
-    q3: { text: 'Anything else important?', options: ['Need it done ASAP', 'Can wait a bit', 'Just getting a price', 'Multiple small jobs'] },
-  },
-  garage_door: {
-    icon: '\uD83D\uDEA8', label: 'Garage Door', group: 'repair',
-    q1: { text: "What's the issue?", options: ['Won\'t open/close', 'Making noise', 'Off track', 'Opener broken', 'Spring snapped', 'Other'] },
-    q2: { text: 'Door type?', options: ['Single car', 'Double car', 'Not sure'] },
-    q3: { text: 'How urgent is this?', options: ['Car is stuck inside', 'Door is stuck open', 'Still works but struggling', 'Just getting a quote'] },
-  },
-  // ── Services ──
-  house_cleaning: {
-    icon: '\u2728', label: 'House Cleaning', group: 'service',
-    q1: { text: 'What type of cleaning?', options: ['Regular cleaning', 'Deep clean', 'Move-in/move-out', 'Post-construction', 'One-time', 'Other'] },
-    q2: { text: 'Home size?', options: ['Studio/1 bed', '2 bedrooms', '3 bedrooms', '4+ bedrooms', 'Not sure'] },
-    q3: { text: 'How often?', options: ['One-time', 'Weekly', 'Bi-weekly', 'Monthly', 'Just want a quote'] },
-  },
-  landscaping: {
-    icon: '\uD83C\uDF3F', label: 'Landscaping', group: 'service',
-    q1: { text: 'What do you need?', options: ['Lawn mowing', 'Garden design', 'Tree trimming', 'Hedge trimming', 'Yard cleanup', 'Sprinkler repair', 'Other'] },
-    q2: { text: 'Yard size?', options: ['Small (under 1/4 acre)', 'Medium (1/4\u20131/2 acre)', 'Large (1/2+ acre)', 'Not sure'] },
-    q3: { text: 'How often?', options: ['One-time', 'Weekly', 'Bi-weekly', 'Monthly', 'Seasonal'] },
-  },
-  pool: {
-    icon: '\uD83C\uDFCA', label: 'Pool Service', group: 'service',
-    q1: { text: 'What do you need?', options: ['Regular cleaning', 'Green/cloudy water', 'Equipment repair', 'Opening/closing', 'Leak detection', 'Other'] },
-    q2: { text: 'Pool type?', options: ['In-ground', 'Above-ground', 'Spa/hot tub', 'Not sure'] },
-    q3: { text: 'How often?', options: ['One-time', 'Weekly service', 'Monthly', 'Just need a repair'] },
-  },
-  pest_control: {
-    icon: '\uD83D\uDC1B', label: 'Pest Control', group: 'service',
-    q1: { text: 'What kind of pest?', options: ['Ants', 'Roaches', 'Mice/rats', 'Termites', 'Spiders', 'Wasps/bees', 'Bed bugs', 'Other'] },
-    q2: { text: 'Where are you seeing them?', options: ['Kitchen', 'Bathroom', 'Bedroom', 'Garage', 'Yard/exterior', 'Multiple areas'] },
-    q3: { text: 'How bad is it?', options: ['Just noticed one or two', 'Seeing them regularly', 'Major infestation', 'Want preventive treatment'] },
-  },
-  painting: {
-    icon: '\uD83C\uDFA8', label: 'Painting', group: 'service',
-    q1: { text: 'Interior or exterior?', options: ['Interior', 'Exterior', 'Both', 'Cabinet painting', 'Other'] },
-    q2: { text: 'How much needs painting?', options: ['One room', '2\u20133 rooms', 'Whole interior', 'Full exterior', 'Touch-ups only'] },
-    q3: { text: 'Any prep work needed?', options: ['Walls are ready to paint', 'Some patching/sanding', 'Wallpaper removal', 'Not sure'] },
-  },
-  moving: {
-    icon: '\uD83D\uDE9A', label: 'Moving', group: 'service',
-    q1: { text: 'What kind of move?', options: ['Full home move', 'Apartment move', 'Few large items', 'Junk removal', 'Storage pickup/delivery', 'Other'] },
-    q2: { text: 'Move size?', options: ['Studio/1 bed', '2 bedrooms', '3+ bedrooms', 'Just a few items'] },
-    q3: { text: 'How far?', options: ['Same building', 'Within 10 miles', '10\u201350 miles', '50+ miles', 'Not sure'] },
-  },
-  pressure_washing: {
-    icon: '\uD83D\uDCA6', label: 'Pressure Wash', group: 'service',
-    q1: { text: 'What needs washing?', options: ['Driveway', 'Patio/deck', 'House siding', 'Fence', 'Roof', 'Multiple areas'] },
-    q2: { text: 'Surface material?', options: ['Concrete', 'Wood', 'Brick', 'Vinyl siding', 'Stone', 'Not sure'] },
-    q3: { text: 'Approximate area?', options: ['Small (under 500 sq ft)', 'Medium (500\u20131,000 sq ft)', 'Large (1,000+ sq ft)', 'Not sure'] },
-  },
-  locksmith: {
-    icon: '\uD83D\uDD11', label: 'Locksmith', group: 'service',
-    q1: { text: 'What do you need?', options: ['Locked out', 'Rekey locks', 'New lock install', 'Lock repair', 'Smart lock setup', 'Other'] },
-    q2: { text: 'What type?', options: ['Front door', 'Car', 'Garage', 'Mailbox/safe', 'Multiple doors'] },
-    q3: { text: 'How urgent is this?', options: ['Locked out right now', 'Today', 'This week', 'Just getting a price'] },
-  },
+  // ── Plumbing group ──
+  plumbing: { icon: '🔧', label: 'Plumbing', group: 'repair',
+    q1: { text: "What's happening?", options: ['Leaking/dripping', 'Clogged/slow drain', 'No hot water', 'Running toilet', 'Low pressure', 'Burst/flooding', 'Other'] } },
+  septic_sewer: { icon: '🕳️', label: 'Septic & Sewer', group: 'repair',
+    q1: { text: "What's the issue?", options: ['Backup/overflow', 'Slow drains throughout', 'Septic tank needs pumping', 'Bad smell', 'Inspection needed', 'Other'] } },
+  water_heater: { icon: '🔥', label: 'Water Heater', group: 'repair',
+    q1: { text: "What's going on?", options: ['No hot water', 'Not enough hot water', 'Leaking', 'Strange noises', 'Need new install', 'Pilot light out', 'Other'] } },
+  sprinkler_irrigation: { icon: '💦', label: 'Sprinkler & Irrigation', group: 'repair',
+    q1: { text: "What do you need?", options: ['Broken sprinkler head', 'Zone not working', 'Leak in system', 'New installation', 'Winterization', 'Timer/controller issue', 'Other'] } },
+  // ── Electrical group ──
+  electrical: { icon: '⚡', label: 'Electrical', group: 'repair',
+    q1: { text: "What's the problem?", options: ['Outlet not working', 'Lights flickering', 'Breaker tripping', 'Sparking/burning smell', 'Need new install', 'Other'] } },
+  generator_install: { icon: '🔋', label: 'Generator Install', group: 'repair',
+    q1: { text: "What do you need?", options: ['New generator install', 'Generator repair', 'Transfer switch install', 'Maintenance/tune-up', 'Not sure', 'Other'] } },
+  ev_charger_install: { icon: '🔌', label: 'EV Charger Install', group: 'repair',
+    q1: { text: "What do you need?", options: ['Level 2 charger install', 'Panel upgrade for EV', 'Charger not working', 'Quote for new install', 'Other'] } },
+  solar: { icon: '☀️', label: 'Solar', group: 'repair',
+    q1: { text: "What do you need?", options: ['New solar install quote', 'Panel repair', 'Inverter issue', 'Not producing enough', 'Battery storage', 'Other'] } },
+  // ── HVAC group ──
+  hvac: { icon: '❄️', label: 'HVAC', group: 'repair',
+    q1: { text: "What's going on?", options: ['AC not cooling', 'Heat not working', 'Strange noises', 'Thermostat issue', 'Bad smell from vents', 'Maintenance/tune-up'] } },
+  chimney: { icon: '🏠', label: 'Chimney', group: 'repair',
+    q1: { text: "What do you need?", options: ['Chimney sweep/cleaning', 'Inspection', 'Repair/repointing', 'Cap/damper install', 'Smoke coming inside', 'Other'] } },
+  insulation: { icon: '🧱', label: 'Insulation', group: 'repair',
+    q1: { text: "What do you need?", options: ['Attic insulation', 'Wall insulation', 'Crawl space', 'Garage insulation', 'Energy audit first', 'Other'] } },
+  // ── Appliance ──
+  appliance: { icon: '🍳', label: 'Appliance Repair', group: 'repair',
+    q1: { text: 'Which appliance?', options: ['Washer', 'Dryer', 'Dishwasher', 'Refrigerator', 'Oven/stove', 'Garbage disposal', 'Other'] } },
+  // ── Roofing & Exterior group ──
+  roofing: { icon: '🏠', label: 'Roofing', group: 'repair',
+    q1: { text: "What's the concern?", options: ['Active leak inside', 'Missing/damaged shingles', 'Storm damage', 'General inspection', 'Full replacement', 'Other'] } },
+  gutter: { icon: '🌧️', label: 'Gutter Cleaning', group: 'repair',
+    q1: { text: "What do you need?", options: ['Cleaning/debris removal', 'Repair/reattach', 'New gutter install', 'Gutter guards', 'Downspout issue', 'Other'] } },
+  siding: { icon: '🪵', label: 'Siding', group: 'repair',
+    q1: { text: "What's the issue?", options: ['Damaged/cracked section', 'Full replacement', 'New install', 'Power wash only', 'Storm damage', 'Other'] } },
+  window_door_install: { icon: '🪟', label: 'Window & Door Install', group: 'repair',
+    q1: { text: "What do you need?", options: ['Window replacement', 'New window install', 'Door replacement', 'Sliding door issue', 'Storm door install', 'Other'] } },
+  // ── Handyman & Structural group ──
+  general: { icon: '🔨', label: 'Handyman', group: 'repair',
+    q1: { text: 'What kind of work?', options: ['Drywall repair', 'Door/window fix', 'Shelving/mounting', 'Furniture assembly', 'Multiple small jobs', 'Other'] } },
+  drywall: { icon: '🪧', label: 'Drywall', group: 'repair',
+    q1: { text: "What do you need?", options: ['Hole/crack repair', 'Water damage repair', 'New drywall install', 'Texture matching', 'Full room', 'Other'] } },
+  concrete: { icon: '🧱', label: 'Concrete', group: 'repair',
+    q1: { text: "What do you need?", options: ['Crack repair', 'New driveway/patio', 'Sidewalk repair', 'Stamped concrete', 'Foundation work', 'Other'] } },
+  masonry: { icon: '🏗️', label: 'Masonry', group: 'repair',
+    q1: { text: "What do you need?", options: ['Brick repair/repointing', 'Retaining wall', 'Stone veneer', 'Fireplace repair', 'New construction', 'Other'] } },
+  foundation_waterproofing: { icon: '💧', label: 'Foundation & Waterproofing', group: 'repair',
+    q1: { text: "What's the concern?", options: ['Foundation crack', 'Water in basement', 'Settling/shifting', 'Crawl space moisture', 'Drainage issue', 'Other'] } },
+  welding_metal_work: { icon: '⚒️', label: 'Welding & Metal Work', group: 'repair',
+    q1: { text: "What do you need?", options: ['Gate/fence repair', 'Railing fabrication', 'Structural welding', 'Custom metalwork', 'Iron repair', 'Other'] } },
+  furniture_assembly: { icon: '🪑', label: 'Furniture Assembly', group: 'repair',
+    q1: { text: 'How many pieces?', options: ['1 item', '2–3 items', '4+ items', 'Full room setup', 'Disassembly needed too'] } },
+  tv_mounting: { icon: '📺', label: 'TV Mounting', group: 'repair',
+    q1: { text: "What do you need?", options: ['TV wall mount', 'TV + hide wires', 'Projector mount', 'Soundbar install', 'Full home theater', 'Other'] } },
+  // ── Garage Door ──
+  garage_door: { icon: '🚨', label: 'Garage Door', group: 'repair',
+    q1: { text: "What's the issue?", options: ['Won\'t open/close', 'Making noise', 'Off track', 'Opener broken', 'Spring snapped', 'Other'] } },
+  // ── Locksmith & Security ──
+  locksmith: { icon: '🔑', label: 'Locksmith', group: 'repair',
+    q1: { text: "What do you need?", options: ['Locked out', 'Rekey locks', 'New lock install', 'Lock repair', 'Smart lock setup', 'Other'] } },
+  security_systems: { icon: '📹', label: 'Security Systems', group: 'repair',
+    q1: { text: "What do you need?", options: ['Camera install', 'Alarm system', 'Doorbell camera', 'System repair', 'Smart home setup', 'Other'] } },
+  // ── Cleaning group ──
+  house_cleaning: { icon: '✨', label: 'House Cleaning', group: 'service',
+    q1: { text: 'What type of cleaning?', options: ['Regular cleaning', 'Deep clean', 'Move-in/move-out', 'Post-construction', 'One-time', 'Other'] } },
+  carpet_cleaning: { icon: '🧹', label: 'Carpet Cleaning', group: 'service',
+    q1: { text: "What do you need?", options: ['Whole house', 'One room', 'Stain removal', 'Pet odor treatment', 'Area rugs', 'Other'] } },
+  window_cleaning: { icon: '🪟', label: 'Window Cleaning', group: 'service',
+    q1: { text: "What do you need?", options: ['All windows', 'Exterior only', 'Interior + exterior', 'Hard to reach/high', 'Screen cleaning too', 'Other'] } },
+  pressure_washing: { icon: '💦', label: 'Pressure Washing', group: 'service',
+    q1: { text: 'What needs washing?', options: ['Driveway', 'Patio/deck', 'House siding', 'Fence', 'Roof', 'Multiple areas'] } },
+  steam_cleaning: { icon: '♨️', label: 'Steam Cleaning', group: 'service',
+    q1: { text: "What needs cleaning?", options: ['Upholstery', 'Tile & grout', 'Mattress', 'Car interior', 'Multiple items', 'Other'] } },
+  // ── Outdoor & Landscaping group ──
+  landscaping: { icon: '🌿', label: 'Landscaping', group: 'service',
+    q1: { text: 'What do you need?', options: ['Lawn mowing', 'Garden design', 'Hedge trimming', 'Yard cleanup', 'Full landscape install', 'Other'] } },
+  tree_trimming: { icon: '🌳', label: 'Tree Trimming', group: 'service',
+    q1: { text: "What do you need?", options: ['Trimming/pruning', 'Tree removal', 'Dead tree', 'Branches on roof/wires', 'Stump grinding', 'Other'] } },
+  stump_removal: { icon: '🪵', label: 'Stump Removal', group: 'service',
+    q1: { text: 'How many stumps?', options: ['1 stump', '2–3 stumps', '4+ stumps', 'Not sure'] } },
+  fencing: { icon: '🏡', label: 'Fencing', group: 'service',
+    q1: { text: "What do you need?", options: ['New fence install', 'Fence repair', 'Gate repair/install', 'Post replacement', 'Full replacement', 'Other'] } },
+  deck_patio: { icon: '🪵', label: 'Deck & Patio', group: 'service',
+    q1: { text: "What do you need?", options: ['New deck build', 'Deck repair', 'Patio install', 'Staining/sealing', 'Pergola/cover', 'Other'] } },
+  // ── Pool & Spa group ──
+  pool: { icon: '🏊', label: 'Pool Service', group: 'service',
+    q1: { text: 'What do you need?', options: ['Regular cleaning', 'Green/cloudy water', 'Equipment repair', 'Opening/closing', 'Leak detection', 'Other'] } },
+  hot_tub: { icon: '♨️', label: 'Hot Tub', group: 'service',
+    q1: { text: "What do you need?", options: ['Repair', 'Cleaning/maintenance', 'New install', 'Cover replacement', 'Water chemistry', 'Other'] } },
+  // ── Pest Control ──
+  pest_control: { icon: '🐛', label: 'Pest Control', group: 'service',
+    q1: { text: 'What kind of pest?', options: ['Ants', 'Roaches', 'Mice/rats', 'Termites', 'Spiders', 'Wasps/bees', 'Bed bugs', 'Other'] } },
+  // ── Painting & Flooring group ──
+  painting: { icon: '🎨', label: 'Painting', group: 'service',
+    q1: { text: 'Interior or exterior?', options: ['Interior', 'Exterior', 'Both', 'Cabinet painting', 'Other'] } },
+  flooring: { icon: '🪵', label: 'Flooring', group: 'service',
+    q1: { text: "What do you need?", options: ['New install', 'Refinishing', 'Repair', 'Removal', 'Not sure what type', 'Other'] } },
+  tile: { icon: '🔲', label: 'Tile', group: 'service',
+    q1: { text: "What do you need?", options: ['New tile install', 'Tile repair', 'Regrout', 'Backsplash', 'Shower/tub tile', 'Other'] } },
+  // ── Remodeling group ──
+  kitchen_remodel: { icon: '🍽️', label: 'Kitchen Remodel', group: 'service',
+    q1: { text: 'What scope?', options: ['Full remodel', 'Cabinets only', 'Countertops only', 'Layout change', 'Cosmetic update', 'Other'] } },
+  bathroom_remodel: { icon: '🛁', label: 'Bathroom Remodel', group: 'service',
+    q1: { text: 'What scope?', options: ['Full remodel', 'Shower/tub only', 'Vanity/sink only', 'Tile work', 'Cosmetic update', 'Other'] } },
+  general_contractor: { icon: '🏗️', label: 'General Contractor', group: 'service',
+    q1: { text: 'What kind of project?', options: ['Home addition', 'Room conversion', 'Structural changes', 'Permit-required work', 'Large renovation', 'Other'] } },
+  // ── Moving & Hauling group ──
+  moving: { icon: '🚚', label: 'Moving', group: 'service',
+    q1: { text: 'What kind of move?', options: ['Full home move', 'Apartment move', 'Few large items', 'Storage pickup/delivery', 'Other'] } },
+  junk_removal: { icon: '🗑️', label: 'Junk Removal', group: 'service',
+    q1: { text: "What needs removing?", options: ['Furniture', 'Appliances', 'Yard waste', 'Construction debris', 'Full cleanout', 'Other'] } },
+  // ── Concierge ──
+  concierge: { icon: '🎩', label: 'Concierge', group: 'service',
+    q1: { text: "What do you need help with?", options: ['Home management', 'Vendor coordination', 'Property check-ins', 'Errand service', 'Other'] } },
 };
 
 const TIERS = [
@@ -684,6 +791,33 @@ export default function GetQuotes() {
   }, []);
 
   const flow = data.category ? CATEGORY_FLOWS[data.category] : null;
+  const [activeGroup, setActiveGroup] = useState<CatGroup | null>(null);
+
+  const handleGroupSelect = (group: CatGroup) => {
+    // If only one subcategory, skip drill-down
+    if (group.subs.length === 1) {
+      handleSubcategorySelect(group.subs[0], group.label);
+      return;
+    }
+    setActiveGroup(group);
+    setPhase('waiting');
+    addUser(group.label);
+    setTimeout(() => {
+      addAssistant(`What type of ${group.label.toLowerCase()} do you need?`);
+      setPhase('subcategory');
+      scrollDown();
+    }, 500);
+  };
+
+  const handleSubcategorySelect = (sub: SubCat, parentLabel?: string) => {
+    const c = CATEGORY_FLOWS[sub.id];
+    if (!c) return;
+    setData(d => ({ ...d, category: sub.id }));
+    setPhase('waiting');
+    // If we skipped drill-down (single sub), show parent label
+    addUser(parentLabel && sub.label.startsWith('General') ? parentLabel : sub.label);
+    setTimeout(() => { addAssistant(c.q1.text); setPhase('q1'); }, 500);
+  };
 
   const handleCategory = (cat: string | CatOption) => {
     const id = typeof cat === 'string' ? cat : cat.id;
@@ -975,8 +1109,8 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     }, 500);
   };
 
-  const repairOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'repair').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
-  const serviceOptions: CatOption[] = Object.entries(CATEGORY_FLOWS).filter(([, c]) => c.group === 'service').map(([id, c]) => ({ id, icon: c.icon, label: c.label }));
+  const repairGroups = CATEGORY_TREE.filter(g => g.type === 'repair').map(g => ({ id: g.label, icon: g.icon, label: g.label }));
+  const serviceGroups = CATEGORY_TREE.filter(g => g.type === 'service').map(g => ({ id: g.label, icon: g.icon, label: g.label }));
 
   return (
     <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
@@ -1065,10 +1199,26 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         {phase === 'category' && (
           <>
             <div style={{ marginLeft: 42, fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6, animation: 'fadeSlide 0.3s ease' }}>REPAIR</div>
-            <QuickReplies options={repairOptions} onSelect={(opt) => handleCategory(opt as CatOption)} columns={4} />
+            <QuickReplies options={repairGroups} onSelect={(opt) => {
+              const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
+              if (group) handleGroupSelect(group);
+            }} columns={4} />
             <div style={{ marginLeft: 42, fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6, animation: 'fadeSlide 0.3s ease' }}>SERVICES</div>
-            <QuickReplies options={serviceOptions} onSelect={(opt) => handleCategory(opt as CatOption)} columns={4} />
+            <QuickReplies options={serviceGroups} onSelect={(opt) => {
+              const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
+              if (group) handleGroupSelect(group);
+            }} columns={4} />
           </>
+        )}
+        {phase === 'subcategory' && activeGroup && (
+          <QuickReplies
+            options={activeGroup.subs.map(s => ({ id: s.id, icon: s.icon, label: s.label }))}
+            onSelect={(opt) => {
+              const sub = activeGroup.subs.find(s => s.id === (typeof opt === 'string' ? opt : opt.id));
+              if (sub) handleSubcategorySelect(sub);
+            }}
+            columns={activeGroup.subs.length <= 3 ? activeGroup.subs.length : 3}
+          />
         )}
         {phase === 'q1' && flow && <QuickReplies options={flow.q1.options} onSelect={(opt) => handleQ1(opt as string)} />}
         {phase === 'ai_followup' && !streaming && (
