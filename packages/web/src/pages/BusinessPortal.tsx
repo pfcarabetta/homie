@@ -247,8 +247,8 @@ const BED_TYPES = [
   { value: 'crib', label: 'Crib' },
 ];
 
-function EditPropertyModal({ workspaceId, property, onClose, onUpdated }: {
-  workspaceId: string; property: Property; onClose: () => void; onUpdated: (p: Property) => void;
+function EditPropertyModal({ workspaceId, property, onClose, onUpdated, onDeleted }: {
+  workspaceId: string; property: Property; onClose: () => void; onUpdated: (p: Property) => void; onDeleted: (id: string) => void;
 }) {
   const [name, setName] = useState(property.name);
   const [address, setAddress] = useState(property.address || '');
@@ -264,6 +264,8 @@ function EditPropertyModal({ workspaceId, property, onClose, onUpdated }: {
   const [notes, setNotes] = useState(property.notes || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   function addBed() { setBeds(prev => [...prev, { type: 'queen', count: 1 }]); }
   function removeBed(i: number) { setBeds(prev => prev.filter((_, idx) => idx !== i)); }
@@ -386,6 +388,41 @@ function EditPropertyModal({ workspaceId, property, onClose, onUpdated }: {
             style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
+        </div>
+
+        {/* Delete property */}
+        <div style={{ borderTop: '1px solid #E0DAD4', marginTop: 24, paddingTop: 20 }}>
+          {!confirmDelete ? (
+            <button onClick={() => setConfirmDelete(true)}
+              style={{ fontSize: 13, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
+              Delete this property
+            </button>
+          ) : (
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#DC2626', marginBottom: 6 }}>Are you sure?</div>
+              <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12 }}>This will permanently remove <strong>{property.name}</strong> and cannot be undone.</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setConfirmDelete(false)}
+                  style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 13, cursor: 'pointer', color: D }}>
+                  Cancel
+                </button>
+                <button disabled={deleting} onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await businessService.deleteProperty(workspaceId, property.id);
+                    onDeleted(property.id);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Failed to delete');
+                    setConfirmDelete(false);
+                  }
+                  setDeleting(false);
+                }}
+                  style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: '#DC2626', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: deleting ? 0.7 : 1 }}>
+                  {deleting ? 'Deleting...' : 'Yes, delete property'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -520,7 +557,8 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
       {editingProperty && (
         <EditPropertyModal workspaceId={workspaceId} property={editingProperty}
           onClose={() => setEditingProperty(null)}
-          onUpdated={p => { setProperties(prev => prev.map(x => x.id === p.id ? p : x)); setEditingProperty(null); }} />
+          onUpdated={p => { setProperties(prev => prev.map(x => x.id === p.id ? p : x)); setEditingProperty(null); }}
+          onDeleted={id => { setProperties(prev => prev.filter(x => x.id !== id)); setEditingProperty(null); }} />
       )}
 
       {/* Track PMS Import Modal */}
