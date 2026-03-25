@@ -1384,6 +1384,8 @@ interface TrackUnit {
   // Nested objects
   rooms?: TrackRoom[];
   bedTypes?: TrackBedType[];
+  // Square footage
+  squareFeet?: number;
   // Legacy/fallback fields
   address?: { street?: string; city?: string; state?: string; zip?: string };
   bathrooms?: number;
@@ -1565,7 +1567,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
         unitCount: 1,
         bedrooms: u.bedrooms ?? null,
         bathrooms: bathroomStr,
-        sqft: u.square_feet ?? null,
+        sqft: u.squareFeet ?? u.square_feet ?? null,
         beds: bedConfig,
         notes: roomNotes || null,
       };
