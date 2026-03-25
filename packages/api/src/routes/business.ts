@@ -1465,17 +1465,48 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
-    // Log first unit's bed-related fields for debugging
-    if (units.length > 0) {
-      const sample = units[0] as unknown as Record<string, unknown>;
-      const embedded = sample._embedded as Record<string, unknown> | undefined;
-      logger.info({
-        bedTypes: sample.bedTypes,
-        embeddedKeys: embedded ? Object.keys(embedded) : null,
-        embeddedRooms: embedded?.rooms,
-        embeddedBedTypes: embedded?.bedTypes,
-        embeddedBed_types: embedded?.bed_types,
-      }, '[Track import] Bed debug');
+    // Fetch bed types for each unit from the separate endpoint
+    for (const u of units) {
+      try {
+        const bedUrl = `${base}/pms/units/${u.id}/bed-types?size=50`;
+        const bedRes = await fetch(bedUrl, {
+          headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+        });
+        if (bedRes.ok) {
+          const bedData = await bedRes.json() as Record<string, unknown>;
+          const embeddedBeds = bedData._embedded as Record<string, unknown> | undefined;
+          const bedList = (
+            embeddedBeds?.bedTypes ?? embeddedBeds?.bed_types ?? embeddedBeds?.['bed-types'] ??
+            bedData.bedTypes ?? bedData.bed_types ?? bedData.contents ?? bedData.results ?? bedData.data ??
+            (Array.isArray(bedData) ? bedData : [])
+          ) as TrackBedType[];
+          if (bedList.length > 0) {
+            u.bedTypes = bedList;
+          }
+        }
+      } catch { /* skip - beds will just be empty */ }
+    }
+
+    // Fetch rooms for each unit
+    for (const u of units) {
+      try {
+        const roomUrl = `${base}/pms/units/${u.id}/rooms?size=50`;
+        const roomRes = await fetch(roomUrl, {
+          headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+        });
+        if (roomRes.ok) {
+          const roomData = await roomRes.json() as Record<string, unknown>;
+          const embeddedRooms = roomData._embedded as Record<string, unknown> | undefined;
+          const roomList = (
+            embeddedRooms?.rooms ?? embeddedRooms?.room ??
+            roomData.rooms ?? roomData.contents ?? roomData.results ?? roomData.data ??
+            (Array.isArray(roomData) ? roomData : [])
+          ) as TrackRoom[];
+          if (roomList.length > 0) {
+            u.rooms = roomList;
+          }
+        }
+      } catch { /* skip */ }
     }
 
     // Only import active units
