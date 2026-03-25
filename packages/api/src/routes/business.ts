@@ -1347,17 +1347,52 @@ router.get('/:workspaceId/bookings', requireWorkspace, async (req: Request, res:
 
 // ── Track PMS Import ────────────────────────────────────────────────────────
 
+interface TrackBedType {
+  id?: number;
+  name?: string;
+  count?: string | number;
+}
+
+interface TrackRoom {
+  name?: string;
+  type?: string;
+  description?: string;
+  sleeps?: number;
+  hasAttachedBathroom?: boolean;
+  beds?: TrackBedType[];
+  order?: number;
+}
+
 interface TrackUnit {
   id: number;
   name?: string;
-  address?: { street?: string; city?: string; state?: string; zip?: string };
+  shortName?: string;
+  // Address fields (flat on the unit, not nested)
+  streetAddress?: string;
+  extendedAddress?: string;
+  locality?: string; // city
+  region?: string; // state
+  postal?: string; // zip
+  country?: string;
+  // Physical
   bedrooms?: number;
+  fullBathrooms?: number;
+  threeQuarterBathrooms?: number;
+  halfBathrooms?: number;
+  maxOccupancy?: number;
+  floors?: number;
+  // Nested objects
+  rooms?: TrackRoom[];
+  bedTypes?: TrackBedType[];
+  // Legacy/fallback fields
+  address?: { street?: string; city?: string; state?: string; zip?: string };
   bathrooms?: number;
   square_feet?: number;
   property_type?: string;
   unit_type?: string;
   status?: string;
-  bed_types?: Array<{ name?: string; quantity?: number }>;
+  isActive?: boolean;
+  bed_types?: TrackBedType[];
 }
 
 // POST /:workspaceId/import/track — Import properties from Track PMS
@@ -1470,23 +1505,66 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
 
     const toInsert = units
       .filter(u => !existingIds.has(String(u.id)))
-      .map(u => ({
-        workspaceId: req.workspaceId,
-        name: u.name || `Unit ${u.id}`,
-        address: u.address?.street ?? null,
-        city: u.address?.city ?? null,
-        state: u.address?.state ?? null,
-        zipCode: u.address?.zip ?? null,
-        propertyType: u.property_type ?? u.unit_type ?? 'vacation_rental',
-        unitCount: 1,
-        bedrooms: u.bedrooms ?? null,
-        bathrooms: u.bathrooms ? String(u.bathrooms) : null,
-        sqft: u.square_feet ?? null,
-        beds: u.bed_types?.map(b => ({ type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'), count: b.quantity ?? 1 })) ?? null,
-        pmsSource: 'track' as const,
-        pmsExternalId: String(u.id),
-        notes: null,
-      }));
+      .map(u => {
+        // Calculate total bathrooms: full + 0.75 * threeQuarter + 0.5 * half
+        const totalBathrooms = (u.fullBathrooms ?? 0) + (u.threeQuarterBathrooms ?? 0) * 0.75 + (u.halfBathrooms ?? 0) * 0.5;
+        const bathroomStr = totalBathrooms > 0 ? String(totalBathrooms) : (u.bathrooms ? String(u.bathrooms) : null);
+
+        // Build bed config from rooms → beds, falling back to top-level bedTypes
+        let bedConfig: { type: string; count: number }[] | null = null;
+        if (u.rooms && u.rooms.length > 0) {
+          // Collect all beds from all rooms
+          const allBeds: { type: string; count: number }[] = [];
+          for (const room of u.rooms) {
+            if (room.beds && room.beds.length > 0) {
+              for (const bed of room.beds) {
+                const bedType = (bed.name ?? 'other').toLowerCase().replace(/\s+/g, '_');
+                const bedCount = typeof bed.count === 'string' ? parseInt(bed.count, 10) || 1 : (bed.count ?? 1);
+                // Merge with existing same-type entry
+                const existing = allBeds.find(b => b.type === bedType);
+                if (existing) { existing.count += bedCount; }
+                else { allBeds.push({ type: bedType, count: bedCount }); }
+              }
+            }
+          }
+          if (allBeds.length > 0) bedConfig = allBeds;
+        }
+        if (!bedConfig && u.bedTypes && u.bedTypes.length > 0) {
+          bedConfig = u.bedTypes.map(b => ({
+            type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'),
+            count: typeof b.count === 'string' ? parseInt(b.count, 10) || 1 : (b.count ?? 1),
+          }));
+        }
+        if (!bedConfig && u.bed_types && u.bed_types.length > 0) {
+          bedConfig = u.bed_types.map(b => ({
+            type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'),
+            count: typeof b.count === 'string' ? parseInt(b.count, 10) || 1 : (b.count ?? 1),
+          }));
+        }
+
+        // Build notes from room descriptions
+        const roomNotes = u.rooms?.filter(r => r.name)
+          .map(r => `${r.name}${r.type ? ` (${r.type})` : ''}${r.sleeps ? ` — sleeps ${r.sleeps}` : ''}`)
+          .join('; ');
+
+        return {
+          workspaceId: req.workspaceId,
+          name: u.name || u.shortName || `Unit ${u.id}`,
+          address: u.streetAddress ?? u.address?.street ?? null,
+          city: u.locality ?? u.address?.city ?? null,
+          state: u.region ?? u.address?.state ?? null,
+          zipCode: u.postal ?? u.address?.zip ?? null,
+          propertyType: u.property_type ?? u.unit_type ?? 'vacation_rental',
+          unitCount: 1,
+          bedrooms: u.bedrooms ?? null,
+          bathrooms: bathroomStr,
+          sqft: u.square_feet ?? null,
+          beds: bedConfig,
+          pmsSource: 'track' as const,
+          pmsExternalId: String(u.id),
+          notes: roomNotes || null,
+        };
+      });
 
     let imported = 0;
     if (toInsert.length > 0) {
