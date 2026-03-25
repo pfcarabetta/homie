@@ -1465,6 +1465,22 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
+    // Log first unit's bed-related fields for debugging
+    if (units.length > 0) {
+      const sample = units[0] as Record<string, unknown>;
+      logger.info({
+        unitKeys: Object.keys(sample),
+        bedrooms: sample.bedrooms,
+        rooms: sample.rooms,
+        bedTypes: sample.bedTypes,
+        bed_types: sample.bed_types,
+        fullBathrooms: sample.fullBathrooms,
+        halfBathrooms: sample.halfBathrooms,
+        squareFeet: sample.squareFeet,
+        square_feet: sample.square_feet,
+      }, '[Track import] Sample unit fields');
+    }
+
     // Only import active units
     const activeUnits = units.filter(u => u.isActive !== false && u.status !== 'inactive');
     const totalFetched = units.length;
