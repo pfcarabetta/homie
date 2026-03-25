@@ -447,7 +447,7 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
-      if (res.data) setProperties(res.data);
+      if (res.data) setProperties(res.data.sort((a, b) => a.name.localeCompare(b.name)));
       setLoading(false);
     });
   }, [workspaceId]);
@@ -588,7 +588,7 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
                   setShowTrackImport(false); setTrackResult(null); setTrackError('');
                   setTrackDomain(''); setTrackKey(''); setTrackSecret('');
                   // Refresh properties list
-                  businessService.listProperties(workspaceId).then(res => { if (res.data) setProperties(res.data); });
+                  businessService.listProperties(workspaceId).then(res => { if (res.data) setProperties(res.data.sort((a, b) => a.name.localeCompare(b.name))); });
                 }} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: O, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
                   Done
                 </button>
