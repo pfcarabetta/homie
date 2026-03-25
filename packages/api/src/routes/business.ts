@@ -1494,39 +1494,62 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       return;
     }
 
+    // Map Track bed type names to Homie bed type values
+    const BED_TYPE_MAP: Record<string, string> = {
+      'king': 'king', 'king bed': 'king', 'king size': 'king', 'california king': 'king', 'cal king': 'king',
+      'queen': 'queen', 'queen bed': 'queen', 'queen size': 'queen',
+      'full': 'full', 'full bed': 'full', 'full size': 'full', 'double': 'full', 'double bed': 'full',
+      'twin': 'twin', 'twin bed': 'twin', 'twin size': 'twin', 'single': 'twin', 'single bed': 'twin', 'twin/single': 'twin',
+      'sofa bed': 'sofa_bed', 'sofa_bed': 'sofa_bed', 'sleeper sofa': 'sofa_bed', 'sofa sleeper': 'sofa_bed',
+      'pull out': 'sofa_bed', 'pull-out': 'sofa_bed', 'pullout': 'sofa_bed', 'futon': 'sofa_bed',
+      'bunk': 'bunk', 'bunk bed': 'bunk', 'bunk beds': 'bunk', 'bunks': 'bunk',
+      'crib': 'crib', 'baby crib': 'crib', 'pack and play': 'crib', 'pack n play': 'crib',
+      'daybed': 'full', 'trundle': 'twin', 'trundle bed': 'twin',
+      'air mattress': 'full', 'airbed': 'full', 'air bed': 'full',
+      'murphy': 'full', 'murphy bed': 'full', 'wall bed': 'full',
+    };
+
+    function normalizeBedType(name: string): string {
+      const key = name.toLowerCase().trim();
+      return BED_TYPE_MAP[key] ?? key.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    }
+
     // Map a Track unit to Homie property fields
     function mapUnit(u: TrackUnit) {
       const totalBathrooms = (u.fullBathrooms ?? 0) + (u.threeQuarterBathrooms ?? 0) * 0.75 + (u.halfBathrooms ?? 0) * 0.5;
       const bathroomStr = totalBathrooms > 0 ? String(totalBathrooms) : (u.bathrooms ? String(u.bathrooms) : null);
 
-      let bedConfig: { type: string; count: number }[] | null = null;
+      // Collect beds from all sources: rooms[].beds[], bedTypes[], bed_types[]
+      const allBeds: { type: string; count: number }[] = [];
+
+      function addBed(name: string, count: string | number) {
+        const bedType = normalizeBedType(name);
+        const bedCount = typeof count === 'string' ? parseInt(count, 10) || 1 : (count ?? 1);
+        const existing = allBeds.find(b => b.type === bedType);
+        if (existing) { existing.count += bedCount; }
+        else { allBeds.push({ type: bedType, count: bedCount }); }
+      }
+
+      // Primary source: rooms with nested beds
       if (u.rooms && u.rooms.length > 0) {
-        const allBeds: { type: string; count: number }[] = [];
         for (const room of u.rooms) {
           if (room.beds && room.beds.length > 0) {
             for (const bed of room.beds) {
-              const bedType = (bed.name ?? 'other').toLowerCase().replace(/\s+/g, '_');
-              const bedCount = typeof bed.count === 'string' ? parseInt(bed.count, 10) || 1 : (bed.count ?? 1);
-              const existing = allBeds.find(b => b.type === bedType);
-              if (existing) { existing.count += bedCount; }
-              else { allBeds.push({ type: bedType, count: bedCount }); }
+              addBed(bed.name ?? 'other', bed.count ?? 1);
             }
           }
         }
-        if (allBeds.length > 0) bedConfig = allBeds;
       }
-      if (!bedConfig && u.bedTypes && u.bedTypes.length > 0) {
-        bedConfig = u.bedTypes.map(b => ({
-          type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'),
-          count: typeof b.count === 'string' ? parseInt(b.count, 10) || 1 : (b.count ?? 1),
-        }));
+
+      // Fallback: top-level bedTypes or bed_types
+      if (allBeds.length === 0) {
+        const topBeds = u.bedTypes ?? u.bed_types ?? [];
+        for (const b of topBeds) {
+          addBed(b.name ?? 'other', b.count ?? 1);
+        }
       }
-      if (!bedConfig && u.bed_types && u.bed_types.length > 0) {
-        bedConfig = u.bed_types.map(b => ({
-          type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'),
-          count: typeof b.count === 'string' ? parseInt(b.count, 10) || 1 : (b.count ?? 1),
-        }));
-      }
+
+      const bedConfig = allBeds.length > 0 ? allBeds : null;
 
       const roomNotes = u.rooms?.filter(r => r.name)
         .map(r => `${r.name}${r.type ? ` (${r.type})` : ''}${r.sleeps ? ` — sleeps ${r.sleeps}` : ''}`)
