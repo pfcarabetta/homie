@@ -141,8 +141,6 @@ const OUTREACH_LOG = [
 interface QuoteData {
   category: string | null;
   a1: string | null;
-  aiFollowUp: string | null;
-  aiFollowUp2: string | null;
   aiDiagnosis: string | null;
   extra: string | null;
   photo: string | null;
@@ -563,7 +561,8 @@ export default function GetQuotes() {
   const isDemo = new URLSearchParams(window.location.search).has('demo');
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [phase, setPhase] = useState('greeting');
-  const [data, setData] = useState<QuoteData>({ category: null, a1: null, aiFollowUp: null, aiFollowUp2: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
+  const [data, setData] = useState<QuoteData>({ category: null, a1: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
+  const aiConvoRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -694,72 +693,71 @@ export default function GetQuotes() {
     setTimeout(() => { addAssistant(c.q1.text); setPhase('q1'); }, 500);
   };
 
+  const askFollowUp = (userAnswer: string, isFirst: boolean) => {
+    const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
+
+    // Build conversation history for the AI
+    if (isFirst) {
+      aiConvoRef.current = [{ role: 'user', content: `I need help with ${cat?.label}. Specifically: ${userAnswer}.` }];
+    } else {
+      aiConvoRef.current.push({ role: 'user', content: userAnswer });
+    }
+
+    const questionCount = aiConvoRef.current.filter(m => m.role === 'assistant').length;
+    const detailsSoFar = aiConvoRef.current.filter(m => m.role === 'user').map(m => m.content).join('. ');
+
+    setTimeout(() => {
+      streamAI(
+        `You are helping gather details from a homeowner who needs ${cat?.label} help so we can brief a service provider. Here is everything gathered so far: "${detailsSoFar}".
+
+You have asked ${questionCount} follow-up question(s) so far. Your job:
+- If you have enough specific detail for a provider to give an accurate quote (location in home, what's happening, severity/urgency, and any relevant specifics like brand, age, size), respond with ONLY the tag <ready> and nothing else.
+- If critical details are still missing that a provider would need, ask ONE brief, specific follow-up question (under 2 sentences). Do not offer to fix the issue — we are finding them a provider. Do not ask about zip code, budget, or timing — the app handles that separately.
+- You must include <ready> after at most 4 follow-up questions, even if some details are missing.
+- For simple/straightforward issues (e.g. "toilet running", "locked out right now"), you can include <ready> after just 1 question if you already have enough context.`,
+        aiConvoRef.current,
+        (aiText) => {
+          const cleaned = aiText.replace(/<ready>/g, '').trim();
+          if (aiText.includes('<ready>') || questionCount >= 4) {
+            // AI says it has enough — collect the gathered details
+            const allUserDetails = aiConvoRef.current.filter(m => m.role === 'user').map(m => m.content).join('. ');
+            setData(d => ({ ...d, extra: allUserDetails }));
+            if (cleaned) {
+              // AI included a final message before <ready> — unlikely but handle it
+            }
+            setTimeout(() => {
+              addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
+              setPhase('extra');
+              scrollDown();
+            }, 300);
+          } else {
+            aiConvoRef.current.push({ role: 'assistant', content: cleaned });
+            setPhase('ai_followup');
+            scrollDown();
+          }
+        },
+      );
+    }, 300);
+  };
+
   const handleQ1 = (answer: string) => {
     setData(d => ({ ...d, a1: answer }));
     setPhase('waiting');
     addUser(answer);
-
-    // Send context to AI for a smart follow-up question
-    const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
-    const context = `I need help with ${cat?.label}. Specifically: ${answer}.`;
-    const history: { role: 'user' | 'assistant'; content: string }[] = [
-      { role: 'user', content: context },
-    ];
-
-    setTimeout(() => {
-      streamAI(
-        `The homeowner needs ${cat?.label} help. They said: "${answer}". Ask ONE brief, specific follow-up question to better understand the issue so we can match them with the right pro. Keep it under 2 sentences. Do not offer to fix it — we are finding them a provider.`,
-        history,
-        (aiText) => {
-          setData(d => ({ ...d, aiFollowUp: aiText }));
-          setPhase('ai_response');
-          scrollDown();
-        },
-      );
-    }, 300);
+    askFollowUp(answer, true);
   };
 
-  const handleAIResponse = (answer: string) => {
-    setData(d => ({ ...d, extra: answer }));
+  const handleFollowUpAnswer = (answer: string) => {
     setPhase('waiting');
     addUser(answer);
-
-    // Ask a second follow-up question for more detail
-    const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
-    const history: { role: 'user' | 'assistant'; content: string }[] = [
-      { role: 'user', content: `I need ${cat?.label} help: ${data.a1}` },
-      { role: 'assistant', content: data.aiFollowUp || '' },
-      { role: 'user', content: answer },
-    ];
-
-    setTimeout(() => {
-      streamAI(
-        `The homeowner needs ${cat?.label} help. They described: "${data.a1}". You asked a follow-up and they said: "${answer}". Ask ONE more brief, specific follow-up question to gather additional detail that would help a provider give an accurate quote. For example, ask about age of equipment, brand, size of area, access issues, or anything else relevant. Keep it under 2 sentences. Do not offer to fix it — we are finding them a provider.`,
-        history,
-        (aiText) => {
-          setData(d => ({ ...d, aiFollowUp2: aiText }));
-          setPhase('ai_response2');
-          scrollDown();
-        },
-      );
-    }, 300);
+    askFollowUp(answer, false);
   };
 
-  const handleAIResponse2 = (answer: string) => {
-    const updatedExtra = (data.extra ? data.extra + '. ' : '') + answer;
-    setData(d => ({ ...d, extra: updatedExtra }));
-    setPhase('waiting');
-    addUser(answer);
-    setTimeout(() => {
-      addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
-      setPhase('extra');
-      scrollDown();
-    }, 500);
-  };
-
-  const handleSkipAI2 = () => {
+  const handleSkipFollowUp = () => {
     setPhase('waiting');
     addUser("No, that covers it");
+    const allUserDetails = aiConvoRef.current.filter(m => m.role === 'user').map(m => m.content).join('. ');
+    setData(d => ({ ...d, extra: allUserDetails }));
     setTimeout(() => {
       addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
       setPhase('extra');
@@ -783,15 +781,14 @@ export default function GetQuotes() {
 
   const generateDiagnosis = (extraDetails: string) => {
     const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
-    const allDetails = [data.a1, data.extra !== extraDetails ? data.extra : null, extraDetails].filter(Boolean).join('. ');
-    const history: { role: 'user' | 'assistant'; content: string }[] = [
-      { role: 'user', content: `I need ${cat?.label} help: ${data.a1}` },
-      { role: 'assistant', content: data.aiFollowUp || '' },
-      { role: 'user', content: data.extra || allDetails },
-    ];
-    if (data.aiFollowUp2) {
-      history.push({ role: 'assistant', content: data.aiFollowUp2 });
-      history.push({ role: 'user', content: allDetails });
+    // Build history from the full AI conversation plus any extra details
+    const history: { role: 'user' | 'assistant'; content: string }[] = [...aiConvoRef.current];
+    if (extraDetails) {
+      history.push({ role: 'user', content: extraDetails });
+    }
+    // Fallback if no AI conversation happened
+    if (history.length === 0) {
+      history.push({ role: 'user', content: `I need ${cat?.label} help: ${data.a1}. ${extraDetails}` });
     }
 
     setStreaming(true);
@@ -835,15 +832,7 @@ export default function GetQuotes() {
     scrollDown();
   };
 
-  const handleSkipAI = () => {
-    setPhase('waiting');
-    addUser("No, that covers it");
-    setTimeout(() => {
-      addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
-      setPhase('extra');
-      scrollDown();
-    }, 500);
-  };
+  const handleSkipAI = handleSkipFollowUp;
 
   const handleZip = (zip: string) => {
     setData(d => ({ ...d, zip }));
@@ -1081,22 +1070,11 @@ export default function GetQuotes() {
           </>
         )}
         {phase === 'q1' && flow && <QuickReplies options={flow.q1.options} onSelect={(opt) => handleQ1(opt as string)} />}
-        {phase === 'ai_response' && !streaming && (
+        {phase === 'ai_followup' && !streaming && (
           <>
-            <TextInput placeholder="Type your answer..." onSubmit={handleAIResponse} />
+            <TextInput placeholder="Type your answer..." onSubmit={handleFollowUpAnswer} />
             <div style={{ marginLeft: 42, marginBottom: 16 }}>
-              <button onClick={handleSkipAI} style={{
-                padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
-                color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-              }}>No, that covers it →</button>
-            </div>
-          </>
-        )}
-        {phase === 'ai_response2' && !streaming && (
-          <>
-            <TextInput placeholder="Type your answer..." onSubmit={handleAIResponse2} />
-            <div style={{ marginLeft: 42, marginBottom: 16 }}>
-              <button onClick={handleSkipAI2} style={{
+              <button onClick={handleSkipFollowUp} style={{
                 padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
                 color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
               }}>No, that covers it →</button>
