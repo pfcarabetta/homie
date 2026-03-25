@@ -126,6 +126,102 @@ function renderBold(text: string) {
   );
 }
 
+/* ── Property Selector with search ─────────────────────────────────────── */
+
+function PropertySelector({ properties, workspaces, selectedWorkspace, onSelectWorkspace, onSelect, onAddClick }: {
+  properties: Property[];
+  workspaces: Workspace[];
+  selectedWorkspace: string | null;
+  onSelectWorkspace: (id: string) => void;
+  onSelect: (p: Property) => void;
+  onAddClick: () => void;
+}) {
+  const [search, setSearch] = useState('');
+
+  const filtered = search.trim()
+    ? properties.filter(p => {
+        const q = search.toLowerCase();
+        return p.name.toLowerCase().includes(q)
+          || (p.address && p.address.toLowerCase().includes(q))
+          || (p.city && p.city.toLowerCase().includes(q))
+          || (p.zipCode && p.zipCode.includes(q));
+      })
+    : properties;
+
+  return (
+    <div>
+      <AssistantMsg text="Which property is this for?" animate />
+      {selectedWorkspace && (
+        <div style={{ marginLeft: 42, display: 'grid', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+          {properties.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>
+              No properties found. <span onClick={onAddClick} style={{ color: O, cursor: 'pointer', fontWeight: 600 }}>Add properties first.</span>
+            </div>
+          ) : (
+            <>
+              {properties.length > 5 && (
+                <div style={{ position: 'relative' }}>
+                  <input
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search properties by name, address, or city..."
+                    style={{
+                      width: '100%', padding: '12px 16px 12px 38px', borderRadius: 12, fontSize: 14,
+                      border: '2px solid rgba(0,0,0,0.08)', outline: 'none', fontFamily: "'DM Sans', sans-serif",
+                      color: D, boxSizing: 'border-box',
+                    }}
+                    onFocus={e => e.target.style.borderColor = O}
+                    onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
+                  />
+                  <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, color: '#9B9490', pointerEvents: 'none' }}>🔍</span>
+                </div>
+              )}
+              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                {filtered.map(p => (
+                  <button key={p.id} onClick={() => onSelect(p)} style={{
+                    display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: 'pointer',
+                    border: '2px solid rgba(0,0,0,0.07)', background: 'white', textAlign: 'left', transition: 'all 0.15s',
+                    fontFamily: "'DM Sans', sans-serif", width: '100%', marginBottom: 8,
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                  >
+                    {p.photoUrls && p.photoUrls.length > 0 && (
+                      <img src={p.photoUrls[0]} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', marginRight: 12, flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: D }}>{p.name}</div>
+                      {(p.address || p.city) && (
+                        <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p.address}{p.city ? `, ${p.city}` : ''}{p.state ? `, ${p.state}` : ''}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#9B9490', background: W, padding: '4px 10px', borderRadius: 8, flexShrink: 0 }}>
+                      {p.unitCount} {p.unitCount === 1 ? 'unit' : 'units'}
+                    </div>
+                  </button>
+                ))}
+                {search && filtered.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: 24, color: '#9B9490', fontSize: 14 }}>
+                    No properties match "{search}"
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          {workspaces.length > 1 && (
+            <select value={selectedWorkspace} onChange={e => onSelectWorkspace(e.target.value)}
+              style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 13, color: '#6B6560', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+              {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Chat message components ────────────────────────────────────────────── */
 
 function AssistantMsg({ text, animate = false }: { text: string; animate?: boolean }) {
@@ -634,41 +730,14 @@ export default function BusinessChat() {
 
           {/* Step: Property selection */}
           {step === 'property' && (
-            <div>
-              <AssistantMsg text="Which property is this for?" animate />
-              {selectedWorkspace && (
-                <div style={{ marginLeft: 42, display: 'grid', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
-                  {properties.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>
-                      No properties found. <span onClick={() => navigate('/business')} style={{ color: O, cursor: 'pointer', fontWeight: 600 }}>Add properties first.</span>
-                    </div>
-                  ) : properties.map(p => (
-                    <button key={p.id} onClick={() => selectProperty(p)} style={{
-                      display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: 'pointer',
-                      border: '2px solid rgba(0,0,0,0.07)', background: 'white', textAlign: 'left', transition: 'all 0.15s',
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{p.name}</div>
-                        {p.address && <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{p.address}{p.city ? `, ${p.city}` : ''}</div>}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#9B9490', background: W, padding: '4px 10px', borderRadius: 8 }}>
-                        {p.unitCount} {p.unitCount === 1 ? 'unit' : 'units'}
-                      </div>
-                    </button>
-                  ))}
-                  {workspaces.length > 1 && (
-                    <select value={selectedWorkspace} onChange={e => { setSelectedWorkspace(e.target.value); setSelectedProperty(null); }}
-                      style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 13, color: '#6B6560', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
-                      {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                    </select>
-                  )}
-                </div>
-              )}
-            </div>
+            <PropertySelector
+              properties={properties}
+              workspaces={workspaces}
+              selectedWorkspace={selectedWorkspace}
+              onSelectWorkspace={(id) => { setSelectedWorkspace(id); setSelectedProperty(null); }}
+              onSelect={selectProperty}
+              onAddClick={() => navigate('/business')}
+            />
           )}
 
           {/* Step: Category selection */}
