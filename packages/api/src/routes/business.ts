@@ -1465,7 +1465,11 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
-    if (units.length === 0) {
+    // Only import active units
+    const activeUnits = units.filter(u => u.isActive !== false && u.status !== 'inactive');
+    const totalFetched = units.length;
+
+    if (activeUnits.length === 0) {
       // Re-fetch first page to include debug info in response
       const debugRes = await fetch(`${base}/pms/units?size=50`, {
         headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
@@ -1584,7 +1588,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
     const existingMap = new Map(existingProps.map(p => [p.pmsExternalId, p.id]));
 
     // Insert new properties
-    const newUnits = units.filter(u => !existingMap.has(String(u.id)));
+    const newUnits = activeUnits.filter(u => !existingMap.has(String(u.id)));
     let imported = 0;
     if (newUnits.length > 0) {
       const toInsert = newUnits.map(u => ({
@@ -1600,7 +1604,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
     // Update existing properties if requested
     let updated = 0;
     if (body.update_existing) {
-      const existingUnits = units.filter(u => existingMap.has(String(u.id)));
+      const existingUnits = activeUnits.filter(u => existingMap.has(String(u.id)));
       for (const u of existingUnits) {
         const propId = existingMap.get(String(u.id))!;
         const mapped = mapUnit(u);
@@ -1615,8 +1619,8 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       data: {
         imported,
         updated,
-        skipped: units.length - imported - updated,
-        total: units.length,
+        skipped: activeUnits.length - imported - updated,
+        total: activeUnits.length,
       },
       error: null,
       meta: {},
