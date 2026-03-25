@@ -816,4 +816,40 @@ router.get('/google-search', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/admin/google-place/:placeId — Fetch phone/website from Place Details
+router.get('/google-place/:placeId', async (req: Request, res: Response) => {
+  const { placeId } = req.params;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey || !placeId) {
+    res.json({ data: null, error: null, meta: {} });
+    return;
+  }
+
+  try {
+    const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=formatted_phone_number,website&key=${apiKey}`;
+    const detailsRes = await fetch(detailsUrl);
+    const data = await detailsRes.json() as {
+      status: string;
+      result?: { formatted_phone_number?: string; website?: string };
+    };
+
+    if (data.status !== 'OK' || !data.result) {
+      res.json({ data: { phone: null, email: null, website: null }, error: null, meta: {} });
+      return;
+    }
+
+    res.json({
+      data: {
+        phone: data.result.formatted_phone_number ?? null,
+        website: data.result.website ?? null,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/google-place]');
+    res.json({ data: { phone: null, website: null }, error: null, meta: {} });
+  }
+});
+
 export default router;

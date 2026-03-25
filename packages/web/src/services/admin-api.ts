@@ -260,6 +260,10 @@ export const adminService = {
     return fetchAdmin<Array<{ placeId: string; name: string; rating: number; reviewCount: number; address: string }>>(`/api/v1/admin/google-search?${params}`);
   },
 
+  async getGooglePlaceDetails(placeId: string) {
+    return fetchAdmin<{ phone: string | null; website: string | null }>(`/api/v1/admin/google-place/${placeId}`);
+  },
+
   async createBusinessAccount(data: { email: string; workspace_name: string; plan?: string }) {
     return fetchAdmin<{
       workspace: { id: string; name: string; slug: string; plan: string };

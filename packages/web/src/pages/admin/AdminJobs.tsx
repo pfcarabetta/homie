@@ -232,11 +232,21 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
     }, 400);
   }
 
-  function selectGoogleResult(result: typeof gResults[number]) {
+  async function selectGoogleResult(result: typeof gResults[number]) {
     setGSelected(result);
     setQName(result.name);
     setGSearch('');
     setGResults([]);
+
+    // Fetch phone/website from Place Details
+    try {
+      const details = await adminService.getGooglePlaceDetails(result.placeId);
+      if (details.data?.phone) setQPhone(details.data.phone);
+      if (details.data?.website) {
+        // Try to extract email from website domain (common pattern: info@domain.com)
+        // Otherwise leave email blank — at least phone is filled
+      }
+    } catch { /* details fetch failed, no problem */ }
   }
 
   function clearGoogleSelection() {
