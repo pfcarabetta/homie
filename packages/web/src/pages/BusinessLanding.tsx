@@ -129,7 +129,6 @@ function Hero() {
         <FadeIn delay={0.3}>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={() => navigate("/register?redirect=/business")} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)" }} onMouseEnter={e => { (e.target as HTMLElement).style.background = COLORS.orangeDark; (e.target as HTMLElement).style.transform = "translateY(-2px)"; }} onMouseLeave={e => { (e.target as HTMLElement).style.background = COLORS.orange; (e.target as HTMLElement).style.transform = "translateY(0)"; }}>Start free trial</button>
-            <button style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, fontWeight: 600, color: COLORS.dark, background: "transparent", border: `2px solid ${COLORS.grayLight}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => (e.target as HTMLElement).style.borderColor = COLORS.orange} onMouseLeave={e => (e.target as HTMLElement).style.borderColor = COLORS.grayLight}>Watch demo</button>
           </div>
         </FadeIn>
         <FadeIn delay={0.45}>
