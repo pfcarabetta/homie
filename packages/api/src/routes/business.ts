@@ -1473,24 +1473,6 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
-    // Debug: log custom fields from first unit
-    if (units.length > 0) {
-      const sample = units[0] as unknown as Record<string, unknown>;
-      logger.info({ custom: JSON.stringify(sample.custom) }, '[Track] custom fields sample');
-    }
-
-    // Also fetch custom field definitions
-    try {
-      const cfUrl = `${base}/pms/custom-fields?size=100`;
-      const cfRes = await fetch(cfUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-      if (cfRes.ok) {
-        const cfRaw = await cfRes.text();
-        logger.info({ body: cfRaw.slice(0, 1000) }, '[Track] custom field definitions');
-      } else {
-        logger.info({ status: cfRes.status }, '[Track] custom-fields endpoint status');
-      }
-    } catch { /* skip */ }
-
     // Fetch bed type definitions to map bedTypeId → name
     const bedTypeMap = new Map<number, string>();
     try {
