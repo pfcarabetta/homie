@@ -142,6 +142,7 @@ interface QuoteData {
   category: string | null;
   a1: string | null;
   aiFollowUp: string | null;
+  aiFollowUp2: string | null;
   aiDiagnosis: string | null;
   extra: string | null;
   photo: string | null;
@@ -557,7 +558,7 @@ export default function GetQuotes() {
   const isDemo = new URLSearchParams(window.location.search).has('demo');
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [phase, setPhase] = useState('greeting');
-  const [data, setData] = useState<QuoteData>({ category: null, a1: null, aiFollowUp: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
+  const [data, setData] = useState<QuoteData>({ category: null, a1: null, aiFollowUp: null, aiFollowUp2: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
   const [streaming, setStreaming] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -714,9 +715,46 @@ export default function GetQuotes() {
   };
 
   const handleAIResponse = (answer: string) => {
-    setData(d => ({ ...d, aiFollowUp: d.aiFollowUp, extra: answer }));
+    setData(d => ({ ...d, extra: answer }));
     setPhase('waiting');
     addUser(answer);
+
+    // Ask a second follow-up question for more detail
+    const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
+    const history: { role: 'user' | 'assistant'; content: string }[] = [
+      { role: 'user', content: `I need ${cat?.label} help: ${data.a1}` },
+      { role: 'assistant', content: data.aiFollowUp || '' },
+      { role: 'user', content: answer },
+    ];
+
+    setTimeout(() => {
+      streamAI(
+        `The homeowner needs ${cat?.label} help. They described: "${data.a1}". You asked a follow-up and they said: "${answer}". Ask ONE more brief, specific follow-up question to gather additional detail that would help a provider give an accurate quote. For example, ask about age of equipment, brand, size of area, access issues, or anything else relevant. Keep it under 2 sentences. Do not offer to fix it — we are finding them a provider.`,
+        history,
+        (aiText) => {
+          setData(d => ({ ...d, aiFollowUp2: aiText }));
+          setPhase('ai_response2');
+          scrollDown();
+        },
+      );
+    }, 300);
+  };
+
+  const handleAIResponse2 = (answer: string) => {
+    const updatedExtra = (data.extra ? data.extra + '. ' : '') + answer;
+    setData(d => ({ ...d, extra: updatedExtra }));
+    setPhase('waiting');
+    addUser(answer);
+    setTimeout(() => {
+      addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
+      setPhase('extra');
+      scrollDown();
+    }, 500);
+  };
+
+  const handleSkipAI2 = () => {
+    setPhase('waiting');
+    addUser("No, that covers it");
     setTimeout(() => {
       addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
       setPhase('extra');
@@ -744,8 +782,12 @@ export default function GetQuotes() {
     const history: { role: 'user' | 'assistant'; content: string }[] = [
       { role: 'user', content: `I need ${cat?.label} help: ${data.a1}` },
       { role: 'assistant', content: data.aiFollowUp || '' },
-      { role: 'user', content: allDetails },
+      { role: 'user', content: data.extra || allDetails },
     ];
+    if (data.aiFollowUp2) {
+      history.push({ role: 'assistant', content: data.aiFollowUp2 });
+      history.push({ role: 'user', content: allDetails });
+    }
 
     setStreaming(true);
     let diagText = '';
@@ -1039,6 +1081,17 @@ export default function GetQuotes() {
             <TextInput placeholder="Type your answer..." onSubmit={handleAIResponse} />
             <div style={{ marginLeft: 42, marginBottom: 16 }}>
               <button onClick={handleSkipAI} style={{
+                padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
+                color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              }}>No, that covers it →</button>
+            </div>
+          </>
+        )}
+        {phase === 'ai_response2' && !streaming && (
+          <>
+            <TextInput placeholder="Type your answer..." onSubmit={handleAIResponse2} />
+            <div style={{ marginLeft: 42, marginBottom: 16 }}>
+              <button onClick={handleSkipAI2} style={{
                 padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
                 color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
               }}>No, that covers it →</button>
