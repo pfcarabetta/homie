@@ -1490,6 +1490,10 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
           ) as TrackRoom[];
           if (roomList.length > 0) {
             u.rooms = roomList;
+            // Debug: log first unit's room/bed structure
+            if (u.id === units[0]?.id) {
+              logger.info({ rooms: JSON.stringify(roomList.slice(0, 2)) }, '[Track] sample rooms with beds');
+            }
           }
         }
       } catch { /* skip */ }
