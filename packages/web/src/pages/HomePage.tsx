@@ -187,7 +187,7 @@ function DiagnosticPreview() {
           <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 14 }}>h</span>
         </div>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 14, color: DARK }}>Homie AI</div>
+          <div style={{ fontWeight: 600, fontSize: 14, color: DARK }}>homie AI</div>
           <div style={{ fontSize: 11, color: '#9B9490' }}>Diagnosing...</div>
         </div>
       </div>
@@ -408,7 +408,7 @@ export default function HomePage() {
 
           <h1>
             Stop calling around.<br />
-            <span style={{ color: ORANGE }}>Let Homie do it.</span>
+            <span style={{ color: ORANGE }}>Let homie do it.</span>
           </h1>
 
           <p className="hp-sub">
@@ -458,7 +458,7 @@ export default function HomePage() {
           </p>
         </div>
         <div className="hp-steps-grid">
-          <Step number={1} title="Describe what you need" description="Tell Homie what you need help with — in plain English. Upload photos if you have them. Our AI figures out the rest." accent={ORANGE} />
+          <Step number={1} title="Describe what you need" description="Tell homie what you need help with — in plain English. Upload photos if you have them. Our AI figures out the rest." accent={ORANGE} />
           <Step number={2} title="AI contacts pros" description="Homie's agent simultaneously calls, texts, and fills out contact forms for local providers — all in real time." accent={DARK} />
           <Step number={3} title="Get quotes back" description="Providers respond with pricing and availability. You see everything in one place, ranked by fit." accent={GREEN} />
           <Step number={4} title="Book and relax" description="Pick the pro that works for you. They arrive already briefed on the issue. No explaining twice." accent={ORANGE} />
@@ -471,7 +471,7 @@ export default function HomePage() {
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <h2 className="hp-section-title" style={{ color: 'white' }}>Not your typical home services platform</h2>
             <p className="hp-section-sub" style={{ color: 'rgba(255,255,255,0.5)', maxWidth: 520, margin: '0 auto' }}>
-              Angi and Thumbtack make you wait for bids from their network. Homie goes out and finds pros for you — anywhere.
+              Angi and Thumbtack make you wait for bids from their network. homie goes out and finds pros for you — anywhere.
             </p>
           </div>
 
@@ -482,7 +482,7 @@ export default function HomePage() {
                 <tr>
                   <th style={{ textAlign: 'left', color: 'rgba(255,255,255,0.4)', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}></th>
                   <th style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}>Thumbtack / Angi</th>
-                  <th style={{ textAlign: 'center', fontWeight: 700, color: ORANGE, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}>Homie</th>
+                  <th style={{ textAlign: 'center', fontWeight: 700, color: ORANGE, borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)' }}>homie</th>
                 </tr>
               </thead>
               <tbody>
@@ -524,7 +524,7 @@ export default function HomePage() {
                 </div>
                 <div style={{ display: 'flex', gap: 8, fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
                   <span style={{ color: GREEN, flexShrink: 0 }}>&#10003;</span>
-                  <span><span style={{ fontWeight: 600, color: ORANGE }}>Homie:</span> {row.us}</span>
+                  <span><span style={{ fontWeight: 600, color: ORANGE }}>homie:</span> {row.us}</span>
                 </div>
               </div>
             ))}
@@ -551,7 +551,7 @@ export default function HomePage() {
               <span style={{ fontSize: 14, fontWeight: 600, color: ORANGE }}>100% free</span>
             </div>
             <h2 className="hp-diy-title">
-              Not sure what's wrong?<br />Ask Homie first.
+              Not sure what's wrong?<br />Ask homie first.
             </h2>
             <p style={{ fontSize: 16, lineHeight: 1.65, color: '#6B6560', marginBottom: 24, maxWidth: 440 }}>
               Chat with our AI diagnostic engine for free. Describe what's happening, upload a photo, and get an expert-level diagnosis with DIY steps, cost estimates, and severity assessment — in under 2 minutes.
@@ -658,9 +658,9 @@ export default function HomePage() {
 
       {/* CTA */}
       <section className="hp-section" style={{ background: ORANGE, textAlign: 'center' }}>
-        <h2 className="hp-cta-title">Every home needs a Homie.</h2>
+        <h2 className="hp-cta-title">Every home needs a homie.</h2>
         <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.8)', marginBottom: 28, maxWidth: 440, margin: '0 auto 28px' }}>
-          Stop spending hours calling around. Describe the problem, and Homie handles the rest.
+          Stop spending hours calling around. Describe the problem, and homie handles the rest.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => navigate('/quote')} style={{
@@ -687,7 +687,7 @@ export default function HomePage() {
               {[
                 { label: 'For homeowners', href: '/' },
                 { label: 'For business', href: '/business/landing' },
-                { label: 'Become a Homie Pro', href: '/portal/signup' },
+                { label: 'Become a homie Pro', href: '/portal/signup' },
                 { label: 'Pricing', href: '#pricing' },
                 { label: 'How it works', href: '#how' },
               ].map(l => (
