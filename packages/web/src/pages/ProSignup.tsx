@@ -32,10 +32,13 @@ function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: number }
 const ALL_CATEGORIES = [
   "Plumbing", "Electrical", "HVAC", "Appliance Repair", "Roofing", "General Contractor",
   "Handyman", "Garage Door", "Cleaning", "Landscaping", "Pool", "Hot Tub",
-  "Pest Control", "Painting", "Locksmith", "Pressure Washing", "Moving",
-  "Flooring", "Fencing", "Tree Trimming", "Gutter Cleaning", "Carpet Cleaning",
-  "Window Cleaning", "Steam Cleaning", "Concrete", "Masonry", "Siding",
-  "Insulation", "Solar", "Security Systems", "Furniture Assembly", "Concierge",
+  "Pest Control", "Painting", "Locksmith", "Pressure Washing", "Moving", "Junk Removal",
+  "Flooring", "Tile", "Fencing", "Tree Trimming", "Stump Removal", "Gutter Cleaning",
+  "Carpet Cleaning", "Window Cleaning", "Steam Cleaning", "Concrete", "Masonry", "Siding",
+  "Drywall", "Insulation", "Solar", "Security Systems", "Furniture Assembly", "Concierge",
+  "Deck & Patio", "Window & Door Install", "Kitchen Remodel", "Bathroom Remodel",
+  "Foundation & Waterproofing", "Chimney", "Septic & Sewer", "Sprinkler & Irrigation",
+  "TV Mounting", "Generator Install", "EV Charger Install", "Welding & Metal Work",
 ];
 
 interface GoogleMatch {
