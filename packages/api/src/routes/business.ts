@@ -1392,6 +1392,8 @@ interface TrackUnit {
   // Nested objects
   rooms?: TrackRoom[];
   bedTypes?: TrackBedType[];
+  // Media
+  coverImage?: string;
   // Square footage
   squareFeet?: number;
   // Legacy/fallback fields
@@ -1626,6 +1628,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
         bathrooms: bathroomStr,
         sqft: u.squareFeet ?? u.square_feet ?? null,
         beds: bedConfig,
+        photoUrls: u.coverImage ? [u.coverImage] : null,
         notes: roomNotes || null,
       };
     }

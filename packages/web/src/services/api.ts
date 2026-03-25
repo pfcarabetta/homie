@@ -643,6 +643,7 @@ export interface Property {
   bathrooms: string | null;
   sqft: number | null;
   beds: BedConfig[] | null;
+  photoUrls: string[] | null;
   notes: string | null;
   active: boolean;
   createdAt: string;

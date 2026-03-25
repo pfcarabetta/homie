@@ -489,9 +489,16 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
         <div style={{ display: 'grid', gap: 12 }}>
           {properties.map(p => (
             <div key={p.id} style={{
-              background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 20,
-              opacity: p.active ? 1 : 0.5,
+              background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', overflow: 'hidden',
+              opacity: p.active ? 1 : 0.5, display: 'flex',
             }}>
+              {p.photoUrls && p.photoUrls.length > 0 && (
+                <div style={{ width: 120, minHeight: 100, flexShrink: 0 }}>
+                  <img src={p.photoUrls[0]} alt={p.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                </div>
+              )}
+              <div style={{ padding: 20, flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600, color: D }}>{p.name}</div>
@@ -545,6 +552,7 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
               )}
 
               {p.notes && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 8, fontStyle: 'italic' }}>{p.notes}</div>}
+              </div>
             </div>
           ))}
         </div>
