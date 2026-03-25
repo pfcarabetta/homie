@@ -1475,6 +1475,12 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
+    // Debug: log coverImage from first unit
+    if (units.length > 0) {
+      const s = units[0] as unknown as Record<string, unknown>;
+      logger.info({ coverImage: s.coverImage, name: s.name, id: s.id }, '[Track] coverImage sample');
+    }
+
     // Fetch bed type definitions to map bedTypeId → name
     const bedTypeMap = new Map<number, string>();
     try {
