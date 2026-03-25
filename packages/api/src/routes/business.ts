@@ -1349,6 +1349,7 @@ router.get('/:workspaceId/bookings', requireWorkspace, async (req: Request, res:
 
 interface TrackBedType {
   id?: number;
+  bedTypeId?: number;
   name?: string;
   bedType?: string;
   bedTypeName?: string;
@@ -1472,6 +1473,22 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
+    // Fetch bed type definitions to map bedTypeId → name
+    const bedTypeMap = new Map<number, string>();
+    try {
+      const btUrl = `${base}/pms/units/bed-types?size=100`;
+      const btRes = await fetch(btUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+      if (btRes.ok) {
+        const btData = await btRes.json() as Record<string, unknown>;
+        const embedded = btData._embedded as Record<string, unknown> | undefined;
+        const btList = (embedded?.unitBedTypes ?? embedded?.bedTypes ?? embedded?.['bed-types'] ?? btData.unitBedTypes ?? btData.bedTypes ?? (Array.isArray(btData) ? btData : [])) as Array<{ id?: number; name?: string }>;
+        for (const bt of btList) {
+          if (bt.id != null && bt.name) bedTypeMap.set(bt.id, bt.name);
+        }
+      }
+      logger.info({ bedTypeCount: bedTypeMap.size, entries: Object.fromEntries(bedTypeMap) }, '[Track] bed type definitions');
+    } catch { /* skip */ }
+
     // Fetch rooms (with nested beds) for each unit from /pms/units/{id}/rooms
     for (const u of units) {
       try {
@@ -1571,15 +1588,20 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
         else { allBeds.push({ type: bedType, count: bedCount }); }
       }
 
+      function resolveBedName(bed: TrackBedType): string {
+        // Try bedTypeId lookup first, then name fields
+        if (bed.bedTypeId != null && bedTypeMap.has(bed.bedTypeId)) return bedTypeMap.get(bed.bedTypeId)!;
+        if (bed.id != null && bedTypeMap.has(bed.id)) return bedTypeMap.get(bed.id)!;
+        return bed.name ?? bed.bedType ?? bed.bedTypeName ?? bed.type ?? 'other';
+      }
+
       // Primary source: rooms with nested beds
       const rooms = u.rooms as TrackRoom[] | undefined;
       if (rooms && rooms.length > 0) {
         for (const room of rooms) {
           if (room.beds && room.beds.length > 0) {
             for (const bed of room.beds) {
-              const bedName = bed.name ?? bed.bedType ?? bed.bedTypeName ?? bed.type ?? 'other';
-              const bedCount = bed.count ?? bed.quantity ?? 1;
-              addBed(bedName, bedCount);
+              addBed(resolveBedName(bed), bed.count ?? bed.quantity ?? 1);
             }
           }
         }
@@ -1589,9 +1611,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       if (allBeds.length === 0) {
         const topBeds = (u.bedTypes ?? u.bed_types ?? []) as TrackBedType[];
         for (const b of topBeds) {
-          const bedName = b.name ?? b.bedType ?? b.bedTypeName ?? b.type ?? 'other';
-          const bedCount = b.count ?? b.quantity ?? 1;
-          addBed(bedName, bedCount);
+          addBed(resolveBedName(b), b.count ?? b.quantity ?? 1);
         }
       }
 
