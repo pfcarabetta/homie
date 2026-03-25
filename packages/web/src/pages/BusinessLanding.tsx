@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import React, { useState, useEffect, useRef, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
@@ -41,26 +41,66 @@ function FadeIn({ children, delay = 0, className = "" }: { children: ReactNode; 
 function Nav() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
   useEffect(() => {
-    const h = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", h, { passive: true });
-    return () => window.removeEventListener("scroll", h);
+    const handleScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setMenuOpen(false);
+    };
+    window.addEventListener("resize", handleResize, { passive: true });
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const navLinkStyle: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif", fontSize: 15, color: COLORS.darkMid, textDecoration: "none", fontWeight: 500 };
+
   return (
-    <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, background: scrolled ? "rgba(255,255,255,0.97)" : "transparent", backdropFilter: scrolled ? "blur(12px)" : "none", borderBottom: scrolled ? "1px solid rgba(0,0,0,0.06)" : "1px solid transparent", transition: "all 0.3s ease", padding: "0 24px" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
-        <div onClick={() => navigate("/")} style={{ display: "flex", alignItems: "baseline", gap: 8, cursor: "pointer" }}>
-          <span style={{ fontFamily: "Fraunces, serif", fontWeight: 700, fontSize: 28, color: COLORS.orange }}>homie</span>
-          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 800, color: COLORS.white, background: COLORS.green, padding: "2px 7px", borderRadius: 4, letterSpacing: "0.08em", textTransform: "uppercase", position: "relative", top: -2 }}>Business</span>
+    <>
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, background: scrolled || menuOpen ? "rgba(255,255,255,0.97)" : "transparent", backdropFilter: scrolled || menuOpen ? "blur(12px)" : "none", borderBottom: scrolled || menuOpen ? "1px solid rgba(0,0,0,0.06)" : "1px solid transparent", transition: "all 0.3s ease", padding: "0 24px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
+          <div onClick={() => navigate("/")} style={{ display: "flex", alignItems: "baseline", gap: 8, cursor: "pointer" }}>
+            <span style={{ fontFamily: "Fraunces, serif", fontWeight: 700, fontSize: 28, color: COLORS.orange }}>homie</span>
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 800, color: COLORS.white, background: COLORS.green, padding: "2px 7px", borderRadius: 4, letterSpacing: "0.08em", textTransform: "uppercase", position: "relative", top: -2 }}>Business</span>
+          </div>
+          {isMobile ? (
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 8, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 5 }}
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+            >
+              <span style={{ display: "block", width: 22, height: 2, background: COLORS.dark, borderRadius: 2, transition: "all 0.2s", transform: menuOpen ? "rotate(45deg) translate(5px, 5px)" : "none" }} />
+              <span style={{ display: "block", width: 22, height: 2, background: COLORS.dark, borderRadius: 2, transition: "all 0.2s", opacity: menuOpen ? 0 : 1 }} />
+              <span style={{ display: "block", width: 22, height: 2, background: COLORS.dark, borderRadius: 2, transition: "all 0.2s", transform: menuOpen ? "rotate(-45deg) translate(5px, -5px)" : "none" }} />
+            </button>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+              <a href="#features" style={navLinkStyle}>Features</a>
+              <a href="#pricing" style={navLinkStyle}>Pricing</a>
+              <a href="#how-it-works" style={navLinkStyle}>How it works</a>
+              <button onClick={() => navigate("/login?redirect=/business")} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "10px 24px", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => (e.target as HTMLElement).style.background = COLORS.orangeDark} onMouseLeave={e => (e.target as HTMLElement).style.background = COLORS.orange}>Get started</button>
+            </div>
+          )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
-          <a href="#features" style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, color: COLORS.darkMid, textDecoration: "none", fontWeight: 500 }}>Features</a>
-          <a href="#pricing" style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, color: COLORS.darkMid, textDecoration: "none", fontWeight: 500 }}>Pricing</a>
-          <a href="#how-it-works" style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, color: COLORS.darkMid, textDecoration: "none", fontWeight: 500 }}>How it works</a>
-          <button onClick={() => navigate("/login?redirect=/business")} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "10px 24px", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => (e.target as HTMLElement).style.background = COLORS.orangeDark} onMouseLeave={e => (e.target as HTMLElement).style.background = COLORS.orange}>Get started</button>
-        </div>
-      </div>
-    </nav>
+        {isMobile && menuOpen && (
+          <div style={{ borderTop: `1px solid ${COLORS.grayLight}`, padding: "16px 0 24px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {[["#features", "Features"], ["#pricing", "Pricing"], ["#how-it-works", "How it works"]].map(([href, label]) => (
+                <a key={href} href={href} onClick={() => setMenuOpen(false)} style={{ ...navLinkStyle, padding: "14px 0", borderBottom: `1px solid ${COLORS.warm}` }}>{label}</a>
+              ))}
+              <button onClick={() => { setMenuOpen(false); navigate("/login?redirect=/business"); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "14px 24px", cursor: "pointer", marginTop: 16 }}>Get started</button>
+            </div>
+          </div>
+        )}
+      </nav>
+    </>
   );
 }
 
