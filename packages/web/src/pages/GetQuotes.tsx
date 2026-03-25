@@ -153,6 +153,11 @@ interface QuoteData {
 
 interface CatOption { id: string; icon: string; label: string }
 
+function renderBold(text: string) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) => i % 2 === 1 ? <b key={i}>{part}</b> : part);
+}
+
 /* -- Chat message components -- */
 function AssistantMsg({ text, animate = true }: { text: string; animate?: boolean }) {
   const [show, setShow] = useState(!animate);
@@ -176,7 +181,7 @@ function AssistantMsg({ text, animate = true }: { text: string; animate?: boolea
       <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
       </div>
-      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D }}>{text}</div>
+      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D }}>{renderBold(text)}</div>
     </div>
   );
 }
