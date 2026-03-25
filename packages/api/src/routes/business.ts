@@ -1612,9 +1612,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
 
       const bedConfig = allBeds.length > 0 ? allBeds : null;
 
-      const roomNotes = rooms?.filter(r => r.name)
-        .map(r => `${r.name}${r.type ? ` (${r.type})` : ''}${r.sleeps ? ` — sleeps ${r.sleeps}` : ''}`)
-        .join('; ');
+      const roomNotes = null;
 
       return {
         name: u.name || u.shortName || `Unit ${u.id}`,
