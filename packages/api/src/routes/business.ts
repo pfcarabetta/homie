@@ -1401,8 +1401,6 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
 
       const trackData = await trackRes.json() as Record<string, unknown>;
 
-      // Log the top-level keys to understand Track's response shape
-      logger.info({ keys: Object.keys(trackData), isArray: Array.isArray(trackData), url: nextUrl }, '[Track import] Response shape');
 
       if (Array.isArray(trackData)) {
         units.push(...(trackData as unknown as TrackUnit[]));
@@ -1415,7 +1413,6 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
           trackData.contents ?? trackData.results ?? trackData.data ??
           trackData.units ?? trackData.items ?? trackData.records ?? []
         ) as TrackUnit[];
-        logger.info({ unitCount: pageUnits.length, firstUnit: pageUnits[0] ? Object.keys(pageUnits[0]) : null }, '[Track import] Page data');
         units.push(...pageUnits);
         // Follow pagination links
         const links = trackData.links as Record<string, unknown> | undefined;
@@ -1457,7 +1454,6 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
           if (hint) break;
         }
       }
-      logger.info({ debugKeys, hint, embedded: debugData._embedded ? Object.keys(debugData._embedded as object) : null }, '[Track import] Debug 0 results');
       res.json({ data: { imported: 0, skipped: 0, total: 0 }, error: null, meta: { debug_keys: debugKeys, hint } });
       return;
     }
