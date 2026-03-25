@@ -1391,12 +1391,60 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
 
 /* ── Vendors Tab ──────────────────────────────────────────────────────── */
 
+interface GroupedVendor {
+  providerId: string;
+  providerName: string;
+  providerPhone: string | null;
+  providerEmail: string | null;
+  providerRating: string | null;
+  providerReviewCount: number;
+  categories: string[] | null;
+  priority: number;
+  notes: string | null;
+  entries: PreferredVendor[]; // one per property assignment
+  propertyIds: (string | null)[]; // null = workspace-wide
+}
+
+function groupVendors(vendors: PreferredVendor[]): GroupedVendor[] {
+  const map = new Map<string, GroupedVendor>();
+  for (const v of vendors) {
+    const existing = map.get(v.providerId);
+    if (existing) {
+      existing.entries.push(v);
+      existing.propertyIds.push(v.propertyId);
+    } else {
+      map.set(v.providerId, {
+        providerId: v.providerId,
+        providerName: v.providerName,
+        providerPhone: v.providerPhone,
+        providerEmail: v.providerEmail,
+        providerRating: v.providerRating,
+        providerReviewCount: v.providerReviewCount,
+        categories: v.categories,
+        priority: v.priority,
+        notes: v.notes,
+        entries: [v],
+        propertyIds: [v.propertyId],
+      });
+    }
+  }
+  return [...map.values()];
+}
+
 function VendorsTab({ workspaceId, role }: { workspaceId: string; role: string }) {
   const [vendors, setVendors] = useState<PreferredVendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingVendor, setEditingVendor] = useState<GroupedVendor | null>(null);
+  const [allProperties, setAllProperties] = useState<Property[]>([]);
 
   const canEdit = role === 'admin' || role === 'coordinator';
+
+  useEffect(() => {
+    businessService.listProperties(workspaceId).then(res => {
+      if (res.data) setAllProperties(res.data.filter(p => p.active));
+    });
+  }, [workspaceId]);
 
   function loadVendors() {
     businessService.listVendors(workspaceId).then(res => {
@@ -1441,48 +1489,59 @@ function VendorsTab({ workspaceId, role }: { workspaceId: string; role: string }
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
-          {vendors.map(v => (
-            <div key={v.id} style={{ background: '#fff', borderRadius: 10, border: '1px solid #E0DAD4', padding: '16px 20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 16, fontWeight: 600, color: D }}>{v.providerName}</span>
-                    <span style={{
-                      fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600,
-                      background: v.priority === 1 ? '#FEF3C7' : v.priority === 2 ? '#DBEAFE' : '#F3F4F6',
-                      color: v.priority === 1 ? '#B45309' : v.priority === 2 ? '#2563EB' : '#6B7280',
-                    }}>
-                      Priority {v.priority}
-                    </span>
+          {groupVendors(vendors).map(g => {
+            const isWorkspaceWide = g.propertyIds.includes(null);
+            const assignedProps = allProperties.filter(p => g.propertyIds.includes(p.id));
+            return (
+              <div key={g.providerId} style={{ background: '#fff', borderRadius: 10, border: '1px solid #E0DAD4', padding: '16px 20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 16, fontWeight: 600, color: D }}>{g.providerName}</span>
+                      <span style={{
+                        fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600,
+                        background: g.priority === 1 ? '#FEF3C7' : g.priority === 2 ? '#DBEAFE' : '#F3F4F6',
+                        color: g.priority === 1 ? '#B45309' : g.priority === 2 ? '#2563EB' : '#6B7280',
+                      }}>
+                        Priority {g.priority}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4, display: 'flex', gap: 16 }}>
+                      {g.providerPhone && <span>{g.providerPhone}</span>}
+                      {g.providerEmail && <span>{g.providerEmail}</span>}
+                      {g.providerRating && <span>Rating: {g.providerRating} ({g.providerReviewCount})</span>}
+                    </div>
+                    {g.categories && g.categories.length > 0 && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                        {g.categories.map(c => (
+                          <span key={c} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, background: `${G}15`, color: G, fontWeight: 500 }}>{c}</span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 12, color: isWorkspaceWide ? '#9B9490' : '#2563EB', marginTop: 6 }}>
+                      {isWorkspaceWide ? '🏢 All properties' : `📍 ${assignedProps.length} ${assignedProps.length === 1 ? 'property' : 'properties'}: ${assignedProps.map(p => p.name).join(', ')}`}
+                    </div>
+                    {g.notes && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 6, fontStyle: 'italic' }}>{g.notes}</div>}
                   </div>
-                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4, display: 'flex', gap: 16 }}>
-                    {v.providerPhone && <span>{v.providerPhone}</span>}
-                    {v.providerEmail && <span>{v.providerEmail}</span>}
-                    {v.providerRating && <span>Rating: {v.providerRating} ({v.providerReviewCount})</span>}
-                  </div>
-                  {v.categories && v.categories.length > 0 && (
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                      {v.categories.map(c => (
-                        <span key={c} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, background: `${G}15`, color: G, fontWeight: 500 }}>{c}</span>
-                      ))}
+                  {canEdit && (
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => setEditingVendor(g)}
+                        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 500 }}>
+                        Edit
+                      </button>
+                      <button onClick={() => {
+                        if (!confirm(`Remove ${g.providerName} from preferred vendors?`)) return;
+                        Promise.all(g.entries.map(e => businessService.removeVendor(workspaceId, e.id).catch(() => {}))).then(() => loadVendors());
+                      }}
+                        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #FCA5A5', background: '#FEF2F2', fontSize: 12, cursor: 'pointer', color: '#DC2626' }}>
+                        Remove
+                      </button>
                     </div>
                   )}
-                  {v.propertyId && (
-                    <div style={{ fontSize: 12, color: '#2563EB', marginTop: 6 }}>
-                      📍 Assigned to specific property
-                    </div>
-                  )}
-                  {v.notes && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 6, fontStyle: 'italic' }}>{v.notes}</div>}
                 </div>
-                {canEdit && (
-                  <button onClick={() => handleRemove(v.id, v.providerName)}
-                    style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #FCA5A5', background: '#FEF2F2', fontSize: 12, cursor: 'pointer', color: '#DC2626', flexShrink: 0 }}>
-                    Remove
-                  </button>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1490,6 +1549,216 @@ function VendorsTab({ workspaceId, role }: { workspaceId: string; role: string }
         <AddVendorModal workspaceId={workspaceId} onClose={() => setShowAdd(false)}
           onAdded={() => { setShowAdd(false); loadVendors(); }} />
       )}
+
+      {editingVendor && (
+        <EditVendorModal workspaceId={workspaceId} vendor={editingVendor} allProperties={allProperties}
+          onClose={() => setEditingVendor(null)}
+          onSaved={() => { setEditingVendor(null); loadVendors(); }} />
+      )}
+    </div>
+  );
+}
+
+/* ── Edit Vendor Modal ────────────────────────────────────────────────── */
+
+function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved }: {
+  workspaceId: string; vendor: GroupedVendor; allProperties: Property[]; onClose: () => void; onSaved: () => void;
+}) {
+  const [selectedCats, setSelectedCats] = useState<string[]>(vendor.categories ?? []);
+  const [priority, setPriority] = useState(vendor.priority);
+  const [notes, setNotes] = useState(vendor.notes ?? '');
+  const [assignMode, setAssignMode] = useState<'all' | 'specific'>(vendor.propertyIds.includes(null) ? 'all' : 'specific');
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>(vendor.propertyIds.filter(Boolean) as string[]);
+  const [cityFilter, setCityFilter] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const cities = [...new Set(allProperties.map(p => p.city).filter(Boolean))] as string[];
+  const filteredProperties = cityFilter ? allProperties.filter(p => p.city === cityFilter) : allProperties;
+
+  function toggleProperty(id: string) {
+    setSelectedPropertyIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+  function selectAllFiltered() {
+    const ids = filteredProperties.map(p => p.id);
+    setSelectedPropertyIds(prev => [...new Set([...prev, ...ids])]);
+  }
+  function deselectAllFiltered() {
+    const ids = new Set(filteredProperties.map(p => p.id));
+    setSelectedPropertyIds(prev => prev.filter(x => !ids.has(x)));
+  }
+
+  async function handleSave() {
+    if (assignMode === 'specific' && selectedPropertyIds.length === 0) {
+      setError('Select at least one property'); return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const cats = selectedCats.length > 0 ? selectedCats : undefined;
+      const targetPropertyIds: (string | null)[] = assignMode === 'specific' ? selectedPropertyIds : [null];
+
+      // Remove all existing entries for this vendor
+      await Promise.all(vendor.entries.map(e => businessService.removeVendor(workspaceId, e.id).catch(() => {})));
+
+      // Re-add with updated settings for each property
+      for (const propId of targetPropertyIds) {
+        await businessService.addVendor(workspaceId, {
+          provider_id: vendor.providerId,
+          property_id: propId,
+          categories: cats,
+          priority,
+          notes: notes || undefined,
+        }).catch(() => {});
+      }
+
+      onSaved();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update vendor');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
+  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 4px' }}>Edit Preferred Vendor</h3>
+        <p style={{ fontSize: 15, fontWeight: 600, color: O, marginBottom: 20 }}>{vendor.providerName}</p>
+
+        <label style={labelStyle}>Categories</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          {VENDOR_CATEGORIES.map(c => {
+            const active = selectedCats.includes(c.value);
+            return (
+              <button key={c.value} type="button"
+                onClick={() => setSelectedCats(prev => active ? prev.filter(x => x !== c.value) : [...prev, c.value])}
+                style={{
+                  padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                  border: active ? `2px solid ${O}` : '1px solid #E0DAD4',
+                  background: active ? `${O}12` : '#fff', color: active ? O : '#6B6560',
+                }}>
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div>
+            <label style={labelStyle}>Priority</label>
+            <select value={priority} onChange={e => setPriority(+e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer', marginBottom: 0 }}>
+              <option value={1}>1 — First choice</option>
+              <option value={2}>2 — Backup</option>
+              <option value={3}>3 — Third option</option>
+            </select>
+          </div>
+        </div>
+
+        <label style={labelStyle}>Notes</label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Agreed rate, specialties, etc."
+          style={{ ...inputStyle, resize: 'vertical' as const }} />
+
+        {/* Property Assignment */}
+        <div style={{ borderTop: '1px solid #E0DAD4', paddingTop: 16, marginTop: 4 }}>
+          <label style={labelStyle}>Assign to Properties</label>
+          <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderRadius: 8, overflow: 'hidden', border: '1px solid #E0DAD4' }}>
+            <button onClick={() => { setAssignMode('all'); setSelectedPropertyIds([]); }}
+              style={{ flex: 1, padding: '8px 0', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                background: assignMode === 'all' ? D : '#fff', color: assignMode === 'all' ? '#fff' : '#6B6560' }}>
+              All Properties
+            </button>
+            <button onClick={() => setAssignMode('specific')}
+              style={{ flex: 1, padding: '8px 0', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                background: assignMode === 'specific' ? D : '#fff', color: assignMode === 'specific' ? '#fff' : '#6B6560' }}>
+              Specific Properties
+            </button>
+          </div>
+
+          {assignMode === 'all' && (
+            <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>
+              This vendor will be available for dispatch to any property in your workspace.
+            </div>
+          )}
+
+          {assignMode === 'specific' && (
+            <>
+              {cities.length > 1 && (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: '#9B9490', fontWeight: 600 }}>Filter:</span>
+                  <button onClick={() => setCityFilter('')}
+                    style={{ padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                      border: !cityFilter ? `2px solid ${O}` : '1px solid #E0DAD4',
+                      background: !cityFilter ? `${O}12` : '#fff', color: !cityFilter ? O : '#6B6560' }}>
+                    All Cities
+                  </button>
+                  {cities.sort().map(c => (
+                    <button key={c} onClick={() => setCityFilter(c)}
+                      style={{ padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                        border: cityFilter === c ? `2px solid ${O}` : '1px solid #E0DAD4',
+                        background: cityFilter === c ? `${O}12` : '#fff', color: cityFilter === c ? O : '#6B6560' }}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <button onClick={selectAllFiltered}
+                  style={{ fontSize: 12, color: O, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  Select all{cityFilter ? ` in ${cityFilter}` : ''}
+                </button>
+                <span style={{ color: '#E0DAD4' }}>|</span>
+                <button onClick={deselectAllFiltered}
+                  style={{ fontSize: 12, color: '#9B9490', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  Deselect all{cityFilter ? ` in ${cityFilter}` : ''}
+                </button>
+                {selectedPropertyIds.length > 0 && (
+                  <span style={{ fontSize: 12, color: G, fontWeight: 600, marginLeft: 'auto' }}>
+                    {selectedPropertyIds.length} selected
+                  </span>
+                )}
+              </div>
+
+              <div style={{ maxHeight: 200, overflow: 'auto', border: '1px solid #E0DAD4', borderRadius: 8 }}>
+                {filteredProperties.map(p => {
+                  const checked = selectedPropertyIds.includes(p.id);
+                  return (
+                    <label key={p.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer',
+                      borderBottom: '1px solid #F5F3F0', background: checked ? `${O}06` : '#fff',
+                    }}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleProperty(p.id)}
+                        style={{ width: 16, height: 16, accentColor: O, flexShrink: 0 }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: D }}>{p.name}</div>
+                        {p.city && <div style={{ fontSize: 12, color: '#9B9490' }}>{p.city}{p.state ? `, ${p.state}` : ''}</div>}
+                      </div>
+                    </label>
+                  );
+                })}
+                {filteredProperties.length === 0 && (
+                  <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: '#9B9490' }}>No properties found</div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {error && <div style={{ color: '#DC2626', fontSize: 14, marginTop: 16 }}>{error}</div>}
+
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
