@@ -1399,22 +1399,27 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
         return;
       }
 
-      const trackData = await trackRes.json() as {
-        contents?: TrackUnit[];
-        results?: TrackUnit[];
-        next?: string;
-        links?: { next?: string };
-        _links?: { next?: { href?: string } };
-      } | TrackUnit[];
+      const trackData = await trackRes.json() as Record<string, unknown>;
+
+      // Log the top-level keys to understand Track's response shape
+      logger.info({ keys: Object.keys(trackData), isArray: Array.isArray(trackData), url: nextUrl }, '[Track import] Response shape');
 
       if (Array.isArray(trackData)) {
-        units.push(...trackData);
+        units.push(...(trackData as unknown as TrackUnit[]));
         nextUrl = null;
       } else {
-        const pageUnits = trackData.contents ?? trackData.results ?? [];
+        // Try all known Track response wrapper keys
+        const pageUnits = (
+          trackData.contents ?? trackData.results ?? trackData.data ??
+          trackData.units ?? trackData.items ?? trackData.records ?? []
+        ) as TrackUnit[];
+        logger.info({ unitCount: pageUnits.length, firstUnit: pageUnits[0] ? Object.keys(pageUnits[0]) : null }, '[Track import] Page data');
         units.push(...pageUnits);
         // Follow pagination links
-        nextUrl = trackData.next ?? trackData.links?.next ?? trackData._links?.next?.href ?? null;
+        const links = trackData.links as Record<string, unknown> | undefined;
+        const _links = trackData._links as Record<string, unknown> | undefined;
+        const nextLink = (_links?.next as Record<string, unknown>)?.href as string | undefined;
+        nextUrl = (trackData.next as string) ?? (links?.next as string) ?? nextLink ?? null;
         if (nextUrl && !nextUrl.startsWith('http')) {
           nextUrl = `${base}${nextUrl.startsWith('/') ? '' : '/'}${nextUrl}`;
         }
@@ -1424,7 +1429,22 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
     }
 
     if (units.length === 0) {
-      res.json({ data: { imported: 0, skipped: 0, total: 0 }, error: null, meta: {} });
+      // Re-fetch first page to include debug info in response
+      const debugRes = await fetch(`${base}/pms/units?size=50`, {
+        headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+      });
+      const debugData = await debugRes.json().catch(() => ({})) as Record<string, unknown>;
+      const debugKeys = Object.keys(debugData);
+      // Check if the data is nested one level deeper
+      let hint = '';
+      for (const key of debugKeys) {
+        const val = debugData[key];
+        if (Array.isArray(val) && val.length > 0) {
+          hint = `Found array at key "${key}" with ${val.length} items`;
+          break;
+        }
+      }
+      res.json({ data: { imported: 0, skipped: 0, total: 0 }, error: null, meta: { debug_keys: debugKeys, hint } });
       return;
     }
 

@@ -594,7 +594,13 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
                           api_secret: trackSecret.trim(),
                         });
                         if (res.error) { setTrackError(res.error); }
-                        else if (res.data) { setTrackResult(res.data); }
+                        else if (res.data) {
+                          if (res.data.total === 0 && res.meta?.hint) {
+                            setTrackError(`Connected to Track but found 0 properties. Debug: ${res.meta.hint || 'No arrays found in response'}. Keys: ${(res.meta.debug_keys as string[])?.join(', ') || 'unknown'}`);
+                          } else {
+                            setTrackResult(res.data);
+                          }
+                        }
                       } catch (err) {
                         setTrackError(err instanceof Error ? err.message : 'Import failed');
                       }
