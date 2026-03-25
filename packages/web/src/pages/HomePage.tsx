@@ -349,13 +349,12 @@ export default function HomePage() {
           .hp-diy-text { flex: none; }
           .hp-diy-preview { flex: none; width: 100%; }
           .hp-diy-title { font-size: 28px; }
-          .hp-pricing-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
-          .hp-pricing-grid > div { padding: 16px 10px !important; border-radius: 14px !important; }
-          .hp-pricing-price { font-size: 22px !important; }
-          .hp-pricing-features { display: none; }
-          .hp-pricing-grid button { font-size: 12px !important; padding: 10px 0 !important; margin-top: 8px !important; }
-          .hp-popular-tag { font-size: 8px !important; padding: 2px 8px !important; top: -8px !important; }
-          .hp-pricing-price { font-size: 36px; }
+          .hp-pricing-grid { grid-template-columns: 1fr; gap: 14px; }
+          .hp-pricing-grid > div { padding: 20px 18px !important; border-radius: 16px !important; }
+          .hp-pricing-price { font-size: 32px !important; }
+          .hp-pricing-features { display: block; }
+          .hp-pricing-grid button { font-size: 14px !important; padding: 12px 0 !important; margin-top: 12px !important; }
+          .hp-popular-tag { font-size: 10px !important; padding: 3px 12px !important; top: -10px !important; }
           .hp-cta-title { font-size: 28px; }
           .hp-social-bar { gap: 16px; padding: 20px 16px; flex-direction: column; align-items: flex-start; }
           .hp-social-item { gap: 6px; }
@@ -599,9 +598,12 @@ export default function HomePage() {
 
         <div className="hp-pricing-grid">
           {[
-            { tier: 'Standard', price: '$9.99', time: '~2 hours', providers: '5 pros contacted', channels: 'SMS + Web', popular: false },
-            { tier: 'Priority', price: '$19.99', time: '~30 minutes', providers: '10 pros contacted', channels: 'Voice + SMS + Web', popular: true },
-            { tier: 'Emergency', price: '$29.99', time: '~15 minutes', providers: '15 pros contacted', channels: 'All channels (blitz)', popular: false },
+            { tier: 'Standard', price: '$9.99', time: '~2 hours', providers: '5 pros contacted', channels: 'SMS + Web', popular: false,
+              features: ['Results in ~2 hours', '5 pros contacted via SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
+            { tier: 'Priority', price: '$19.99', time: '~30 minutes', providers: '10 pros contacted', channels: 'Voice + SMS + Web', popular: true,
+              features: ['Results in ~30 minutes', '10 pros contacted simultaneously', 'AI voice calls + SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
+            { tier: 'Emergency', price: '$29.99', time: '~15 minutes', providers: '15 pros contacted', channels: 'All channels (blitz)', popular: false,
+              features: ['Results in ~15 minutes', '15 pros blitzed across all channels', 'Contacts closed businesses too', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
           ].map((t, i) => (
             <div key={i} style={{
               background: t.popular ? DARK : 'white', borderRadius: 20, padding: '32px 24px',
@@ -615,16 +617,27 @@ export default function HomePage() {
                   padding: '4px 14px', borderRadius: 100, letterSpacing: '0.04em', whiteSpace: 'nowrap',
                 }}>MOST POPULAR</div>
               )}
-              <div style={{ fontSize: 15, fontWeight: 600, color: t.popular ? 'rgba(255,255,255,0.6)' : '#9B9490', marginBottom: 8 }}>{t.tier}</div>
-              <div className="hp-pricing-price" style={{ color: t.popular ? 'white' : DARK }}>{t.price}</div>
-              <div style={{ fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490', marginBottom: 20 }}>per search</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: t.popular ? 'rgba(255,255,255,0.6)' : '#9B9490' }}>{t.tier}</div>
+                  <div className="hp-pricing-price" style={{ color: t.popular ? 'white' : DARK, margin: 0 }}>{t.price}</div>
+                  <div style={{ fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490' }}>per search</div>
+                </div>
+                <div style={{
+                  background: t.popular ? ORANGE : 'rgba(27,158,119,0.1)', borderRadius: 10, padding: '8px 14px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: t.popular ? 'white' : GREEN }}>{t.time.replace('~', '')}</div>
+                  <div style={{ fontSize: 10, color: t.popular ? 'rgba(255,255,255,0.7)' : '#9B9490', fontWeight: 500 }}>avg response</div>
+                </div>
+              </div>
               <div className="hp-pricing-features">
-                {[t.time, t.providers, t.channels, 'Full diagnostic included', 'Money-back guarantee'].map((f, j) => (
+                {t.features.map((f, j) => (
                   <div key={j} style={{
                     display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9,
                     fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.75)' : '#6B6560',
                   }}>
-                    <span style={{ color: GREEN }}>&#10003;</span> {f}
+                    <span style={{ color: GREEN, flexShrink: 0 }}>&#10003;</span> {f}
                   </div>
                 ))}
               </div>
