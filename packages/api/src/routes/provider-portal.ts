@@ -447,4 +447,69 @@ router.post('/google-claim', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/portal/bookings/:bookingId/cancel — Provider cancels a booking
+router.post('/bookings/:bookingId/cancel', async (req: Request, res: Response) => {
+  const { bookingId } = req.params;
+
+  try {
+    const [booking] = await db
+      .select({
+        id: bookings.id,
+        status: bookings.status,
+        providerId: bookings.providerId,
+        jobId: bookings.jobId,
+        homeownerId: bookings.homeownerId,
+      })
+      .from(bookings)
+      .where(and(eq(bookings.id, bookingId), eq(bookings.providerId, req.providerId)))
+      .limit(1);
+
+    if (!booking) {
+      res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
+      return;
+    }
+    if (booking.status === 'cancelled') {
+      res.status(409).json({ data: null, error: 'Booking is already cancelled', meta: {} });
+      return;
+    }
+
+    // Get provider name, job details, and homeowner contact
+    const [provider] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, req.providerId)).limit(1);
+    const [job] = await db.select({ diagnosis: jobs.diagnosis, zipCode: jobs.zipCode }).from(jobs).where(eq(jobs.id, booking.jobId)).limit(1);
+    const [homeowner] = await db
+      .select({ email: homeowners.email, phone: homeowners.phone, firstName: homeowners.firstName })
+      .from(homeowners)
+      .where(eq(homeowners.id, booking.homeownerId))
+      .limit(1);
+
+    // Cancel the booking
+    await db.update(bookings).set({ status: 'cancelled' } as Record<string, unknown>).where(eq(bookings.id, bookingId));
+
+    // Notify homeowner
+    const providerName = provider?.name ?? 'Your provider';
+    const category = (job?.diagnosis as Record<string, string> | null)?.category ?? 'service';
+    const summary = (job?.diagnosis as Record<string, string> | null)?.summary ?? '';
+
+    const { sendSms, sendEmail } = await import('../services/notifications');
+
+    if (homeowner?.phone) {
+      void sendSms(homeowner.phone, `Hi ${homeowner.firstName || 'there'}, ${providerName} has cancelled your ${category} booking via Homie.${summary ? ` Job: ${summary.slice(0, 100)}` : ''} You can find another provider in your account.`);
+    }
+    if (homeowner?.email) {
+      void sendEmail(homeowner.email, `Booking Cancelled — ${category} job via Homie`,
+        `<div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 20px;">
+          <h2 style="font-family: 'Fraunces', serif; color: #2D2926; font-size: 22px;">Booking Cancelled</h2>
+          <p style="font-size: 15px; color: #6B6560; line-height: 1.6;"><b>${providerName}</b> has cancelled your <b>${category}</b> booking.</p>
+          ${summary ? `<p style="font-size: 14px; color: #9B9490;">${summary.slice(0, 200)}</p>` : ''}
+          <p style="font-size: 14px; color: #6B6560; line-height: 1.6;">You can find another provider by visiting your Homie account.</p>
+        </div>`);
+    }
+
+    res.json({ data: { cancelled: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /portal/bookings/:id/cancel]');
+    res.status(500).json({ data: null, error: 'Failed to cancel booking', meta: {} });
+  }
+});
+
 export default router;

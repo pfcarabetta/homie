@@ -164,6 +164,8 @@ function BookingsTab() {
   const [bookingsList, setBookingsList] = useState<ProviderBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     portalService.getBookings().then(r => {
@@ -341,6 +343,46 @@ function BookingsTab() {
                     textAlign: 'center', textDecoration: 'none', display: 'block',
                   }}>✉️ Email {b.homeownerFirstName || 'Customer'}</a>
                 </div>
+
+                {/* Cancel booking */}
+                {b.status === 'confirmed' && (
+                  <div style={{ marginTop: 16, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }}>
+                    {cancelConfirmId === b.id ? (
+                      <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 16 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#DC2626', marginBottom: 6 }}>Cancel this booking?</div>
+                        <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, marginBottom: 12 }}>
+                          This can't be undone. The homeowner will be notified of the cancellation via text and email.
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={(e) => { e.stopPropagation(); setCancelConfirmId(null); }}
+                            style={{ flex: 1, padding: '10px 0', borderRadius: 100, border: '1px solid #E0DAD4', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: D }}>
+                            Keep Booking
+                          </button>
+                          <button disabled={cancelling} onClick={async (e) => {
+                            e.stopPropagation();
+                            setCancelling(true);
+                            try {
+                              await portalService.cancelBooking(b.id);
+                              setBookingsList(prev => prev.map(bk => bk.id === b.id ? { ...bk, status: 'cancelled' } : bk));
+                              setCancelConfirmId(null);
+                            } catch (err) {
+                              alert((err as Error).message || 'Failed to cancel');
+                            }
+                            setCancelling(false);
+                          }}
+                            style={{ flex: 1, padding: '10px 0', borderRadius: 100, border: 'none', background: '#DC2626', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: cancelling ? 0.6 : 1 }}>
+                            {cancelling ? 'Cancelling...' : 'Yes, Cancel Booking'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={(e) => { e.stopPropagation(); setCancelConfirmId(b.id); }}
+                        style={{ background: 'none', border: 'none', fontSize: 13, color: '#DC2626', fontWeight: 500, cursor: 'pointer', padding: 0 }}>
+                        Cancel this booking
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
