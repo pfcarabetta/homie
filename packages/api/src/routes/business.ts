@@ -1465,6 +1465,44 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       }
     }
 
+    // Fetch bed types and rooms for first unit to debug, then all
+    const firstUnit = units[0];
+    if (firstUnit) {
+      // Debug: try bed-types endpoint
+      try {
+        const bedUrl = `${base}/pms/units/${firstUnit.id}/bed-types?size=50`;
+        const bedRes = await fetch(bedUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+        const bedRaw = await bedRes.text();
+        logger.info({ unitId: firstUnit.id, status: bedRes.status, body: bedRaw.slice(0, 500) }, '[Track] bed-types response');
+      } catch (e) { logger.error({ err: e }, '[Track] bed-types fetch failed'); }
+
+      // Debug: try rooms endpoint
+      try {
+        const roomUrl = `${base}/pms/units/${firstUnit.id}/rooms?size=50`;
+        const roomRes = await fetch(roomUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+        const roomRaw = await roomRes.text();
+        logger.info({ unitId: firstUnit.id, status: roomRes.status, body: roomRaw.slice(0, 500) }, '[Track] rooms response');
+      } catch (e) { logger.error({ err: e }, '[Track] rooms fetch failed'); }
+
+      // Debug: try single unit detail (may include more data)
+      try {
+        const detailUrl = `${base}/pms/units/${firstUnit.id}`;
+        const detailRes = await fetch(detailUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+        if (detailRes.ok) {
+          const detail = await detailRes.json() as Record<string, unknown>;
+          const emb = detail._embedded as Record<string, unknown> | undefined;
+          logger.info({
+            unitId: firstUnit.id,
+            topBedTypes: detail.bedTypes,
+            topRooms: detail.rooms,
+            embeddedKeys: emb ? Object.keys(emb) : null,
+            embeddedBedTypes: emb?.bedTypes,
+            embeddedRooms: emb?.rooms,
+          }, '[Track] single unit detail');
+        }
+      } catch (e) { logger.error({ err: e }, '[Track] single unit fetch failed'); }
+    }
+
     // Fetch bed types for each unit from the separate endpoint
     for (const u of units) {
       try {
