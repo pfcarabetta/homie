@@ -1468,17 +1468,14 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
     // Log first unit's bed-related fields for debugging
     if (units.length > 0) {
       const sample = units[0] as unknown as Record<string, unknown>;
+      const embedded = sample._embedded as Record<string, unknown> | undefined;
       logger.info({
-        unitKeys: Object.keys(sample),
-        bedrooms: sample.bedrooms,
-        rooms: sample.rooms,
         bedTypes: sample.bedTypes,
-        bed_types: sample.bed_types,
-        fullBathrooms: sample.fullBathrooms,
-        halfBathrooms: sample.halfBathrooms,
-        squareFeet: sample.squareFeet,
-        square_feet: sample.square_feet,
-      }, '[Track import] Sample unit fields');
+        embeddedKeys: embedded ? Object.keys(embedded) : null,
+        embeddedRooms: embedded?.rooms,
+        embeddedBedTypes: embedded?.bedTypes,
+        embeddedBed_types: embedded?.bed_types,
+      }, '[Track import] Bed debug');
     }
 
     // Only import active units
@@ -1541,8 +1538,9 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
       const totalBathrooms = (u.fullBathrooms ?? 0) + (u.threeQuarterBathrooms ?? 0) * 0.75 + (u.halfBathrooms ?? 0) * 0.5;
       const bathroomStr = totalBathrooms > 0 ? String(totalBathrooms) : (u.bathrooms ? String(u.bathrooms) : null);
 
-      // Collect beds from all sources: rooms[].beds[], bedTypes[], bed_types[]
+      // Collect beds from all sources: _embedded.rooms[].beds[], rooms[].beds[], bedTypes[], _embedded.bedTypes[]
       const allBeds: { type: string; count: number }[] = [];
+      const embedded = (u as unknown as Record<string, unknown>)._embedded as Record<string, unknown> | undefined;
 
       function addBed(name: string, count: string | number) {
         const bedType = normalizeBedType(name);
@@ -1552,9 +1550,10 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
         else { allBeds.push({ type: bedType, count: bedCount }); }
       }
 
-      // Primary source: rooms with nested beds
-      if (u.rooms && u.rooms.length > 0) {
-        for (const room of u.rooms) {
+      // Primary source: rooms with nested beds (check _embedded.rooms first, then top-level rooms)
+      const rooms = (embedded?.rooms ?? u.rooms) as TrackRoom[] | undefined;
+      if (rooms && rooms.length > 0) {
+        for (const room of rooms) {
           if (room.beds && room.beds.length > 0) {
             for (const bed of room.beds) {
               addBed(bed.name ?? 'other', bed.count ?? 1);
@@ -1563,9 +1562,9 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
         }
       }
 
-      // Fallback: top-level bedTypes or bed_types
+      // Fallback: bedTypes from _embedded or top-level
       if (allBeds.length === 0) {
-        const topBeds = u.bedTypes ?? u.bed_types ?? [];
+        const topBeds = (embedded?.bedTypes ?? embedded?.bed_types ?? u.bedTypes ?? u.bed_types ?? []) as TrackBedType[];
         for (const b of topBeds) {
           addBed(b.name ?? 'other', b.count ?? 1);
         }
@@ -1573,7 +1572,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
 
       const bedConfig = allBeds.length > 0 ? allBeds : null;
 
-      const roomNotes = u.rooms?.filter(r => r.name)
+      const roomNotes = rooms?.filter(r => r.name)
         .map(r => `${r.name}${r.type ? ` (${r.type})` : ''}${r.sleeps ? ` — sleeps ${r.sleeps}` : ''}`)
         .join('; ');
 
