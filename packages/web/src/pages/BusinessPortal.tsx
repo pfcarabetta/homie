@@ -1784,7 +1784,7 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-function DispatchesTab({ workspaceId }: { workspaceId: string }) {
+function DispatchesTab({ workspaceId, onTabChange }: { workspaceId: string; onTabChange?: (tab: Tab) => void }) {
   const navigate = useNavigate();
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1994,23 +1994,32 @@ function DispatchesTab({ workspaceId }: { workspaceId: string }) {
                               )}
                             </div>
                             {j.status !== 'expired' && j.status !== 'refunded' && (
-                              <button onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  // Find property address for this job
-                                  const propertyAddr = j.propertyName || undefined;
-                                  await jobService.bookProvider(j.id, r.id, r.provider.id, propertyAddr);
-                                  setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'completed' } : d));
-                                  alert(`${r.provider.name} has been booked! They will receive an SMS and email with the job details.`);
-                                } catch (err) {
-                                  alert((err as Error).message || 'Booking failed');
-                                }
-                              }} style={{
-                                width: '100%', padding: '10px 0', borderRadius: 100, border: 'none', marginTop: 10,
-                                background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                                fontFamily: "'DM Sans', sans-serif",
-                                boxShadow: `0 4px 16px ${O}40`,
-                              }}>Book {r.provider.name.split(' ')[0]}</button>
+                              j.status === 'completed' ? (
+                                <div style={{
+                                  width: '100%', padding: '10px 0', borderRadius: 100, marginTop: 10,
+                                  background: '#E0DAD4', color: '#9B9490', fontSize: 14, fontWeight: 600,
+                                  fontFamily: "'DM Sans', sans-serif", textAlign: 'center',
+                                }}>Booked</div>
+                              ) : (
+                                <button onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const propertyAddr = j.propertyName || undefined;
+                                    await jobService.bookProvider(j.id, r.id, r.provider.id, propertyAddr);
+                                    setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'completed' } : d));
+                                    if (onTabChange) {
+                                      onTabChange('bookings');
+                                    }
+                                  } catch (err) {
+                                    alert((err as Error).message || 'Booking failed');
+                                  }
+                                }} style={{
+                                  width: '100%', padding: '10px 0', borderRadius: 100, border: 'none', marginTop: 10,
+                                  background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                                  fontFamily: "'DM Sans', sans-serif",
+                                  boxShadow: `0 4px 16px ${O}40`,
+                                }}>Book {r.provider.name.split(' ')[0]}</button>
+                              )
                             )}
                           </div>
                         ))}
@@ -2860,7 +2869,7 @@ export default function BusinessPortal() {
             {/* Tab content */}
             {workspace && tab === 'overview' && <OverviewTab workspace={workspace} />}
             {workspace && tab === 'dispatches' && (
-              <DispatchesTab workspaceId={workspace.id} />
+              <DispatchesTab workspaceId={workspace.id} onTabChange={setTab} />
             )}
             {workspace && tab === 'bookings' && (
               <BusinessBookingsTab workspaceId={workspace.id} />
