@@ -399,6 +399,13 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+  const [showTrackImport, setShowTrackImport] = useState(false);
+  const [trackDomain, setTrackDomain] = useState('');
+  const [trackKey, setTrackKey] = useState('');
+  const [trackSecret, setTrackSecret] = useState('');
+  const [trackImporting, setTrackImporting] = useState(false);
+  const [trackResult, setTrackResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
+  const [trackError, setTrackError] = useState('');
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
@@ -421,10 +428,16 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Properties</h3>
         {canEdit && (
-          <button onClick={() => setShowAdd(true)}
-            style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
-            + Add Property
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setShowTrackImport(true)}
+              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              Import from Track
+            </button>
+            <button onClick={() => setShowAdd(true)}
+              style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+              + Add Property
+            </button>
+          </div>
         )}
       </div>
 
@@ -508,6 +521,103 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
         <EditPropertyModal workspaceId={workspaceId} property={editingProperty}
           onClose={() => setEditingProperty(null)}
           onUpdated={p => { setProperties(prev => prev.map(x => x.id === p.id ? p : x)); setEditingProperty(null); }} />
+      )}
+
+      {/* Track PMS Import Modal */}
+      {showTrackImport && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+          onClick={() => { if (!trackImporting) { setShowTrackImport(false); setTrackResult(null); setTrackError(''); } }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 4px' }}>Import from Track PMS</h3>
+            <p style={{ fontSize: 14, color: '#9B9490', marginBottom: 20 }}>Connect your Track account to import properties automatically.</p>
+
+            {trackResult ? (
+              <div>
+                <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 20, textAlign: 'center', marginBottom: 16 }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: D, marginBottom: 4 }}>{trackResult.imported} properties imported</div>
+                  {trackResult.skipped > 0 && (
+                    <div style={{ fontSize: 13, color: '#6B6560' }}>{trackResult.skipped} already existed (skipped)</div>
+                  )}
+                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>{trackResult.total} total found in Track</div>
+                </div>
+                <button onClick={() => {
+                  setShowTrackImport(false); setTrackResult(null); setTrackError('');
+                  setTrackDomain(''); setTrackKey(''); setTrackSecret('');
+                  // Refresh properties list
+                  businessService.listProperties(workspaceId).then(res => { if (res.data) setProperties(res.data); });
+                }} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: O, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
+                  Done
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>Track Domain</label>
+                    <input value={trackDomain} onChange={e => setTrackDomain(e.target.value)} placeholder="yourcompany.trackhs.com"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                    <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>Your Track domain without https://</div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>API Key</label>
+                    <input value={trackKey} onChange={e => setTrackKey(e.target.value)} placeholder="Your Track API key"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>API Secret</label>
+                    <input value={trackSecret} onChange={e => setTrackSecret(e.target.value)} placeholder="Your Track API secret" type="password"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+
+                {trackError && (
+                  <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#B91C1C', marginBottom: 12 }}>
+                    {trackError}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => { setShowTrackImport(false); setTrackError(''); }}
+                    style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: '1px solid #E0DAD4', background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button
+                    disabled={trackImporting || !trackDomain.trim() || !trackKey.trim() || !trackSecret.trim()}
+                    onClick={async () => {
+                      setTrackImporting(true); setTrackError('');
+                      try {
+                        const res = await businessService.importFromTrack(workspaceId, {
+                          track_domain: trackDomain.trim(),
+                          api_key: trackKey.trim(),
+                          api_secret: trackSecret.trim(),
+                        });
+                        if (res.error) { setTrackError(res.error); }
+                        else if (res.data) { setTrackResult(res.data); }
+                      } catch (err) {
+                        setTrackError(err instanceof Error ? err.message : 'Import failed');
+                      }
+                      setTrackImporting(false);
+                    }}
+                    style={{
+                      flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                      background: (!trackDomain.trim() || !trackKey.trim() || !trackSecret.trim()) ? '#E0DAD4' : O,
+                      color: (!trackDomain.trim() || !trackKey.trim() || !trackSecret.trim()) ? '#9B9490' : '#fff',
+                      opacity: trackImporting ? 0.7 : 1,
+                    }}>
+                    {trackImporting ? 'Importing...' : 'Import Properties'}
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 16, padding: '12px 14px', background: '#F9F5F2', borderRadius: 8, fontSize: 12, color: '#9B9490', lineHeight: 1.5 }}>
+                  <strong style={{ color: '#6B6560' }}>Where to find your API credentials:</strong><br />
+                  Contact your Track PMS administrator or Track support to obtain your API key and secret. Your domain is the URL you use to log into Track (e.g. yourcompany.trackhs.com).
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

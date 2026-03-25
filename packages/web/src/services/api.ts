@@ -820,6 +820,12 @@ export const businessService = {
       method: 'DELETE',
     }),
 
+  // Track PMS Import
+  importFromTrack: (workspaceId: string, data: { track_domain: string; api_key: string; api_secret: string }) =>
+    fetchAPI<{ imported: number; skipped: number; total: number }>(`/api/v1/business/${workspaceId}/import/track`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+
   // Members
   listMembers: (workspaceId: string) =>
     fetchAPI<WorkspaceMember[]>(`/api/v1/business/${workspaceId}/members`),

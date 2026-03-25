@@ -1345,4 +1345,112 @@ router.get('/:workspaceId/bookings', requireWorkspace, async (req: Request, res:
   }
 });
 
+// ── Track PMS Import ────────────────────────────────────────────────────────
+
+interface TrackUnit {
+  id: number;
+  name?: string;
+  address?: { street?: string; city?: string; state?: string; zip?: string };
+  bedrooms?: number;
+  bathrooms?: number;
+  square_feet?: number;
+  property_type?: string;
+  unit_type?: string;
+  status?: string;
+  bed_types?: Array<{ name?: string; quantity?: number }>;
+}
+
+// POST /:workspaceId/import/track — Import properties from Track PMS
+router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  const body = req.body as {
+    track_domain?: string;
+    api_key?: string;
+    api_secret?: string;
+  };
+
+  if (!body.track_domain || !body.api_key || !body.api_secret) {
+    res.status(400).json({ data: null, error: 'track_domain, api_key, and api_secret are required', meta: {} });
+    return;
+  }
+
+  const domain = body.track_domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const authHeader = 'Basic ' + Buffer.from(`${body.api_key}:${body.api_secret}`).toString('base64');
+
+  try {
+    // Fetch units from Track PMS API
+    const trackUrl = `https://${domain}/api/v1/pms/units?size=500`;
+    const trackRes = await fetch(trackUrl, {
+      headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+    });
+
+    if (!trackRes.ok) {
+      const errText = await trackRes.text().catch(() => '');
+      logger.error({ status: trackRes.status, body: errText }, '[Track import] API call failed');
+      res.status(trackRes.status === 401 ? 401 : 502).json({
+        data: null,
+        error: trackRes.status === 401 ? 'Invalid Track API credentials' : `Track API returned ${trackRes.status}`,
+        meta: {},
+      });
+      return;
+    }
+
+    const trackData = await trackRes.json() as { contents?: TrackUnit[]; results?: TrackUnit[] } | TrackUnit[];
+    const units: TrackUnit[] = Array.isArray(trackData) ? trackData : (trackData.contents ?? trackData.results ?? []);
+
+    if (units.length === 0) {
+      res.json({ data: { imported: 0, skipped: 0, total: 0 }, error: null, meta: {} });
+      return;
+    }
+
+    // Check which units are already imported (by pmsExternalId)
+    const existingProps = await db
+      .select({ pmsExternalId: properties.pmsExternalId })
+      .from(properties)
+      .where(and(
+        eq(properties.workspaceId, req.workspaceId),
+        eq(properties.pmsSource, 'track'),
+      ));
+    const existingIds = new Set(existingProps.map(p => p.pmsExternalId));
+
+    const toInsert = units
+      .filter(u => !existingIds.has(String(u.id)))
+      .map(u => ({
+        workspaceId: req.workspaceId,
+        name: u.name || `Unit ${u.id}`,
+        address: u.address?.street ?? null,
+        city: u.address?.city ?? null,
+        state: u.address?.state ?? null,
+        zipCode: u.address?.zip ?? null,
+        propertyType: u.property_type ?? u.unit_type ?? 'vacation_rental',
+        unitCount: 1,
+        bedrooms: u.bedrooms ?? null,
+        bathrooms: u.bathrooms ? String(u.bathrooms) : null,
+        sqft: u.square_feet ?? null,
+        beds: u.bed_types?.map(b => ({ type: (b.name ?? 'other').toLowerCase().replace(/\s+/g, '_'), count: b.quantity ?? 1 })) ?? null,
+        pmsSource: 'track' as const,
+        pmsExternalId: String(u.id),
+        notes: null,
+      }));
+
+    let imported = 0;
+    if (toInsert.length > 0) {
+      const inserted = await db.insert(properties).values(toInsert as unknown as typeof properties.$inferInsert[]).returning();
+      imported = inserted.length;
+    }
+
+    res.json({
+      data: {
+        imported,
+        skipped: units.length - imported,
+        total: units.length,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/import/track]');
+    res.status(500).json({ data: null, error: 'Failed to import from Track PMS', meta: {} });
+  }
+});
+
 export default router;
