@@ -554,13 +554,23 @@ export async function sendBookingNotifications(
 
   if (!homeowner || !provider) return;
 
-  // Emit tracking event for booking
+  // Emit tracking event for booking — include provider's availability from their response
   const providerFirstName = provider.name.split(' ')[0];
   const providerInitial = provider.name.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ');
   const displayName = `${providerFirstName} ${providerInitial}`.trim();
-  void emitTrackingEvent(jobId, 'provider_booked', 'Provider Booked', `Appointment confirmed with ${displayName}.`, {
+  let availability: string | undefined;
+  try {
+    const [response] = await db.select({ availability: providerResponses.availability })
+      .from(providerResponses)
+      .where(and(eq(providerResponses.jobId, jobId), eq(providerResponses.providerId, providerId)))
+      .limit(1);
+    availability = response?.availability ?? undefined;
+  } catch { /* non-fatal */ }
+  void emitTrackingEvent(jobId, 'provider_booked', 'Appointment Confirmed',
+    `${displayName} is booked.${availability ? ` Available: ${availability}` : ''}`, {
     provider_name: displayName,
     rating: provider.googleRating ?? undefined,
+    ...(availability ? { availability } : {}),
   });
 
   const category = ((job.diagnosis as DiagnosisPayload | null)?.category ?? 'home maintenance').replace(/_/g, ' ');

@@ -8,10 +8,7 @@ const STEPS = [
   { key: 'reported', icon: '📋', label: 'Reported', desc: 'Issue reported and diagnosed' },
   { key: 'dispatched', icon: '📡', label: 'Dispatching', desc: 'Finding available pros in your area' },
   { key: 'provider_responded', icon: '💬', label: 'Quoted', desc: 'A pro has responded with availability' },
-  { key: 'provider_booked', icon: '✅', label: 'Booked', desc: 'Pro has been booked for the job' },
-  { key: 'provider_en_route', icon: '🚗', label: 'En Route', desc: 'Pro is on the way' },
-  { key: 'in_progress', icon: '🔧', label: 'In Progress', desc: 'Work is being done' },
-  { key: 'completed', icon: '🎉', label: 'Completed', desc: 'Job complete!' },
+  { key: 'provider_booked', icon: '✅', label: 'Booked', desc: 'Appointment confirmed' },
 ] as const;
 
 const SEV: Record<string, { bg: string; text: string; label: string }> = {
@@ -28,15 +25,14 @@ function buildDemoData(): TrackingStatusType {
     job_title: 'Leaking kitchen faucet',
     job_category: 'plumbing',
     severity: 'medium',
-    status: 'provider_en_route',
+    status: 'provider_booked',
     provider: { name: 'Mike R.', rating: '4.9' },
-    last_updated: new Date(now - 20 * 60_000).toISOString(),
+    last_updated: new Date(now - 30 * 60_000).toISOString(),
     timeline: [
       { event_type: 'reported', title: 'Issue Reported', description: 'Guest reported a leaking kitchen faucet — water dripping from the base when turned on.', metadata: null, created_at: new Date(now - 120 * 60_000).toISOString() },
       { event_type: 'dispatched', title: 'Dispatching Pros', description: 'Contacting plumbers in the area via phone, SMS, and web.', metadata: null, created_at: new Date(now - 110 * 60_000).toISOString() },
       { event_type: 'provider_responded', title: 'Quote Received', description: 'Mike R. is available and provided a quote.', metadata: { provider_name: 'Mike R.', quote: '$175', rating: '4.9 ★' }, created_at: new Date(now - 80 * 60_000).toISOString() },
-      { event_type: 'provider_booked', title: 'Provider Booked', description: 'Appointment confirmed with Mike R.', metadata: { scheduled: 'Today, 2:00–4:00 PM' }, created_at: new Date(now - 60 * 60_000).toISOString() },
-      { event_type: 'provider_en_route', title: 'On the Way', description: 'Mike is headed to your property now.', metadata: { eta: '~20 minutes' }, created_at: new Date(now - 20 * 60_000).toISOString() },
+      { event_type: 'provider_booked', title: 'Appointment Confirmed', description: 'Mike R. is booked and confirmed for the job.', metadata: { scheduled: 'Today, 2:00–4:00 PM', availability: 'Tomorrow 9–11 AM' }, created_at: new Date(now - 30 * 60_000).toISOString() },
     ],
   };
 }
@@ -144,32 +140,31 @@ export default function TrackingStatus() {
             )}
 
             {/* Job summary */}
-            <div style={{ background: '#fff', borderRadius: 20, padding: '24px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
-                {data.property_name}
-              </div>
-              <div style={{ fontSize: 17, fontWeight: 600, color: D, marginBottom: 12, lineHeight: 1.4 }}>
-                {renderBold(data.job_title)}
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
-                <span style={{ padding: '4px 14px', borderRadius: 100, background: `${G}15`, color: G, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>
-                  {data.job_category.replace(/_/g, ' ')}
-                </span>
-                <span style={{ padding: '4px 14px', borderRadius: 100, background: sev.bg, color: sev.text, fontSize: 12, fontWeight: 600 }}>
-                  {sev.label}
-                </span>
+            <div style={{ background: '#fff', borderRadius: 16, padding: '16px 18px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
+                    {data.property_name}
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: D, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
+                    {renderBold(data.job_title)}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 10 }}>
+                  <span style={{ padding: '3px 10px', borderRadius: 100, background: `${G}15`, color: G, fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>
+                    {data.job_category.replace(/_/g, ' ')}
+                  </span>
+                  <span style={{ padding: '3px 10px', borderRadius: 100, background: sev.bg, color: sev.text, fontSize: 11, fontWeight: 600 }}>
+                    {sev.label}
+                  </span>
+                </div>
               </div>
 
-              {/* Current status highlight */}
-              <div style={{ background: `${O}08`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: O, animation: 'trackPulse 2s ease-in-out infinite', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: D, textTransform: 'capitalize' }}>
-                    {data.status.replace(/_/g, ' ')}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#6B6560', marginTop: 1 }}>
-                    {STEPS.find(s => s.key === data.status)?.desc ?? 'Processing your request'}
-                  </div>
+              {/* Current status */}
+              <div style={{ background: `${O}06`, borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: O, animation: 'trackPulse 2s ease-in-out infinite', flexShrink: 0 }} />
+                <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>
+                  {data.status.replace(/_/g, ' ')}
                 </div>
               </div>
             </div>
@@ -195,19 +190,18 @@ export default function TrackingStatus() {
                     )}
                   </div>
                 </div>
-                {/* ETA or scheduled */}
+                {/* Appointment time from booked event */}
                 {(() => {
-                  const metas = data.timeline.filter(e => e.metadata).flatMap(e => Object.entries(e.metadata!));
-                  const eta = metas.find(([k]) => k === 'eta');
-                  const sched = metas.find(([k]) => k === 'scheduled');
-                  const info = eta ?? sched;
-                  if (!info) return null;
+                  const bookedEvent = data.timeline.find(e => e.event_type === 'provider_booked');
+                  const respondedEvent = data.timeline.find(e => e.event_type === 'provider_responded');
+                  const scheduled = (bookedEvent?.metadata?.scheduled ?? bookedEvent?.metadata?.availability ?? respondedEvent?.metadata?.availability) as string | undefined;
+                  if (!scheduled) return null;
                   return (
                     <div style={{ marginTop: 14, background: W, borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 18 }}>{info[0] === 'eta' ? '⏱️' : '📅'}</span>
+                      <span style={{ fontSize: 18 }}>📅</span>
                       <div>
-                        <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 600 }}>{info[0] === 'eta' ? 'ESTIMATED ARRIVAL' : 'SCHEDULED'}</div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{String(info[1])}</div>
+                        <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 600 }}>APPOINTMENT</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{scheduled}</div>
                       </div>
                     </div>
                   );
