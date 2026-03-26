@@ -2834,6 +2834,7 @@ export default function BusinessPortal() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceDetail | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
+  const [showReportsUpgrade, setShowReportsUpgrade] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
@@ -2930,19 +2931,24 @@ export default function BusinessPortal() {
             <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #E0DAD4', marginBottom: 24, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x' }}>
               {TABS.filter(t => {
                 if (t === 'settings' && workspace?.user_role !== 'admin') return false;
-                if (t === 'reports' && !['professional', 'business', 'enterprise'].includes(workspace?.plan ?? '')) return false;
                 return true;
-              }).map(t => (
-                <button key={t} onClick={() => setTab(t)}
-                  style={{
-                    padding: '12px 20px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600,
-                    color: tab === t ? O : '#9B9490',
-                    borderBottom: tab === t ? `2px solid ${O}` : '2px solid transparent',
-                    marginBottom: -1, whiteSpace: 'nowrap', flexShrink: 0,
-                  }}>
-                  {TAB_LABELS[t]}
-                </button>
-              ))}
+              }).map(t => {
+                const isLocked = t === 'reports' && !['professional', 'business', 'enterprise'].includes(workspace?.plan ?? '');
+                return (
+                  <button key={t} onClick={() => {
+                    if (isLocked) { setShowReportsUpgrade(true); return; }
+                    setTab(t);
+                  }}
+                    style={{
+                      padding: '12px 20px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                      color: isLocked ? '#D0CBC6' : (tab === t ? O : '#9B9490'),
+                      borderBottom: tab === t ? `2px solid ${O}` : '2px solid transparent',
+                      marginBottom: -1, whiteSpace: 'nowrap', flexShrink: 0,
+                    }}>
+                    {TAB_LABELS[t]}{isLocked ? ' 🔒' : ''}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Tab content */}
@@ -2971,6 +2977,32 @@ export default function BusinessPortal() {
           </>
         )}
       </div>
+
+      {showReportsUpgrade && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+          onClick={() => setShowReportsUpgrade(false)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 32, width: '100%', maxWidth: 420, boxShadow: '0 16px 48px rgba(0,0,0,0.15)', textAlign: 'center' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+            <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 8px' }}>Upgrade to unlock Reports</h3>
+            <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 24 }}>
+              Full cost reporting, vendor scorecards, and advanced analytics are available on the <strong style={{ color: O }}>Professional</strong> plan and above.
+            </p>
+            <div style={{ background: W, borderRadius: 12, padding: 16, marginBottom: 24, textAlign: 'left' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 10 }}>Professional plan includes:</div>
+              {['Full cost reporting by property & category', 'Vendor scorecards with response rates', 'Booking & dispatch analytics', 'Team activity log'].map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 13, color: '#6B6560' }}>
+                  <span style={{ color: G, fontSize: 12 }}>✓</span> {f}
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowReportsUpgrade(false)}
+              style={{ width: '100%', padding: '14px 0', borderRadius: 10, border: 'none', background: O, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       {showCreate && (
         <CreateWorkspaceModal onClose={() => setShowCreate(false)}
