@@ -226,7 +226,7 @@ trackingAuthRouter.post('/:id/tracking', async (req: Request, res: Response) => 
       })
       .returning();
 
-    const trackingUrl = `https://yourhomie.com/t/${token}`;
+    const trackingUrl = `https://homiepro.ai/t/${token}`;
 
     const out: ApiResponse<{
       tracking_token: string;
@@ -323,7 +323,7 @@ trackingAuthRouter.post('/:id/tracking/events', async (req: Request, res: Respon
       const { sendSms, sendEmail } = await import('../services/notifications');
 
       for (const link of links) {
-        const trackingUrl = `https://yourhomie.com/t/${link.trackingToken}`;
+        const trackingUrl = `https://homiepro.ai/t/${link.trackingToken}`;
 
         if (link.notifyPhone) {
           void sendSms(
