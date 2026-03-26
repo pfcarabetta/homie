@@ -950,7 +950,7 @@ export default function BusinessChat() {
               </div>
 
               {/* Share status tracker */}
-              {jobId && !trackingUrl && (
+              {!trackingUrl && (
                 <div style={{ marginLeft: 42, marginBottom: 16, background: W, borderRadius: 12, padding: 16, border: '1px solid rgba(0,0,0,0.06)', animation: 'fadeSlide 0.3s ease' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 4 }}>Share maintenance status</div>
                   <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.5 }}>
@@ -962,7 +962,8 @@ export default function BusinessChat() {
                     <input value={trackEmail} onChange={e => setTrackEmail(e.target.value)} placeholder="Email for updates (optional)"
                       style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
                   </div>
-                  <button disabled={trackCreating} onClick={async () => {
+                  <button disabled={trackCreating || !jobId} onClick={async () => {
+                    if (!jobId) return;
                     setTrackCreating(true);
                     try {
                       const res = await trackingService.createLink(jobId, {
@@ -978,7 +979,7 @@ export default function BusinessChat() {
                     background: D, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
                     fontFamily: "'DM Sans', sans-serif", opacity: trackCreating ? 0.7 : 1,
                   }}>
-                    {trackCreating ? 'Creating...' : 'Create tracking link'}
+                    {trackCreating ? 'Creating...' : !jobId ? 'Waiting for dispatch...' : 'Create tracking link'}
                   </button>
                 </div>
               )}
