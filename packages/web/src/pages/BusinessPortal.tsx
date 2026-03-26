@@ -17,6 +17,7 @@ function HomieBizLogo({ size = 'default' }: { size?: 'default' | 'large' }) {
         color: '#fff', background: G, padding: isLarge ? '3px 8px' : '2px 6px',
         borderRadius: 4, marginLeft: isLarge ? 10 : 7, letterSpacing: '0.08em',
         textTransform: 'uppercase' as const, lineHeight: 1,
+        position: 'relative' as const, bottom: isLarge ? 3 : 2,
       }}>Business</span>
     </span>
   );
