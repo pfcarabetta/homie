@@ -264,7 +264,7 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
             const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
             void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
               `${firstName} ${initial} has responded.`.trim(),
-              { provider_name: `${firstName} ${initial}`.trim(), ...(state.quotedPrice ? { quote: state.quotedPrice } : {}), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
+              { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
             );
           } catch { /* non-fatal */ }
         }
@@ -544,7 +544,7 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
           const initial = provider.name.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ');
           void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
             `${firstName} ${initial} has responded.`.trim(),
-            { provider_name: `${firstName} ${initial}`.trim(), ...(state.quotedPrice ? { quote: state.quotedPrice } : {}), ...(provDetail?.googleRating ? { rating: `${provDetail.googleRating} ★` } : {}) },
+            { provider_name: `${firstName} ${initial}`.trim(), ...(provDetail?.googleRating ? { rating: `${provDetail.googleRating} ★` } : {}) },
           );
         } catch { /* non-fatal */ }
       }
@@ -772,7 +772,7 @@ router.post('/web/submit-quote', async (req: Request, res: Response) => {
     const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
     void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
       `${firstName} ${initial} has responded.`.trim(),
-      { provider_name: `${firstName} ${initial}`.trim(), ...(quoted_price ? { quote: quoted_price } : {}), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
+      { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
     );
   } catch { /* non-fatal */ }
 

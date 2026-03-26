@@ -31,7 +31,7 @@ function buildDemoData(): TrackingStatusType {
     timeline: [
       { event_type: 'reported', title: 'Issue Reported', description: 'Guest reported a leaking kitchen faucet — water dripping from the base when turned on.', metadata: null, created_at: new Date(now - 120 * 60_000).toISOString() },
       { event_type: 'dispatched', title: 'Dispatching Pros', description: 'Contacting plumbers in the area via phone, SMS, and web.', metadata: null, created_at: new Date(now - 110 * 60_000).toISOString() },
-      { event_type: 'provider_responded', title: 'Quote Received', description: 'Mike R. is available and provided a quote.', metadata: { provider_name: 'Mike R.', quote: '$175', rating: '4.9 ★' }, created_at: new Date(now - 80 * 60_000).toISOString() },
+      { event_type: 'provider_responded', title: 'Quote Received', description: 'Mike R. is available and has responded.', metadata: { provider_name: 'Mike R.', rating: '4.9 ★' }, created_at: new Date(now - 80 * 60_000).toISOString() },
       { event_type: 'provider_booked', title: 'Appointment Confirmed', description: 'Mike R. is booked and confirmed for the job.', metadata: { scheduled: 'Today, 2:00–4:00 PM', availability: 'Tomorrow 9–11 AM' }, created_at: new Date(now - 30 * 60_000).toISOString() },
     ],
   };
@@ -254,7 +254,7 @@ export default function TrackingStatus() {
                       </div>
                       {event?.metadata && (
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                          {Object.entries(event.metadata).filter(([k, v]) => k !== 'provider_name' && v != null).map(([k, v]) => (
+                          {Object.entries(event.metadata).filter(([k, v]) => k !== 'provider_name' && k !== 'quote' && v != null).map(([k, v]) => (
                             <span key={k} style={{
                               padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
                               background: k === 'quote' ? `${G}12` : k === 'rating' ? '#FFF7ED' : `${O}08`,

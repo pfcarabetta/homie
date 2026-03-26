@@ -156,7 +156,7 @@ router.post('/jobs/:attemptId/respond', async (req: Request, res: Response) => {
         const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
         void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
           `${firstName} ${initial} has responded.`.trim(),
-          { provider_name: `${firstName} ${initial}`.trim(), ...(quoted_price ? { quote: quoted_price } : {}), rating: provider?.googleRating ? `${provider.googleRating} ★` : undefined },
+          { provider_name: `${firstName} ${initial}`.trim(), rating: provider?.googleRating ? `${provider.googleRating} ★` : undefined },
         );
       } catch { /* non-fatal */ }
     }
