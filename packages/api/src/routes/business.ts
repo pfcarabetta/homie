@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, or, desc, ne, sql, gte, lte } from 'drizzle-orm';
+import { eq, and, or, desc, ne, sql, gte, lte, count } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { workspaces } from '../db/schema/workspaces';
@@ -374,6 +374,16 @@ router.post('/:workspaceId/members', requireWorkspace, requireWorkspaceRole('adm
 
     if (existing) {
       res.status(409).json({ data: null, error: 'User is already a member of this workspace', meta: {} });
+      return;
+    }
+
+    // Enforce member limit based on plan
+    const planMemberLimits: Record<string, number> = { trial: 1, starter: 1, professional: 5, business: 15, enterprise: 9999 };
+    const [ws] = await db.select({ plan: workspaces.plan }).from(workspaces).where(eq(workspaces.id, req.workspaceId)).limit(1);
+    const maxMembers = planMemberLimits[ws?.plan ?? 'starter'] ?? 1;
+    const [{ value: currentCount }] = await db.select({ value: count() }).from(workspaceMembers).where(eq(workspaceMembers.workspaceId, req.workspaceId));
+    if (currentCount >= maxMembers) {
+      res.status(403).json({ data: null, error: `Team member limit reached (${maxMembers} on ${ws?.plan ?? 'starter'} plan). Upgrade to add more members.`, meta: {} });
       return;
     }
 

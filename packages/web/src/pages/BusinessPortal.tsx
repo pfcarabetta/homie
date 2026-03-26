@@ -850,7 +850,11 @@ const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
   viewer: { bg: '#F3F4F6', text: '#6B7280' },
 };
 
-function TeamTab({ workspaceId, role, ownerId }: { workspaceId: string; role: string; ownerId: string }) {
+const PLAN_MEMBER_LIMITS: Record<string, number> = {
+  trial: 1, starter: 1, professional: 5, business: 15, enterprise: 9999,
+};
+
+function TeamTab({ workspaceId, role, ownerId, plan }: { workspaceId: string; role: string; ownerId: string; plan: string }) {
   const { homeowner } = useAuth();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -859,6 +863,8 @@ function TeamTab({ workspaceId, role, ownerId }: { workspaceId: string; role: st
   const [editRole, setEditRole] = useState('');
 
   const isAdmin = role === 'admin';
+  const memberLimit = PLAN_MEMBER_LIMITS[plan] ?? 1;
+  const atLimit = members.length >= memberLimit;
 
   function loadMembers() {
     businessService.listMembers(workspaceId).then(res => {
@@ -890,12 +896,24 @@ function TeamTab({ workspaceId, role, ownerId }: { workspaceId: string; role: st
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Team Members</h3>
+        <div>
+          <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Team Members</h3>
+          <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>
+            {members.length} of {memberLimit === 9999 ? 'unlimited' : memberLimit} {memberLimit === 1 ? 'user' : 'users'} · {plan.charAt(0).toUpperCase() + plan.slice(1)} plan
+          </div>
+        </div>
         {isAdmin && (
-          <button onClick={() => setShowInvite(true)}
-            style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
-            + Invite Member
-          </button>
+          atLimit ? (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 13, color: '#DC2626', fontWeight: 600, marginBottom: 4 }}>Team limit reached</div>
+              <div style={{ fontSize: 12, color: '#9B9490' }}>Upgrade your plan to add more members</div>
+            </div>
+          ) : (
+            <button onClick={() => setShowInvite(true)}
+              style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+              + Invite Member
+            </button>
+          )
         )}
       </div>
 
@@ -2844,7 +2862,7 @@ export default function BusinessPortal() {
               <VendorsTab workspaceId={workspace.id} role={workspace.user_role} />
             )}
             {workspace && tab === 'team' && (
-              <TeamTab workspaceId={workspace.id} role={workspace.user_role} ownerId={workspace.ownerId || ''} />
+              <TeamTab workspaceId={workspace.id} role={workspace.user_role} ownerId={workspace.ownerId || ''} plan={workspace.plan} />
             )}
             {workspace && tab === 'settings' && workspace.user_role === 'admin' && (
               <SettingsTab workspace={workspace} onUpdated={w => { setWorkspace(w); }} />
