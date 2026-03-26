@@ -328,28 +328,35 @@ trackingAuthRouter.post('/:id/tracking/events', async (req: Request, res: Respon
         if (link.notifyPhone) {
           void sendSms(
             link.notifyPhone,
-            `Homie update for ${link.propertyName}: ${body.title}. Track status: ${trackingUrl}`,
+            `🏠 ${link.propertyName} — ${body.title}. View status: ${trackingUrl}`,
           );
         }
 
         if (link.notifyEmail) {
           const emailHtml = `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
-              <div style="background: #2563eb; padding: 24px; border-radius: 8px 8px 0 0;">
-                <h1 style="color: white; margin: 0; font-size: 20px;">Homie</h1>
+            <div style="font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; background: #F9F5F2; padding: 32px 20px;">
+              <div style="text-align: center; margin-bottom: 24px;">
+                <span style="font-family: 'Fraunces', Georgia, serif; font-size: 28px; font-weight: 700; color: #E8632B;">homie</span>
               </div>
-              <div style="background: #ffffff; padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-                <h2 style="margin: 0 0 8px; font-size: 18px; color: #111827;">Update for ${link.propertyName}</h2>
-                <p style="margin: 0 0 16px; color: #4b5563; font-size: 16px;">${body.title}</p>
-                ${body.description ? `<p style="margin: 0 0 16px; color: #6b7280; font-size: 14px;">${body.description}</p>` : ''}
-                <a href="${trackingUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500;">Track Status</a>
+              <div style="background: #ffffff; border-radius: 16px; padding: 32px 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                <div style="font-size: 12px; font-weight: 600; color: #9B9490; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">Maintenance Update</div>
+                <h2 style="margin: 0 0 6px; font-size: 22px; font-weight: 700; color: #2D2926; font-family: 'Fraunces', Georgia, serif;">${link.propertyName}</h2>
+                <p style="margin: 0 0 20px; color: #6B6560; font-size: 16px; line-height: 1.6;">${body.title}</p>
+                ${body.description ? `<p style="margin: 0 0 20px; color: #9B9490; font-size: 14px; line-height: 1.6;">${body.description}</p>` : ''}
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+                  <a href="${trackingUrl}" style="display: inline-block; background: #E8632B; color: #ffffff; padding: 14px 36px; border-radius: 100px; text-decoration: none; font-weight: 600; font-size: 16px;">View Status</a>
+                </td></tr></table>
               </div>
-              <p style="color: #9ca3af; font-size: 12px; margin-top: 16px; text-align: center;">Sent by Homie - AI-powered home maintenance</p>
+              <div style="text-align: center; margin-top: 24px;">
+                <p style="color: #9B9490; font-size: 12px; margin: 0; line-height: 1.5;">
+                  Sent by <a href="https://homiepro.ai" style="color: #E8632B; text-decoration: none; font-weight: 600;">homie</a> — Your home's best friend
+                </p>
+              </div>
             </div>
           `;
           void sendEmail(
             link.notifyEmail,
-            `Homie update for ${link.propertyName}: ${body.title}`,
+            `🏠 ${link.propertyName} — ${body.title}`,
             emailHtml,
           );
         }
