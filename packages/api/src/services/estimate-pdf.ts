@@ -30,6 +30,9 @@ interface EstimatePDFOptions {
   };
   estimates: Array<{
     providerName: string;
+    providerPhone?: string | null;
+    providerEmail?: string | null;
+    providerWebsite?: string | null;
     googleRating: string | null;
     reviewCount: number;
     channel: string;
@@ -42,365 +45,379 @@ interface EstimatePDFOptions {
   declinedCount: number;
 }
 
-const ORANGE = '#E8632B';
-const DARK = '#2D2926';
+const O = '#E8632B';
+const D = '#2D2926';
 const GRAY = '#6B6560';
-const LIGHT_GRAY = '#9B9490';
-const WARM_BG = '#F9F5F2';
-const PAGE_WIDTH = 612;
-const PAGE_HEIGHT = 792;
-const MARGIN = 50;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+const MUTED = '#9B9490';
+const WARM = '#F9F5F2';
+const BORDER = '#E0DAD4';
+const GREEN = '#1B9E77';
+const PW = 612;
+const PH = 792;
+const M = 50;
+const CW = PW - M * 2;
 
-function formatDate(d: Date): string {
+function fmtDate(d: Date): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function formatResponseTime(sec: number): string {
+function fmtTime(sec: number): string {
   if (sec < 60) return `${Math.round(sec)}s`;
-  if (sec < 3600) return `${Math.round(sec / 60)}m`;
-  const hours = Math.floor(sec / 3600);
-  const mins = Math.round((sec % 3600) / 60);
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  if (sec < 3600) return `${Math.round(sec / 60)} min`;
+  const h = Math.floor(sec / 3600);
+  const m = Math.round((sec % 3600) / 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
 function titleCase(s: string): string {
   return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function severityLabel(s: string): string {
-  const colors: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', emergency: 'Emergency' };
-  return colors[s] || titleCase(s);
+function roundedRect(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number, r: number) {
+  doc.moveTo(x + r, y).lineTo(x + w - r, y)
+    .quadraticCurveTo(x + w, y, x + w, y + r).lineTo(x + w, y + h - r)
+    .quadraticCurveTo(x + w, y + h, x + w - r, y + h).lineTo(x + r, y + h)
+    .quadraticCurveTo(x, y + h, x, y + h - r).lineTo(x, y + r)
+    .quadraticCurveTo(x, y, x + r, y).closePath();
 }
 
-function roundedRect(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number, r: number): void {
-  doc.moveTo(x + r, y)
-    .lineTo(x + w - r, y)
-    .quadraticCurveTo(x + w, y, x + w, y + r)
-    .lineTo(x + w, y + h - r)
-    .quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-    .lineTo(x + r, y + h)
-    .quadraticCurveTo(x, y + h, x, y + h - r)
-    .lineTo(x, y + r)
-    .quadraticCurveTo(x, y, x + r, y)
-    .closePath();
-}
-
-async function resolveLogoBuffer(logoUrl: string): Promise<Buffer | null> {
+async function resolveLogoBuffer(url: string): Promise<Buffer | null> {
   try {
-    if (logoUrl.startsWith('data:image')) {
-      const match = logoUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
-      if (match) return Buffer.from(match[1], 'base64');
-      return null;
+    if (url.startsWith('data:image')) {
+      const match = url.match(/^data:image\/[^;]+;base64,(.+)$/);
+      return match ? Buffer.from(match[1], 'base64') : null;
     }
-    if (logoUrl.startsWith('http')) {
-      const res = await fetch(logoUrl);
+    if (url.startsWith('http')) {
+      const res = await fetch(url);
       if (!res.ok) return null;
-      const arrayBuf = await res.arrayBuffer();
-      return Buffer.from(arrayBuf);
+      return Buffer.from(await res.arrayBuffer());
     }
     return null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-function drawHeader(doc: PDFKit.PDFDocument, workspace: EstimatePDFOptions['workspace'], jobId: string, date: Date, isFirstPage: boolean): number {
-  let y = MARGIN;
-
-  if (isFirstPage) {
-    // Company name
-    doc.font('Helvetica-Bold').fontSize(20).fillColor(DARK);
-    doc.text(workspace.name, MARGIN, y, { width: CONTENT_WIDTH / 2 });
-    y += 26;
-
-    // Company details
-    const details: string[] = [];
-    if (workspace.companyAddress) details.push(workspace.companyAddress);
-    if (workspace.companyPhone) details.push(workspace.companyPhone);
-    if (workspace.companyEmail) details.push(workspace.companyEmail);
-    if (details.length > 0) {
-      doc.font('Helvetica').fontSize(9).fillColor(LIGHT_GRAY);
-      for (const line of details) {
-        doc.text(line, MARGIN, y, { width: CONTENT_WIDTH / 2 });
-        y += 12;
-      }
-    }
-
-    // Right side: title, date, job ID
-    const rightX = MARGIN + CONTENT_WIDTH / 2;
-    doc.font('Helvetica-Bold').fontSize(16).fillColor(DARK);
-    doc.text('Estimate Summary', rightX, MARGIN, { width: CONTENT_WIDTH / 2, align: 'right' });
-    doc.font('Helvetica').fontSize(10).fillColor(GRAY);
-    doc.text(formatDate(date), rightX, MARGIN + 22, { width: CONTENT_WIDTH / 2, align: 'right' });
-    doc.text(`Job ID: ${jobId.substring(0, 8)}`, rightX, MARGIN + 36, { width: CONTENT_WIDTH / 2, align: 'right' });
-
-    y = Math.max(y, MARGIN + 52) + 10;
-  } else {
-    // Smaller header on subsequent pages
-    doc.font('Helvetica-Bold').fontSize(12).fillColor(DARK);
-    doc.text(workspace.name, MARGIN, y, { width: CONTENT_WIDTH / 2 });
-    const rightX = MARGIN + CONTENT_WIDTH / 2;
-    doc.font('Helvetica').fontSize(9).fillColor(GRAY);
-    doc.text('Estimate Summary (cont.)', rightX, y, { width: CONTENT_WIDTH / 2, align: 'right' });
-    y += 20;
-  }
-
-  // Orange line
-  doc.save();
-  doc.moveTo(MARGIN, y).lineTo(PAGE_WIDTH - MARGIN, y).lineWidth(2).strokeColor(ORANGE).stroke();
-  doc.restore();
-
-  return y + 12;
+function drawFooter(doc: PDFKit.PDFDocument, pageNum: number) {
+  const fy = PH - 45;
+  doc.save().moveTo(M, fy).lineTo(PW - M, fy).lineWidth(0.5).strokeColor(BORDER).stroke().restore();
+  doc.font('Helvetica').fontSize(7.5).fillColor(MUTED);
+  doc.text('Generated by Homie — homiepro.ai', M, fy + 6, { width: CW, align: 'left' });
+  doc.text(`Page ${pageNum}`, M, fy + 6, { width: CW, align: 'right' });
+  doc.fontSize(6.5);
+  doc.text('This estimate summary is for informational purposes only. Actual costs may vary based on on-site assessment.', M, fy + 17, { width: CW, align: 'center' });
 }
 
-function drawFooter(doc: PDFKit.PDFDocument, pageNum: number): void {
-  const footerY = PAGE_HEIGHT - 50;
-  doc.save();
-  doc.moveTo(MARGIN, footerY).lineTo(PAGE_WIDTH - MARGIN, footerY).lineWidth(0.5).strokeColor(LIGHT_GRAY).stroke();
-  doc.restore();
-
-  doc.font('Helvetica').fontSize(8).fillColor(LIGHT_GRAY);
-  doc.text('Generated by Homie — homiepro.ai', MARGIN, footerY + 6, { width: CONTENT_WIDTH, align: 'left' });
-  doc.text(`Page ${pageNum}`, MARGIN, footerY + 6, { width: CONTENT_WIDTH, align: 'right' });
-  doc.font('Helvetica').fontSize(7).fillColor(LIGHT_GRAY);
-  doc.text(
-    'This estimate summary is for informational purposes only. Actual costs may vary. Homie does not guarantee provider pricing or availability.',
-    MARGIN, footerY + 18, { width: CONTENT_WIDTH, align: 'center' },
-  );
+function checkPage(doc: PDFKit.PDFDocument, y: number, needed: number, pageNum: { val: number }, workspace: EstimatePDFOptions['workspace'], jobId: string, createdAt: Date): number {
+  if (y + needed > PH - 70) {
+    drawFooter(doc, pageNum.val);
+    doc.addPage();
+    pageNum.val++;
+    // Small continuation header
+    let ny = M;
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(D);
+    doc.text(workspace.name, M, ny, { width: CW / 2 });
+    doc.font('Helvetica').fontSize(8).fillColor(MUTED);
+    doc.text('Estimate Summary (cont.)', M + CW / 2, ny, { width: CW / 2, align: 'right' });
+    ny += 16;
+    doc.save().moveTo(M, ny).lineTo(PW - M, ny).lineWidth(1.5).strokeColor(O).stroke().restore();
+    return ny + 12;
+  }
+  return y;
 }
 
 export async function generateEstimatePDF(options: EstimatePDFOptions): Promise<Buffer> {
   const { workspace, property, job, estimates, declinedCount } = options;
 
-  const doc = new PDFDocument({
-    size: 'LETTER',
-    margins: { top: MARGIN, bottom: 60, left: MARGIN, right: MARGIN },
-    bufferPages: true,
-  });
-
+  const doc = new PDFDocument({ size: 'LETTER', margins: { top: M, bottom: 60, left: M, right: M }, bufferPages: true });
   const chunks: Buffer[] = [];
   doc.on('data', (chunk: Buffer) => chunks.push(chunk));
 
-  // Embed logo if available
   let logoBuffer: Buffer | null = null;
-  if (workspace.logoUrl) {
-    logoBuffer = await resolveLogoBuffer(workspace.logoUrl);
-  }
+  if (workspace.logoUrl) logoBuffer = await resolveLogoBuffer(workspace.logoUrl);
 
-  let pageNum = 1;
-  let y = drawHeader(doc, workspace, job.id, job.createdAt, true);
+  const pg = { val: 1 };
+  let y = M;
 
-  // If logo was resolved, draw it next to the company name
+  // ═══════════════════════════════════════════════════════════════════
+  // HEADER
+  // ═══════════════════════════════════════════════════════════════════
+
+  const headerLeftX = M;
+  let logoEndX = M;
+
+  // Logo
   if (logoBuffer) {
     try {
-      doc.image(logoBuffer, MARGIN, MARGIN, { height: 30 });
-    } catch {
-      // Skip if image format is unsupported
-    }
+      doc.image(logoBuffer, headerLeftX, y, { height: 40 });
+      logoEndX = headerLeftX + 50; // approximate, will be overridden by text position
+    } catch { /* skip */ }
   }
 
-  // ── Property Section ──────────────────────────────────────────────
-  y += 4;
-  doc.font('Helvetica-Bold').fontSize(14).fillColor(DARK);
-  doc.text(property.name, MARGIN, y, { width: CONTENT_WIDTH });
-  y += 20;
+  // Company name — position below logo if logo exists, or at top
+  const nameY = logoBuffer ? y + 46 : y;
+  doc.font('Helvetica-Bold').fontSize(18).fillColor(D);
+  doc.text(workspace.name, headerLeftX, nameY, { width: CW * 0.6 });
+  let detailY = nameY + 22;
 
-  const addressParts: string[] = [];
-  if (property.address) addressParts.push(property.address);
-  const cityStateZip: string[] = [];
-  if (property.city) cityStateZip.push(property.city);
-  if (property.state) cityStateZip.push(property.state);
-  if (property.zipCode) cityStateZip.push(property.zipCode);
-  if (cityStateZip.length > 0) addressParts.push(cityStateZip.join(', '));
-
-  if (addressParts.length > 0) {
-    doc.font('Helvetica').fontSize(10).fillColor(GRAY);
-    for (const line of addressParts) {
-      doc.text(line, MARGIN, y, { width: CONTENT_WIDTH });
-      y += 14;
-    }
+  // Company details stacked below name
+  doc.font('Helvetica').fontSize(8.5).fillColor(MUTED);
+  if (workspace.companyAddress) {
+    doc.text(workspace.companyAddress, headerLeftX, detailY, { width: CW * 0.6 });
+    detailY += 11;
+  }
+  const contactParts: string[] = [];
+  if (workspace.companyPhone) contactParts.push(workspace.companyPhone);
+  if (workspace.companyEmail) contactParts.push(workspace.companyEmail);
+  if (contactParts.length > 0) {
+    doc.text(contactParts.join('  •  '), headerLeftX, detailY, { width: CW * 0.6 });
+    detailY += 11;
   }
 
-  y += 8;
+  // Right side: Estimate Summary title + date + job ID
+  const rightX = M + CW * 0.55;
+  const rightW = CW * 0.45;
+  doc.font('Helvetica-Bold').fontSize(15).fillColor(O);
+  doc.text('Estimate Summary', rightX, y, { width: rightW, align: 'right' });
+  doc.font('Helvetica').fontSize(9).fillColor(GRAY);
+  doc.text(fmtDate(job.createdAt), rightX, y + 20, { width: rightW, align: 'right' });
+  doc.text(`Job #${job.id.substring(0, 8).toUpperCase()}`, rightX, y + 32, { width: rightW, align: 'right' });
 
-  // ── Job Summary Box ───────────────────────────────────────────────
-  const diagnosis = job.diagnosis;
-  const boxPadding = 14;
-  // Pre-calculate box height
-  let boxContentHeight = 0;
-  const jobTitle = diagnosis ? titleCase(diagnosis.category) : 'Service Request';
-  boxContentHeight += 20; // title
-  if (diagnosis) {
-    boxContentHeight += 16; // category + severity
-    boxContentHeight += 14; // date
-    // Summary text height estimate
-    const summaryText = diagnosis.summary.replace(/\*\*(.+?)\*\*/g, '$1');
-    const summaryLines = Math.ceil(summaryText.length / 80);
-    boxContentHeight += summaryLines * 14 + 4;
-    if (diagnosis.confidence) boxContentHeight += 14;
+  y = Math.max(detailY, y + 48) + 8;
+
+  // Orange divider
+  doc.save().moveTo(M, y).lineTo(PW - M, y).lineWidth(2).strokeColor(O).stroke().restore();
+  y += 16;
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PROPERTY
+  // ═══════════════════════════════════════════════════════════════════
+
+  doc.font('Helvetica-Bold').fontSize(13).fillColor(D);
+  doc.text(property.name, M, y, { width: CW });
+  y += 18;
+
+  const addrParts: string[] = [];
+  if (property.address) addrParts.push(property.address);
+  const csz: string[] = [];
+  if (property.city) csz.push(property.city);
+  if (property.state) csz.push(property.state);
+  if (property.zipCode) csz.push(property.zipCode);
+  if (csz.length > 0) addrParts.push(csz.join(', '));
+  if (addrParts.length > 0) {
+    doc.font('Helvetica').fontSize(9.5).fillColor(GRAY);
+    doc.text(addrParts.join(', '), M, y, { width: CW });
+    y += 14;
   }
-  if (job.preferredTiming || job.budget) boxContentHeight += 16;
+  y += 10;
 
-  const boxHeight = boxContentHeight + boxPadding * 2;
+  // ═══════════════════════════════════════════════════════════════════
+  // JOB SUMMARY BOX
+  // ═══════════════════════════════════════════════════════════════════
+
+  const diag = job.diagnosis;
+  const pad = 16;
+
+  // Calculate box height dynamically
+  let tempY = 0;
+  tempY += 18; // title
+  if (diag) {
+    tempY += 14; // category + severity
+    tempY += 12; // date
+    tempY += 8; // spacing
+    const summaryClean = (diag.summary || '').replace(/\*\*(.+?)\*\*/g, '$1');
+    const summaryH = doc.font('Helvetica').fontSize(9.5).heightOfString(summaryClean, { width: CW - pad * 2 });
+    tempY += summaryH + 6;
+    if (diag.confidence) tempY += 12;
+  }
+  if (job.preferredTiming || job.budget) tempY += 14;
+  const boxH = tempY + pad * 2;
+
+  y = checkPage(doc, y, boxH, pg, workspace, job.id, job.createdAt);
 
   doc.save();
-  roundedRect(doc, MARGIN, y, CONTENT_WIDTH, boxHeight, 8);
-  doc.fillColor(WARM_BG).fill();
+  roundedRect(doc, M, y, CW, boxH, 6);
+  doc.fillColor(WARM).fill();
   doc.restore();
 
-  let by = y + boxPadding;
+  let by = y + pad;
 
-  doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK);
-  doc.text(jobTitle, MARGIN + boxPadding, by, { width: CONTENT_WIDTH - boxPadding * 2 });
-  by += 20;
+  if (diag) {
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(D);
+    doc.text(titleCase(diag.category), M + pad, by, { width: CW - pad * 2 });
+    by += 18;
 
-  if (diagnosis) {
-    doc.font('Helvetica').fontSize(10).fillColor(GRAY);
-    doc.text(`${titleCase(diagnosis.category)}  •  Severity: ${severityLabel(diagnosis.severity)}`, MARGIN + boxPadding, by, { width: CONTENT_WIDTH - boxPadding * 2 });
-    by += 16;
-
-    doc.font('Helvetica').fontSize(9).fillColor(LIGHT_GRAY);
-    doc.text(`Reported: ${formatDate(job.createdAt)}`, MARGIN + boxPadding, by, { width: CONTENT_WIDTH - boxPadding * 2 });
+    doc.font('Helvetica').fontSize(9).fillColor(GRAY);
+    doc.text(`Severity: ${titleCase(diag.severity)}  •  Reported: ${fmtDate(job.createdAt)}`, M + pad, by, { width: CW - pad * 2 });
     by += 14;
+    by += 6;
 
-    const summaryText = diagnosis.summary.replace(/\*\*(.+?)\*\*/g, '$1');
-    doc.font('Helvetica').fontSize(10).fillColor(DARK);
-    const summaryHeight = doc.heightOfString(summaryText, { width: CONTENT_WIDTH - boxPadding * 2 });
-    doc.text(summaryText, MARGIN + boxPadding, by, { width: CONTENT_WIDTH - boxPadding * 2 });
-    by += summaryHeight + 4;
+    const summaryClean = (diag.summary || '').replace(/\*\*(.+?)\*\*/g, '$1');
+    doc.font('Helvetica').fontSize(9.5).fillColor(D);
+    const sH = doc.heightOfString(summaryClean, { width: CW - pad * 2 });
+    doc.text(summaryClean, M + pad, by, { width: CW - pad * 2 });
+    by += sH + 6;
 
-    if (diagnosis.confidence) {
-      doc.font('Helvetica').fontSize(9).fillColor(LIGHT_GRAY);
-      doc.text(`Diagnostic confidence: ${Math.round(diagnosis.confidence * 100)}%`, MARGIN + boxPadding, by, { width: CONTENT_WIDTH - boxPadding * 2 });
-      by += 14;
+    if (diag.confidence) {
+      doc.font('Helvetica').fontSize(8.5).fillColor(MUTED);
+      doc.text(`AI Diagnostic Confidence: ${Math.round(diag.confidence * 100)}%`, M + pad, by, { width: CW - pad * 2 });
+      by += 12;
     }
+  } else {
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(D);
+    doc.text('Service Request', M + pad, by, { width: CW - pad * 2 });
+    by += 18;
   }
 
   if (job.preferredTiming || job.budget) {
-    const timingBudget: string[] = [];
-    if (job.preferredTiming) timingBudget.push(`Timing: ${job.preferredTiming}`);
-    if (job.budget) timingBudget.push(`Budget: ${job.budget}`);
-    doc.font('Helvetica').fontSize(10).fillColor(GRAY);
-    doc.text(timingBudget.join('    '), MARGIN + boxPadding, by, { width: CONTENT_WIDTH - boxPadding * 2 });
-    by += 16;
+    const parts: string[] = [];
+    if (job.preferredTiming) parts.push(`Timing: ${titleCase(job.preferredTiming)}`);
+    if (job.budget) parts.push(`Budget: ${job.budget}`);
+    doc.font('Helvetica').fontSize(9).fillColor(GRAY);
+    doc.text(parts.join('    •    '), M + pad, by, { width: CW - pad * 2 });
+    by += 14;
   }
 
-  y = y + boxHeight + 16;
+  y += boxH + 20;
 
-  // ── Estimates Section ─────────────────────────────────────────────
-  const totalResponses = estimates.length;
-  doc.font('Helvetica-Bold').fontSize(14).fillColor(DARK);
-  const estimateHeaderText = `${totalResponses} estimate${totalResponses !== 1 ? 's' : ''} received`;
-  doc.text(estimateHeaderText, MARGIN, y, { width: CONTENT_WIDTH });
-  y += 20;
+  // ═══════════════════════════════════════════════════════════════════
+  // ESTIMATES HEADER
+  // ═══════════════════════════════════════════════════════════════════
+
+  y = checkPage(doc, y, 30, pg, workspace, job.id, job.createdAt);
+
+  doc.font('Helvetica-Bold').fontSize(13).fillColor(D);
+  doc.text(`${estimates.length} Estimate${estimates.length !== 1 ? 's' : ''} Received`, M, y, { width: CW });
+  y += 18;
 
   if (declinedCount > 0) {
-    doc.font('Helvetica').fontSize(9).fillColor(LIGHT_GRAY);
-    doc.text(`${declinedCount} provider${declinedCount !== 1 ? 's' : ''} declined or did not respond`, MARGIN, y, { width: CONTENT_WIDTH });
+    doc.font('Helvetica').fontSize(8.5).fillColor(MUTED);
+    doc.text(`${declinedCount} additional provider${declinedCount !== 1 ? 's were' : ' was'} contacted but declined or did not respond.`, M, y, { width: CW });
     y += 14;
   }
+  y += 8;
 
-  y += 4;
+  // ═══════════════════════════════════════════════════════════════════
+  // ESTIMATE CARDS
+  // ═══════════════════════════════════════════════════════════════════
 
-  // Draw each estimate
-  for (const est of estimates) {
-    // Estimate block height calculation
-    let estHeight = 16 + 14 + 14; // provider name, rating line, channel line
-    if (est.quotedPrice) estHeight += 24;
-    if (est.availability) estHeight += 14;
-    if (est.message) {
-      const msgLines = Math.ceil(est.message.length / 70);
-      estHeight += msgLines * 13 + 4;
-    }
-    if (est.responseTimeSec !== null) estHeight += 14;
-    estHeight += 20; // padding
+  for (let i = 0; i < estimates.length; i++) {
+    const est = estimates[i];
+    const ip = 14; // inner padding
 
-    // Check if we need a new page
-    const maxY = PAGE_HEIGHT - 80;
-    if (y + estHeight > maxY) {
-      drawFooter(doc, pageNum);
-      doc.addPage();
-      pageNum++;
-      y = drawHeader(doc, workspace, job.id, job.createdAt, false);
-    }
+    // Pre-calculate card height
+    let cardH = ip; // top padding
+    cardH += 16; // provider name row
+    cardH += 4; // spacing
 
-    // Draw estimate border box
-    doc.save();
-    roundedRect(doc, MARGIN, y, CONTENT_WIDTH, estHeight, 6);
-    doc.lineWidth(1).strokeColor('#E0DBD7').stroke();
-    doc.restore();
+    // Info rows
+    const infoRows: string[] = [];
+    if (est.googleRating) infoRows.push(`★ ${est.googleRating}${est.reviewCount > 0 ? ` (${est.reviewCount} reviews)` : ''} — Google`);
+    if (est.providerPhone) infoRows.push(`Phone: ${est.providerPhone}`);
+    if (est.providerEmail) infoRows.push(`Email: ${est.providerEmail}`);
+    if (est.providerWebsite) infoRows.push(`Web: ${est.providerWebsite}`);
+    cardH += infoRows.length * 13;
+    if (infoRows.length > 0) cardH += 6; // spacing after info
 
-    let ey = y + 10;
-    const innerPad = 12;
-    const innerWidth = CONTENT_WIDTH - innerPad * 2;
-
-    // Provider name
-    doc.font('Helvetica-Bold').fontSize(12).fillColor(DARK);
-    doc.text(est.providerName, MARGIN + innerPad, ey, { width: innerWidth * 0.6 });
-
-    // Preferred badge
-    if (est.isPreferred) {
-      const badgeX = MARGIN + CONTENT_WIDTH - innerPad - 70;
-      doc.save();
-      roundedRect(doc, badgeX, ey - 1, 60, 15, 4);
-      doc.fillColor(ORANGE).fill();
-      doc.restore();
-      doc.font('Helvetica-Bold').fontSize(7).fillColor('#FFFFFF');
-      doc.text('PREFERRED', badgeX + 5, ey + 2, { width: 50, align: 'center' });
-    }
-    ey += 16;
-
-    // Rating + reviews
-    if (est.googleRating || est.reviewCount > 0) {
-      doc.font('Helvetica').fontSize(9).fillColor(GRAY);
-      const ratingParts: string[] = [];
-      if (est.googleRating) ratingParts.push(`★ ${est.googleRating}`);
-      if (est.reviewCount > 0) ratingParts.push(`${est.reviewCount} reviews`);
-      doc.text(ratingParts.join('  •  '), MARGIN + innerPad, ey, { width: innerWidth });
-    }
-    ey += 14;
-
-    // Channel badge
-    doc.font('Helvetica').fontSize(8).fillColor(LIGHT_GRAY);
-    doc.text(`Channel: ${est.channel.toUpperCase()}`, MARGIN + innerPad, ey, { width: innerWidth });
-    ey += 14;
-
-    // Quoted price
-    if (est.quotedPrice) {
-      doc.font('Helvetica-Bold').fontSize(16).fillColor(ORANGE);
-      doc.text(est.quotedPrice, MARGIN + innerPad, ey, { width: innerWidth });
-      ey += 24;
+    // Quote + availability row
+    if (est.quotedPrice || est.availability) {
+      cardH += 22; // quote row
+      cardH += 6;
     }
 
-    // Availability
-    if (est.availability) {
-      doc.font('Helvetica').fontSize(10).fillColor(GRAY);
-      doc.text(`Availability: ${est.availability}`, MARGIN + innerPad, ey, { width: innerWidth });
-      ey += 14;
-    }
+    // Channel + response time row
+    cardH += 12;
 
     // Message
     if (est.message) {
+      const msgH = doc.font('Helvetica-Oblique').fontSize(9).heightOfString(`"${est.message}"`, { width: CW - ip * 2 });
+      cardH += msgH + 8;
+    }
+
+    cardH += ip; // bottom padding
+
+    y = checkPage(doc, y, cardH + 8, pg, workspace, job.id, job.createdAt);
+
+    // Card background
+    doc.save();
+    roundedRect(doc, M, y, CW, cardH, 6);
+    doc.lineWidth(1).strokeColor(BORDER).stroke();
+    doc.restore();
+
+    let cy = y + ip;
+    const iw = CW - ip * 2;
+
+    // ── Provider name row ──
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(D);
+    const nameW = est.isPreferred ? iw - 75 : iw;
+    doc.text(est.providerName, M + ip, cy, { width: nameW });
+
+    // Preferred badge
+    if (est.isPreferred) {
+      const bx = M + CW - ip - 68;
+      doc.save();
+      roundedRect(doc, bx, cy, 58, 16, 4);
+      doc.fillColor(O).fill();
+      doc.restore();
+      doc.font('Helvetica-Bold').fontSize(7).fillColor('#FFFFFF');
+      doc.text('PREFERRED', bx + 2, cy + 4, { width: 54, align: 'center' });
+    }
+    cy += 16 + 4;
+
+    // ── Info rows (rating, phone, email, website) ──
+    doc.font('Helvetica').fontSize(9).fillColor(GRAY);
+    for (const row of infoRows) {
+      doc.text(row, M + ip, cy, { width: iw });
+      cy += 13;
+    }
+    if (infoRows.length > 0) cy += 4;
+
+    // ── Quote + Availability row ──
+    if (est.quotedPrice || est.availability) {
+      const qx = M + ip;
+      if (est.quotedPrice) {
+        doc.font('Helvetica-Bold').fontSize(16).fillColor(O);
+        doc.text(est.quotedPrice, qx, cy, { continued: false });
+        // Availability next to price
+        if (est.availability) {
+          doc.font('Helvetica').fontSize(9.5).fillColor(D);
+          const priceW = doc.widthOfString(est.quotedPrice);
+          doc.text(`  •  ${est.availability}`, qx + priceW + 4, cy + 4, { width: iw - priceW - 10 });
+        }
+      } else if (est.availability) {
+        doc.font('Helvetica').fontSize(10).fillColor(D);
+        doc.text(`Availability: ${est.availability}`, qx, cy, { width: iw });
+      }
+      cy += 22 + 4;
+    }
+
+    // ── Channel + response time ──
+    doc.font('Helvetica').fontSize(8).fillColor(MUTED);
+    const metaParts: string[] = [`Contacted via ${est.channel.toUpperCase()}`];
+    if (est.responseTimeSec !== null) metaParts.push(`Responded in ${fmtTime(est.responseTimeSec)}`);
+    doc.text(metaParts.join('  •  '), M + ip, cy, { width: iw });
+    cy += 12;
+
+    // ── Provider message ──
+    if (est.message) {
+      cy += 2;
+      doc.save();
+      // Light background for the note
+      const noteH = doc.font('Helvetica-Oblique').fontSize(9).heightOfString(`"${est.message}"`, { width: iw - 16 }) + 12;
+      roundedRect(doc, M + ip, cy, iw, noteH, 4);
+      doc.fillColor('#FAFAF8').fill();
+      doc.restore();
+
       doc.font('Helvetica-Oblique').fontSize(9).fillColor(GRAY);
-      const msgHeight = doc.heightOfString(est.message, { width: innerWidth });
-      doc.text(`"${est.message}"`, MARGIN + innerPad, ey, { width: innerWidth });
-      ey += msgHeight + 4;
+      doc.text(`"${est.message}"`, M + ip + 8, cy + 6, { width: iw - 16 });
     }
 
-    // Response time
-    if (est.responseTimeSec !== null) {
-      doc.font('Helvetica').fontSize(8).fillColor(LIGHT_GRAY);
-      doc.text(`Response time: ${formatResponseTime(est.responseTimeSec)}`, MARGIN + innerPad, ey, { width: innerWidth });
-      ey += 14;
-    }
-
-    y += estHeight + 10;
+    y += cardH + 10;
   }
 
-  // Draw footer on the last page
-  drawFooter(doc, pageNum);
+  // ═══════════════════════════════════════════════════════════════════
+  // FOOTER
+  // ═══════════════════════════════════════════════════════════════════
 
+  drawFooter(doc, pg.val);
   doc.end();
 
   return new Promise<Buffer>((resolve, reject) => {

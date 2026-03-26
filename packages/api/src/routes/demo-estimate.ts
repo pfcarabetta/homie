@@ -37,6 +37,9 @@ router.get('/estimate-summary', async (_req: Request, res: Response) => {
       estimates: [
         {
           providerName: 'Atlantic Plumbing & Heating',
+          providerPhone: '(843) 555-0234',
+          providerEmail: 'service@atlanticplumbing.com',
+          providerWebsite: 'atlanticplumbing.com',
           googleRating: '4.8',
           reviewCount: 247,
           channel: 'sms',
@@ -48,6 +51,9 @@ router.get('/estimate-summary', async (_req: Request, res: Response) => {
         },
         {
           providerName: 'Beachside Plumbing Co.',
+          providerPhone: '(843) 555-0187',
+          providerEmail: null,
+          providerWebsite: 'beachsideplumbing.co',
           googleRating: '4.6',
           reviewCount: 183,
           channel: 'email',
@@ -59,6 +65,9 @@ router.get('/estimate-summary', async (_req: Request, res: Response) => {
         },
         {
           providerName: 'Grand Strand Mechanical',
+          providerPhone: '(843) 555-0301',
+          providerEmail: 'info@gsmechanical.com',
+          providerWebsite: null,
           googleRating: '4.9',
           reviewCount: 312,
           channel: 'sms',

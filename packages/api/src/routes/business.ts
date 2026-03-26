@@ -1791,6 +1791,9 @@ router.get('/:workspaceId/jobs/:jobId/estimate-pdf', requireWorkspace, requireWo
     const responses = await db
       .select({
         providerName: providers.name,
+        providerPhone: providers.phone,
+        providerEmail: providers.email,
+        providerWebsite: providers.website,
         googleRating: providers.googleRating,
         reviewCount: providers.reviewCount,
         channel: providerResponses.channel,
@@ -1841,6 +1844,9 @@ router.get('/:workspaceId/jobs/:jobId/estimate-pdf', requireWorkspace, requireWo
       }
       return {
         providerName: r.providerName,
+        providerPhone: r.providerPhone,
+        providerEmail: r.providerEmail,
+        providerWebsite: r.providerWebsite,
         googleRating: r.googleRating,
         reviewCount: r.reviewCount,
         channel: r.channel,
