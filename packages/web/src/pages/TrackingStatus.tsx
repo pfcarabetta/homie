@@ -1,33 +1,25 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { trackingService, type TrackingStatus as TrackingStatusType } from '@/services/api';
 
-// ── Constants ──────────────────────────────────────────────────────────────
-
-const O = '#E8632B';
-const G = '#1B9E77';
-const D = '#2D2926';
-const W = '#F9F5F2';
+const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
 const STEPS = [
-  { key: 'reported', label: 'Reported' },
-  { key: 'dispatched', label: 'Dispatched' },
-  { key: 'provider_responded', label: 'Provider Responded' },
-  { key: 'provider_booked', label: 'Provider Booked' },
-  { key: 'provider_en_route', label: 'Provider En Route' },
-  { key: 'in_progress', label: 'In Progress' },
-  { key: 'completed', label: 'Completed' },
+  { key: 'reported', icon: '📋', label: 'Reported', desc: 'Issue reported and diagnosed' },
+  { key: 'dispatched', icon: '📡', label: 'Dispatching', desc: 'Finding available pros in your area' },
+  { key: 'provider_responded', icon: '💬', label: 'Quoted', desc: 'A pro has responded with availability' },
+  { key: 'provider_booked', icon: '✅', label: 'Booked', desc: 'Pro has been booked for the job' },
+  { key: 'provider_en_route', icon: '🚗', label: 'En Route', desc: 'Pro is on the way' },
+  { key: 'in_progress', icon: '🔧', label: 'In Progress', desc: 'Work is being done' },
+  { key: 'completed', icon: '🎉', label: 'Completed', desc: 'Job complete!' },
 ] as const;
 
-const SEVERITY_COLORS: Record<string, string> = {
-  low: '#1B9E77',
-  medium: '#D4A017',
-  high: '#E8632B',
-  urgent: '#DC2626',
-  emergency: '#DC2626',
+const SEV: Record<string, { bg: string; text: string; label: string }> = {
+  low: { bg: '#F0FDF4', text: '#16A34A', label: 'Low' },
+  medium: { bg: '#FFF7ED', text: '#D4A017', label: 'Medium' },
+  high: { bg: '#FFF1F0', text: '#E8632B', label: 'High' },
+  urgent: { bg: '#FEF2F2', text: '#DC2626', label: 'Urgent' },
 };
-
-// ── Demo data ──────────────────────────────────────────────────────────────
 
 function buildDemoData(): TrackingStatusType {
   const now = Date.now();
@@ -40,46 +32,14 @@ function buildDemoData(): TrackingStatusType {
     provider: { name: 'Mike R.', rating: '4.9' },
     last_updated: new Date(now - 20 * 60_000).toISOString(),
     timeline: [
-      {
-        event_type: 'reported',
-        title: 'Issue Reported',
-        description: 'Maintenance request submitted.',
-        metadata: null,
-        created_at: new Date(now - 120 * 60_000).toISOString(),
-      },
-      {
-        event_type: 'dispatched',
-        title: 'Dispatched',
-        description: 'Searching for available providers.',
-        metadata: null,
-        created_at: new Date(now - 110 * 60_000).toISOString(),
-      },
-      {
-        event_type: 'provider_responded',
-        title: 'Provider Responded',
-        description: 'A provider has accepted the job.',
-        metadata: { provider_name: 'Mike R.', quote: '$175' },
-        created_at: new Date(now - 80 * 60_000).toISOString(),
-      },
-      {
-        event_type: 'provider_booked',
-        title: 'Provider Booked',
-        description: 'Appointment confirmed.',
-        metadata: { scheduled: 'Today, 2:00-4:00 PM' },
-        created_at: new Date(now - 60 * 60_000).toISOString(),
-      },
-      {
-        event_type: 'provider_en_route',
-        title: 'Provider En Route',
-        description: 'The provider is on the way.',
-        metadata: { eta: '~20 minutes' },
-        created_at: new Date(now - 20 * 60_000).toISOString(),
-      },
+      { event_type: 'reported', title: 'Issue Reported', description: 'Guest reported a leaking kitchen faucet — water dripping from the base when turned on.', metadata: null, created_at: new Date(now - 120 * 60_000).toISOString() },
+      { event_type: 'dispatched', title: 'Dispatching Pros', description: 'Contacting plumbers in the area via phone, SMS, and web.', metadata: null, created_at: new Date(now - 110 * 60_000).toISOString() },
+      { event_type: 'provider_responded', title: 'Quote Received', description: 'Mike R. is available and provided a quote.', metadata: { provider_name: 'Mike R.', quote: '$175', rating: '4.9 ★' }, created_at: new Date(now - 80 * 60_000).toISOString() },
+      { event_type: 'provider_booked', title: 'Provider Booked', description: 'Appointment confirmed with Mike R.', metadata: { scheduled: 'Today, 2:00–4:00 PM' }, created_at: new Date(now - 60 * 60_000).toISOString() },
+      { event_type: 'provider_en_route', title: 'On the Way', description: 'Mike is headed to your property now.', metadata: { eta: '~20 minutes' }, created_at: new Date(now - 20 * 60_000).toISOString() },
     ],
   };
 }
-
-// ── Helpers ────────────────────────────────────────────────────────────────
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -88,26 +48,19 @@ function timeAgo(dateStr: string): string {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ${mins % 60}m ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
-function formatTimestamp(dateStr: string): string {
-  return new Date(dateStr).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+function fmtTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
-
-// ── Component ──────────────────────────────────────────────────────────────
 
 export default function TrackingStatus() {
   const { token } = useParams<{ token: string }>();
   const [data, setData] = useState<TrackingStatusType | null>(null);
   const [loading, setLoading] = useState(true);
   const [expired, setExpired] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const isDemo = token === 'demo';
 
@@ -116,316 +69,224 @@ export default function TrackingStatus() {
     try {
       const res = await trackingService.getStatus(token);
       if (res.data) {
-        if (res.data.expired) {
-          setExpired(true);
-        } else {
-          setData(res.data);
-          setExpired(false);
-        }
-      }
-    } catch {
-      setExpired(true);
-    } finally {
-      setLoading(false);
-    }
+        if (res.data.expired) setExpired(true);
+        else { setData(res.data); setExpired(false); }
+      } else { setExpired(true); }
+    } catch { setExpired(true); }
+    finally { setLoading(false); }
   }, [token, isDemo]);
 
   useEffect(() => {
-    if (isDemo) {
-      setData(buildDemoData());
-      setLoading(false);
-      return;
-    }
+    if (isDemo) { setData(buildDemoData()); setLoading(false); return; }
     fetchData();
-    const interval = setInterval(fetchData, 30_000);
-    return () => clearInterval(interval);
+    pollRef.current = setInterval(fetchData, 30_000);
+    return () => clearInterval(pollRef.current);
   }, [fetchData, isDemo]);
 
-  // Determine step statuses
-  const completedEventTypes = new Set(data?.timeline.map((e) => e.event_type) ?? []);
-  const timelineMap = Object.fromEntries(
-    (data?.timeline ?? []).map((e) => [e.event_type, e]),
-  );
+  const completedKeys = new Set(data?.timeline.map(e => e.event_type) ?? []);
+  const eventMap = Object.fromEntries((data?.timeline ?? []).map(e => [e.event_type, e]));
+  let lastDoneIdx = -1;
+  STEPS.forEach((s, i) => { if (completedKeys.has(s.key)) lastDoneIdx = i; });
 
-  let lastCompletedIndex = -1;
-  for (let i = STEPS.length - 1; i >= 0; i--) {
-    if (completedEventTypes.has(STEPS[i].key)) {
-      lastCompletedIndex = i;
-      break;
-    }
-  }
+  const sev = data ? (SEV[data.severity] ?? SEV.medium) : SEV.medium;
 
   return (
-    <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif", color: D }}>
-      {/* Google Fonts */}
+    <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap');
-        @keyframes pulse-dot {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.4); opacity: 0.6; }
-        }
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .step-completed { animation: fade-in 0.4s ease-out both; }
+        @keyframes trackPulse { 0%,100% { transform:scale(1); box-shadow: 0 0 0 0 rgba(232,99,43,0.4); } 50% { transform:scale(1.15); box-shadow: 0 0 0 8px rgba(232,99,43,0); } }
+        @keyframes trackFadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes trackSpin { to { transform:rotate(360deg); } }
+        .track-step { animation: trackFadeIn 0.4s ease-out both; }
       `}</style>
 
       {/* Header */}
-      <header style={{
-        padding: '24px 20px 16px',
-        textAlign: 'center',
-        borderBottom: '1px solid rgba(45,41,38,0.08)',
-        background: '#fff',
-      }}>
-        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: O }}>
-          homie
-        </div>
-        <div style={{ fontSize: 13, color: '#888', marginTop: 4, letterSpacing: '0.02em' }}>
-          Maintenance Status
-        </div>
+      <header style={{ background: '#fff', padding: '20px 20px 16px', textAlign: 'center', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+        <Link to="/" style={{ textDecoration: 'none' }}>
+          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700, color: O }}>homie</span>
+        </Link>
+        <div style={{ fontSize: 12, color: '#9B9490', marginTop: 4, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Maintenance Status</div>
       </header>
 
-      <main style={{ maxWidth: 520, margin: '0 auto', padding: '20px 16px 40px' }}>
+      <main style={{ maxWidth: 480, margin: '0 auto', padding: '20px 16px 40px' }}>
+
         {/* Loading */}
         {loading && (
-          <div style={{ textAlign: 'center', padding: '80px 0' }}>
-            <div style={{
-              width: 40, height: 40, border: `3px solid ${O}33`, borderTopColor: O,
-              borderRadius: '50%', margin: '0 auto 16px',
-              animation: 'spin 0.8s linear infinite',
-            }} />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-            <p style={{ color: '#888', fontSize: 14 }}>Loading status...</p>
+          <div style={{ textAlign: 'center', padding: '100px 0' }}>
+            <div style={{ width: 36, height: 36, border: `3px solid ${O}30`, borderTopColor: O, borderRadius: '50%', margin: '0 auto 16px', animation: 'trackSpin 0.7s linear infinite' }} />
+            <p style={{ color: '#9B9490', fontSize: 14 }}>Loading status...</p>
           </div>
         )}
 
         {/* Expired */}
         {!loading && expired && (
-          <div style={{
-            textAlign: 'center', padding: '80px 20px',
-            background: '#fff', borderRadius: 16, marginTop: 20,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>&#128274;</div>
-            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 20, marginBottom: 12, color: D }}>
-              Update Expired
-            </h2>
-            <p style={{ color: '#666', fontSize: 14, lineHeight: 1.6, maxWidth: 320, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', padding: '80px 20px', background: '#fff', borderRadius: 20, marginTop: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>🔒</div>
+            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 22, color: D, marginBottom: 8 }}>Update Expired</h2>
+            <p style={{ color: '#6B6560', fontSize: 15, lineHeight: 1.6, maxWidth: 300, margin: '0 auto' }}>
               This maintenance update has expired. Contact your property manager for status.
             </p>
           </div>
         )}
 
-        {/* Content */}
+        {/* Main content */}
         {!loading && !expired && data && (
           <>
-            {/* Job summary card */}
-            <div style={{
-              background: '#fff', borderRadius: 16, padding: '24px 20px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', marginBottom: 16,
-            }}>
-              {data.property_name && (
-                <div style={{ fontSize: 12, color: '#888', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {data.property_name}
-                </div>
-              )}
-              <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, margin: '0 0 12px', color: D }}>
+            {/* Demo banner */}
+            {isDemo && (
+              <div style={{ background: '#EFF6FF', border: '1px solid rgba(37,99,235,0.1)', borderRadius: 12, padding: '10px 16px', marginBottom: 16, textAlign: 'center', fontSize: 13, color: '#2563EB', fontWeight: 500 }}>
+                Demo — this is a sample tracking page
+              </div>
+            )}
+
+            {/* Job summary */}
+            <div style={{ background: '#fff', borderRadius: 20, padding: '28px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: '#9B9490', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+                {data.property_name}
+              </div>
+              <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: D, margin: '0 0 14px', lineHeight: 1.2 }}>
                 {data.job_title}
               </h1>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-                <span style={{
-                  display: 'inline-block', padding: '4px 12px', borderRadius: 999,
-                  background: `${G}18`, color: G, fontSize: 12, fontWeight: 600,
-                  textTransform: 'capitalize',
-                }}>
-                  {data.job_category}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
+                <span style={{ padding: '4px 14px', borderRadius: 100, background: `${G}15`, color: G, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>
+                  {data.job_category.replace(/_/g, ' ')}
                 </span>
-                <span style={{
-                  display: 'inline-block', padding: '4px 12px', borderRadius: 999,
-                  background: `${SEVERITY_COLORS[data.severity] ?? '#888'}18`,
-                  color: SEVERITY_COLORS[data.severity] ?? '#888',
-                  fontSize: 12, fontWeight: 600, textTransform: 'capitalize',
-                }}>
-                  {data.severity}
+                <span style={{ padding: '4px 14px', borderRadius: 100, background: sev.bg, color: sev.text, fontSize: 12, fontWeight: 600 }}>
+                  {sev.label}
                 </span>
               </div>
-              <div style={{
-                fontSize: 15, fontWeight: 600, color: O,
-                textTransform: 'capitalize',
-              }}>
-                {data.status.replace(/_/g, ' ')}
-              </div>
-            </div>
 
-            {/* Timeline */}
-            <div style={{
-              background: '#fff', borderRadius: 16, padding: '24px 20px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', marginBottom: 16,
-            }}>
-              <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 16, fontWeight: 600, margin: '0 0 20px', color: D }}>
-                Progress
-              </h2>
-              <div style={{ position: 'relative' }}>
-                {STEPS.map((step, i) => {
-                  const event = timelineMap[step.key];
-                  const isCompleted = completedEventTypes.has(step.key);
-                  const isCurrent = !isCompleted && i === lastCompletedIndex + 1;
-                  const isUpcoming = !isCompleted && !isCurrent;
-                  const isLast = i === STEPS.length - 1;
-
-                  return (
-                    <div
-                      key={step.key}
-                      className={isCompleted ? 'step-completed' : undefined}
-                      style={{
-                        display: 'flex', gap: 16, position: 'relative',
-                        paddingBottom: isLast ? 0 : 24,
-                        opacity: isUpcoming ? 0.4 : 1,
-                      }}
-                    >
-                      {/* Left: line + dot */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 24, flexShrink: 0 }}>
-                        {/* Dot */}
-                        {isCompleted && (
-                          <div style={{
-                            width: 24, height: 24, borderRadius: '50%', background: G,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0,
-                          }}>
-                            &#10003;
-                          </div>
-                        )}
-                        {isCurrent && (
-                          <div style={{
-                            width: 24, height: 24, borderRadius: '50%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0,
-                          }}>
-                            <div style={{
-                              width: 14, height: 14, borderRadius: '50%', background: O,
-                              animation: 'pulse-dot 1.8s ease-in-out infinite',
-                            }} />
-                          </div>
-                        )}
-                        {isUpcoming && (
-                          <div style={{
-                            width: 24, height: 24, borderRadius: '50%',
-                            border: '2px solid #ccc', background: W, flexShrink: 0,
-                          }} />
-                        )}
-                        {/* Connecting line */}
-                        {!isLast && (
-                          <div style={{
-                            width: 2, flex: 1, marginTop: 4,
-                            background: isCompleted && completedEventTypes.has(STEPS[i + 1]?.key) ? G : '#ddd',
-                          }} />
-                        )}
-                      </div>
-
-                      {/* Right: content */}
-                      <div style={{ flex: 1, paddingTop: 2 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
-                          {event?.title ?? step.label}
-                        </div>
-                        {event?.description && (
-                          <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                            {event.description}
-                          </div>
-                        )}
-                        {event?.metadata && (
-                          <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {Object.entries(event.metadata).map(([k, v]) => (
-                              <span key={k} style={{
-                                display: 'inline-block', padding: '3px 10px', borderRadius: 8,
-                                background: `${O}10`, color: O, fontSize: 12, fontWeight: 500,
-                              }}>
-                                {String(v)}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {event && (
-                          <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
-                            {formatTimestamp(event.created_at)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* Current status highlight */}
+              <div style={{ background: `${O}08`, borderRadius: 14, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: O, animation: 'trackPulse 2s ease-in-out infinite', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: D, textTransform: 'capitalize' }}>
+                    {data.status.replace(/_/g, ' ')}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6B6560', marginTop: 2 }}>
+                    {STEPS.find(s => s.key === data.status)?.desc ?? 'Processing your request'}
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Provider card */}
             {data.provider && (
-              <div style={{
-                background: `${O}08`, borderRadius: 16, padding: '20px',
-                border: `1px solid ${O}20`, marginBottom: 16,
-              }}>
-                <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 600, margin: '0 0 12px', color: D }}>
-                  Your Provider
-                </h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ background: '#fff', borderRadius: 20, padding: '22px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', marginBottom: 16, border: `1px solid ${O}15` }}>
+                <div style={{ fontSize: 12, color: '#9B9490', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>Your Provider</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{
-                    width: 44, height: 44, borderRadius: '50%', background: O,
+                    width: 52, height: 52, borderRadius: '50%', background: `${O}12`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff', fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700,
+                    fontSize: 22, fontWeight: 700, color: O, fontFamily: "'Fraunces', serif",
                   }}>
                     {data.provider.name.charAt(0)}
                   </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{data.provider.name}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: D }}>{data.provider.name}</div>
                     {data.provider.rating && (
-                      <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>
-                        <span style={{ color: '#F5A623' }}>&#9733;</span> {data.provider.rating}
+                      <div style={{ fontSize: 14, color: '#6B6560', marginTop: 2 }}>
+                        <span style={{ color: '#F5A623' }}>★</span> {data.provider.rating} rating
                       </div>
                     )}
                   </div>
                 </div>
-                {/* Show ETA or scheduled from latest timeline metadata */}
+                {/* ETA or scheduled */}
                 {(() => {
-                  const allMeta = data.timeline
-                    .filter((e) => e.metadata)
-                    .flatMap((e) => Object.entries(e.metadata!));
-                  const eta = allMeta.find(([k]) => k === 'eta');
-                  const scheduled = allMeta.find(([k]) => k === 'scheduled');
-                  const display = eta ?? scheduled;
-                  if (!display) return null;
+                  const metas = data.timeline.filter(e => e.metadata).flatMap(e => Object.entries(e.metadata!));
+                  const eta = metas.find(([k]) => k === 'eta');
+                  const sched = metas.find(([k]) => k === 'scheduled');
+                  const info = eta ?? sched;
+                  if (!info) return null;
                   return (
-                    <div style={{
-                      marginTop: 12, padding: '10px 14px', borderRadius: 10,
-                      background: '#fff', fontSize: 13, color: D,
-                    }}>
-                      <span style={{ fontWeight: 600 }}>
-                        {display[0] === 'eta' ? 'ETA: ' : 'Scheduled: '}
-                      </span>
-                      {String(display[1])}
+                    <div style={{ marginTop: 14, background: W, borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 18 }}>{info[0] === 'eta' ? '⏱️' : '📅'}</span>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 600 }}>{info[0] === 'eta' ? 'ESTIMATED ARRIVAL' : 'SCHEDULED'}</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{String(info[1])}</div>
+                      </div>
                     </div>
                   );
                 })()}
               </div>
             )}
 
+            {/* Timeline */}
+            <div style={{ background: '#fff', borderRadius: 20, padding: '28px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: '#9B9490', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 20 }}>Progress</div>
+
+              {STEPS.map((step, i) => {
+                const event = eventMap[step.key];
+                const done = completedKeys.has(step.key);
+                const current = !done && i === lastDoneIdx + 1;
+                const upcoming = !done && !current;
+                const isLast = i === STEPS.length - 1;
+                const nextDone = completedKeys.has(STEPS[i + 1]?.key);
+
+                return (
+                  <div key={step.key} className={done ? 'track-step' : undefined} style={{ display: 'flex', gap: 14, position: 'relative', paddingBottom: isLast ? 0 : 6 }}>
+                    {/* Timeline column */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 32, flexShrink: 0 }}>
+                      {done && (
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: G, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 12.75l6 6 9-13.5" /></svg>
+                        </div>
+                      )}
+                      {current && (
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <div style={{ width: 16, height: 16, borderRadius: '50%', background: O, animation: 'trackPulse 2s ease-in-out infinite' }} />
+                        </div>
+                      )}
+                      {upcoming && (
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid #E0DAD4', background: W, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <span style={{ fontSize: 14, opacity: 0.4 }}>{step.icon}</span>
+                        </div>
+                      )}
+                      {!isLast && (
+                        <div style={{ width: 2, flex: 1, minHeight: 20, marginTop: 4, marginBottom: 4, background: done && nextDone ? G : '#E0DAD4', borderRadius: 1 }} />
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div style={{ flex: 1, paddingTop: 4, paddingBottom: isLast ? 0 : 16, opacity: upcoming ? 0.35 : 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{event?.title ?? step.label}</div>
+                      <div style={{ fontSize: 13, color: '#6B6560', marginTop: 2, lineHeight: 1.5 }}>
+                        {event?.description ?? step.desc}
+                      </div>
+                      {event?.metadata && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                          {Object.entries(event.metadata).map(([k, v]) => (
+                            <span key={k} style={{
+                              padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                              background: k === 'quote' ? `${G}12` : `${O}08`,
+                              color: k === 'quote' ? G : O,
+                            }}>
+                              {String(v)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {event && (
+                        <div style={{ fontSize: 11, color: '#9B9490', marginTop: 6 }}>{fmtTime(event.created_at)}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
             {/* Last updated */}
-            <div style={{ textAlign: 'center', fontSize: 12, color: '#999', marginTop: 8 }}>
-              Last updated {timeAgo(data.last_updated)}
+            <div style={{ textAlign: 'center', fontSize: 12, color: '#9B9490', padding: '8px 0' }}>
+              Last updated {timeAgo(data.last_updated)} · Auto-refreshes every 30s
             </div>
           </>
         )}
       </main>
 
       {/* Footer */}
-      <footer style={{
-        textAlign: 'center', padding: '24px 16px 32px',
-        borderTop: '1px solid rgba(45,41,38,0.06)',
-        fontSize: 13, color: '#999',
-      }}>
+      <footer style={{ textAlign: 'center', padding: '20px 16px 32px', borderTop: '1px solid rgba(0,0,0,0.04)', fontSize: 13, color: '#9B9490' }}>
         Powered by{' '}
-        <Link to="/" style={{ color: O, textDecoration: 'none', fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
-          homie
-        </Link>
-        {' '}&mdash; Your home&rsquo;s best friend
+        <Link to="/" style={{ color: O, textDecoration: 'none', fontFamily: "'Fraunces', serif", fontWeight: 700 }}>homie</Link>
+        {' '}— Your home's best friend
       </footer>
     </div>
   );
