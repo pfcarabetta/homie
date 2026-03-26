@@ -65,6 +65,115 @@ const B2B_CATEGORIES: CatDef[] = [
 
 /* ── Diagnosis Summary Card ──────────────────────────────────────────────── */
 
+function TrackingShareCard({ jobId, propertyName, trackingUrl, setTrackingUrl }: {
+  jobId: string | null; propertyName?: string; trackingUrl: string | null; setTrackingUrl: (url: string) => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [notifySaved, setNotifySaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const createdRef = useRef(false);
+
+  // Auto-create tracking link as soon as jobId is available
+  useEffect(() => {
+    if (!jobId || trackingUrl || createdRef.current) return;
+    createdRef.current = true;
+    setCreating(true);
+    trackingService.createLink(jobId, { property_name: propertyName })
+      .then(res => { if (res.data) setTrackingUrl(res.data.tracking_url); })
+      .catch(() => {})
+      .finally(() => setCreating(false));
+  }, [jobId, trackingUrl, propertyName, setTrackingUrl]);
+
+  // Save notification contacts (creates a new link with contacts, or could update — for simplicity, create another)
+  async function saveNotify() {
+    if (!jobId || (!phone.trim() && !email.trim())) return;
+    setSaving(true);
+    try {
+      await trackingService.createLink(jobId, {
+        notify_phone: phone.trim() || undefined,
+        notify_email: email.trim() || undefined,
+        property_name: propertyName,
+      });
+      setNotifySaved(true);
+    } catch { /* ignore */ }
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ marginLeft: 42, marginBottom: 16, background: W, borderRadius: 12, padding: 16, border: '1px solid rgba(0,0,0,0.06)', animation: 'fadeSlide 0.3s ease' }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 4 }}>Share maintenance status</div>
+      <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.5 }}>
+        Copy the tracking link or add a phone/email to send automatic updates.
+      </div>
+
+      {/* Tracking URL */}
+      {creating && (
+        <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>Creating tracking link...</div>
+      )}
+      {trackingUrl && (
+        <div style={{
+          display: 'flex', gap: 8, alignItems: 'center', background: '#fff', borderRadius: 8,
+          padding: '8px 10px', border: '1px solid rgba(0,0,0,0.06)', marginBottom: 12,
+        }}>
+          <input readOnly value={trackingUrl} style={{
+            flex: 1, border: 'none', outline: 'none', fontSize: 12, color: D,
+            fontFamily: "'DM Mono', monospace", background: 'transparent',
+          }} />
+          <button onClick={() => {
+            navigator.clipboard.writeText(trackingUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }} style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600,
+            background: copied ? G : O, color: '#fff', cursor: 'pointer', flexShrink: 0,
+          }}>
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      )}
+
+      {/* Optional notifications */}
+      {trackingUrl && !notifySaved && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', marginBottom: 6 }}>Also send updates via (optional)</div>
+          <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone for SMS updates"
+              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 13, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email for updates"
+              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 13, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
+          </div>
+          {(phone.trim() || email.trim()) && (
+            <button disabled={saving} onClick={saveNotify} style={{
+              width: '100%', padding: '8px 0', borderRadius: 100, border: '1px solid rgba(0,0,0,0.08)',
+              background: '#fff', color: D, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              fontFamily: "'DM Sans', sans-serif", opacity: saving ? 0.7 : 1,
+            }}>
+              {saving ? 'Saving...' : 'Send updates'}
+            </button>
+          )}
+        </>
+      )}
+
+      {/* Notifications saved */}
+      {notifySaved && (
+        <div style={{ fontSize: 12, color: G, fontWeight: 600 }}>
+          ✓ Updates will be sent{phone ? ` to ${phone}` : ''}{phone && email ? ' and' : ''}{email ? ` to ${email}` : ''}
+        </div>
+      )}
+
+      {/* Preview link */}
+      {trackingUrl && (
+        <div style={{ marginTop: 8, fontSize: 11 }}>
+          <a href={trackingUrl} target="_blank" rel="noopener" style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}>Preview tracking page →</a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching }: {
   category: CatDef; property: Property; summary: string; isService: boolean;
   onDispatch: () => void; dispatching: boolean;
@@ -316,10 +425,6 @@ export default function BusinessChat() {
   const [selectedResponse, setSelectedResponse] = useState<number | null>(null);
   const [bookedName, setBookedName] = useState<string | null>(null);
   const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
-  const [trackPhone, setTrackPhone] = useState('');
-  const [trackEmail, setTrackEmail] = useState('');
-  const [trackCreating, setTrackCreating] = useState(false);
-  const [trackCopied, setTrackCopied] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -950,70 +1055,12 @@ export default function BusinessChat() {
               </div>
 
               {/* Share status tracker */}
-              {!trackingUrl && (
-                <div style={{ marginLeft: 42, marginBottom: 16, background: W, borderRadius: 12, padding: 16, border: '1px solid rgba(0,0,0,0.06)', animation: 'fadeSlide 0.3s ease' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 4 }}>Share maintenance status</div>
-                  <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.5 }}>
-                    Send real-time updates to your guest or property owner.
-                  </div>
-                  <div style={{ display: 'grid', gap: 8, marginBottom: 10 }}>
-                    <input value={trackPhone} onChange={e => setTrackPhone(e.target.value)} placeholder="Phone for SMS updates (optional)"
-                      style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
-                    <input value={trackEmail} onChange={e => setTrackEmail(e.target.value)} placeholder="Email for updates (optional)"
-                      style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
-                  </div>
-                  <button disabled={trackCreating || !jobId} onClick={async () => {
-                    if (!jobId) return;
-                    setTrackCreating(true);
-                    try {
-                      const res = await trackingService.createLink(jobId, {
-                        notify_phone: trackPhone || undefined,
-                        notify_email: trackEmail || undefined,
-                        property_name: selectedProperty?.name,
-                      });
-                      if (res.data) setTrackingUrl(res.data.tracking_url);
-                    } catch { /* ignore */ }
-                    setTrackCreating(false);
-                  }} style={{
-                    width: '100%', padding: '10px 0', borderRadius: 100, border: 'none',
-                    background: D, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                    fontFamily: "'DM Sans', sans-serif", opacity: trackCreating ? 0.7 : 1,
-                  }}>
-                    {trackCreating ? 'Creating...' : !jobId ? 'Waiting for dispatch...' : 'Create tracking link'}
-                  </button>
-                </div>
-              )}
-
-              {/* Tracking URL created */}
-              {trackingUrl && (
-                <div style={{ marginLeft: 42, marginBottom: 16, background: '#EFF6FF', borderRadius: 12, padding: 16, border: '1px solid rgba(37,99,235,0.1)', animation: 'fadeSlide 0.3s ease' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', marginBottom: 8 }}>Tracking link created</div>
-                  <div style={{
-                    display: 'flex', gap: 8, alignItems: 'center', background: '#fff', borderRadius: 8,
-                    padding: '8px 10px', border: '1px solid rgba(0,0,0,0.06)',
-                  }}>
-                    <input readOnly value={trackingUrl} style={{
-                      flex: 1, border: 'none', outline: 'none', fontSize: 12, color: D,
-                      fontFamily: "'DM Mono', monospace", background: 'transparent',
-                    }} />
-                    <button onClick={() => {
-                      navigator.clipboard.writeText(trackingUrl);
-                      setTrackCopied(true);
-                      setTimeout(() => setTrackCopied(false), 2000);
-                    }} style={{
-                      padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600,
-                      background: trackCopied ? G : O, color: '#fff', cursor: 'pointer', flexShrink: 0,
-                    }}>
-                      {trackCopied ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#6B6560', marginTop: 6 }}>
-                    {trackPhone && <span>SMS → {trackPhone} · </span>}
-                    {trackEmail && <span>Email → {trackEmail} · </span>}
-                    <a href={trackingUrl} target="_blank" rel="noopener" style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}>Preview →</a>
-                  </div>
-                </div>
-              )}
+              <TrackingShareCard
+                jobId={jobId}
+                propertyName={selectedProperty?.name}
+                trackingUrl={trackingUrl}
+                setTrackingUrl={setTrackingUrl}
+              />
 
               {/* Compact stats */}
               {outreachStatus && (
