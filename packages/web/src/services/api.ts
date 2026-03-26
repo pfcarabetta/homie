@@ -663,6 +663,9 @@ export interface WorkspaceDetail extends Workspace {
   user_role: string;
   ownerId: string;
   stripeCustomerId: string | null;
+  companyAddress: string | null;
+  companyPhone: string | null;
+  companyEmail: string | null;
   updatedAt: string;
 }
 
@@ -840,7 +843,7 @@ export const businessService = {
   getWorkspace: (id: string) => fetchAPI<WorkspaceDetail>(`/api/v1/business/${id}`),
   createWorkspace: (data: { name: string; slug?: string }) =>
     fetchAPI<Workspace>('/api/v1/business', { method: 'POST', body: JSON.stringify(data) }),
-  updateWorkspace: (id: string, data: { name?: string; slug?: string }) =>
+  updateWorkspace: (id: string, data: { name?: string; slug?: string; company_address?: string | null; company_phone?: string | null; company_email?: string | null }) =>
     fetchAPI<Workspace>(`/api/v1/business/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Properties

@@ -13,6 +13,7 @@ import { providers } from '../db/schema/providers';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { preferredVendors } from '../db/schema/preferred-vendors';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
+import { generateEstimatePDF } from '../services/estimate-pdf';
 
 const router = Router();
 
@@ -139,12 +140,18 @@ router.get('/:workspaceId', requireWorkspace, async (req: Request, res: Response
 // ── PATCH /:workspaceId — Update workspace ───────────────────────────────────
 
 router.patch('/:workspaceId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
-  const { name, slug, logo_url } = req.body as { name?: string; slug?: string; logo_url?: string | null };
+  const { name, slug, logo_url, company_address, company_phone, company_email } = req.body as {
+    name?: string; slug?: string; logo_url?: string | null;
+    company_address?: string | null; company_phone?: string | null; company_email?: string | null;
+  };
   const updates: Record<string, unknown> = {};
 
   if (name !== undefined) updates.name = name.trim();
   if (slug !== undefined) updates.slug = slugify(slug);
   if (logo_url !== undefined) updates.logoUrl = logo_url;
+  if (company_address !== undefined) updates.companyAddress = company_address;
+  if (company_phone !== undefined) updates.companyPhone = company_phone;
+  if (company_email !== undefined) updates.companyEmail = company_email;
   if (Object.keys(updates).length > 0) updates.updatedAt = new Date();
 
   if (Object.keys(updates).length === 0) {
@@ -1727,6 +1734,155 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
   } catch (err) {
     logger.error({ err }, '[POST /business/:id/import/track]');
     res.status(500).json({ data: null, error: 'Failed to import from Track PMS', meta: {} });
+  }
+});
+
+// ── Estimate Summary PDF ────────────────────────────────────────────────────
+
+// GET /:workspaceId/jobs/:jobId/estimate-pdf
+router.get('/:workspaceId/jobs/:jobId/estimate-pdf', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+
+  try {
+    // Check plan
+    const [ws] = await db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, req.workspaceId))
+      .limit(1);
+
+    if (!ws) {
+      res.status(404).json({ data: null, error: 'Workspace not found', meta: {} });
+      return;
+    }
+
+    const allowedPlans = ['professional', 'business', 'enterprise'];
+    if (!allowedPlans.includes(ws.plan)) {
+      res.status(403).json({ data: null, error: 'Estimate PDF export requires a Professional, Business, or Enterprise plan.', meta: {} });
+      return;
+    }
+
+    // Load job
+    const [job] = await db
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Job not found', meta: {} });
+      return;
+    }
+
+    // Load property
+    let property = { name: 'Unknown Property', address: null as string | null, city: null as string | null, state: null as string | null, zipCode: job.zipCode as string | null };
+    if (job.propertyId) {
+      const [prop] = await db
+        .select()
+        .from(properties)
+        .where(eq(properties.id, job.propertyId))
+        .limit(1);
+      if (prop) {
+        property = { name: prop.name, address: prop.address, city: prop.city, state: prop.state, zipCode: prop.zipCode };
+      }
+    }
+
+    // Load provider responses with provider info
+    const responses = await db
+      .select({
+        providerName: providers.name,
+        googleRating: providers.googleRating,
+        reviewCount: providers.reviewCount,
+        channel: providerResponses.channel,
+        quotedPrice: providerResponses.quotedPrice,
+        availability: providerResponses.availability,
+        message: providerResponses.message,
+        createdAt: providerResponses.createdAt,
+        providerId: providerResponses.providerId,
+        outreachAttemptId: providerResponses.outreachAttemptId,
+      })
+      .from(providerResponses)
+      .innerJoin(providers, eq(providerResponses.providerId, providers.id))
+      .where(eq(providerResponses.jobId, jobId))
+      .orderBy(providerResponses.createdAt);
+
+    // Load outreach attempts to compute response time and declined count
+    const attempts = await db
+      .select({
+        id: outreachAttempts.id,
+        providerId: outreachAttempts.providerId,
+        status: outreachAttempts.status,
+        attemptedAt: outreachAttempts.attemptedAt,
+        respondedAt: outreachAttempts.respondedAt,
+      })
+      .from(outreachAttempts)
+      .where(eq(outreachAttempts.jobId, jobId));
+
+    const declinedCount = attempts.filter(a => a.status === 'declined' || a.status === 'expired' || a.status === 'no_response').length;
+
+    // Build attempt lookup for response time
+    const attemptMap = new Map(attempts.map(a => [a.id, a]));
+
+    // Check which providers are preferred vendors
+    const preferredRows = await db
+      .select({ providerId: preferredVendors.providerId })
+      .from(preferredVendors)
+      .where(and(eq(preferredVendors.workspaceId, req.workspaceId), eq(preferredVendors.active, true)));
+    const preferredSet = new Set(preferredRows.map(r => r.providerId));
+
+    // Build estimates array
+    const estimatesArr = responses.map(r => {
+      let responseTimeSec: number | null = null;
+      if (r.outreachAttemptId) {
+        const attempt = attemptMap.get(r.outreachAttemptId);
+        if (attempt?.attemptedAt && attempt?.respondedAt) {
+          responseTimeSec = (new Date(attempt.respondedAt).getTime() - new Date(attempt.attemptedAt).getTime()) / 1000;
+        }
+      }
+      return {
+        providerName: r.providerName,
+        googleRating: r.googleRating,
+        reviewCount: r.reviewCount,
+        channel: r.channel,
+        isPreferred: preferredSet.has(r.providerId),
+        quotedPrice: r.quotedPrice,
+        availability: r.availability,
+        message: r.message,
+        responseTimeSec,
+      };
+    });
+
+    const diagnosis = job.diagnosis as { category: string; severity: string; summary: string; confidence?: number } | null;
+
+    const pdfBuffer = await generateEstimatePDF({
+      workspace: {
+        name: ws.name,
+        logoUrl: ws.logoUrl,
+        companyAddress: ws.companyAddress,
+        companyPhone: ws.companyPhone,
+        companyEmail: ws.companyEmail,
+      },
+      property,
+      job: {
+        id: job.id,
+        status: job.status,
+        createdAt: job.createdAt,
+        diagnosis,
+        preferredTiming: job.preferredTiming,
+        budget: job.budget,
+      },
+      estimates: estimatesArr,
+      declinedCount,
+    });
+
+    const filename = `estimate-summary-${job.id.substring(0, 8)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.end(pdfBuffer);
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/jobs/:jobId/estimate-pdf]');
+    res.status(500).json({ data: null, error: 'Failed to generate estimate PDF', meta: {} });
   }
 });
 

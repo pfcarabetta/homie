@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { businessService, jobService, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem } from '@/services/api';
+import { businessService, jobService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -1863,7 +1863,7 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-function DispatchesTab({ workspaceId, onTabChange }: { workspaceId: string; onTabChange?: (tab: Tab) => void }) {
+function DispatchesTab({ workspaceId, onTabChange, plan }: { workspaceId: string; onTabChange?: (tab: Tab) => void; plan: string }) {
   const navigate = useNavigate();
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1872,6 +1872,33 @@ function DispatchesTab({ workspaceId, onTabChange }: { workspaceId: string; onTa
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const isPro = ['professional', 'business', 'enterprise'].includes(plan);
+
+  async function handleDownloadEstimate(jobId: string) {
+    setDownloadingPdf(jobId);
+    try {
+      const token = getToken();
+      const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+      const res = await fetch(`${API_BASE}/api/v1/business/${workspaceId}/jobs/${jobId}/estimate-pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Failed to generate PDF');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `estimate-summary-${jobId.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert((err as Error).message || 'Failed to download estimate PDF');
+    } finally {
+      setDownloadingPdf(null);
+    }
+  }
 
   useEffect(() => {
     businessService.listDispatches(workspaceId).then(res => {
@@ -2030,6 +2057,44 @@ function DispatchesTab({ workspaceId, onTabChange }: { workspaceId: string; onTa
                   {j.expiresAt && (
                     <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 14 }}>
                       {isActive ? 'Expires' : 'Expired'}: {new Date(j.expiresAt).toLocaleString()}
+                    </div>
+                  )}
+
+                  {/* Download Estimate Summary */}
+                  {jobResponses.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      {isPro ? (
+                        <button
+                          onClick={() => handleDownloadEstimate(j.id)}
+                          disabled={downloadingPdf === j.id}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 8,
+                            padding: '9px 18px', borderRadius: 8,
+                            border: `1px solid ${O}40`, background: `${O}08`,
+                            color: O, fontSize: 13, fontWeight: 600, cursor: downloadingPdf === j.id ? 'default' : 'pointer',
+                            opacity: downloadingPdf === j.id ? 0.6 : 1,
+                          }}
+                        >
+                          {downloadingPdf === j.id ? (
+                            <>Generating PDF...</>
+                          ) : (
+                            <>📄 Download Estimate Summary</>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 8,
+                            padding: '9px 18px', borderRadius: 8,
+                            border: '1px solid #E0DAD4', background: '#F5F3F0',
+                            color: '#B0AAA4', fontSize: 13, fontWeight: 600,
+                            cursor: 'default',
+                          }}
+                        >
+                          📄 Download Estimate Summary <span style={{ fontSize: 11, fontWeight: 500 }}>(Professional+)</span>
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -2778,6 +2843,31 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const isPro = ['professional', 'business', 'enterprise'].includes(workspace.plan);
+  const [companyAddress, setCompanyAddress] = useState(workspace.companyAddress ?? '');
+  const [companyPhone, setCompanyPhone] = useState(workspace.companyPhone ?? '');
+  const [companyEmail, setCompanyEmail] = useState(workspace.companyEmail ?? '');
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [detailsMsg, setDetailsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  async function handleSaveCompanyDetails() {
+    setSavingDetails(true);
+    setDetailsMsg(null);
+    try {
+      const res = await businessService.updateWorkspace(workspace.id, {
+        company_address: companyAddress || null,
+        company_phone: companyPhone || null,
+        company_email: companyEmail || null,
+      });
+      if (res.data) {
+        onUpdated({ ...workspace, ...res.data, companyAddress: companyAddress || null, companyPhone: companyPhone || null, companyEmail: companyEmail || null });
+        setDetailsMsg({ type: 'success', text: 'Company details saved' });
+      }
+    } catch (err: unknown) {
+      setDetailsMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save' });
+    } finally {
+      setSavingDetails(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -2892,6 +2982,50 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
             Add your company logo to maintenance status pages shared with guests. Available on <strong style={{ color: O }}>Professional</strong> plan and above.
           </div>
         )}
+      </div>
+
+      {/* Company Details */}
+      <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24, marginTop: 20 }}>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 12 }}>Company Details</label>
+
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Company Address</label>
+        <textarea
+          value={companyAddress}
+          onChange={e => setCompanyAddress(e.target.value)}
+          rows={2}
+          style={{ ...inputStyle, resize: 'vertical' as const }}
+          placeholder="123 Main St, Suite 100&#10;City, ST 12345"
+        />
+
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Company Phone</label>
+        <input
+          value={companyPhone}
+          onChange={e => setCompanyPhone(e.target.value)}
+          style={inputStyle}
+          placeholder="(555) 123-4567"
+        />
+
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Company Email</label>
+        <input
+          value={companyEmail}
+          onChange={e => setCompanyEmail(e.target.value)}
+          style={inputStyle}
+          placeholder="info@yourcompany.com"
+          type="email"
+        />
+
+        <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginBottom: 16, lineHeight: 1.5 }}>
+          These details appear on estimate summary PDFs.
+        </div>
+
+        {detailsMsg && (
+          <div style={{ fontSize: 14, marginBottom: 16, color: detailsMsg.type === 'success' ? G : '#DC2626' }}>{detailsMsg.text}</div>
+        )}
+
+        <button onClick={handleSaveCompanyDetails} disabled={savingDetails}
+          style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: savingDetails ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: savingDetails ? 0.7 : 1 }}>
+          {savingDetails ? 'Saving...' : 'Save Company Details'}
+        </button>
       </div>
 
       {/* Appearance */}
@@ -3117,7 +3251,7 @@ export default function BusinessPortal() {
             {/* Tab content */}
             {workspace && tab === 'overview' && <OverviewTab workspace={workspace} />}
             {workspace && tab === 'dispatches' && (
-              <DispatchesTab workspaceId={workspace.id} onTabChange={setTab} />
+              <DispatchesTab workspaceId={workspace.id} onTabChange={setTab} plan={workspace.plan} />
             )}
             {workspace && tab === 'bookings' && (
               <BusinessBookingsTab workspaceId={workspace.id} />
