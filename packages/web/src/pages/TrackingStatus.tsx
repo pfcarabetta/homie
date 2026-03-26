@@ -103,9 +103,19 @@ export default function TrackingStatus() {
 
       {/* Header */}
       <header style={{ background: '#fff', padding: '20px 20px 16px', textAlign: 'center', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-        <Link to="/" style={{ textDecoration: 'none' }}>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700, color: O }}>homie</span>
-        </Link>
+        {data?.brand_logo_url ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <img src={data.brand_logo_url} alt="Brand" style={{ height: 40, maxWidth: 160, objectFit: 'contain' }} />
+            <div style={{ width: 1, height: 24, background: '#E0DAD4' }} />
+            <Link to="/" style={{ textDecoration: 'none' }}>
+              <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: O }}>homie</span>
+            </Link>
+          </div>
+        ) : (
+          <Link to="/" style={{ textDecoration: 'none' }}>
+            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700, color: O }}>homie</span>
+          </Link>
+        )}
         <div style={{ fontSize: 12, color: '#9B9490', marginTop: 4, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Maintenance Status</div>
       </header>
 

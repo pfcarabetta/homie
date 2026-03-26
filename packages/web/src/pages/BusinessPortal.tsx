@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -2774,6 +2774,10 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
   const [slug, setSlug] = useState(workspace.slug);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(workspace.logoUrl ?? null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const isPro = ['professional', 'business', 'enterprise'].includes(workspace.plan);
 
   async function handleSave() {
     setSaving(true);
@@ -2817,6 +2821,77 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
           style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
+      </div>
+
+      {/* Brand Logo */}
+      <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24, marginTop: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', margin: 0 }}>Brand Logo</label>
+          {!isPro && (
+            <span style={{ fontSize: 11, fontWeight: 600, color: O, background: `${O}12`, padding: '3px 10px', borderRadius: 100 }}>Professional+</span>
+          )}
+        </div>
+
+        {isPro ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+              {logoPreview ? (
+                <div style={{ position: 'relative' }}>
+                  <img src={logoPreview} alt="Brand logo" style={{ width: 72, height: 72, borderRadius: 12, objectFit: 'contain', border: '1px solid var(--bp-border)', background: 'var(--bp-bg)', padding: 4 }} />
+                  <button onClick={async () => {
+                    setLogoUploading(true);
+                    try {
+                      await businessService.updateWorkspace(workspace.id, { logo_url: null } as Record<string, unknown>);
+                      setLogoPreview(null);
+                      onUpdated({ ...workspace, logoUrl: null });
+                    } catch { /* ignore */ }
+                    setLogoUploading(false);
+                  }} style={{
+                    position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%',
+                    background: '#DC2626', color: '#fff', border: '2px solid var(--bp-card)', fontSize: 10,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>✕</button>
+                </div>
+              ) : (
+                <div style={{ width: 72, height: 72, borderRadius: 12, border: '2px dashed var(--bp-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span style={{ fontSize: 28, opacity: 0.3 }}>🏢</span>
+                </div>
+              )}
+              <div>
+                <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 2 * 1024 * 1024) { alert('Logo must be under 2MB'); return; }
+                  setLogoUploading(true);
+                  const reader = new FileReader();
+                  reader.onload = async (ev) => {
+                    const dataUrl = ev.target?.result as string;
+                    try {
+                      await businessService.updateWorkspace(workspace.id, { logo_url: dataUrl } as Record<string, unknown>);
+                      setLogoPreview(dataUrl);
+                      onUpdated({ ...workspace, logoUrl: dataUrl });
+                    } catch { alert('Failed to upload logo'); }
+                    setLogoUploading(false);
+                  };
+                  reader.readAsDataURL(file);
+                  if (logoInputRef.current) logoInputRef.current.value = '';
+                }} />
+                <button onClick={() => logoInputRef.current?.click()} disabled={logoUploading}
+                  style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-bg)', color: 'var(--bp-text)', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: logoUploading ? 0.6 : 1 }}>
+                  {logoUploading ? 'Uploading...' : logoPreview ? 'Change Logo' : 'Upload Logo'}
+                </button>
+                <div style={{ fontSize: 11, color: 'var(--bp-muted)', marginTop: 6 }}>PNG, JPG, SVG, or WebP · Max 2MB</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--bp-muted)', lineHeight: 1.5 }}>
+              Your logo appears on the maintenance status tracker shared with guests and property owners.
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6 }}>
+            Add your company logo to maintenance status pages shared with guests. Available on <strong style={{ color: O }}>Professional</strong> plan and above.
+          </div>
+        )}
       </div>
 
       {/* Appearance */}

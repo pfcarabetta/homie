@@ -613,6 +613,7 @@ export interface TrackingStatus {
   }>;
   provider: { name: string; rating: string | null; reviewCount?: number } | null;
   last_updated: string;
+  brand_logo_url?: string | null;
   expired?: boolean;
 }
 
@@ -652,6 +653,7 @@ export interface Workspace {
   slug: string;
   plan: string;
   role: string;
+  logoUrl: string | null;
   createdAt: string;
 }
 

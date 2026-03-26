@@ -139,11 +139,12 @@ router.get('/:workspaceId', requireWorkspace, async (req: Request, res: Response
 // ── PATCH /:workspaceId — Update workspace ───────────────────────────────────
 
 router.patch('/:workspaceId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
-  const { name, slug } = req.body as { name?: string; slug?: string };
+  const { name, slug, logo_url } = req.body as { name?: string; slug?: string; logo_url?: string | null };
   const updates: Record<string, unknown> = {};
 
   if (name !== undefined) updates.name = name.trim();
   if (slug !== undefined) updates.slug = slugify(slug);
+  if (logo_url !== undefined) updates.logoUrl = logo_url;
   if (Object.keys(updates).length > 0) updates.updatedAt = new Date();
 
   if (Object.keys(updates).length === 0) {

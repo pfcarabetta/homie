@@ -10,6 +10,7 @@ export const workspaces = pgTable('workspaces', {
   searchesUsed: integer('searches_used').notNull().default(0),
   searchesLimit: integer('searches_limit').notNull().default(10),
   billingCycleStart: timestamp('billing_cycle_start', { withTimezone: true }).notNull().defaultNow(),
+  logoUrl: text('logo_url'),
   ownerId: uuid('owner_id').notNull().references(() => homeowners.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

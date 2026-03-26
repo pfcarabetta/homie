@@ -8,6 +8,7 @@ import {
   properties,
   bookings,
   providers,
+  workspaces,
   jobTrackingLinks,
   jobTrackingEvents,
   TRACKING_EVENT_TYPES,
@@ -109,6 +110,13 @@ trackingPublicRouter.get('/:token', async (req: Request, res: Response) => {
       ? lastEvent.createdAt.toISOString()
       : job.createdAt.toISOString();
 
+    // Look up workspace logo
+    let brandLogoUrl: string | null = null;
+    if (job.workspaceId) {
+      const [ws] = await db.select({ logoUrl: workspaces.logoUrl }).from(workspaces).where(eq(workspaces.id, job.workspaceId)).limit(1);
+      brandLogoUrl = ws?.logoUrl ?? null;
+    }
+
     const out: ApiResponse<{
       property_name: string;
       job_title: string | null;
@@ -124,6 +132,7 @@ trackingPublicRouter.get('/:token', async (req: Request, res: Response) => {
       }>;
       provider: { name: string; rating: string | null; reviewCount: number } | null;
       last_updated: string;
+      brand_logo_url: string | null;
     }> = {
       data: {
         property_name: link.propertyName,
@@ -140,6 +149,7 @@ trackingPublicRouter.get('/:token', async (req: Request, res: Response) => {
         })),
         provider: providerInfo,
         last_updated: lastUpdated,
+        brand_logo_url: brandLogoUrl,
       },
       error: null,
       meta: {},
