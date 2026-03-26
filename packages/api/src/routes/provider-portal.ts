@@ -147,6 +147,18 @@ router.post('/jobs/:attemptId/respond', async (req: Request, res: Response) => {
         message: message ?? null,
         ratingAtTime: provider?.googleRating ?? null,
       });
+
+      // Emit tracking event
+      try {
+        const { emitTrackingEvent } = await import('../services/orchestration');
+        const [prov] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, req.providerId)).limit(1);
+        const firstName = prov?.name?.split(' ')[0] ?? 'A provider';
+        const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
+        void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
+          `${firstName} ${initial} has responded.`.trim(),
+          { provider_name: `${firstName} ${initial}`.trim(), ...(quoted_price ? { quote: quoted_price } : {}), rating: provider?.googleRating ? `${provider.googleRating} ★` : undefined },
+        );
+      } catch { /* non-fatal */ }
     }
 
     const responseTimeSec = (Date.now() - attempt.attemptedAt.getTime()) / 1000;

@@ -255,6 +255,18 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
             availability: state.availability,
             message: state.notes,
           });
+
+          // Emit tracking event
+          try {
+            const { emitTrackingEvent } = await import('../services/orchestration');
+            const [prov] = await db.select({ name: providers.name, googleRating: providers.googleRating }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+            const firstName = prov?.name?.split(' ')[0] ?? 'A provider';
+            const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
+            void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
+              `${firstName} ${initial} has responded.`.trim(),
+              { provider_name: `${firstName} ${initial}`.trim(), ...(state.quotedPrice ? { quote: state.quotedPrice } : {}), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
+            );
+          } catch { /* non-fatal */ }
         }
 
         const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
@@ -523,6 +535,17 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
         });
         void captureJobPayment(attempt.jobId);
         void notifyHomeownerOfQuote(attempt.jobId, provider.name, state.quotedPrice, state.availability, state.notes);
+
+        // Emit tracking event
+        try {
+          const { emitTrackingEvent } = await import('../services/orchestration');
+          const firstName = provider.name.split(' ')[0];
+          const initial = provider.name.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ');
+          void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
+            `${firstName} ${initial} has responded.`.trim(),
+            { provider_name: `${firstName} ${initial}`.trim(), ...(state.quotedPrice ? { quote: state.quotedPrice } : {}) },
+          );
+        } catch { /* non-fatal */ }
       }
 
       const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
@@ -739,6 +762,18 @@ router.post('/web/submit-quote', async (req: Request, res: Response) => {
     availability: availability || null,
     message: message || null,
   });
+
+  // Emit tracking event
+  try {
+    const { emitTrackingEvent } = await import('../services/orchestration');
+    const [prov] = await db.select({ name: providers.name, googleRating: providers.googleRating }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+    const firstName = prov?.name?.split(' ')[0] ?? 'A provider';
+    const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
+    void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
+      `${firstName} ${initial} has responded.`.trim(),
+      { provider_name: `${firstName} ${initial}`.trim(), ...(quoted_price ? { quote: quoted_price } : {}), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
+    );
+  } catch { /* non-fatal */ }
 
   const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
   void recordProviderResponse(attempt.providerId, responseTimeSec);

@@ -749,6 +749,16 @@ router.post('/jobs/:jobId/quotes', async (req: Request, res: Response) => {
       .set({ status: 'collecting' } as Record<string, unknown>)
       .where(and(eq(jobs.id, jobId), eq(jobs.status, 'dispatching')));
 
+    // Emit tracking event for quote received
+    try {
+      const { emitTrackingEvent } = await import('../services/orchestration');
+      const provName = body.provider_name ?? 'A provider';
+      void emitTrackingEvent(jobId, 'provider_responded', 'Quote Received',
+        `${provName} has responded.`,
+        { provider_name: provName, ...(body.quoted_price ? { quote: body.quoted_price } : {}) },
+      );
+    } catch { /* non-fatal */ }
+
     res.status(201).json({
       data: {
         id: response.id,
