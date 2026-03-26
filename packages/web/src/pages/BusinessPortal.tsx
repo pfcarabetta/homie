@@ -3173,10 +3173,16 @@ export default function BusinessPortal() {
       `}</style>
       {/* Header */}
       <header style={{ background: 'var(--bp-header)', borderBottom: '1px solid var(--bp-border)', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
             <HomieBizLogo />
           </span>
+          {workspace?.logoUrl && (
+            <>
+              <div style={{ width: 1, height: 28, background: 'var(--bp-border)' }} />
+              <img src={workspace.logoUrl} alt={workspace.name} style={{ height: 32, maxWidth: 120, objectFit: 'contain' }} />
+            </>
+          )}
         </div>
         <AvatarDropdown />
       </header>
