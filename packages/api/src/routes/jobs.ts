@@ -129,9 +129,8 @@ router.post('/', async (req: Request, res: Response) => {
         .limit(1);
 
       if (ws) {
-        // Calculate dynamic limit: searchesPerProperty × active properties
-        const planSearches: Record<string, number> = { trial: 0, starter: 2, professional: 3, business: 5, enterprise: 10 };
-        const perProp = planSearches[ws.plan] ?? 2;
+        // Fair use: 5 searches per property per month across all plans
+        const perProp = 5;
 
         if (ws.plan === 'trial') {
           // Trial uses fixed limit from DB

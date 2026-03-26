@@ -902,10 +902,10 @@ export const businessService = {
       searches_used: number;
       searches_limit: number;
       searches_remaining: number;
-      extra_search_cost: string;
       base_price: number;
       per_property_price: number;
       searches_per_property: number;
+      max_properties: number;
       property_count: number;
       billing_cycle_start: string;
       billing_cycle_end: string;

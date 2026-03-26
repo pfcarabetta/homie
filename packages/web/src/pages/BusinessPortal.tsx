@@ -684,7 +684,7 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
 function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
   const [usage, setUsage] = useState<{
     plan: string; searches_used: number; searches_limit: number;
-    searches_remaining: number; extra_search_cost: string;
+    searches_remaining: number;
     base_price: number; per_property_price: number;
     searches_per_property: number; property_count: number;
     billing_cycle_start: string; billing_cycle_end: string;
@@ -703,9 +703,6 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
     { label: 'Your Role', value: workspace.user_role.charAt(0).toUpperCase() + workspace.user_role.slice(1), icon: '🔑' },
   ];
 
-  const usagePct = usage ? Math.min(100, Math.round((usage.searches_used / usage.searches_limit) * 100)) : 0;
-  const barColor = usagePct >= 90 ? '#DC2626' : usagePct >= 70 ? '#EF9F27' : G;
-
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 24 }}>
@@ -718,76 +715,38 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
         ))}
       </div>
 
-      {/* Outreach credits / billing */}
+      {/* Usage & billing */}
       {usage && (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24, marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: 0 }}>Outreach Credits</h4>
-            <span style={{ fontSize: 12, color: '#9B9490' }}>
-              Resets {new Date(usage.billing_cycle_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
-          </div>
+          <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 20px' }}>Usage & Billing</h4>
 
-          {/* Credit pool progress */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-              <div>
-                <span style={{ fontSize: 32, fontWeight: 700, color: D, fontFamily: "'Fraunces', serif" }}>{usage.searches_remaining}</span>
-                <span style={{ fontSize: 14, color: '#9B9490', marginLeft: 8 }}>credits remaining</span>
-              </div>
-              <span style={{ fontSize: 13, color: '#9B9490' }}>{usage.searches_used} of {usage.searches_limit} used</span>
-            </div>
-            <div style={{ height: 10, borderRadius: 5, background: '#E0DAD4' }}>
-              <div style={{ height: '100%', borderRadius: 5, background: barColor, width: `${usagePct}%`, transition: 'width 0.5s ease' }} />
-            </div>
-          </div>
-
-          {/* How credits are calculated */}
-          <div style={{ background: W, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: D, marginBottom: 8 }}>Your credit pool</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#6B6560' }}>
-              <span style={{ fontWeight: 700, color: D }}>{usage.property_count}</span>
-              <span>properties</span>
-              <span style={{ color: '#9B9490' }}>×</span>
-              <span style={{ fontWeight: 700, color: D }}>{usage.searches_per_property}</span>
-              <span>credits each</span>
-              <span style={{ color: '#9B9490' }}>=</span>
-              <span style={{ fontWeight: 700, color: O, fontSize: 16 }}>{usage.searches_limit} credits/mo</span>
-            </div>
-            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>Credits are shared across your entire portfolio — use them on any property.</div>
-          </div>
-
-          {/* Plan & pricing details */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Plan</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{usage.plan}</div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Base</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>${usage.base_price}/mo</div>
+              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Properties</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{usage.property_count}</div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Per property</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>${usage.per_property_price}/mo</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>$10/mo</div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Est. monthly</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: O }}>${usage.base_price + usage.per_property_price * usage.property_count}/mo</div>
-            </div>
-            <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Extra credit</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: O }}>{usage.extra_search_cost}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: O }}>${usage.base_price + 10 * usage.property_count}/mo</div>
             </div>
           </div>
 
-          {usagePct >= 90 && (
-            <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
-              {usage.searches_remaining === 0
-                ? 'You\'ve used all your outreach credits this cycle. Add more properties or upgrade your plan.'
-                : `Only ${usage.searches_remaining} credit${usage.searches_remaining !== 1 ? 's' : ''} remaining. Add properties to increase your pool.`}
+          <div style={{ background: W, borderRadius: 10, padding: '14px 16px' }}>
+            <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6 }}>
+              <strong style={{ color: D }}>Unlimited searches</strong> — your plan includes unlimited diagnostic chats and outreach searches across all properties. Fair use: 5 searches per property per month.
             </div>
-          )}
+            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 8 }}>
+              Searches this cycle: <strong style={{ color: D }}>{usage.searches_used}</strong> · Resets {new Date(usage.billing_cycle_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1860,7 +1819,7 @@ function DispatchesTab({ workspaceId, onTabChange }: { workspaceId: string; onTa
             responseStatus = `${j.responseCount} provider response${j.responseCount > 1 ? 's' : ''}`;
             responseColor = G;
           } else if (j.status === 'expired' && j.responseCount === 0) {
-            responseStatus = 'No responses — 1 credit refunded';
+            responseStatus = 'No responses — no charge';
             responseColor = '#9B9490';
           } else {
             responseStatus = 'No responses';
@@ -1923,7 +1882,7 @@ function DispatchesTab({ workspaceId, onTabChange }: { workspaceId: string; onTa
                   {j.status === 'expired' && j.responseCount === 0 && (
                     <div style={{ background: '#EFF6FF', borderRadius: 8, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(37,99,235,0.1)' }}>
                       <span style={{ fontSize: 14 }}>💰</span>
-                      <span style={{ fontSize: 13, color: '#2563EB', fontWeight: 500 }}>1 outreach credit was refunded — no charge for dispatches with zero responses.</span>
+                      <span style={{ fontSize: 13, color: '#2563EB', fontWeight: 500 }}>No charge for dispatches with zero responses.</span>
                     </div>
                   )}
 
@@ -2061,7 +2020,7 @@ function DispatchesTab({ workspaceId, onTabChange }: { workspaceId: string; onTa
                   const job = dispatches.find(d => d.id === showCancelConfirm);
                   return job && job.responseCount > 0
                     ? ' Any booked providers will be notified of the cancellation via SMS and email.'
-                    : ' If no providers have responded, your outreach credit will be refunded.';
+                    : ' If no providers have responded, there is no charge.';
                 })()}
               </p>
             </div>
@@ -2078,7 +2037,7 @@ function DispatchesTab({ workspaceId, onTabChange }: { workspaceId: string; onTa
                   const res = await businessService.cancelDispatch(workspaceId, jobId);
                   setDispatches(prev => prev.map(d => d.id === jobId ? { ...d, status: 'expired' } : d));
                   if (res.data?.credit_refunded) {
-                    alert('Dispatch cancelled. 1 outreach credit was refunded.');
+                    alert('Dispatch cancelled. No charge for dispatches with zero responses.');
                   } else if (res.data?.providers_notified && res.data.providers_notified > 0) {
                     alert(`Dispatch cancelled. ${res.data.providers_notified} booked provider${res.data.providers_notified > 1 ? 's were' : ' was'} notified.`);
                   } else {

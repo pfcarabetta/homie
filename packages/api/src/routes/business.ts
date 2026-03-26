@@ -33,7 +33,9 @@ router.post('/', async (req: Request, res: Response) => {
   const finalSlug = slug ? slugify(slug) : slugify(name);
   const validPlans = ['trial', 'starter', 'professional', 'business', 'enterprise'];
   const selectedPlan = plan && validPlans.includes(plan) ? plan : 'starter';
-  const planSearchLimits: Record<string, number> = { trial: 5, starter: 2, professional: 3, business: 5, enterprise: 10 };
+  // Per-property model: all plans get 5 searches/property/month (fair use)
+  const planSearchLimits: Record<string, number> = { trial: 5, starter: 5, professional: 5, business: 5, enterprise: 5 };
+  const planPropertyLimits: Record<string, number> = { trial: 5, starter: 10, professional: 50, business: 150, enterprise: 9999 };
 
   try {
     const [workspace] = await db
@@ -734,12 +736,13 @@ router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRol
 
 // ── Billing & Usage ─────────────────────────────────────────────────────────
 
-const PLAN_LIMITS: Record<string, { base: number; perProperty: number; searchesPerProperty: number; extraCost: string }> = {
-  trial: { base: 0, perProperty: 0, searchesPerProperty: 0, extraCost: 'N/A' },
-  starter: { base: 29, perProperty: 5, searchesPerProperty: 2, extraCost: '$6.99' },
-  professional: { base: 49, perProperty: 8, searchesPerProperty: 3, extraCost: '$4.99' },
-  business: { base: 99, perProperty: 10, searchesPerProperty: 5, extraCost: '$3.49' },
-  enterprise: { base: 299, perProperty: 10, searchesPerProperty: 10, extraCost: '$2.49' },
+// New per-property model: $10/property/mo across all plans, tiers unlock features
+const PLAN_LIMITS: Record<string, { base: number; perProperty: number; searchesPerProperty: number; maxProperties: number }> = {
+  trial: { base: 0, perProperty: 0, searchesPerProperty: 5, maxProperties: 5 },
+  starter: { base: 0, perProperty: 10, searchesPerProperty: 5, maxProperties: 10 },
+  professional: { base: 99, perProperty: 10, searchesPerProperty: 5, maxProperties: 50 },
+  business: { base: 249, perProperty: 10, searchesPerProperty: 5, maxProperties: 150 },
+  enterprise: { base: 0, perProperty: 10, searchesPerProperty: 5, maxProperties: 9999 },
 };
 
 // GET /:workspaceId/usage
@@ -771,10 +774,8 @@ router.get('/:workspaceId/usage', requireWorkspace, async (req: Request, res: Re
       .from(properties)
       .where(and(eq(properties.workspaceId, req.workspaceId), eq(properties.active, true)));
 
-    // Trial uses fixed DB limit; all other plans calculate dynamically from property count
-    const effectiveLimit = ws.plan === 'trial'
-      ? ws.searchesLimit
-      : Math.max(planInfo.searchesPerProperty * propertyCount, planInfo.searchesPerProperty);
+    // Fair use: 5 searches per property per month
+    const effectiveLimit = Math.max(planInfo.searchesPerProperty * propertyCount, planInfo.searchesPerProperty);
 
     res.json({
       data: {
@@ -782,10 +783,10 @@ router.get('/:workspaceId/usage', requireWorkspace, async (req: Request, res: Re
         searches_used: ws.searchesUsed,
         searches_limit: effectiveLimit,
         searches_remaining: Math.max(0, effectiveLimit - ws.searchesUsed),
-        extra_search_cost: planInfo.extraCost,
         base_price: planInfo.base,
         per_property_price: planInfo.perProperty,
         searches_per_property: planInfo.searchesPerProperty,
+        max_properties: planInfo.maxProperties,
         property_count: propertyCount,
         billing_cycle_start: ws.billingCycleStart,
         billing_cycle_end: billingCycleEnd.toISOString(),

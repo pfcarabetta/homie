@@ -271,72 +271,90 @@ function Categories() {
 }
 
 function Pricing({ onSignup }: { onSignup: () => void }) {
-  const [annual, setAnnual] = useState(false);
+  const [propertyCount, setPropertyCount] = useState(20);
   const tiers = [
-    { name: "Starter", price: 29, annual: 25, perProperty: 5, annualPerProperty: 4, properties: "Unlimited", members: "1 user", searches: "2 credits per property", extra: "$6.99", features: ["PMS import", "Preferred vendors (5)", "Basic cost tracking", "Credits shared across portfolio"], popular: false },
-    { name: "Professional", price: 49, annual: 42, perProperty: 8, annualPerProperty: 7, properties: "Unlimited", members: "5 team members", searches: "3 credits per property", extra: "$4.99", features: ["PMS import + weekly sync", "Unlimited preferred vendors", "B2B job categories", "Full cost reporting", "Vendor scorecards", "Human outreach manager", "Credits shared across portfolio"], popular: true },
-    { name: "Business", price: 99, annual: 84, perProperty: 10, annualPerProperty: 9, properties: "Unlimited", members: "15 team members", searches: "5 credits per property", extra: "$3.49", features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Vendor scorecards", "Human outreach manager", "Credits shared across portfolio", "All Professional features"], popular: false },
+    { name: "Starter", platformFee: 0, maxProperties: 10, members: "1 user", badge: "Free to start", badgeColor: COLORS.green, popular: false,
+      features: ["PMS import (manual or one platform)", "Unlimited diagnostic chats", "Unlimited outreach searches", "Fair use: 5 searches/property/mo", "Preferred vendors (up to 5)", "Basic cost tracking"] },
+    { name: "Professional", platformFee: 99, maxProperties: 50, members: "5 team members", badge: "Most popular", badgeColor: COLORS.orange, popular: true,
+      features: ["PMS import with weekly sync", "All B2B categories (turnover, hot tub, restock, concierge)", "Full cost reporting", "Vendor scorecards", "Unlimited preferred vendors", "Team activity log"] },
+    { name: "Business", platformFee: 249, maxProperties: 150, members: "15 team members with roles", badge: null, badgeColor: "", popular: false,
+      features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Guest diagnostic access", "API access", "All Professional features"] },
   ];
+  const perProperty = 10;
+
   return (
     <section id="pricing" style={{ background: COLORS.warm, padding: "96px 24px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <FadeIn>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, color: COLORS.orange, letterSpacing: 1, textTransform: "uppercase" }}>Pricing</span>
-            <h2 style={{ fontFamily: "Fraunces, serif", fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 700, color: COLORS.dark, margin: "12px 0 8px" }}>Less than one emergency plumber call</h2>
-            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, color: COLORS.gray, margin: "0 0 24px" }}>Start free for 14 days. No credit card required.</p>
-            <div style={{ display: "inline-flex", background: COLORS.white, borderRadius: 100, padding: 4, border: `1px solid ${COLORS.grayLight}` }}>
-              <button onClick={() => setAnnual(false)} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: annual ? COLORS.gray : COLORS.white, background: annual ? "transparent" : COLORS.dark, border: "none", borderRadius: 100, padding: "8px 20px", cursor: "pointer", transition: "all 0.2s" }}>Monthly</button>
-              <button onClick={() => setAnnual(true)} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: annual ? COLORS.white : COLORS.gray, background: annual ? COLORS.dark : "transparent", border: "none", borderRadius: 100, padding: "8px 20px", cursor: "pointer", transition: "all 0.2s" }}>Annual <span style={{ color: COLORS.orange, fontSize: 12 }}>save 15%</span></button>
+            <h2 style={{ fontFamily: "Fraunces, serif", fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 700, color: COLORS.dark, margin: "12px 0 8px" }}>$10 per property per month. Every plan.</h2>
+            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, color: COLORS.gray, margin: "0 0 32px", maxWidth: 520, marginLeft: "auto", marginRight: "auto" }}>Choose the features your team needs. Your homie handles the rest.</p>
+
+            {/* Property count slider */}
+            <div style={{ maxWidth: 480, margin: "0 auto", background: COLORS.white, borderRadius: 16, padding: "24px 32px", border: `1px solid ${COLORS.grayLight}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: COLORS.dark }}>How many properties?</span>
+                <span style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 700, color: COLORS.orange }}>{propertyCount}</span>
+              </div>
+              <input type="range" min={1} max={100} value={propertyCount} onChange={e => setPropertyCount(+e.target.value)}
+                style={{ width: "100%", accentColor: COLORS.orange, cursor: "pointer" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: COLORS.gray, marginTop: 4 }}>
+                <span>1</span><span>25</span><span>50</span><span>75</span><span>100</span>
+              </div>
             </div>
           </div>
         </FadeIn>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, alignItems: "start" }}>
-          {tiers.map((t, i) => (
-            <FadeIn key={i} delay={i * 0.1}>
-              <div style={{ background: COLORS.white, borderRadius: 24, padding: 36, position: "relative", border: t.popular ? `2px solid ${COLORS.orange}` : `1px solid ${COLORS.grayLight}`, transition: "transform 0.2s, box-shadow 0.2s" }} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 16px 48px rgba(0,0,0,0.08)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-                {t.popular && <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: COLORS.orange, color: COLORS.white, fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, padding: "5px 16px", borderRadius: 100 }}>Most popular</div>}
-                <h3 style={{ fontFamily: "Fraunces, serif", fontSize: 24, fontWeight: 700, color: COLORS.dark, margin: "0 0 4px" }}>{t.name}</h3>
-                <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.gray, margin: "0 0 20px" }}>Unlimited properties</p>
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                    <span style={{ fontFamily: "Fraunces, serif", fontSize: 48, fontWeight: 700, color: COLORS.dark }}>${annual ? t.annual : t.price}</span>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, color: COLORS.gray }}>/mo base</span>
-                  </div>
-                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, color: COLORS.darkMid, marginTop: 4 }}>
-                    + <strong>${annual ? (t as Record<string, unknown>).annualPerProperty as number : (t as Record<string, unknown>).perProperty as number}</strong>/property/mo
-                  </div>
-                </div>
-                <button onClick={onSignup} style={{ width: "100%", fontFamily: "'DM Sans', sans-serif", fontSize: 16, fontWeight: 600, color: t.popular ? COLORS.white : COLORS.dark, background: t.popular ? COLORS.orange : COLORS.warm, border: t.popular ? "none" : `1px solid ${COLORS.grayLight}`, borderRadius: 12, padding: "14px 0", cursor: "pointer", transition: "all 0.2s", marginBottom: 28 }} onMouseEnter={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orangeDark; else (e.target as HTMLElement).style.background = COLORS.grayLight; }} onMouseLeave={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orange; else (e.target as HTMLElement).style.background = COLORS.warm; }}>Start free trial</button>
-                <div style={{ borderTop: `1px solid ${COLORS.warm}`, paddingTop: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: COLORS.gray }}>Team members</span>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: COLORS.dark, fontWeight: 600 }}>{t.members}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: COLORS.gray }}>Outreach searches</span>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: COLORS.dark, fontWeight: 600 }}>{t.searches}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: COLORS.gray }}>Additional search</span>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: COLORS.dark, fontWeight: 600 }}>{t.extra}</span>
-                  </div>
-                  {t.features.map((f, j) => (
-                    <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <div style={{ width: 18, height: 18, borderRadius: "50%", background: COLORS.greenLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <span style={{ color: COLORS.green, fontSize: 11, fontWeight: 700 }}>✓</span>
-                      </div>
-                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.darkMid }}>{f}</span>
+          {tiers.map((t, i) => {
+            const props = Math.min(propertyCount, t.maxProperties);
+            const total = t.platformFee + (props * perProperty);
+            return (
+              <FadeIn key={i} delay={i * 0.1}>
+                <div style={{ background: COLORS.white, borderRadius: 24, padding: 36, position: "relative", border: t.popular ? `2px solid ${COLORS.orange}` : `1px solid ${COLORS.grayLight}`, transition: "transform 0.2s, box-shadow 0.2s" }} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 16px 48px rgba(0,0,0,0.08)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+                  {t.badge && <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: t.badgeColor, color: COLORS.white, fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, padding: "5px 16px", borderRadius: 100, whiteSpace: "nowrap" }}>{t.badge}</div>}
+                  <h3 style={{ fontFamily: "Fraunces, serif", fontSize: 24, fontWeight: 700, color: COLORS.dark, margin: "0 0 4px" }}>{t.name}</h3>
+                  <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.gray, margin: "0 0 20px" }}>Up to {t.maxProperties} properties · {t.members}</p>
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                      <span style={{ fontFamily: "Fraunces, serif", fontSize: 48, fontWeight: 700, color: COLORS.dark }}>${t.platformFee}</span>
+                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, color: COLORS.gray }}>/mo platform</span>
                     </div>
-                  ))}
+                    <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, color: COLORS.darkMid, marginTop: 4 }}>
+                      + <strong>$10</strong>/property/mo
+                    </div>
+                    {propertyCount > 0 && (
+                      <div style={{
+                        marginTop: 12, background: COLORS.warm, borderRadius: 10, padding: "10px 14px",
+                        fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.dark,
+                      }}>
+                        {propertyCount > t.maxProperties ? (
+                          <span style={{ color: COLORS.gray }}>Supports up to {t.maxProperties} properties</span>
+                        ) : (
+                          <><strong style={{ fontSize: 20, color: COLORS.orange }}>${total}</strong><span style={{ color: COLORS.gray }}>/mo for {props} {props === 1 ? 'property' : 'properties'}</span></>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={onSignup} style={{ width: "100%", fontFamily: "'DM Sans', sans-serif", fontSize: 16, fontWeight: 600, color: t.popular ? COLORS.white : COLORS.dark, background: t.popular ? COLORS.orange : COLORS.warm, border: t.popular ? "none" : `1px solid ${COLORS.grayLight}`, borderRadius: 12, padding: "14px 0", cursor: "pointer", transition: "all 0.2s", marginBottom: 28 }} onMouseEnter={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orangeDark; else (e.target as HTMLElement).style.background = COLORS.grayLight; }} onMouseLeave={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orange; else (e.target as HTMLElement).style.background = COLORS.warm; }}>{t.platformFee === 0 ? 'Start for free' : 'Start free trial'}</button>
+                  <div style={{ borderTop: `1px solid ${COLORS.warm}`, paddingTop: 20 }}>
+                    {t.features.map((f, j) => (
+                      <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: "50%", background: COLORS.greenLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <span style={{ color: COLORS.green, fontSize: 11, fontWeight: 700 }}>✓</span>
+                        </div>
+                        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.darkMid }}>{f}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </FadeIn>
-          ))}
+              </FadeIn>
+            );
+          })}
         </div>
         <FadeIn delay={0.4}>
           <div style={{ textAlign: "center", marginTop: 40 }}>
-            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, color: COLORS.gray }}>Managing 100+ properties? <a href="#" style={{ color: COLORS.orange, fontWeight: 600, textDecoration: "none" }}>Talk to us about Enterprise pricing →</a></p>
+            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, color: COLORS.gray }}>Managing 150+ properties? <a href="#" style={{ color: COLORS.orange, fontWeight: 600, textDecoration: "none" }}>Talk to us about Enterprise — custom platform fee, volume discounts, white-label, dedicated account manager →</a></p>
           </div>
         </FadeIn>
       </div>
