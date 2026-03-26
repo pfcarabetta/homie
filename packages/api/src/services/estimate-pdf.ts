@@ -117,7 +117,9 @@ function checkPage(doc: PDFKit.PDFDocument, y: number, needed: number, pg: { val
 
 export async function generateEstimatePDF(options: EstimatePDFOptions): Promise<Buffer> {
   const { workspace, property, job, estimates, declinedCount } = options;
-  const doc = new PDFDocument({ size: 'LETTER', margins: { top: M, bottom: 40, left: M, right: M }, bufferPages: true });
+  // Use bottom margin of 0 to prevent PDFKit from auto-creating pages.
+  // We handle page breaks manually via checkPage().
+  const doc = new PDFDocument({ size: 'LETTER', margins: { top: M, bottom: 0, left: M, right: M }, bufferPages: true });
   const chunks: Buffer[] = [];
   doc.on('data', (chunk: Buffer) => chunks.push(chunk));
 
