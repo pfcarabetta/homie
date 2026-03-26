@@ -949,6 +949,71 @@ export default function BusinessChat() {
                 <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5 }}>We'll notify you when quotes arrive. You can also check status in your <span onClick={() => navigate('/business')} style={{ color: O, cursor: 'pointer', fontWeight: 600 }}>business portal</span>.</div>
               </div>
 
+              {/* Share status tracker */}
+              {jobId && !trackingUrl && (
+                <div style={{ marginLeft: 42, marginBottom: 16, background: W, borderRadius: 12, padding: 16, border: '1px solid rgba(0,0,0,0.06)', animation: 'fadeSlide 0.3s ease' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 4 }}>Share maintenance status</div>
+                  <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.5 }}>
+                    Send real-time updates to your guest or property owner.
+                  </div>
+                  <div style={{ display: 'grid', gap: 8, marginBottom: 10 }}>
+                    <input value={trackPhone} onChange={e => setTrackPhone(e.target.value)} placeholder="Phone for SMS updates (optional)"
+                      style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
+                    <input value={trackEmail} onChange={e => setTrackEmail(e.target.value)} placeholder="Email for updates (optional)"
+                      style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
+                  </div>
+                  <button disabled={trackCreating} onClick={async () => {
+                    setTrackCreating(true);
+                    try {
+                      const res = await trackingService.createLink(jobId, {
+                        notify_phone: trackPhone || undefined,
+                        notify_email: trackEmail || undefined,
+                        property_name: selectedProperty?.name,
+                      });
+                      if (res.data) setTrackingUrl(res.data.tracking_url);
+                    } catch { /* ignore */ }
+                    setTrackCreating(false);
+                  }} style={{
+                    width: '100%', padding: '10px 0', borderRadius: 100, border: 'none',
+                    background: D, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif", opacity: trackCreating ? 0.7 : 1,
+                  }}>
+                    {trackCreating ? 'Creating...' : 'Create tracking link'}
+                  </button>
+                </div>
+              )}
+
+              {/* Tracking URL created */}
+              {trackingUrl && (
+                <div style={{ marginLeft: 42, marginBottom: 16, background: '#EFF6FF', borderRadius: 12, padding: 16, border: '1px solid rgba(37,99,235,0.1)', animation: 'fadeSlide 0.3s ease' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', marginBottom: 8 }}>Tracking link created</div>
+                  <div style={{
+                    display: 'flex', gap: 8, alignItems: 'center', background: '#fff', borderRadius: 8,
+                    padding: '8px 10px', border: '1px solid rgba(0,0,0,0.06)',
+                  }}>
+                    <input readOnly value={trackingUrl} style={{
+                      flex: 1, border: 'none', outline: 'none', fontSize: 12, color: D,
+                      fontFamily: "'DM Mono', monospace", background: 'transparent',
+                    }} />
+                    <button onClick={() => {
+                      navigator.clipboard.writeText(trackingUrl);
+                      setTrackCopied(true);
+                      setTimeout(() => setTrackCopied(false), 2000);
+                    }} style={{
+                      padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600,
+                      background: trackCopied ? G : O, color: '#fff', cursor: 'pointer', flexShrink: 0,
+                    }}>
+                      {trackCopied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6B6560', marginTop: 6 }}>
+                    {trackPhone && <span>SMS → {trackPhone} · </span>}
+                    {trackEmail && <span>Email → {trackEmail} · </span>}
+                    <a href={trackingUrl} target="_blank" rel="noopener" style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}>Preview →</a>
+                  </div>
+                </div>
+              )}
+
               {/* Compact stats */}
               {outreachStatus && (
                 <div style={{ marginLeft: 42, display: 'flex', gap: 8, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
@@ -1056,76 +1121,6 @@ export default function BusinessChat() {
                     </div>
                   </div>
 
-                  {/* Share status tracker */}
-                  {jobId && !trackingUrl && (
-                    <div style={{
-                      background: W, borderRadius: 16, padding: 20, marginTop: 12,
-                      border: '1px solid rgba(0,0,0,0.06)',
-                    }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: D, marginBottom: 4 }}>Share maintenance status</div>
-                      <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 14, lineHeight: 1.5 }}>
-                        Send real-time updates to your guest or property owner.
-                      </div>
-                      <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
-                        <input value={trackPhone} onChange={e => setTrackPhone(e.target.value)} placeholder="Phone for SMS updates (optional)"
-                          style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none' }} />
-                        <input value={trackEmail} onChange={e => setTrackEmail(e.target.value)} placeholder="Email for updates (optional)"
-                          style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none' }} />
-                      </div>
-                      <button disabled={trackCreating} onClick={async () => {
-                        setTrackCreating(true);
-                        try {
-                          const res = await trackingService.createLink(jobId, {
-                            notify_phone: trackPhone || undefined,
-                            notify_email: trackEmail || undefined,
-                            property_name: selectedProperty?.name,
-                          });
-                          if (res.data) setTrackingUrl(res.data.tracking_url);
-                        } catch { /* ignore */ }
-                        setTrackCreating(false);
-                      }} style={{
-                        width: '100%', padding: '12px 0', borderRadius: 100, border: 'none',
-                        background: D, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                        opacity: trackCreating ? 0.7 : 1,
-                      }}>
-                        {trackCreating ? 'Creating...' : 'Create tracking link'}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Tracking URL created */}
-                  {trackingUrl && (
-                    <div style={{
-                      background: '#EFF6FF', borderRadius: 16, padding: 20, marginTop: 12,
-                      border: '1px solid rgba(37,99,235,0.1)',
-                    }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#2563EB', marginBottom: 8 }}>Tracking link created</div>
-                      <div style={{
-                        display: 'flex', gap: 8, alignItems: 'center', background: '#fff', borderRadius: 8,
-                        padding: '10px 12px', border: '1px solid rgba(0,0,0,0.06)',
-                      }}>
-                        <input readOnly value={trackingUrl} style={{
-                          flex: 1, border: 'none', outline: 'none', fontSize: 13, color: D,
-                          fontFamily: "'DM Mono', monospace", background: 'transparent',
-                        }} />
-                        <button onClick={() => {
-                          navigator.clipboard.writeText(trackingUrl);
-                          setTrackCopied(true);
-                          setTimeout(() => setTrackCopied(false), 2000);
-                        }} style={{
-                          padding: '6px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600,
-                          background: trackCopied ? G : O, color: '#fff', cursor: 'pointer', flexShrink: 0,
-                        }}>
-                          {trackCopied ? 'Copied!' : 'Copy'}
-                        </button>
-                      </div>
-                      <div style={{ fontSize: 12, color: '#6B6560', marginTop: 8 }}>
-                        {trackPhone && <span>SMS updates → {trackPhone} · </span>}
-                        {trackEmail && <span>Email updates → {trackEmail} · </span>}
-                        <a href={trackingUrl} target="_blank" rel="noopener" style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}>Preview →</a>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
