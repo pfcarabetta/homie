@@ -2974,7 +2974,7 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
               </div>
             </div>
             <div style={{ fontSize: 12, color: 'var(--bp-muted)', lineHeight: 1.5 }}>
-              Your logo appears on the maintenance status tracker shared with guests and property owners.
+              Your logo appears on the maintenance status tracker, estimate summary PDFs, and the business portal header.
             </div>
           </>
         ) : (
