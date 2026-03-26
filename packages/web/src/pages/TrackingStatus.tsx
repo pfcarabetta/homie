@@ -55,6 +55,11 @@ function fmtTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function renderBold(text: string) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) => i % 2 === 1 ? <strong key={i}>{part}</strong> : part);
+}
+
 export default function TrackingStatus() {
   const { token } = useParams<{ token: string }>();
   const [data, setData] = useState<TrackingStatusType | null>(null);
@@ -139,13 +144,13 @@ export default function TrackingStatus() {
             )}
 
             {/* Job summary */}
-            <div style={{ background: '#fff', borderRadius: 20, padding: '28px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: '#9B9490', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+            <div style={{ background: '#fff', borderRadius: 20, padding: '24px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
                 {data.property_name}
               </div>
-              <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: D, margin: '0 0 14px', lineHeight: 1.2 }}>
-                {data.job_title}
-              </h1>
+              <div style={{ fontSize: 17, fontWeight: 600, color: D, marginBottom: 12, lineHeight: 1.4 }}>
+                {renderBold(data.job_title)}
+              </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
                 <span style={{ padding: '4px 14px', borderRadius: 100, background: `${G}15`, color: G, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>
                   {data.job_category.replace(/_/g, ' ')}
@@ -156,13 +161,13 @@ export default function TrackingStatus() {
               </div>
 
               {/* Current status highlight */}
-              <div style={{ background: `${O}08`, borderRadius: 14, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 12, height: 12, borderRadius: '50%', background: O, animation: 'trackPulse 2s ease-in-out infinite', flexShrink: 0 }} />
+              <div style={{ background: `${O}08`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: O, animation: 'trackPulse 2s ease-in-out infinite', flexShrink: 0 }} />
                 <div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: D, textTransform: 'capitalize' }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: D, textTransform: 'capitalize' }}>
                     {data.status.replace(/_/g, ' ')}
                   </div>
-                  <div style={{ fontSize: 13, color: '#6B6560', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: '#6B6560', marginTop: 1 }}>
                     {STEPS.find(s => s.key === data.status)?.desc ?? 'Processing your request'}
                   </div>
                 </div>
@@ -250,7 +255,7 @@ export default function TrackingStatus() {
                     <div style={{ flex: 1, paddingTop: 4, paddingBottom: isLast ? 0 : 16, opacity: upcoming ? 0.35 : 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{event?.title ?? step.label}</div>
                       <div style={{ fontSize: 13, color: '#6B6560', marginTop: 2, lineHeight: 1.5 }}>
-                        {event?.description ?? step.desc}
+                        {renderBold(event?.description ?? step.desc)}
                       </div>
                       {event?.metadata && (
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
