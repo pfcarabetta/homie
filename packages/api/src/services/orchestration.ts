@@ -8,6 +8,7 @@ import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerScores } from '../db/schema/provider-scores';
 import { preferredVendors } from '../db/schema/preferred-vendors';
 import { providerResponses } from '../db/schema/provider-responses';
+import { jobTrackingEvents, jobTrackingLinks, type TrackingEventType } from '../db/schema/job-tracking';
 import { discoverProviders } from './providers/discovery';
 import { generateScripts } from './scripts/generation';
 import { VoiceAdapter } from './outreach/voice';
@@ -19,6 +20,47 @@ import { DiagnosisPayload } from '../db/schema/jobs';
 import { DiscoveredProvider } from '../types/providers';
 import { JobTier } from '../types/jobs';
 import { Job } from '../db/schema/jobs';
+
+// ── Tracking event helper ─────────────────────────────────────────────────────
+
+export async function emitTrackingEvent(jobId: string, eventType: TrackingEventType, title: string, description?: string, metadata?: Record<string, unknown>) {
+  try {
+    await db.insert(jobTrackingEvents).values({
+      jobId,
+      eventType,
+      title,
+      description: description ?? null,
+      metadata: metadata ?? null,
+    });
+
+    // Notify all linked tracking contacts
+    const links = await db.select().from(jobTrackingLinks).where(eq(jobTrackingLinks.jobId, jobId));
+    for (const link of links) {
+      const trackingUrl = `https://homiepro.ai/t/${link.trackingToken}`;
+      if (link.notifyPhone) {
+        void sendSms(link.notifyPhone, `🏠 ${link.propertyName} — ${title}. View status: ${trackingUrl}`);
+      }
+      if (link.notifyEmail) {
+        void sendEmail(link.notifyEmail, `🏠 ${link.propertyName} — ${title}`,
+          `<div style="font-family:'DM Sans',-apple-system,sans-serif;max-width:520px;margin:0 auto;background:#F9F5F2;padding:32px 20px;">
+            <div style="text-align:center;margin-bottom:24px;"><span style="font-family:'Fraunces',Georgia,serif;font-size:28px;font-weight:700;color:#E8632B;">homie</span></div>
+            <div style="background:#fff;border-radius:16px;padding:32px 28px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+              <div style="font-size:12px;font-weight:600;color:#9B9490;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Maintenance Update</div>
+              <h2 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#2D2926;font-family:'Fraunces',Georgia,serif;">${link.propertyName}</h2>
+              <p style="margin:0 0 20px;color:#6B6560;font-size:16px;line-height:1.6;">${title}</p>
+              ${description ? `<p style="margin:0 0 20px;color:#9B9490;font-size:14px;line-height:1.6;">${description}</p>` : ''}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+                <a href="${trackingUrl}" style="display:inline-block;background:#E8632B;color:#fff;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px;">View Status</a>
+              </td></tr></table>
+            </div>
+            <div style="text-align:center;margin-top:24px;"><p style="color:#9B9490;font-size:12px;margin:0;">Sent by <a href="https://homiepro.ai" style="color:#E8632B;text-decoration:none;font-weight:600;">homie</a> — Your home's best friend</p></div>
+          </div>`);
+      }
+    }
+  } catch (err) {
+    logger.error({ err, jobId, eventType }, '[orchestration] emitTrackingEvent failed');
+  }
+}
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -366,6 +408,10 @@ export async function dispatchJob(jobId: string): Promise<void> {
   // Transition job status to collecting
   await db.update(jobs).set({ status: 'collecting' }).where(eq(jobs.id, jobId));
 
+  // Emit tracking events
+  void emitTrackingEvent(jobId, 'reported', 'Issue Reported', diagnosis.summary?.slice(0, 200));
+  void emitTrackingEvent(jobId, 'dispatched', 'Dispatching Pros', `Contacting ${eligible.length} providers in the area via phone, SMS, and web.`);
+
   const adapters = createAdapters();
 
   // ── Cascading dispatch for B2B with preferred vendors ─────────────────
@@ -507,6 +553,15 @@ export async function sendBookingNotifications(
     .limit(1);
 
   if (!homeowner || !provider) return;
+
+  // Emit tracking event for booking
+  const providerFirstName = provider.name.split(' ')[0];
+  const providerInitial = provider.name.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ');
+  const displayName = `${providerFirstName} ${providerInitial}`.trim();
+  void emitTrackingEvent(jobId, 'provider_booked', 'Provider Booked', `Appointment confirmed with ${displayName}.`, {
+    provider_name: displayName,
+    rating: provider.googleRating ?? undefined,
+  });
 
   const category = ((job.diagnosis as DiagnosisPayload | null)?.category ?? 'home maintenance').replace(/_/g, ' ');
 

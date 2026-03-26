@@ -2,6 +2,7 @@ import { pgTable, uuid, text, varchar, timestamp, jsonb, index, uniqueIndex } fr
 import { jobs } from './jobs';
 
 export const TRACKING_EVENT_TYPES = [
+  'reported',
   'dispatched',
   'provider_contacted',
   'provider_responded',

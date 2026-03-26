@@ -153,6 +153,18 @@ async function createProviderResponse(
     channel,
     message,
   });
+
+  // Emit tracking event for provider response
+  try {
+    const { emitTrackingEvent } = await import('../services/orchestration');
+    const [prov] = await db.select({ name: providers.name, googleRating: providers.googleRating }).from(providers).where(eq(providers.id, providerId)).limit(1);
+    const firstName = prov?.name?.split(' ')[0] ?? 'A provider';
+    const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
+    void emitTrackingEvent(jobId, 'provider_responded', 'Quote Received',
+      `${firstName} ${initial} has responded.`.trim(),
+      { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
+    );
+  } catch { /* non-fatal */ }
 }
 
 // ── POST /twilio/voice/conversation ──────────────────────────────────────────
