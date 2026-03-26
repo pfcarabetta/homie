@@ -29,6 +29,7 @@ import AdminJobs from '@/pages/admin/AdminJobs';
 import AdminProviders from '@/pages/admin/AdminProviders';
 import AdminBookings from '@/pages/admin/AdminBookings';
 import AdminBusiness from '@/pages/admin/AdminBusiness';
+import TrackingStatus from '@/pages/TrackingStatus';
 
 export default function App() {
   return (
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/security" element={<Security />} />
+          <Route path="/t/:token" element={<TrackingStatus />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
           <Route path="/portal/login" element={<ProviderLogin />} />
           <Route path="/portal/signup" element={<ProSignup />} />

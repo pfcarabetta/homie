@@ -15,6 +15,7 @@ import providerAuthRouter from './routes/provider-auth';
 import providerPortalRouter from './routes/provider-portal';
 import businessRouter from './routes/business';
 import businessChatRouter from './routes/business-chat';
+import { trackingPublicRouter, trackingAuthRouter } from './routes/tracking';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
 import { requireProviderAuth } from './middleware/provider-auth';
@@ -70,6 +71,8 @@ app.use('/api/v1/webhooks', webhooksRouter);
 app.use('/api/v1/admin', requireAdmin, adminRouter);
 app.use('/api/v1/business', apiLimiter, requireAuth, businessRouter);
 app.use('/api/v1/business-chat', diagnosticLimiter, requireAuth, businessChatRouter);
+app.use('/api/v1/tracking', apiLimiter, trackingPublicRouter);
+app.use('/api/v1/jobs', apiLimiter, requireAuth, trackingAuthRouter);
 
 // Sentry error handler — must be after all routes
 Sentry.setupExpressErrorHandler(app);

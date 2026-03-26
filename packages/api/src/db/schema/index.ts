@@ -10,3 +10,4 @@ export * from './workspaces';
 export * from './properties';
 export * from './workspace-members';
 export * from './preferred-vendors';
+export * from './job-tracking';

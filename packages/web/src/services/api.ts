@@ -596,6 +596,46 @@ export interface AccountBooking {
   scheduled: string | null;
 }
 
+// ── Tracking ────────────────────────────────────────────────────────────────
+
+export interface TrackingStatus {
+  property_name: string;
+  job_title: string;
+  job_category: string;
+  severity: string;
+  status: string;
+  timeline: Array<{
+    event_type: string;
+    title: string;
+    description: string | null;
+    metadata: Record<string, unknown> | null;
+    created_at: string;
+  }>;
+  provider: { name: string; rating: string | null } | null;
+  last_updated: string;
+  expired?: boolean;
+}
+
+export const trackingService = {
+  getStatus: (token: string) =>
+    fetchAPI<TrackingStatus>('/api/v1/tracking/' + token),
+  createLink: (
+    jobId: string,
+    data: { notify_phone?: string; notify_email?: string; property_name?: string },
+  ) =>
+    fetchAPI<{
+      tracking_token: string;
+      tracking_url: string;
+      notify_phone: string | null;
+      notify_email: string | null;
+    }>('/api/v1/jobs/' + jobId + '/tracking', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ── accountService ─────────────────────────────────────────────────────────
+
 export const accountService = {
   getProfile: () => fetchAPI<AccountProfile>('/api/v1/account'),
   updateProfile: (data: Partial<{ email: string; phone: string; zip_code: string; current_password: string; new_password: string }>) =>

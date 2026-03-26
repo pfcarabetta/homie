@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import {
-  businessService, businessChatService, jobService, connectJobSocket,
+  businessService, businessChatService, jobService, connectJobSocket, trackingService,
   type Property, type Workspace, type DiagnosticStreamCallbacks,
   type JobStatusResponse, type ProviderResponseItem,
 } from '@/services/api';
@@ -315,6 +315,11 @@ export default function BusinessChat() {
   const [dispatching, setDispatching] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<number | null>(null);
   const [bookedName, setBookedName] = useState<string | null>(null);
+  const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
+  const [trackPhone, setTrackPhone] = useState('');
+  const [trackEmail, setTrackEmail] = useState('');
+  const [trackCreating, setTrackCreating] = useState(false);
+  const [trackCopied, setTrackCopied] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -1050,6 +1055,77 @@ export default function BusinessChat() {
                       <strong style={{ color: D }}>{bookedName}</strong> has been booked. They'll be in touch to confirm details.
                     </div>
                   </div>
+
+                  {/* Share status tracker */}
+                  {jobId && !trackingUrl && (
+                    <div style={{
+                      background: W, borderRadius: 16, padding: 20, marginTop: 12,
+                      border: '1px solid rgba(0,0,0,0.06)',
+                    }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: D, marginBottom: 4 }}>Share maintenance status</div>
+                      <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 14, lineHeight: 1.5 }}>
+                        Send real-time updates to your guest or property owner.
+                      </div>
+                      <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+                        <input value={trackPhone} onChange={e => setTrackPhone(e.target.value)} placeholder="Phone for SMS updates (optional)"
+                          style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none' }} />
+                        <input value={trackEmail} onChange={e => setTrackEmail(e.target.value)} placeholder="Email for updates (optional)"
+                          style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none' }} />
+                      </div>
+                      <button disabled={trackCreating} onClick={async () => {
+                        setTrackCreating(true);
+                        try {
+                          const res = await trackingService.createLink(jobId, {
+                            notify_phone: trackPhone || undefined,
+                            notify_email: trackEmail || undefined,
+                            property_name: selectedProperty?.name,
+                          });
+                          if (res.data) setTrackingUrl(res.data.tracking_url);
+                        } catch { /* ignore */ }
+                        setTrackCreating(false);
+                      }} style={{
+                        width: '100%', padding: '12px 0', borderRadius: 100, border: 'none',
+                        background: D, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                        opacity: trackCreating ? 0.7 : 1,
+                      }}>
+                        {trackCreating ? 'Creating...' : 'Create tracking link'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Tracking URL created */}
+                  {trackingUrl && (
+                    <div style={{
+                      background: '#EFF6FF', borderRadius: 16, padding: 20, marginTop: 12,
+                      border: '1px solid rgba(37,99,235,0.1)',
+                    }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#2563EB', marginBottom: 8 }}>Tracking link created</div>
+                      <div style={{
+                        display: 'flex', gap: 8, alignItems: 'center', background: '#fff', borderRadius: 8,
+                        padding: '10px 12px', border: '1px solid rgba(0,0,0,0.06)',
+                      }}>
+                        <input readOnly value={trackingUrl} style={{
+                          flex: 1, border: 'none', outline: 'none', fontSize: 13, color: D,
+                          fontFamily: "'DM Mono', monospace", background: 'transparent',
+                        }} />
+                        <button onClick={() => {
+                          navigator.clipboard.writeText(trackingUrl);
+                          setTrackCopied(true);
+                          setTimeout(() => setTrackCopied(false), 2000);
+                        }} style={{
+                          padding: '6px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600,
+                          background: trackCopied ? G : O, color: '#fff', cursor: 'pointer', flexShrink: 0,
+                        }}>
+                          {trackCopied ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6B6560', marginTop: 8 }}>
+                        {trackPhone && <span>SMS updates → {trackPhone} · </span>}
+                        {trackEmail && <span>Email updates → {trackEmail} · </span>}
+                        <a href={trackingUrl} target="_blank" rel="noopener" style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}>Preview →</a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
