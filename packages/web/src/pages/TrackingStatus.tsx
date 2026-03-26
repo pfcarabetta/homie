@@ -168,13 +168,6 @@ export default function TrackingStatus() {
                 </div>
               </div>
 
-              {/* Current status */}
-              <div style={{ background: `${O}06`, borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: O, animation: 'trackPulse 2s ease-in-out infinite', flexShrink: 0 }} />
-                <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>
-                  {data.status.replace(/_/g, ' ')}
-                </div>
-              </div>
             </div>
 
             {/* Provider card */}
