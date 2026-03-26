@@ -66,9 +66,9 @@ function Nav() {
     <>
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, background: scrolled || menuOpen ? "rgba(255,255,255,0.97)" : "transparent", backdropFilter: scrolled || menuOpen ? "blur(12px)" : "none", borderBottom: scrolled || menuOpen ? "1px solid rgba(0,0,0,0.06)" : "1px solid transparent", transition: "all 0.3s ease", padding: "0 24px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
-          <div onClick={() => navigate("/")} style={{ display: "flex", alignItems: "baseline", gap: 8, cursor: "pointer" }}>
-            <span style={{ fontFamily: "Fraunces, serif", fontWeight: 700, fontSize: 28, color: COLORS.orange }}>homie</span>
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 800, color: COLORS.white, background: COLORS.green, padding: "2px 7px", borderRadius: 4, letterSpacing: "0.08em", textTransform: "uppercase", position: "relative", top: -2 }}>Business</span>
+          <div onClick={() => navigate("/")} style={{ display: "inline-flex", alignItems: "flex-end", gap: 8, cursor: "pointer" }}>
+            <span style={{ fontFamily: "Fraunces, serif", fontWeight: 700, fontSize: 28, color: COLORS.orange, lineHeight: 1 }}>homie</span>
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 800, color: COLORS.white, background: COLORS.green, padding: "2px 7px", borderRadius: 4, letterSpacing: "0.08em", textTransform: "uppercase", lineHeight: 1, position: "relative", bottom: 2 }}>Business</span>
           </div>
           {isMobile ? (
             <button
