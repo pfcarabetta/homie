@@ -432,12 +432,24 @@ function EditPropertyModal({ workspaceId, property, onClose, onUpdated, onDelete
 
 /* ── Properties Tab ─────────────────────────────────────────────────────── */
 
-function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: string }) {
+const PLAN_PROPERTY_LIMITS: Record<string, number> = {
+  trial: 5, starter: 10, professional: 50, business: 150, enterprise: 9999,
+};
+
+const PLAN_TIERS_ORDERED = [
+  { plan: 'starter', limit: 10, label: 'Starter', price: '$0/mo + $10/property' },
+  { plan: 'professional', limit: 50, label: 'Professional', price: '$99/mo + $10/property' },
+  { plan: 'business', limit: 150, label: 'Business', price: '$249/mo + $10/property' },
+  { plan: 'enterprise', limit: 9999, label: 'Enterprise', price: 'Custom' },
+];
+
+function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role: string; plan: string }) {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [showTrackImport, setShowTrackImport] = useState(false);
+  const [showTierWarning, setShowTierWarning] = useState<{ adding: number; nextTier: typeof PLAN_TIERS_ORDERED[number] } | null>(null);
   const [trackDomain, setTrackDomain] = useState('');
   const [trackKey, setTrackKey] = useState('');
   const [trackSecret, setTrackSecret] = useState('');
@@ -454,6 +466,21 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
   }, [workspaceId]);
 
   const canEdit = role === 'admin' || role === 'coordinator';
+  const propertyLimit = PLAN_PROPERTY_LIMITS[plan] ?? 10;
+  const activeCount = properties.filter(p => p.active).length;
+  const atLimit = activeCount >= propertyLimit;
+
+  function checkTierWarning(addCount: number) {
+    const newTotal = activeCount + addCount;
+    if (newTotal > propertyLimit) {
+      const nextTier = PLAN_TIERS_ORDERED.find(t => t.limit >= newTotal && t.plan !== plan);
+      if (nextTier) {
+        setShowTierWarning({ adding: addCount, nextTier });
+        return true;
+      }
+    }
+    return false;
+  }
 
   function formatBeds(beds: BedConfig[] | null): string {
     if (!beds || beds.length === 0) return '';
@@ -465,18 +492,33 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Properties</h3>
-        {canEdit && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setShowTrackImport(true)}
-              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-              Import from Track
-            </button>
-            <button onClick={() => setShowAdd(true)}
-              style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
-              + Add Property
-            </button>
+        <div>
+          <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Properties</h3>
+          <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>
+            {activeCount} of {propertyLimit === 9999 ? 'unlimited' : propertyLimit} properties · {plan.charAt(0).toUpperCase() + plan.slice(1)} plan
           </div>
+        </div>
+        {canEdit && (
+          atLimit ? (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 13, color: '#DC2626', fontWeight: 600, marginBottom: 4 }}>Property limit reached</div>
+              <div style={{ fontSize: 12, color: '#9B9490' }}>Upgrade your plan to add more properties</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setShowTrackImport(true)}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Import from Track
+              </button>
+              <button onClick={() => {
+                if (checkTierWarning(1)) return;
+                setShowAdd(true);
+              }}
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+                + Add Property
+              </button>
+            </div>
+          )
         )}
       </div>
 
@@ -562,6 +604,36 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
       )}
 
       {/* Track PMS Import Modal */}
+      {/* Tier upgrade warning */}
+      {showTierWarning && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+          onClick={() => setShowTierWarning(null)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 420, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>⬆️</div>
+              <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 8px' }}>Plan upgrade required</h3>
+              <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, margin: 0 }}>
+                Adding {showTierWarning.adding === 1 ? 'this property' : `${showTierWarning.adding} properties`} will exceed your <strong>{plan.charAt(0).toUpperCase() + plan.slice(1)}</strong> plan limit of <strong>{propertyLimit} properties</strong>.
+              </p>
+              <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginTop: 8 }}>
+                You'll be moved to the <strong style={{ color: O }}>{showTierWarning.nextTier.label}</strong> plan ({showTierWarning.nextTier.price}).
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowTierWarning(null)}
+                style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: '1px solid #E0DAD4', background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={() => { setShowTierWarning(null); setShowAdd(true); }}
+                style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Continue & Upgrade
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showTrackImport && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
           onClick={() => { if (!trackImporting) { setShowTrackImport(false); setTrackResult(null); setTrackError(''); } }}>
@@ -649,6 +721,16 @@ function PropertiesTab({ workspaceId, role }: { workspaceId: string; role: strin
                             setTrackError(`Connected to Track but found 0 properties. Debug: ${res.meta.hint || 'No arrays found in response'}. Keys: ${(res.meta.debug_keys as string[])?.join(', ') || 'unknown'}`);
                           } else {
                             setTrackResult(res.data);
+                            // Check if import pushed over tier limit
+                            if (res.data.imported > 0) {
+                              const newTotal = activeCount + res.data.imported;
+                              if (newTotal > propertyLimit) {
+                                const nextTier = PLAN_TIERS_ORDERED.find(t => t.limit >= newTotal && t.plan !== plan);
+                                if (nextTier) {
+                                  setTrackError(`Import complete, but you now have ${newTotal} properties which exceeds your ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan limit of ${propertyLimit}. You'll need to upgrade to ${nextTier.label} (${nextTier.price}).`);
+                                }
+                              }
+                            }
                           }
                         }
                       } catch (err) {
@@ -2875,7 +2957,7 @@ export default function BusinessPortal() {
               <ReportsTab workspaceId={workspace.id} plan={workspace.plan} />
             )}
             {workspace && tab === 'properties' && (
-              <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} />
+              <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} />
             )}
             {workspace && tab === 'vendors' && (
               <VendorsTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} />
