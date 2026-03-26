@@ -79,7 +79,7 @@ trackingPublicRouter.get('/:token', async (req: Request, res: Response) => {
       .orderBy(desc(jobTrackingEvents.createdAt));
 
     // Look up provider info only if a booking exists
-    let providerInfo: { name: string; rating: string | null } | null = null;
+    let providerInfo: { name: string; rating: string | null; reviewCount: number } | null = null;
     const [booking] = await db
       .select({ providerId: bookings.providerId })
       .from(bookings)
@@ -88,22 +88,16 @@ trackingPublicRouter.get('/:token', async (req: Request, res: Response) => {
 
     if (booking) {
       const [provider] = await db
-        .select({ name: providers.name, googleRating: providers.googleRating })
+        .select({ name: providers.name, googleRating: providers.googleRating, reviewCount: providers.reviewCount })
         .from(providers)
         .where(eq(providers.id, booking.providerId))
         .limit(1);
 
       if (provider) {
-        // Show first name + last initial only
-        const parts = provider.name.trim().split(/\s+/);
-        const safeName =
-          parts.length > 1
-            ? `${parts[0]} ${parts[parts.length - 1][0]}.`
-            : parts[0];
-
         providerInfo = {
-          name: safeName,
+          name: provider.name,
           rating: provider.googleRating,
+          reviewCount: provider.reviewCount ?? 0,
         };
       }
     }
@@ -128,7 +122,7 @@ trackingPublicRouter.get('/:token', async (req: Request, res: Response) => {
         metadata: Record<string, unknown> | null;
         created_at: string;
       }>;
-      provider: { name: string; rating: string | null } | null;
+      provider: { name: string; rating: string | null; reviewCount: number } | null;
       last_updated: string;
     }> = {
       data: {

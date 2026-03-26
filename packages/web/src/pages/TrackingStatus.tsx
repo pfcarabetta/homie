@@ -26,7 +26,7 @@ function buildDemoData(): TrackingStatusType {
     job_category: 'plumbing',
     severity: 'medium',
     status: 'provider_booked',
-    provider: { name: 'Mike R.', rating: '4.9' },
+    provider: { name: 'Rodriguez Plumbing', rating: '4.9', reviewCount: 214 },
     last_updated: new Date(now - 30 * 60_000).toISOString(),
     timeline: [
       { event_type: 'reported', title: 'Issue Reported', description: 'Guest reported a leaking kitchen faucet — water dripping from the base when turned on.', metadata: null, created_at: new Date(now - 120 * 60_000).toISOString() },
@@ -186,7 +186,7 @@ export default function TrackingStatus() {
                     <div style={{ fontSize: 18, fontWeight: 700, color: D }}>{data.provider.name}</div>
                     {data.provider.rating && (
                       <div style={{ fontSize: 14, color: '#6B6560', marginTop: 2 }}>
-                        <span style={{ color: '#F5A623' }}>★</span> {data.provider.rating} rating
+                        <span style={{ color: '#F5A623' }}>★</span> {data.provider.rating}{data.provider.reviewCount ? ` (${data.provider.reviewCount} reviews)` : ''} · Google
                       </div>
                     )}
                   </div>

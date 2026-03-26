@@ -611,7 +611,7 @@ export interface TrackingStatus {
     metadata: Record<string, unknown> | null;
     created_at: string;
   }>;
-  provider: { name: string; rating: string | null } | null;
+  provider: { name: string; rating: string | null; reviewCount?: number } | null;
   last_updated: string;
   expired?: boolean;
 }
