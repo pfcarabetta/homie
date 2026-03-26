@@ -2766,7 +2766,10 @@ function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
 
 /* ── Settings Tab ──────────────────────────────────────────────────────── */
 
-function SettingsTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUpdated: (w: WorkspaceDetail) => void }) {
+function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
+  workspace: WorkspaceDetail; onUpdated: (w: WorkspaceDetail) => void;
+  themeMode: 'light' | 'dark' | 'auto'; onThemeChange: (mode: 'light' | 'dark' | 'auto') => void;
+}) {
   const [name, setName] = useState(workspace.name);
   const [slug, setSlug] = useState(workspace.slug);
   const [saving, setSaving] = useState(false);
@@ -2793,17 +2796,17 @@ function SettingsTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onU
     }
   }
 
-  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const, background: 'var(--bp-input)', color: 'var(--bp-text)' };
 
   return (
     <div style={{ maxWidth: 480 }}>
-      <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 20px' }}>Workspace Settings</h3>
+      <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: 'var(--bp-text)', margin: '0 0 20px' }}>Workspace Settings</h3>
 
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24 }}>
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Workspace Name</label>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24 }}>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Workspace Name</label>
         <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
 
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Slug</label>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Slug</label>
         <input value={slug} onChange={e => setSlug(e.target.value)} style={inputStyle} />
 
         {msg && (
@@ -2815,6 +2818,30 @@ function SettingsTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onU
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
+
+      {/* Appearance */}
+      <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24, marginTop: 20 }}>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 12 }}>Appearance</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {([
+            { value: 'light' as const, label: '☀️ Light', desc: 'Always light' },
+            { value: 'dark' as const, label: '🌙 Dark', desc: 'Always dark' },
+            { value: 'auto' as const, label: '🔄 Auto', desc: 'Based on time of day' },
+          ]).map(opt => (
+            <button key={opt.value} onClick={() => onThemeChange(opt.value)}
+              style={{
+                flex: 1, padding: '12px 8px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                border: themeMode === opt.value ? `2px solid ${O}` : '1px solid var(--bp-border)',
+                background: themeMode === opt.value ? `${O}12` : 'var(--bp-bg)',
+                transition: 'all 0.15s',
+              }}>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{opt.label.split(' ')[0]}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: themeMode === opt.value ? O : 'var(--bp-text)' }}>{opt.label.split(' ').slice(1).join(' ')}</div>
+              <div style={{ fontSize: 11, color: 'var(--bp-muted)', marginTop: 2 }}>{opt.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2825,10 +2852,35 @@ const TABS = ['overview', 'dispatches', 'bookings', 'reports', 'properties', 've
 type Tab = typeof TABS[number];
 const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', dispatches: 'Dispatches', bookings: 'Bookings', reports: 'Reports', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
 
+function useThemeMode() {
+  const [mode, setMode] = useState<'light' | 'dark' | 'auto'>(() => {
+    return (localStorage.getItem('bp_theme') as 'light' | 'dark' | 'auto') || 'light';
+  });
+
+  const resolvedTheme = mode === 'auto'
+    ? (new Date().getHours() >= 18 || new Date().getHours() < 7 ? 'dark' : 'light')
+    : mode;
+
+  function setTheme(m: 'light' | 'dark' | 'auto') {
+    setMode(m);
+    localStorage.setItem('bp_theme', m);
+  }
+
+  // Re-check auto mode every minute
+  useEffect(() => {
+    if (mode !== 'auto') return;
+    const interval = setInterval(() => setMode('auto'), 60000);
+    return () => clearInterval(interval);
+  }, [mode]);
+
+  return { mode, resolvedTheme, setTheme };
+}
+
 export default function BusinessPortal() {
   useDocumentTitle('Business Portal');
   const { homeowner } = useAuth();
   const navigate = useNavigate();
+  const { mode: themeMode, resolvedTheme, setTheme } = useThemeMode();
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -2859,8 +2911,44 @@ export default function BusinessPortal() {
   if (!homeowner) return null;
 
   return (
-    <div style={{ minHeight: '100vh', background: W }}>
+    <div className="bp-portal" data-theme={resolvedTheme} style={{ minHeight: '100vh', background: 'var(--bp-bg)' }}>
       <style>{`
+        .bp-portal {
+          --bp-bg: ${W};
+          --bp-card: #ffffff;
+          --bp-input: #ffffff;
+          --bp-text: ${D};
+          --bp-muted: #6B6560;
+          --bp-subtle: #9B9490;
+          --bp-border: #E0DAD4;
+          --bp-hover: #FAFAF8;
+          --bp-header: #ffffff;
+          --bp-warm: ${W};
+          color: var(--bp-text);
+          transition: background 0.3s, color 0.3s;
+        }
+        .bp-portal[data-theme="dark"] {
+          --bp-bg: #1A1A1A;
+          --bp-card: #242424;
+          --bp-input: #2E2E2E;
+          --bp-text: #E8E4E0;
+          --bp-muted: #9B9490;
+          --bp-subtle: #6B6560;
+          --bp-border: #3A3A3A;
+          --bp-hover: #2E2E2E;
+          --bp-header: #1E1E1E;
+          --bp-warm: #2E2E2E;
+        }
+        .bp-portal[data-theme="dark"] input,
+        .bp-portal[data-theme="dark"] select,
+        .bp-portal[data-theme="dark"] textarea {
+          background: var(--bp-input) !important;
+          color: var(--bp-text) !important;
+          border-color: var(--bp-border) !important;
+        }
+        .bp-portal[data-theme="dark"] button {
+          transition: background 0.15s, color 0.15s;
+        }
         @media (max-width: 640px) {
           .bp-prop-card { flex-direction: column !important; }
           .bp-prop-img { width: 100% !important; height: 140px !important; min-height: auto !important; }
@@ -2875,7 +2963,7 @@ export default function BusinessPortal() {
         }
       `}</style>
       {/* Header */}
-      <header style={{ background: '#fff', borderBottom: '1px solid #E0DAD4', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <header style={{ background: 'var(--bp-header)', borderBottom: '1px solid var(--bp-border)', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <span onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
             <HomieBizLogo />
@@ -2928,7 +3016,7 @@ export default function BusinessPortal() {
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #E0DAD4', marginBottom: 24, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x' }}>
+            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--bp-border)', marginBottom: 24, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x' }}>
               {TABS.filter(t => {
                 if (t === 'settings' && workspace?.user_role !== 'admin') return false;
                 return true;
@@ -2972,7 +3060,7 @@ export default function BusinessPortal() {
               <TeamTab workspaceId={workspace.id} role={workspace.user_role} ownerId={workspace.ownerId || ''} plan={workspace.plan} />
             )}
             {workspace && tab === 'settings' && workspace.user_role === 'admin' && (
-              <SettingsTab workspace={workspace} onUpdated={w => { setWorkspace(w); }} />
+              <SettingsTab workspace={workspace} onUpdated={w => { setWorkspace(w); }} themeMode={themeMode} onThemeChange={setTheme} />
             )}
           </>
         )}
