@@ -572,6 +572,21 @@ router.post('/:workspaceId/vendors', requireWorkspace, requireWorkspaceRole('adm
       return;
     }
 
+    // Enforce vendor limit based on plan
+    const planVendorLimits: Record<string, number> = { trial: 5, starter: 5, professional: 9999, business: 9999, enterprise: 9999 };
+    const [ws] = await db.select({ plan: workspaces.plan }).from(workspaces).where(eq(workspaces.id, req.workspaceId)).limit(1);
+    const maxVendors = planVendorLimits[ws?.plan ?? 'starter'] ?? 5;
+    // Count unique providers (not entries — one vendor with multiple properties counts as 1)
+    const vendorRows = await db.select({ providerId: preferredVendors.providerId }).from(preferredVendors)
+      .where(and(eq(preferredVendors.workspaceId, req.workspaceId), eq(preferredVendors.active, true)));
+    const uniqueVendors = new Set(vendorRows.map(v => v.providerId)).size;
+    // Only check limit if this is a new provider (not adding another property to an existing vendor)
+    const isNewProvider = !vendorRows.some(v => v.providerId === body.provider_id);
+    if (isNewProvider && uniqueVendors >= maxVendors) {
+      res.status(403).json({ data: null, error: `Preferred vendor limit reached (${maxVendors} on ${ws?.plan ?? 'starter'} plan). Upgrade to Professional for unlimited vendors.`, meta: {} });
+      return;
+    }
+
     const [vendor] = await db
       .insert(preferredVendors)
       .values({

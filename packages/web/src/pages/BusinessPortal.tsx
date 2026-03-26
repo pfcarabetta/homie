@@ -1399,7 +1399,11 @@ function groupVendors(vendors: PreferredVendor[]): GroupedVendor[] {
   return [...map.values()];
 }
 
-function VendorsTab({ workspaceId, role }: { workspaceId: string; role: string }) {
+const PLAN_VENDOR_LIMITS: Record<string, number> = {
+  trial: 5, starter: 5, professional: 9999, business: 9999, enterprise: 9999,
+};
+
+function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: string; plan: string }) {
   const [vendors, setVendors] = useState<PreferredVendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -1407,6 +1411,9 @@ function VendorsTab({ workspaceId, role }: { workspaceId: string; role: string }
   const [allProperties, setAllProperties] = useState<Property[]>([]);
 
   const canEdit = role === 'admin' || role === 'coordinator';
+  const vendorLimit = PLAN_VENDOR_LIMITS[plan] ?? 5;
+  const uniqueVendorCount = groupVendors(vendors).length;
+  const atLimit = uniqueVendorCount >= vendorLimit;
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
@@ -1436,12 +1443,24 @@ function VendorsTab({ workspaceId, role }: { workspaceId: string; role: string }
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Preferred Vendors</h3>
+        <div>
+          <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Preferred Vendors</h3>
+          <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>
+            {uniqueVendorCount} of {vendorLimit === 9999 ? 'unlimited' : vendorLimit} vendors · {plan.charAt(0).toUpperCase() + plan.slice(1)} plan
+          </div>
+        </div>
         {canEdit && (
-          <button onClick={() => setShowAdd(true)}
-            style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
-            + Add Vendor
-          </button>
+          atLimit ? (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 13, color: '#DC2626', fontWeight: 600, marginBottom: 4 }}>Vendor limit reached</div>
+              <div style={{ fontSize: 12, color: '#9B9490' }}>Upgrade to Professional for unlimited vendors</div>
+            </div>
+          ) : (
+            <button onClick={() => setShowAdd(true)}
+              style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+              + Add Vendor
+            </button>
+          )
         )}
       </div>
 
@@ -2859,7 +2878,7 @@ export default function BusinessPortal() {
               <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} />
             )}
             {workspace && tab === 'vendors' && (
-              <VendorsTab workspaceId={workspace.id} role={workspace.user_role} />
+              <VendorsTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} />
             )}
             {workspace && tab === 'team' && (
               <TeamTab workspaceId={workspace.id} role={workspace.user_role} ownerId={workspace.ownerId || ''} plan={workspace.plan} />
