@@ -138,50 +138,54 @@ export async function generateEstimatePDF(options: EstimatePDFOptions): Promise<
   let y = M;
 
   // ═══════════════════════════════════════════════════════════════════
-  // HEADER
+  // HEADER — Left: logo + company info, Right: title + date
   // ═══════════════════════════════════════════════════════════════════
 
-  const headerLeftX = M;
-  let logoEndX = M;
+  // Right side first (fixed position)
+  doc.font('Helvetica-Bold').fontSize(14).fillColor(O);
+  doc.text('Estimate Summary', M, y, { width: CW, align: 'right' });
+  doc.font('Helvetica').fontSize(9).fillColor(GRAY);
+  doc.text(fmtDate(job.createdAt), M, y + 18, { width: CW, align: 'right' });
+  doc.text(`Job #${job.id.substring(0, 8).toUpperCase()}`, M, y + 30, { width: CW, align: 'right' });
 
-  // Logo
+  // Left side: logo
+  let leftY = y;
   if (logoBuffer) {
     try {
-      doc.image(logoBuffer, headerLeftX, y, { height: 40 });
-      logoEndX = headerLeftX + 50; // approximate, will be overridden by text position
+      doc.image(logoBuffer, M, leftY, { height: 36 });
+      leftY += 42;
     } catch { /* skip */ }
   }
 
-  // Company name — position below logo if logo exists, or at top
-  const nameY = logoBuffer ? y + 46 : y;
-  doc.font('Helvetica-Bold').fontSize(18).fillColor(D);
-  doc.text(workspace.name, headerLeftX, nameY, { width: CW * 0.6 });
-  let detailY = nameY + 22;
+  // Company name
+  doc.font('Helvetica-Bold').fontSize(16).fillColor(D);
+  const nameH = doc.heightOfString(workspace.name, { width: CW * 0.55 });
+  doc.text(workspace.name, M, leftY, { width: CW * 0.55 });
+  leftY += nameH + 4;
 
-  // Company details stacked below name
-  doc.font('Helvetica').fontSize(8.5).fillColor(MUTED);
+  // Company address
   if (workspace.companyAddress) {
-    doc.text(workspace.companyAddress, headerLeftX, detailY, { width: CW * 0.6 });
-    detailY += 11;
-  }
-  const contactParts: string[] = [];
-  if (workspace.companyPhone) contactParts.push(workspace.companyPhone);
-  if (workspace.companyEmail) contactParts.push(workspace.companyEmail);
-  if (contactParts.length > 0) {
-    doc.text(contactParts.join('  •  '), headerLeftX, detailY, { width: CW * 0.6 });
-    detailY += 11;
+    doc.font('Helvetica').fontSize(8.5).fillColor(MUTED);
+    const addrH = doc.heightOfString(workspace.companyAddress, { width: CW * 0.55 });
+    doc.text(workspace.companyAddress, M, leftY, { width: CW * 0.55 });
+    leftY += addrH + 3;
   }
 
-  // Right side: Estimate Summary title + date + job ID
-  const rightX = M + CW * 0.55;
-  const rightW = CW * 0.45;
-  doc.font('Helvetica-Bold').fontSize(15).fillColor(O);
-  doc.text('Estimate Summary', rightX, y, { width: rightW, align: 'right' });
-  doc.font('Helvetica').fontSize(9).fillColor(GRAY);
-  doc.text(fmtDate(job.createdAt), rightX, y + 20, { width: rightW, align: 'right' });
-  doc.text(`Job #${job.id.substring(0, 8).toUpperCase()}`, rightX, y + 32, { width: rightW, align: 'right' });
+  // Company phone
+  if (workspace.companyPhone) {
+    doc.font('Helvetica').fontSize(8.5).fillColor(MUTED);
+    doc.text(workspace.companyPhone, M, leftY, { width: CW * 0.55 });
+    leftY += 12;
+  }
 
-  y = Math.max(detailY, y + 48) + 8;
+  // Company email
+  if (workspace.companyEmail) {
+    doc.font('Helvetica').fontSize(8.5).fillColor(MUTED);
+    doc.text(workspace.companyEmail, M, leftY, { width: CW * 0.55 });
+    leftY += 12;
+  }
+
+  y = Math.max(leftY, y + 46) + 10;
 
   // Orange divider
   doc.save().moveTo(M, y).lineTo(PW - M, y).lineWidth(2).strokeColor(O).stroke().restore();
@@ -317,11 +321,10 @@ export async function generateEstimatePDF(options: EstimatePDFOptions): Promise<
     cardH += infoRows.length * 13;
     if (infoRows.length > 0) cardH += 6; // spacing after info
 
-    // Quote + availability row
-    if (est.quotedPrice || est.availability) {
-      cardH += 22; // quote row
-      cardH += 6;
-    }
+    // Quote row
+    if (est.quotedPrice) { cardH += 22; }
+    // Availability row (separate line)
+    if (est.availability) { cardH += 16; }
 
     // Channel + response time row
     cardH += 12;
@@ -370,23 +373,18 @@ export async function generateEstimatePDF(options: EstimatePDFOptions): Promise<
     }
     if (infoRows.length > 0) cy += 4;
 
-    // ── Quote + Availability row ──
-    if (est.quotedPrice || est.availability) {
-      const qx = M + ip;
-      if (est.quotedPrice) {
-        doc.font('Helvetica-Bold').fontSize(16).fillColor(O);
-        doc.text(est.quotedPrice, qx, cy, { continued: false });
-        // Availability next to price
-        if (est.availability) {
-          doc.font('Helvetica').fontSize(9.5).fillColor(D);
-          const priceW = doc.widthOfString(est.quotedPrice);
-          doc.text(`  •  ${est.availability}`, qx + priceW + 4, cy + 4, { width: iw - priceW - 10 });
-        }
-      } else if (est.availability) {
-        doc.font('Helvetica').fontSize(10).fillColor(D);
-        doc.text(`Availability: ${est.availability}`, qx, cy, { width: iw });
-      }
-      cy += 22 + 4;
+    // ── Quoted price ──
+    if (est.quotedPrice) {
+      doc.font('Helvetica-Bold').fontSize(16).fillColor(O);
+      doc.text(est.quotedPrice, M + ip, cy, { width: iw });
+      cy += 22;
+    }
+
+    // ── Availability (separate labeled line) ──
+    if (est.availability) {
+      doc.font('Helvetica').fontSize(9.5).fillColor(D);
+      doc.text(`Availability: ${est.availability}`, M + ip, cy, { width: iw });
+      cy += 16;
     }
 
     // ── Channel + response time ──
