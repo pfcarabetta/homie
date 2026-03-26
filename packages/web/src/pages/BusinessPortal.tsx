@@ -10,13 +10,13 @@ const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 function HomieBizLogo({ size = 'default' }: { size?: 'default' | 'large' }) {
   const isLarge = size === 'large';
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 0 }}>
-      <span style={{ fontFamily: "'Fraunces', serif", fontSize: isLarge ? 28 : 22, fontWeight: 700, color: O }}>homie</span>
+    <span style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 0 }}>
+      <span style={{ fontFamily: "'Fraunces', serif", fontSize: isLarge ? 28 : 22, fontWeight: 700, color: O, lineHeight: 1 }}>homie</span>
       <span style={{
         fontFamily: "'DM Sans', sans-serif", fontSize: isLarge ? 11 : 9, fontWeight: 800,
         color: '#fff', background: G, padding: isLarge ? '3px 8px' : '2px 6px',
         borderRadius: 4, marginLeft: isLarge ? 10 : 7, letterSpacing: '0.08em',
-        textTransform: 'uppercase' as const, position: 'relative' as const, top: isLarge ? -2 : -1,
+        textTransform: 'uppercase' as const, lineHeight: 1,
       }}>Business</span>
     </span>
   );
