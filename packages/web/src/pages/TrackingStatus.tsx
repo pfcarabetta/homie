@@ -254,11 +254,11 @@ export default function TrackingStatus() {
                       </div>
                       {event?.metadata && (
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                          {Object.entries(event.metadata).map(([k, v]) => (
+                          {Object.entries(event.metadata).filter(([k, v]) => k !== 'provider_name' && v != null).map(([k, v]) => (
                             <span key={k} style={{
                               padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                              background: k === 'quote' ? `${G}12` : `${O}08`,
-                              color: k === 'quote' ? G : O,
+                              background: k === 'quote' ? `${G}12` : k === 'rating' ? '#FFF7ED' : `${O}08`,
+                              color: k === 'quote' ? G : k === 'rating' ? '#D4A017' : O,
                             }}>
                               {String(v)}
                             </span>

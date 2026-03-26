@@ -753,9 +753,10 @@ router.post('/jobs/:jobId/quotes', async (req: Request, res: Response) => {
     try {
       const { emitTrackingEvent } = await import('../services/orchestration');
       const provName = body.provider_name ?? 'A provider';
+      const [provInfo] = await db.select({ googleRating: providers.googleRating }).from(providers).where(eq(providers.id, providerId)).limit(1);
       void emitTrackingEvent(jobId, 'provider_responded', 'Quote Received',
         `${provName} has responded.`,
-        { provider_name: provName, ...(body.quoted_price ? { quote: body.quoted_price } : {}) },
+        { provider_name: provName, ...(body.quoted_price ? { quote: body.quoted_price } : {}), ...(provInfo?.googleRating ? { rating: `${provInfo.googleRating} ★` } : {}) },
       );
     } catch { /* non-fatal */ }
 

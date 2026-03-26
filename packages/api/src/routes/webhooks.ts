@@ -539,11 +539,12 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
         // Emit tracking event
         try {
           const { emitTrackingEvent } = await import('../services/orchestration');
+          const [provDetail] = await db.select({ googleRating: providers.googleRating }).from(providers).where(eq(providers.id, provider.id)).limit(1);
           const firstName = provider.name.split(' ')[0];
           const initial = provider.name.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ');
           void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
             `${firstName} ${initial} has responded.`.trim(),
-            { provider_name: `${firstName} ${initial}`.trim(), ...(state.quotedPrice ? { quote: state.quotedPrice } : {}) },
+            { provider_name: `${firstName} ${initial}`.trim(), ...(state.quotedPrice ? { quote: state.quotedPrice } : {}), ...(provDetail?.googleRating ? { rating: `${provDetail.googleRating} ★` } : {}) },
           );
         } catch { /* non-fatal */ }
       }
