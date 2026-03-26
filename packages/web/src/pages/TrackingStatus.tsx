@@ -61,6 +61,7 @@ export default function TrackingStatus() {
   const [data, setData] = useState<TrackingStatusType | null>(null);
   const [loading, setLoading] = useState(true);
   const [expired, setExpired] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const isDemo = token === 'demo';
@@ -140,23 +141,30 @@ export default function TrackingStatus() {
             )}
 
             {/* Job summary */}
-            <div style={{ background: '#fff', borderRadius: 16, padding: '16px 18px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', marginBottom: 14 }}>
+            <div style={{ background: '#fff', borderRadius: 16, padding: '16px 18px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', marginBottom: 14, cursor: 'pointer' }}
+              onClick={() => setSummaryExpanded(e => !e)}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
                     {data.property_name}
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: D, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
+                  <div style={{
+                    fontSize: 15, fontWeight: 600, color: D, lineHeight: 1.4,
+                    ...(summaryExpanded ? {} : { overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }),
+                  }}>
                     {renderBold(data.job_title)}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 10 }}>
-                  <span style={{ padding: '3px 10px', borderRadius: 100, background: `${G}15`, color: G, fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>
-                    {data.job_category.replace(/_/g, ' ')}
-                  </span>
-                  <span style={{ padding: '3px 10px', borderRadius: 100, background: sev.bg, color: sev.text, fontSize: 11, fontWeight: 600 }}>
-                    {sev.label}
-                  </span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0, marginLeft: 10 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <span style={{ padding: '3px 10px', borderRadius: 100, background: `${G}15`, color: G, fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>
+                      {data.job_category.replace(/_/g, ' ')}
+                    </span>
+                    <span style={{ padding: '3px 10px', borderRadius: 100, background: sev.bg, color: sev.text, fontSize: 11, fontWeight: 600 }}>
+                      {sev.label}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 11, color: '#9B9490', transition: 'transform 0.2s', transform: summaryExpanded ? 'rotate(180deg)' : 'none' }}>▼</span>
                 </div>
               </div>
 
