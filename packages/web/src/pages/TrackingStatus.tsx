@@ -104,7 +104,7 @@ export default function TrackingStatus() {
       {/* Header */}
       <header style={{ background: '#fff', padding: '20px 20px 16px', textAlign: 'center', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
         {data?.brand_logo_url ? (
-          <img src={data.brand_logo_url} alt="Brand" style={{ height: 44, maxWidth: 200, objectFit: 'contain' }} />
+          <img src={data.brand_logo_url} alt="Brand" style={{ height: 56, maxWidth: 240, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
         ) : (
           <Link to="/" style={{ textDecoration: 'none' }}>
             <span style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700, color: O }}>homie</span>
