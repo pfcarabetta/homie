@@ -91,6 +91,9 @@ const CATEGORY_TREE: CatGroup[] = [
     { id: 'moving', icon: '🚚', label: 'Moving' },
     { id: 'junk_removal', icon: '🗑️', label: 'Junk Removal' },
   ]},
+  { icon: '📸', label: 'Photography', type: 'service', subs: [
+    { id: 'photography', icon: '📸', label: 'Professional Photography' },
+  ]},
 ];
 
 /* -- Category-specific follow-up questions -- */
@@ -212,6 +215,9 @@ const CATEGORY_FLOWS: Record<string, {
   // ── Concierge ──
   concierge: { icon: '🎩', label: 'Concierge', group: 'service',
     q1: { text: "What do you need help with?", options: ['Home management', 'Vendor coordination', 'Property check-ins', 'Errand service', 'Other'] } },
+  // ── Photography ──
+  photography: { icon: '📸', label: 'Professional Photography', group: 'service',
+    q1: { text: 'What type of shoot?', options: ['Property listing photos', 'Interior/design', 'Aerial/drone', 'Virtual tour/3D', 'Seasonal update', 'Event/lifestyle', 'Other'] } },
 };
 
 const TIERS = [

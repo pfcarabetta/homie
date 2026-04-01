@@ -237,6 +237,7 @@ function Categories() {
     { name: "Supplies restocking", type: "service" }, { name: "Home inspection", type: "service" },
     { name: "Concierge", type: "service" }, { name: "Trash valet", type: "service" },
     { name: "Locksmith / access", type: "service" }, { name: "General handyman", type: "repair" },
+    { name: "Photography", type: "service" },
   ];
   return (
     <section style={{ background: COLORS.white, padding: "96px 24px" }}>

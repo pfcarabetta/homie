@@ -39,6 +39,7 @@ const ALL_CATEGORIES = [
   "Deck & Patio", "Window & Door Install", "Kitchen Remodel", "Bathroom Remodel",
   "Foundation & Waterproofing", "Chimney", "Septic & Sewer", "Sprinkler & Irrigation",
   "TV Mounting", "Generator Install", "EV Charger Install", "Welding & Metal Work",
+  "Professional Photography",
 ];
 
 interface GoogleMatch {

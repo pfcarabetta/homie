@@ -61,6 +61,8 @@ const B2B_CATEGORIES: CatDef[] = [
     q1: { text: 'What needs assembling?', options: ['Bed frame', 'Desk/table', 'Shelving/bookcase', 'Outdoor furniture', 'Multiple pieces', 'TV mounting'] } },
   { id: 'concierge', icon: '🎩', label: 'Concierge', group: 'service',
     q1: { text: 'What service?', options: ['Private chef', 'Transport', 'Grocery delivery', 'Equipment rental', 'Activities', 'Other'] } },
+  { id: 'photography', icon: '📸', label: 'Photography', group: 'service',
+    q1: { text: 'What type of shoot?', options: ['Property listing photos', 'Interior/design', 'Aerial/drone', 'Virtual tour/3D', 'Seasonal update', 'Event/lifestyle', 'Other'] } },
 ];
 
 /* ── Diagnosis Summary Card ──────────────────────────────────────────────── */

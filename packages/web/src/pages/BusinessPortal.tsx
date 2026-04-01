@@ -79,6 +79,7 @@ const VENDOR_CATEGORIES: { value: string; label: string }[] = [
   { value: 'ev_charger_install', label: 'EV Charger Install' },
   { value: 'welding_metal_work', label: 'Welding & Metal Work' },
   { value: 'concierge', label: 'Concierge' },
+  { value: 'photography', label: 'Professional Photography' },
 ];
 
 const PROPERTY_TYPES: Record<string, string> = {

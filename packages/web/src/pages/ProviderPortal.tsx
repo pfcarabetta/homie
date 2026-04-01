@@ -451,7 +451,7 @@ const ALL_CATEGORIES = [
   'Locksmith', 'Pressure Washing', 'Moving', 'Flooring', 'Fencing',
   'Tree Trimming', 'Gutter Cleaning', 'Carpet Cleaning', 'Window Cleaning',
   'Steam Cleaning', 'Concrete', 'Masonry', 'Siding', 'Insulation', 'Solar',
-  'Security Systems', 'Furniture Assembly', 'Concierge',
+  'Security Systems', 'Furniture Assembly', 'Concierge', 'Professional Photography',
 ];
 
 const RADIUS_OPTIONS = [5, 10, 15, 25, 50];
