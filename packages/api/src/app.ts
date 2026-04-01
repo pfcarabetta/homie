@@ -76,7 +76,7 @@ app.use('/api/v1/demo', demoEstimateRouter);
 app.use('/api/v1/business-chat', diagnosticLimiter, requireAuth, businessChatRouter);
 app.use('/api/v1/tracking', apiLimiter, trackingPublicRouter);
 app.use('/api/v1/jobs', apiLimiter, requireAuth, trackingAuthRouter);
-app.use('/api/v1/integrations/slack', apiLimiter, requireAuth, slackAuthRouter);
+app.use('/api/v1/integrations/slack', apiLimiter, slackAuthRouter);
 app.use('/api/v1/slack', slackPublicRouter);
 
 // Sentry error handler — must be after all routes

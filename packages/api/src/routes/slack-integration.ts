@@ -77,37 +77,38 @@ function verifySlackSignature(
 
 export const slackAuthRouter = Router();
 
-// GET /install — redirect to Slack OAuth URL
-slackAuthRouter.get('/:workspaceId/install', requireWorkspace, requireWorkspaceRole('admin'), (req: Request, res: Response) => {
+// GET /install — redirect to Slack OAuth URL (public — browser redirect, no auth header possible)
+slackAuthRouter.get('/install', (req: Request, res: Response) => {
+  const workspaceId = req.query.workspace_id as string;
+  if (!workspaceId) {
+    res.status(400).json({ data: null, error: 'workspace_id is required', meta: {} });
+    return;
+  }
   if (!SLACK_CLIENT_ID) {
     res.status(500).json({ data: null, error: 'Slack integration not configured', meta: {} });
     return;
   }
 
-  const redirectUri = `${API_BASE_URL}/api/v1/integrations/slack/${req.workspaceId}/callback`;
+  const redirectUri = `${API_BASE_URL}/api/v1/integrations/slack/callback`;
   const scopes = 'chat:write,channels:read,groups:read,incoming-webhook';
-  const state = req.workspaceId;
+  const state = workspaceId;
 
   const slackUrl = `https://slack.com/oauth/v2/authorize?client_id=${SLACK_CLIENT_ID}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 
   res.redirect(slackUrl);
 });
 
-// GET /callback — exchange code for token, store in workspace
-slackAuthRouter.get('/:workspaceId/callback', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+// GET /callback — exchange code for token (public — Slack redirects here without auth)
+slackAuthRouter.get('/callback', async (req: Request, res: Response) => {
   const { code, state } = req.query as { code?: string; state?: string };
+  const workspaceId = state;
 
-  if (!code) {
-    res.status(400).json({ data: null, error: 'Missing authorization code', meta: {} });
+  if (!code || !workspaceId) {
+    res.status(400).json({ data: null, error: 'Missing authorization code or state', meta: {} });
     return;
   }
 
-  if (state !== req.workspaceId) {
-    res.status(400).json({ data: null, error: 'State mismatch', meta: {} });
-    return;
-  }
-
-  const redirectUri = `${API_BASE_URL}/api/v1/integrations/slack/${req.workspaceId}/callback`;
+  const redirectUri = `${API_BASE_URL}/api/v1/integrations/slack/callback`;
 
   try {
     const tokenRes = await fetch('https://slack.com/api/oauth.v2.access', {
@@ -136,24 +137,23 @@ slackAuthRouter.get('/:workspaceId/callback', requireWorkspace, requireWorkspace
         slackTeamId: data.team?.id ?? null,
         slackChannelId: data.incoming_webhook?.channel_id ?? null,
         slackConnectedAt: new Date(),
-        slackConnectedBy: req.homeownerId,
         updatedAt: new Date(),
-      })
-      .where(eq(workspaces.id, req.workspaceId));
+      } as Record<string, unknown>)
+      .where(eq(workspaces.id, workspaceId));
 
     // Create default settings row if not exists
     const [existing] = await db
       .select({ id: workspaceSlackSettings.id })
       .from(workspaceSlackSettings)
-      .where(eq(workspaceSlackSettings.workspaceId, req.workspaceId))
+      .where(eq(workspaceSlackSettings.workspaceId, workspaceId))
       .limit(1);
 
     if (!existing) {
-      await db.insert(workspaceSlackSettings).values({ workspaceId: req.workspaceId });
+      await db.insert(workspaceSlackSettings).values({ workspaceId });
     }
 
-    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
-    res.redirect(`${APP_URL}/business/settings?slack=connected`);
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'https://homiepro.ai';
+    res.redirect(`${APP_URL}/business?tab=settings&slack=connected`);
   } catch (err) {
     logger.error({ err }, '[slack] OAuth callback error');
     res.status(500).json({ data: null, error: 'Failed to complete Slack OAuth', meta: {} });
