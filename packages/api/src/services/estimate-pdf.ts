@@ -139,7 +139,7 @@ export async function generateEstimatePDF(options: EstimatePDFOptions): Promise<
   // Left side
   let ly = y;
   if (logoBuffer) {
-    try { doc.image(logoBuffer, M, ly, { height: 28 }); ly += 32; } catch { /* skip */ }
+    try { doc.image(logoBuffer, M, ly, { height: 48 }); ly += 54; } catch { /* skip */ }
   }
   doc.font('Helvetica-Bold').fontSize(13).fillColor(D);
   doc.text(workspace.name, M, ly, { width: CW * 0.55 });

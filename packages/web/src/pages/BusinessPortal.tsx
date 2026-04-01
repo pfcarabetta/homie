@@ -3180,7 +3180,7 @@ export default function BusinessPortal() {
           {workspace?.logoUrl && (
             <>
               <div style={{ width: 1, height: 28, background: 'var(--bp-border)' }} />
-              <img src={workspace.logoUrl} alt={workspace.name} style={{ height: 32, maxWidth: 120, objectFit: 'contain' }} />
+              <img src={workspace.logoUrl} alt={workspace.name} style={{ height: 44, maxWidth: 160, objectFit: 'contain' }} />
             </>
           )}
         </div>
