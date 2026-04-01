@@ -451,7 +451,11 @@ const ALL_CATEGORIES = [
   'Locksmith', 'Pressure Washing', 'Moving', 'Flooring', 'Fencing',
   'Tree Trimming', 'Gutter Cleaning', 'Carpet Cleaning', 'Window Cleaning',
   'Steam Cleaning', 'Concrete', 'Masonry', 'Siding', 'Insulation', 'Solar',
-  'Security Systems', 'Furniture Assembly', 'Concierge', 'Professional Photography',
+  'Drywall', 'Security Systems', 'Furniture Assembly', 'Concierge',
+  'Deck & Patio', 'Window & Door Install', 'Kitchen Remodel', 'Bathroom Remodel',
+  'Foundation & Waterproofing', 'Chimney', 'Septic & Sewer', 'Sprinkler & Irrigation',
+  'TV Mounting', 'Generator Install', 'EV Charger Install', 'Welding & Metal Work',
+  'Junk Removal', 'Stump Removal', 'Tile', 'Professional Photography',
 ];
 
 const RADIUS_OPTIONS = [5, 10, 15, 25, 50];
