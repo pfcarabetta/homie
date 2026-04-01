@@ -85,6 +85,17 @@ router.post('/register', async (req: Request, res: Response) => {
     // Send verification email (fire-and-forget)
     void sendVerificationEmail(homeowner.id, homeowner.email, verifyToken, homeowner.firstName);
 
+    // Send SMS opt-in confirmation if user consented and provided a phone number
+    if (body.sms_opt_in && homeowner.phone) {
+      try {
+        const { sendSms } = await import('../services/notifications');
+        void sendSms(
+          homeowner.phone,
+          'homie: SMS notifications active! You\'ll get booking confirmations, maintenance updates, and quote alerts. Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out.',
+        );
+      } catch { /* non-fatal */ }
+    }
+
     const token = signToken(homeowner.id);
 
     const out: ApiResponse<AuthResponse> = {
