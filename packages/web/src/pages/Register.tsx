@@ -20,6 +20,7 @@ export default function Register() {
   const [zipCode, setZipCode] = useState('');
   const [phone, setPhone] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [smsOptIn, setSmsOptIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -45,7 +46,7 @@ export default function Register() {
     }
 
     setLoading(true);
-    const err = await register({ firstName: firstName.trim(), lastName: lastName.trim(), email, password, zipCode, phone: phone || undefined });
+    const err = await register({ firstName: firstName.trim(), lastName: lastName.trim(), email, password, zipCode, phone: phone || undefined, smsOptIn });
     if (err) {
       setLoading(false);
       setError(err);
@@ -219,6 +220,21 @@ export default function Register() {
                 placeholder="(555) 123-4567"
               />
             </div>
+
+            {/* SMS Opt-in */}
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={smsOptIn}
+                onChange={(e) => setSmsOptIn(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-dark/20 accent-orange-500 cursor-pointer"
+              />
+              <span className="text-xs text-dark/50 leading-relaxed">
+                I agree to receive SMS notifications from homie, including booking confirmations, maintenance status updates, and service alerts. Message and data rates may apply. Reply STOP to unsubscribe at any time. View our{' '}
+                <a href="/privacy" className="text-orange-500 hover:text-orange-600 underline">Privacy Policy</a>{' '}and{' '}
+                <a href="/terms" className="text-orange-500 hover:text-orange-600 underline">Terms of Service</a>.
+              </span>
+            </label>
 
             <button
               type="submit"

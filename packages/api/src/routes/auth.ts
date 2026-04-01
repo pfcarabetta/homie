@@ -22,6 +22,7 @@ interface RegisterBody {
   password?: unknown;
   zip_code?: unknown;
   phone?: unknown;
+  sms_opt_in?: boolean;
 }
 
 interface LoginBody {
@@ -75,6 +76,8 @@ router.post('/register', async (req: Request, res: Response) => {
         passwordHash,
         zipCode: body.zip_code,
         phone: typeof body.phone === 'string' ? body.phone : null,
+        smsOptIn: body.sms_opt_in === true,
+        smsOptInAt: body.sms_opt_in === true ? new Date() : null,
         emailVerifyToken: verifyToken,
       })
       .returning();

@@ -380,6 +380,7 @@ export const authService = {
     password: string;
     zipCode: string;
     phone?: string;
+    smsOptIn?: boolean;
   }): Promise<ApiResponse<AuthResponse>> {
     const res = await fetchAPI<AuthResponse>('/api/v1/auth/register', {
       method: 'POST',
@@ -390,6 +391,7 @@ export const authService = {
         password: params.password,
         zip_code: params.zipCode,
         ...(params.phone ? { phone: params.phone } : {}),
+        sms_opt_in: params.smsOptIn ?? false,
       }),
     });
     if (res.data) setToken(res.data.token);

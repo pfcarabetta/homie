@@ -8,7 +8,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<string | null>;
-  register: (params: { firstName: string; lastName: string; email: string; password: string; zipCode: string; phone?: string }) => Promise<string | null>;
+  register: (params: { firstName: string; lastName: string; email: string; password: string; zipCode: string; phone?: string; smsOptIn?: boolean }) => Promise<string | null>;
   logout: () => void;
 }
 
