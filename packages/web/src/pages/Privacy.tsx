@@ -10,7 +10,7 @@ export default function Privacy() {
       </header>
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 24px 80px', color: '#2D2926' }}>
         <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 32, fontWeight: 700, marginBottom: 8 }}>Privacy Policy</h1>
-        <p style={{ color: '#9B9490', fontSize: 14, marginBottom: 32 }}>Last updated: March 21, 2026</p>
+        <p style={{ color: '#9B9490', fontSize: 14, marginBottom: 32 }}>Last updated: March 31, 2026</p>
 
         <div style={{ fontSize: 15, lineHeight: 1.8, color: '#6B6560' }}>
           <h2 style={{ fontSize: 20, fontWeight: 600, color: '#2D2926', marginTop: 32, marginBottom: 12 }}>1. Information We Collect</h2>
@@ -46,6 +46,22 @@ export default function Privacy() {
             <li>Service-related notifications about your job requests</li>
           </ul>
           <p>We use Twilio for phone and SMS communications with providers, and SendGrid for email delivery. These services process data according to their own privacy policies.</p>
+
+          <h2 style={{ fontSize: 20, fontWeight: 600, color: '#2D2926', marginTop: 32, marginBottom: 12 }}>4a. SMS/Text Messaging</h2>
+          <p>If you provide your phone number and opt in to SMS notifications during account registration, you consent to receive text messages from Homie related to your use of the platform. These messages may include:</p>
+          <ul style={{ paddingLeft: 20 }}>
+            <li>Booking confirmations and appointment details</li>
+            <li>Maintenance status updates and provider notifications</li>
+            <li>Quote results and provider responses</li>
+            <li>Account security alerts (password resets, verification codes)</li>
+            <li>Booking cancellation notices</li>
+          </ul>
+          <p><strong>Message frequency:</strong> Message frequency varies based on your activity. You may receive up to 10 messages per service request. Ongoing users may receive up to 25 messages per month depending on the number of active jobs and bookings.</p>
+          <p><strong>Message and data rates:</strong> Message and data rates may apply depending on your mobile carrier and plan. Homie is not responsible for any charges incurred from your carrier for receiving SMS messages.</p>
+          <p><strong>Opt-out:</strong> You may opt out of SMS notifications at any time by replying <strong>STOP</strong> to any message from Homie. You will receive a confirmation message and no further SMS messages will be sent. You may re-subscribe at any time by replying <strong>START</strong>.</p>
+          <p><strong>Help:</strong> For help with SMS messaging, reply <strong>HELP</strong> to any message from Homie, or contact us at yo@homiepro.ai.</p>
+          <p><strong>Supported carriers:</strong> Homie SMS messaging is supported on all major US carriers including AT&T, T-Mobile, Verizon, and Sprint. Coverage may vary by location and carrier.</p>
+          <p>Your phone number and SMS opt-in status are stored securely. We do not sell, share, or use your phone number for marketing purposes unrelated to the Homie platform. Your consent is recorded with a timestamp for compliance purposes.</p>
 
           <h2 style={{ fontSize: 20, fontWeight: 600, color: '#2D2926', marginTop: 32, marginBottom: 12 }}>5. Data Security</h2>
           <p>We implement industry-standard security measures including encrypted data transmission (HTTPS), secure password hashing (bcrypt), and JWT-based authentication. Payment processing is handled by Stripe, a PCI-compliant payment processor.</p>
