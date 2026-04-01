@@ -745,6 +745,10 @@ export interface WorkspaceBooking {
   availability: string | null;
 }
 
+export interface VendorSchedule {
+  [day: string]: { start: string; end: string } | null;
+}
+
 export interface PreferredVendor {
   id: string;
   providerId: string;
@@ -752,6 +756,7 @@ export interface PreferredVendor {
   categories: string[] | null;
   priority: number;
   notes: string | null;
+  availabilitySchedule: VendorSchedule | null;
   active: boolean;
   createdAt: string;
   providerName: string;
@@ -897,7 +902,7 @@ export const businessService = {
     fetchAPI<ProviderSearchResult[]>(`/api/v1/business/${workspaceId}/vendors/search?q=${encodeURIComponent(q)}`),
   addVendor: (workspaceId: string, data: {
     provider_id: string; property_id?: string | null; categories?: string[];
-    priority?: number; notes?: string;
+    priority?: number; notes?: string; availability_schedule?: VendorSchedule | null;
   }) => fetchAPI<PreferredVendor>(`/api/v1/business/${workspaceId}/vendors`, {
     method: 'POST', body: JSON.stringify(data),
   }),

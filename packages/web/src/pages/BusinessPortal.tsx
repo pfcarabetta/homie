@@ -1075,6 +1075,78 @@ function TeamTab({ workspaceId, role, ownerId, plan }: { workspaceId: string; ro
 
 /* ── Add Vendor Modal ──────────────────────────────────────────────────── */
 
+const DAYS = [
+  { key: 'mon', label: 'Mon' }, { key: 'tue', label: 'Tue' }, { key: 'wed', label: 'Wed' },
+  { key: 'thu', label: 'Thu' }, { key: 'fri', label: 'Fri' }, { key: 'sat', label: 'Sat' }, { key: 'sun', label: 'Sun' },
+];
+const TIME_OPTIONS = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
+function fmtTimeLabel(t: string) { const [h] = t.split(':').map(Number); const ampm = h >= 12 ? 'PM' : 'AM'; return `${h % 12 || 12} ${ampm}`; }
+
+type VendorSched = Record<string, { start: string; end: string } | null>;
+
+function SchedulePicker({ schedule, onChange }: { schedule: VendorSched; onChange: (s: VendorSched) => void }) {
+  function toggleDay(day: string) {
+    const current = schedule[day];
+    onChange({ ...schedule, [day]: current ? null : { start: '08:00', end: '17:00' } });
+  }
+  function updateTime(day: string, field: 'start' | 'end', val: string) {
+    const slot = schedule[day];
+    if (!slot) return;
+    onChange({ ...schedule, [day]: { ...slot, [field]: val } });
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+        {DAYS.map(d => {
+          const active = !!schedule[d.key];
+          return (
+            <button key={d.key} type="button" onClick={() => toggleDay(d.key)} style={{
+              flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              border: active ? `2px solid ${O}` : '1px solid #E0DAD4',
+              background: active ? `${O}10` : '#fff', color: active ? O : '#9B9490',
+            }}>{d.label}</button>
+          );
+        })}
+      </div>
+      {DAYS.filter(d => schedule[d.key]).map(d => (
+        <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 13 }}>
+          <span style={{ width: 32, fontWeight: 600, color: D, fontSize: 12 }}>{d.label}</span>
+          <select value={schedule[d.key]!.start} onChange={e => updateTime(d.key, 'start', e.target.value)}
+            style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid #E0DAD4', fontSize: 12, cursor: 'pointer' }}>
+            {TIME_OPTIONS.map(t => <option key={t} value={t}>{fmtTimeLabel(t)}</option>)}
+          </select>
+          <span style={{ color: '#9B9490', fontSize: 11 }}>to</span>
+          <select value={schedule[d.key]!.end} onChange={e => updateTime(d.key, 'end', e.target.value)}
+            style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid #E0DAD4', fontSize: 12, cursor: 'pointer' }}>
+            {TIME_OPTIONS.map(t => <option key={t} value={t}>{fmtTimeLabel(t)}</option>)}
+          </select>
+        </div>
+      ))}
+      {DAYS.every(d => !schedule[d.key]) && (
+        <div style={{ fontSize: 12, color: '#9B9490', fontStyle: 'italic' }}>No days selected — vendor available anytime</div>
+      )}
+    </div>
+  );
+}
+
+function formatScheduleSummary(sched: VendorSched | null): string {
+  if (!sched) return 'Available anytime';
+  const activeDays = DAYS.filter(d => sched[d.key]);
+  if (activeDays.length === 0) return 'Available anytime';
+  if (activeDays.length === 7) {
+    const first = sched[activeDays[0].key]!;
+    const allSame = activeDays.every(d => sched[d.key]!.start === first.start && sched[d.key]!.end === first.end);
+    if (allSame) return `Every day ${fmtTimeLabel(first.start)}–${fmtTimeLabel(first.end)}`;
+  }
+  if (activeDays.length === 5 && activeDays.every(d => ['mon','tue','wed','thu','fri'].includes(d.key))) {
+    const first = sched[activeDays[0].key]!;
+    const allSame = activeDays.every(d => sched[d.key]!.start === first.start && sched[d.key]!.end === first.end);
+    if (allSame) return `Mon–Fri ${fmtTimeLabel(first.start)}–${fmtTimeLabel(first.end)}`;
+  }
+  return activeDays.map(d => d.label).join(', ');
+}
+
 function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string; onClose: () => void; onAdded: () => void }) {
   const [mode, setMode] = useState<'search' | 'create'>('search');
   const [query, setQuery] = useState('');
@@ -1086,6 +1158,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [priority, setPriority] = useState(1);
   const [notes, setNotes] = useState('');
+  const [schedule, setSchedule] = useState<VendorSched>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -1171,6 +1244,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
               categories: cats,
               priority,
               notes: notes || undefined,
+              availability_schedule: Object.keys(schedule).length > 0 ? schedule : undefined,
             }).catch(() => {}); // skip duplicates
           }
         }
@@ -1183,6 +1257,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
             categories: cats,
             priority,
             notes: notes || undefined,
+            availability_schedule: Object.keys(schedule).length > 0 ? schedule : undefined,
           }).catch(() => {}); // skip duplicates
         }
       }
@@ -1328,6 +1403,11 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
               </div>
             </div>
 
+            {/* Operating Hours */}
+            <label style={labelStyle}>Operating Hours <span style={{ fontWeight: 400, color: '#9B9490' }}>(optional)</span></label>
+            <SchedulePicker schedule={schedule} onChange={setSchedule} />
+            <div style={{ marginBottom: 16 }} />
+
             <label style={labelStyle}>Notes</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Agreed rate, specialties, etc."
               style={{ ...inputStyle, resize: 'vertical' as const }} />
@@ -1451,6 +1531,7 @@ interface GroupedVendor {
   categories: string[] | null;
   priority: number;
   notes: string | null;
+  availabilitySchedule: VendorSched | null;
   entries: PreferredVendor[]; // one per property assignment
   propertyIds: (string | null)[]; // null = workspace-wide
 }
@@ -1473,6 +1554,7 @@ function groupVendors(vendors: PreferredVendor[]): GroupedVendor[] {
         categories: v.categories,
         priority: v.priority,
         notes: v.notes,
+        availabilitySchedule: v.availabilitySchedule,
         entries: [v],
         propertyIds: [v.propertyId],
       });
@@ -1590,6 +1672,9 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
                     <div style={{ fontSize: 12, color: isWorkspaceWide ? '#9B9490' : '#2563EB', marginTop: 6 }}>
                       {isWorkspaceWide ? '🏢 All properties' : `📍 ${assignedProps.length} ${assignedProps.length === 1 ? 'property' : 'properties'}: ${assignedProps.map(p => p.name).join(', ')}`}
                     </div>
+                    <div style={{ fontSize: 12, color: '#9B9490', marginTop: 4 }}>
+                      🕐 {formatScheduleSummary(g.availabilitySchedule)}
+                    </div>
                     {g.notes && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 6, fontStyle: 'italic' }}>{g.notes}</div>}
                   </div>
                   {canEdit && (
@@ -1636,6 +1721,7 @@ function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved 
   const [selectedCats, setSelectedCats] = useState<string[]>(vendor.categories ?? []);
   const [priority, setPriority] = useState(vendor.priority);
   const [notes, setNotes] = useState(vendor.notes ?? '');
+  const [schedule, setSchedule] = useState<VendorSched>(vendor.availabilitySchedule ?? {});
   const [assignMode, setAssignMode] = useState<'all' | 'specific'>(vendor.propertyIds.includes(null) ? 'all' : 'specific');
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>(vendor.propertyIds.filter(Boolean) as string[]);
   const [cityFilter, setCityFilter] = useState('');
@@ -1678,6 +1764,7 @@ function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved 
           categories: cats,
           priority,
           notes: notes || undefined,
+          availability_schedule: Object.keys(schedule).length > 0 ? schedule : undefined,
         }).catch(() => {});
       }
 
@@ -1727,6 +1814,11 @@ function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved 
             </select>
           </div>
         </div>
+
+        {/* Operating Hours */}
+        <label style={labelStyle}>Operating Hours <span style={{ fontWeight: 400, color: '#9B9490' }}>(optional)</span></label>
+        <SchedulePicker schedule={schedule} onChange={setSchedule} />
+        <div style={{ marginBottom: 16 }} />
 
         <label style={labelStyle}>Notes</label>
         <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Agreed rate, specialties, etc."

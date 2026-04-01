@@ -278,7 +278,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
     try {
       const jobCategory = diagnosis.category.toLowerCase();
       const pvRows = await db
-        .select({ providerId: preferredVendors.providerId, categories: preferredVendors.categories })
+        .select({ providerId: preferredVendors.providerId, categories: preferredVendors.categories, availabilitySchedule: preferredVendors.availabilitySchedule })
         .from(preferredVendors)
         .where(and(
           eq(preferredVendors.workspaceId, job.workspaceId),
@@ -292,7 +292,24 @@ export async function dispatchJob(jobId: string): Promise<void> {
         ))
         .orderBy(asc(preferredVendors.priority));
 
-      preferredProviderIds.push(...pvRows.map(r => r.providerId));
+      // Filter out vendors who are not available right now
+      const now = new Date();
+      const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      const currentDay = dayNames[now.getDay()];
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const availableRows = pvRows.filter(r => {
+        if (!r.availabilitySchedule) return true; // no schedule = always available
+        const daySlot = (r.availabilitySchedule as Record<string, { start: string; end: string } | null>)[currentDay];
+        if (daySlot === null || daySlot === undefined) return false; // not available this day
+        return currentTime >= daySlot.start && currentTime <= daySlot.end;
+      });
+
+      if (availableRows.length < pvRows.length) {
+        logger.info(`[orchestration] dispatchJob: ${pvRows.length - availableRows.length} preferred vendors filtered out (outside operating hours)`);
+      }
+
+      preferredProviderIds.push(...availableRows.map(r => r.providerId));
       if (preferredProviderIds.length > 0) {
         logger.info(`[orchestration] dispatchJob: found ${preferredProviderIds.length} preferred vendors for job ${jobId}`);
       }

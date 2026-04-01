@@ -516,6 +516,7 @@ router.get('/:workspaceId/vendors', requireWorkspace, async (req: Request, res: 
         categories: preferredVendors.categories,
         priority: preferredVendors.priority,
         notes: preferredVendors.notes,
+        availabilitySchedule: preferredVendors.availabilitySchedule,
         active: preferredVendors.active,
         createdAt: preferredVendors.createdAt,
         providerName: providers.name,
@@ -544,6 +545,7 @@ router.post('/:workspaceId/vendors', requireWorkspace, requireWorkspaceRole('adm
     categories?: string[];
     priority?: number;
     notes?: string;
+    availability_schedule?: Record<string, { start: string; end: string } | null>;
   };
 
   if (!body.provider_id) {
@@ -604,6 +606,7 @@ router.post('/:workspaceId/vendors', requireWorkspace, requireWorkspaceRole('adm
         categories: body.categories ?? null,
         priority: body.priority ?? 0,
         notes: body.notes ?? null,
+        availabilitySchedule: body.availability_schedule ?? null,
       })
       .returning();
 
@@ -624,6 +627,7 @@ router.post('/:workspaceId/vendors/create', requireWorkspace, requireWorkspaceRo
     priority?: number;
     notes?: string;
     property_id?: string | null;
+    availability_schedule?: Record<string, { start: string; end: string } | null>;
   };
 
   if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
@@ -658,6 +662,7 @@ router.post('/:workspaceId/vendors/create', requireWorkspace, requireWorkspaceRo
         categories: body.categories ?? null,
         priority: body.priority ?? 0,
         notes: body.notes ?? null,
+        availabilitySchedule: body.availability_schedule ?? null,
       })
       .returning();
 
@@ -690,6 +695,7 @@ router.patch('/:workspaceId/vendors/:vendorId', requireWorkspace, requireWorkspa
     priority: 'priority',
     notes: 'notes',
     active: 'active',
+    availability_schedule: 'availabilitySchedule',
   };
 
   for (const [bodyKey, dbKey] of Object.entries(fields)) {
