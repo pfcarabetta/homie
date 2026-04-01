@@ -165,6 +165,23 @@ async function createProviderResponse(
       { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
     );
   } catch { /* non-fatal */ }
+
+  // Slack notification — fire-and-forget
+  try {
+    const [job] = await db.select({ workspaceId: jobs.workspaceId, diagnosis: jobs.diagnosis }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
+    if (job?.workspaceId) {
+      const [prov] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, providerId)).limit(1);
+      const diagnosis = job.diagnosis as { category?: string } | null;
+      const { notifySlack } = await import('../services/slack-notifier');
+      void notifySlack(job.workspaceId, 'provider_response', {
+        jobId,
+        providerId,
+        providerName: prov?.name ?? 'A provider',
+        message,
+        category: diagnosis?.category ?? 'maintenance',
+      });
+    }
+  } catch { /* Slack failure must not break response handling */ }
 }
 
 // ── POST /twilio/voice/conversation ──────────────────────────────────────────

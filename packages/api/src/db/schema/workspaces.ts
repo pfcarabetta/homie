@@ -15,6 +15,11 @@ export const workspaces = pgTable('workspaces', {
   companyPhone: text('company_phone'),
   companyEmail: text('company_email'),
   ownerId: uuid('owner_id').notNull().references(() => homeowners.id),
+  slackTeamId: text('slack_team_id'),
+  slackAccessToken: text('slack_access_token'),
+  slackChannelId: text('slack_channel_id'),
+  slackConnectedAt: timestamp('slack_connected_at', { withTimezone: true }),
+  slackConnectedBy: uuid('slack_connected_by'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

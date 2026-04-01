@@ -429,6 +429,23 @@ export async function dispatchJob(jobId: string): Promise<void> {
   void emitTrackingEvent(jobId, 'reported', 'Issue Reported', diagnosis.summary?.slice(0, 200));
   void emitTrackingEvent(jobId, 'dispatched', 'Dispatching Pros', `Contacting ${eligible.length} providers in the area via phone, SMS, and web.`);
 
+  // Slack notification — fire-and-forget
+  if (job.workspaceId) {
+    try {
+      const { notifySlack } = await import('./slack-notifier');
+      void notifySlack(job.workspaceId, 'dispatch_created', {
+        jobId,
+        category: diagnosis.category,
+        severity: diagnosis.severity,
+        summary: diagnosis.summary,
+        tier,
+        propertyName: job.propertyId ? '' : '',
+        zipCode: job.zipCode,
+        providerCount: eligible.length,
+      });
+    } catch { /* Slack failure must not break dispatch */ }
+  }
+
   const adapters = createAdapters();
 
   // ── Cascading dispatch for B2B with preferred vendors ─────────────────
@@ -589,6 +606,21 @@ export async function sendBookingNotifications(
     rating: provider.googleRating ?? undefined,
     ...(availability ? { availability } : {}),
   });
+
+  // Slack notification — fire-and-forget
+  if (job.workspaceId) {
+    try {
+      const { notifySlack } = await import('./slack-notifier');
+      const bookingDiagnosis = job.diagnosis as DiagnosisPayload | null;
+      void notifySlack(job.workspaceId, 'booking_confirmed', {
+        jobId,
+        providerName: displayName,
+        quotedPrice: availability ? undefined : undefined,
+        availability,
+        category: bookingDiagnosis?.category ?? 'maintenance',
+      });
+    } catch { /* Slack failure must not break booking */ }
+  }
 
   const category = ((job.diagnosis as DiagnosisPayload | null)?.category ?? 'home maintenance').replace(/_/g, ' ');
 

@@ -668,6 +668,8 @@ export interface WorkspaceDetail extends Workspace {
   companyAddress: string | null;
   companyPhone: string | null;
   companyEmail: string | null;
+  slackChannelId: string | null;
+  slackTeamId: string | null;
   updatedAt: string;
 }
 
@@ -975,4 +977,44 @@ export const businessService = {
     fetchAPI<{ bookings: WorkspaceBooking[] }>(`/api/v1/business/${workspaceId}/bookings`),
   cancelBooking: (workspaceId: string, bookingId: string) =>
     fetchAPI<{ cancelled: boolean; provider_notified: string }>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/cancel`, { method: 'POST' }),
+};
+
+// ── Slack Integration ───────────────────────────────────────────────────────
+
+export interface SlackSettings {
+  connected: boolean;
+  slackTeamName?: string;
+  slackChannelName?: string;
+  slackChannelId?: string;
+  notifyDispatchCreated: boolean;
+  notifyProviderResponse: boolean;
+  notifyBookingConfirmed: boolean;
+  notifyApprovalNeeded: boolean;
+  notifyJobCompleted: boolean;
+  notifyOutreachFailed: boolean;
+  notifyDailyDigest: boolean;
+  approvalThresholdCents: number;
+  digestTime: string;
+}
+
+export const slackService = {
+  getSettings: (workspaceId: string) =>
+    fetchAPI<SlackSettings>('/api/v1/integrations/slack/settings?workspace_id=' + workspaceId),
+  updateSettings: (workspaceId: string, data: Partial<SlackSettings>) =>
+    fetchAPI<SlackSettings>('/api/v1/integrations/slack/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ workspace_id: workspaceId, ...data }),
+    }),
+  getChannels: (workspaceId: string) =>
+    fetchAPI<Array<{ id: string; name: string }>>('/api/v1/integrations/slack/channels?workspace_id=' + workspaceId),
+  disconnect: (workspaceId: string) =>
+    fetchAPI<{ disconnected: boolean }>('/api/v1/integrations/slack/disconnect', {
+      method: 'DELETE',
+      body: JSON.stringify({ workspace_id: workspaceId }),
+    }),
+  sendTest: (workspaceId: string) =>
+    fetchAPI<{ sent: boolean }>('/api/v1/integrations/slack/test', {
+      method: 'POST',
+      body: JSON.stringify({ workspace_id: workspaceId }),
+    }),
 };
