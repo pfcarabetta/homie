@@ -445,7 +445,7 @@ function StreamingMsg({ text }: { text: string }) {
 
 /* ── Main component ─────────────────────────────────────────────────────── */
 
-type Step = 'property' | 'category' | 'q1' | 'chat' | 'extra' | 'budget' | 'summary' | 'outreach' | 'results';
+type Step = 'property' | 'category' | 'q1' | 'chat' | 'extra' | 'budget' | 'generating' | 'summary' | 'outreach' | 'results';
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -678,11 +678,12 @@ export default function BusinessChat() {
     setBudget(selected);
     setMessages(prev => [...prev, { role: 'user', content: selected === 'flexible' ? 'No budget preference' : selected }]);
 
-    // Generate the scope silently after budget is selected
+    // Generate the scope after budget is selected
     const promptText = category?.group === 'service'
       ? 'Please generate a final scope summary so I can dispatch a provider.'
       : 'Please generate your diagnosis so I can dispatch a pro.';
 
+    setStep('generating');
     setStreaming(true);
     setStreamText('');
     let visible = '';
@@ -798,6 +799,7 @@ export default function BusinessChat() {
     <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes spin { to { transform:rotate(360deg); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
@@ -1092,6 +1094,16 @@ export default function BusinessChat() {
                 onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#9B9490'; }}
               >Skip</button>
+            </div>
+          )}
+
+          {/* Generating dispatch indicator */}
+          {step === 'generating' && (
+            <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: W, borderRadius: 12, padding: '14px 18px' }}>
+                <div style={{ width: 20, height: 20, border: `2.5px solid ${O}30`, borderTopColor: O, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: D }}>Generating dispatch scope...</span>
+              </div>
             </div>
           )}
 
