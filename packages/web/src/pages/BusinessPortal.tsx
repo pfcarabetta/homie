@@ -2568,31 +2568,29 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
   }
 
   useEffect(() => {
-    businessService.listDispatches(workspaceId).then(res => {
+    businessService.listDispatches(workspaceId).then(async res => {
       if (res.data) setDispatches(res.data);
       setLoading(false);
+
+      // Auto-expand focused job after data loads
+      if (focusJobId && res.data?.some(d => d.id === focusJobId)) {
+        setExpandedId(focusJobId);
+        // Load responses for the focused job
+        try {
+          const respRes = await jobService.getResponses(focusJobId);
+          if (respRes.data) setResponses(prev => ({ ...prev, [focusJobId]: respRes.data!.responses }));
+        } catch { /* ignore */ }
+        // Scroll into view after render
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            const el = document.getElementById(`dispatch-${focusJobId}`);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            onFocusHandled?.();
+          }, 100);
+        });
+      }
     }).catch(() => setLoading(false));
   }, [workspaceId]);
-
-  // Auto-expand and scroll to focused job
-  const focusHandledRef = useRef(false);
-  useEffect(() => {
-    if (!focusJobId || loading || dispatches.length === 0 || focusHandledRef.current) return;
-    focusHandledRef.current = true;
-    setExpandedId(focusJobId);
-    // Also load responses for the focused job
-    if (!responses[focusJobId]) {
-      setLoadingResponses(focusJobId);
-      jobService.getResponses(focusJobId).then(res => {
-        if (res.data) setResponses(prev => ({ ...prev, [focusJobId]: res.data!.responses }));
-      }).catch(() => {}).finally(() => setLoadingResponses(null));
-    }
-    setTimeout(() => {
-      const el = document.getElementById(`dispatch-${focusJobId}`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      onFocusHandled?.();
-    }, 400);
-  }, [focusJobId, loading, dispatches]);
 
   async function toggleExpand(jobId: string) {
     if (expandedId === jobId) { setExpandedId(null); return; }
@@ -3287,26 +3285,28 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
 
   useEffect(() => {
     businessService.listBookings(workspaceId).then(res => {
-      setBookingsList(res.data?.bookings ?? []);
+      const bList = res.data?.bookings ?? [];
+      setBookingsList(bList);
       setLoading(false);
+
+      // Auto-expand focused booking after data loads
+      if (focusJobId) {
+        const match = bList.find(b => b.jobId === focusJobId);
+        if (match) {
+          setExpandedId(match.id);
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              const el = document.getElementById(`booking-${match.id}`);
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              onFocusHandled?.();
+            }, 100);
+          });
+        } else {
+          onFocusHandled?.();
+        }
+      }
     }).catch(() => setLoading(false));
   }, [workspaceId]);
-
-  // Auto-expand and scroll to focused booking
-  const focusHandledRef = useRef(false);
-  useEffect(() => {
-    if (!focusJobId || loading || bookingsList.length === 0 || focusHandledRef.current) return;
-    focusHandledRef.current = true;
-    const match = bookingsList.find(b => b.jobId === focusJobId);
-    if (match) {
-      setExpandedId(match.id);
-      setTimeout(() => {
-        const el = document.getElementById(`booking-${match.id}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 400);
-    }
-    onFocusHandled?.();
-  }, [focusJobId, loading, bookingsList]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading bookings...</div>;
 
