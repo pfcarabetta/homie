@@ -6,6 +6,58 @@ export interface BedConfig {
   count: number;
 }
 
+export interface PropertyDetails {
+  hvac?: {
+    acType?: string; acBrand?: string; acModel?: string; acAge?: string;
+    heatingType?: string; heatingBrand?: string; heatingModel?: string;
+    thermostatBrand?: string; thermostatModel?: string;
+    filterSize?: string;
+  };
+  waterHeater?: {
+    type?: string; brand?: string; model?: string; age?: string;
+    fuel?: string; capacity?: string; location?: string;
+  };
+  appliances?: {
+    refrigerator?: { brand?: string; model?: string };
+    washer?: { brand?: string; model?: string };
+    dryer?: { brand?: string; model?: string; fuel?: string };
+    dishwasher?: { brand?: string; model?: string };
+    oven?: { brand?: string; model?: string; fuel?: string };
+    disposal?: { brand?: string };
+    microwave?: { brand?: string; type?: string };
+  };
+  plumbing?: {
+    kitchenFaucetBrand?: string; bathroomFaucetBrand?: string;
+    toiletBrand?: string; waterSoftener?: string;
+    septicOrSewer?: string; mainShutoffLocation?: string;
+  };
+  electrical?: {
+    breakerBoxLocation?: string; panelAmperage?: string;
+    hasGenerator?: boolean; generatorType?: string;
+    hasSolar?: boolean; solarSystem?: string;
+    hasEvCharger?: boolean; evChargerBrand?: string;
+  };
+  poolSpa?: {
+    poolType?: string; poolHeaterBrand?: string; poolPumpBrand?: string;
+    hotTubBrand?: string; hotTubModel?: string;
+  };
+  exterior?: {
+    roofType?: string; roofAge?: string; sidingMaterial?: string;
+    fenceMaterial?: string; garageDoorBrand?: string;
+    irrigationBrand?: string;
+  };
+  access?: {
+    lockboxCode?: string; gateCode?: string;
+    alarmBrand?: string; alarmCode?: string;
+    wifiNetwork?: string; wifiPassword?: string;
+  };
+  general?: {
+    yearBuilt?: string; hasHoa?: boolean; hoaContact?: string;
+    pestControlProvider?: string; pestControlFrequency?: string;
+    cleaningNotes?: string;
+  };
+}
+
 export const properties = pgTable('properties', {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
@@ -22,6 +74,7 @@ export const properties = pgTable('properties', {
   beds: jsonb('beds').$type<BedConfig[]>(),
   pmsSource: text('pms_source'),
   pmsExternalId: text('pms_external_id'),
+  details: jsonb('details').$type<PropertyDetails>(),
   notes: text('notes'),
   photoUrls: text('photo_urls').array(),
   active: boolean('active').notNull().default(true),

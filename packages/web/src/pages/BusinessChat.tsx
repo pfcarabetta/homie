@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import {
   businessService, businessChatService, jobService, connectJobSocket, trackingService,
-  type Property, type Workspace, type DiagnosticStreamCallbacks,
+  type Property, type PropertyDetails, type Workspace, type DiagnosticStreamCallbacks,
   type JobStatusResponse, type ProviderResponseItem,
 } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
@@ -518,7 +518,7 @@ export default function BusinessChat() {
     if (messages.length > 0) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamText, step]);
 
-  // Build property context string
+  // Build property context string with relevant equipment details
   function getPropertyContext(): string {
     if (!selectedProperty) return '';
     const p = selectedProperty;
@@ -526,17 +526,156 @@ export default function BusinessChat() {
     const safeNotes = p.notes
       ? p.notes.replace(/\b(door|gate|lock|access|entry|wifi|password|code|pin)\s*(code|number|#|:)?\s*[:\-]?\s*\S+/gi, '[access info redacted]').trim()
       : null;
-    const parts = [
+    const parts: string[] = [
       `Property: ${p.name}`,
-      p.address && `Address: ${p.address}${p.city ? `, ${p.city}` : ''}${p.state ? `, ${p.state}` : ''} ${p.zipCode || ''}`,
+      p.address ? `Address: ${p.address}${p.city ? `, ${p.city}` : ''}${p.state ? `, ${p.state}` : ''} ${p.zipCode || ''}` : '',
       `Type: ${p.propertyType}`,
       `Units: ${p.unitCount}`,
-      p.bedrooms != null && p.bedrooms > 0 && `Bedrooms: ${p.bedrooms}`,
-      p.bathrooms != null && +p.bathrooms > 0 && `Bathrooms: ${p.bathrooms}`,
-      p.sqft != null && p.sqft > 0 && `Square footage: ${p.sqft.toLocaleString()} sqft`,
-      p.beds && p.beds.length > 0 && `Beds: ${p.beds.map(b => `${b.count}× ${b.type}`).join(', ')}`,
-      safeNotes && `Notes: ${safeNotes}`,
+      p.bedrooms != null && p.bedrooms > 0 ? `Bedrooms: ${p.bedrooms}` : '',
+      p.bathrooms != null && +p.bathrooms > 0 ? `Bathrooms: ${p.bathrooms}` : '',
+      p.sqft != null && p.sqft > 0 ? `Square footage: ${p.sqft.toLocaleString()} sqft` : '',
+      p.beds && p.beds.length > 0 ? `Beds: ${p.beds.map(b => `${b.count}\u00D7 ${b.type}`).join(', ')}` : '',
+      safeNotes ? `Notes: ${safeNotes}` : '',
     ].filter(Boolean);
+
+    // Inject relevant property details based on selected category
+    const d = p.details as PropertyDetails | null;
+    if (d) {
+      const catId = category?.id || '';
+
+      // Helper to format an object's non-empty values
+      function fmt(obj: Record<string, unknown> | undefined, prefix: string): string {
+        if (!obj) return '';
+        const entries = Object.entries(obj)
+          .filter(([, v]) => v !== undefined && v !== '' && v !== null && v !== false)
+          .map(([k, v]) => {
+            const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+            return `${label}: ${String(v)}`;
+          });
+        return entries.length > 0 ? `${prefix}: ${entries.join(', ')}` : '';
+      }
+
+      // Always include access info (redacted codes for AI — just brands)
+      if (d.access) {
+        const accessParts = [
+          d.access.alarmBrand && `Alarm: ${d.access.alarmBrand}`,
+        ].filter(Boolean);
+        if (accessParts.length > 0) parts.push(`Security: ${accessParts.join(', ')}`);
+      }
+
+      // Category-specific details
+      if (['hvac', 'chimney', 'insulation'].includes(catId)) {
+        const h = d.hvac;
+        if (h) {
+          const hvacParts = [
+            h.acType && `${h.acType} AC`,
+            h.acBrand && `(${h.acBrand}${h.acModel ? ` ${h.acModel}` : ''})`,
+            h.acAge && `${h.acAge} old`,
+            h.heatingType && `Heating: ${h.heatingType}`,
+            h.heatingBrand && `(${h.heatingBrand}${h.heatingModel ? ` ${h.heatingModel}` : ''})`,
+            h.thermostatBrand && `Thermostat: ${h.thermostatBrand}${h.thermostatModel ? ` ${h.thermostatModel}` : ''}`,
+            h.filterSize && `Filter: ${h.filterSize}`,
+          ].filter(Boolean);
+          if (hvacParts.length > 0) parts.push(`HVAC: ${hvacParts.join(', ')}`);
+        }
+      }
+
+      if (['water_heater', 'plumbing'].includes(catId)) {
+        const wh = d.waterHeater;
+        if (wh) {
+          const whParts = [
+            wh.type && `${wh.type}`,
+            wh.brand && `${wh.brand}`,
+            wh.model && `${wh.model}`,
+            wh.fuel && `${wh.fuel}`,
+            wh.capacity && `${wh.capacity}`,
+            wh.age && `${wh.age} old`,
+            wh.location && `in ${wh.location}`,
+          ].filter(Boolean);
+          if (whParts.length > 0) parts.push(`Water heater: ${whParts.join(', ')}`);
+        }
+      }
+
+      if (['plumbing', 'septic_sewer'].includes(catId)) {
+        const pl = d.plumbing;
+        if (pl) {
+          const plParts = [
+            pl.kitchenFaucetBrand && `Kitchen faucet: ${pl.kitchenFaucetBrand}`,
+            pl.bathroomFaucetBrand && `Bathroom faucet: ${pl.bathroomFaucetBrand}`,
+            pl.toiletBrand && `Toilet: ${pl.toiletBrand}`,
+            pl.waterSoftener && `Water softener: ${pl.waterSoftener}`,
+            pl.septicOrSewer && `${pl.septicOrSewer}`,
+            pl.mainShutoffLocation && `Main shutoff: ${pl.mainShutoffLocation}`,
+          ].filter(Boolean);
+          if (plParts.length > 0) parts.push(`Plumbing: ${plParts.join(', ')}`);
+        }
+      }
+
+      if (['appliance', 'cleaning'].includes(catId)) {
+        const ap = d.appliances;
+        if (ap) {
+          const appParts: string[] = [];
+          for (const [name, info] of Object.entries(ap)) {
+            if (!info) continue;
+            const appInfo = info as Record<string, string>;
+            const desc = [appInfo.brand, appInfo.model, appInfo.fuel].filter(Boolean).join(' ');
+            if (desc) appParts.push(`${name.charAt(0).toUpperCase() + name.slice(1)}: ${desc}`);
+          }
+          if (appParts.length > 0) parts.push(`Appliances: ${appParts.join(', ')}`);
+        }
+      }
+
+      if (['electrical', 'generator_install', 'ev_charger_install', 'solar', 'security_systems'].includes(catId)) {
+        const el = d.electrical;
+        if (el) {
+          const elParts = [
+            el.breakerBoxLocation && `Breaker: ${el.breakerBoxLocation}`,
+            el.panelAmperage && `Panel: ${el.panelAmperage}`,
+            el.hasGenerator && el.generatorType && `Generator: ${el.generatorType}`,
+            el.hasSolar && el.solarSystem && `Solar: ${el.solarSystem}`,
+            el.hasEvCharger && el.evChargerBrand && `EV charger: ${el.evChargerBrand}`,
+          ].filter(Boolean);
+          if (elParts.length > 0) parts.push(`Electrical: ${elParts.join(', ')}`);
+        }
+      }
+
+      if (['pool', 'hot_tub'].includes(catId)) {
+        const ps = d.poolSpa;
+        if (ps) {
+          const psParts = [
+            ps.poolType && `Pool: ${ps.poolType}`,
+            ps.poolHeaterBrand && `Heater: ${ps.poolHeaterBrand}`,
+            ps.poolPumpBrand && `Pump: ${ps.poolPumpBrand}`,
+            ps.hotTubBrand && `Hot tub: ${ps.hotTubBrand}${ps.hotTubModel ? ` ${ps.hotTubModel}` : ''}`,
+          ].filter(Boolean);
+          if (psParts.length > 0) parts.push(`Pool/Spa: ${psParts.join(', ')}`);
+        }
+      }
+
+      if (['roofing', 'siding', 'gutter', 'garage_door', 'fencing', 'sprinkler_irrigation', 'landscaping', 'painting', 'pressure_washing'].includes(catId)) {
+        const ex = d.exterior;
+        if (ex) {
+          const exParts = [
+            ex.roofType && `Roof: ${ex.roofType}`,
+            ex.roofAge && `(${ex.roofAge} old)`,
+            ex.sidingMaterial && `Siding: ${ex.sidingMaterial}`,
+            ex.fenceMaterial && `Fence: ${ex.fenceMaterial}`,
+            ex.garageDoorBrand && `Garage door: ${ex.garageDoorBrand}`,
+            ex.irrigationBrand && `Irrigation: ${ex.irrigationBrand}`,
+          ].filter(Boolean);
+          if (exParts.length > 0) parts.push(`Exterior: ${exParts.join(', ')}`);
+        }
+      }
+
+      if (d.general) {
+        const gParts = [
+          d.general.yearBuilt && `Built: ${d.general.yearBuilt}`,
+          d.general.hasHoa && `HOA${d.general.hoaContact ? `: ${d.general.hoaContact}` : ''}`,
+        ].filter(Boolean);
+        if (gParts.length > 0) parts.push(gParts.join(', '));
+      }
+    }
+
     return parts.join('\n');
   }
 
