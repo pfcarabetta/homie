@@ -277,7 +277,7 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
     { name: "Starter", platformFee: 0, maxProperties: 10, members: "1 user", badge: "Free to start", badgeColor: COLORS.green, popular: false,
       features: ["Unlimited diagnostic chats", "Unlimited outreach searches", "Fair use: 5 searches/property/mo", "Preferred vendors (up to 5)", "Basic cost tracking", "Manual property entry"] },
     { name: "Professional", platformFee: 99, maxProperties: 50, members: "5 team members", badge: "Most popular", badgeColor: COLORS.orange, popular: true,
-      features: ["PMS import with weekly sync", "All B2B categories (turnover, hot tub, restock, concierge)", "Full cost reporting", "Vendor scorecards", "Unlimited preferred vendors", "Slack integration", "Owner estimate summary PDF"] },
+      features: ["PMS import with weekly sync", "Full cost reporting", "Vendor scorecards", "Unlimited preferred vendors", "Slack integration", "Owner estimate summary PDF"] },
     { name: "Business", platformFee: 249, maxProperties: 150, members: "15 team members with roles", badge: null, badgeColor: "", popular: false,
       features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Guest diagnostic access", "API access", "All Professional features"] },
   ];
