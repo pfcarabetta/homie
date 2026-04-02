@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { businessService, jobService, slackService, templateService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun } from '@/services/api';
+import { businessService, jobService, slackService, templateService, estimateService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
+import EstimateCard from '@/components/EstimateCard';
+import EstimateBadge from '@/components/EstimateBadge';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -2596,6 +2598,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [preferredProviderIds, setPreferredProviderIds] = useState<Set<string>>(new Set());
+  const [estimates, setEstimates] = useState<Record<string, CostEstimate>>({});
   const isPro = ['professional', 'business', 'enterprise'].includes(plan);
 
   useEffect(() => {
@@ -2637,6 +2640,8 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
       // Auto-expand focused job after data loads
       if (focusJobId && res.data?.some(d => d.id === focusJobId)) {
         setExpandedId(focusJobId);
+        const focusJob = res.data.find(d => d.id === focusJobId);
+        if (focusJob) fetchEstimate(focusJob);
         // Load responses for the focused job
         try {
           const respRes = await jobService.getResponses(focusJobId);
@@ -2654,9 +2659,21 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
     }).catch(() => setLoading(false));
   }, [workspaceId]);
 
+  async function fetchEstimate(job: WorkspaceDispatch) {
+    if (estimates[job.id] || !job.diagnosis?.category || !job.zipCode) return;
+    try {
+      const cat = job.diagnosis.category;
+      const sub = job.diagnosis.subcategory || cat;
+      const res = await estimateService.generate({ category: cat, subcategory: sub, zip_code: job.zipCode, workspace_id: workspaceId });
+      if (res.data) setEstimates(prev => ({ ...prev, [job.id]: res.data! }));
+    } catch { /* ignore */ }
+  }
+
   async function toggleExpand(jobId: string) {
     if (expandedId === jobId) { setExpandedId(null); return; }
     setExpandedId(jobId);
+    const job = dispatches.find(d => d.id === jobId);
+    if (job) fetchEstimate(job);
     if (!responses[jobId]) {
       setLoadingResponses(jobId);
       try {
@@ -2853,6 +2870,13 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                     </div>
                   )}
 
+                  {/* AI Cost Estimate */}
+                  {estimates[j.id] && (
+                    <div style={{ marginBottom: 12 }}>
+                      <EstimateCard estimate={estimates[j.id]} />
+                    </div>
+                  )}
+
                   {/* Provider Responses */}
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Provider Responses</div>
@@ -2881,9 +2905,13 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                                 <span style={{ color: '#9B9490', fontSize: 11 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
                               </div>
                               {r.quoted_price && (
-                                <div style={{ textAlign: 'right' }}>
+                                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                                   <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
-                                  <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price — estimate</div>
+                                  {estimates[j.id] ? (
+                                    <EstimateBadge quotedPrice={r.quoted_price} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
+                                  ) : (
+                                    <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
+                                  )}
                                 </div>
                               )}
                             </div>

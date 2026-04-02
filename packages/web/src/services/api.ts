@@ -75,6 +75,7 @@ export async function fetchAPI<T>(
 
 export interface DiagnosisPayload {
   category: string;
+  subcategory?: string;
   severity: 'low' | 'medium' | 'high' | 'emergency';
   summary: string;
   recommendedActions: string[];

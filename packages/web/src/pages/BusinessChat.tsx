@@ -1073,6 +1073,7 @@ export default function BusinessChat() {
     try {
       const diagnosis = {
         category: category?.id || 'general',
+        subcategory: q1Answer || category?.id || 'general',
         severity: 'medium' as const,
         summary: aiDiagnosis || `${category?.label}: ${q1Answer}`,
         recommendedActions: ['Dispatch professional'],
