@@ -550,6 +550,10 @@ export default function BusinessChat() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workspaceId = searchParams.get('workspace') || '';
+  const prefillPropertyId = searchParams.get('property') || '';
+  const prefillCategory = searchParams.get('category') || '';
+  const prefillTitle = searchParams.get('prefill') || '';
+  const prefillDescription = searchParams.get('description') || '';
 
   // Workspace & properties
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -602,10 +606,37 @@ export default function BusinessChat() {
   }, [homeowner]);
 
   // Load properties when workspace changes
+  const prefillHandledRef = useRef(false);
   useEffect(() => {
     if (!selectedWorkspace) return;
     businessService.listProperties(selectedWorkspace).then(res => {
-      if (res.data) setProperties(res.data.filter(p => p.active));
+      if (res.data) {
+        const activeProps = res.data.filter(p => p.active);
+        setProperties(activeProps);
+
+        // Auto-select property and category from seasonal suggestion prefill
+        if (prefillPropertyId && prefillCategory && !prefillHandledRef.current) {
+          prefillHandledRef.current = true;
+          const prop = activeProps.find(p => p.id === prefillPropertyId);
+          if (prop) {
+            setSelectedProperty(prop);
+            // Find matching category
+            const cat = B2B_CATEGORIES.find(c => c.id === prefillCategory);
+            if (cat) {
+              setCategory(cat);
+              const propName = prop.name;
+              const title = prefillTitle || cat.label;
+              const desc = prefillDescription || '';
+              setMessages([
+                { role: 'assistant', content: `${cat.icon} **${title}** at ${propName}${desc ? ` — ${desc}` : ''}. ${cat.q1.text}` },
+              ]);
+              setStep('q1');
+            } else {
+              setStep('category');
+            }
+          }
+        }
+      }
     });
   }, [selectedWorkspace]);
 

@@ -1024,6 +1024,14 @@ function DashboardTab({ workspace, onNavigate }: { workspace: WorkspaceDetail; o
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [suggestionsGeneratedAt, setSuggestionsGeneratedAt] = useState<string | null>(null);
+  const [dispatchSuggestion, setDispatchSuggestion] = useState<SeasonalSuggestion | null>(null);
+  const [allProperties, setAllProperties] = useState<Property[]>([]);
+
+  useEffect(() => {
+    businessService.listProperties(workspace.id).then(res => {
+      if (res.data) setAllProperties(res.data.filter(p => p.active).sort((a, b) => a.name.localeCompare(b.name)));
+    }).catch(() => {});
+  }, [workspace.id]);
 
   useEffect(() => {
     businessService.getDashboard(workspace.id).then(res => {
@@ -1233,7 +1241,7 @@ function DashboardTab({ workspace, onNavigate }: { workspace: WorkspaceDetail; o
                     {s.properties.length > 0 && <span> · {s.properties.slice(0, 3).join(', ')}{s.properties.length > 3 ? ` +${s.properties.length - 3} more` : ''}</span>}
                   </div>
                   <div style={{ fontSize: 11, color: O, fontStyle: 'italic', marginBottom: 10 }}>{s.reason}</div>
-                  <button onClick={() => navigate(`/business/chat?workspace=${workspace.id}`)}
+                  <button onClick={() => setDispatchSuggestion(s)}
                     style={{
                       width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
                       background: O, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -1252,6 +1260,60 @@ function DashboardTab({ workspace, onNavigate }: { workspace: WorkspaceDetail; o
           </div>
         )}
       </div>
+
+      {/* Property picker for suggestion dispatch */}
+      {dispatchSuggestion && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+          onClick={() => setDispatchSuggestion(null)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 4px' }}>Select Property to Dispatch</h3>
+            <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 16 }}>
+              <strong>{dispatchSuggestion.title}</strong> — {dispatchSuggestion.description}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 350, overflowY: 'auto' }}>
+              {allProperties
+                .sort((a, b) => {
+                  const aMatch = dispatchSuggestion!.properties.some(n => a.name.includes(n) || n.includes(a.name));
+                  const bMatch = dispatchSuggestion!.properties.some(n => b.name.includes(n) || n.includes(b.name));
+                  if (aMatch && !bMatch) return -1;
+                  if (!aMatch && bMatch) return 1;
+                  return a.name.localeCompare(b.name);
+                })
+                .map(p => {
+                  const isRecommended = dispatchSuggestion!.properties.some(n => p.name.includes(n) || n.includes(p.name));
+                  return (
+                    <button key={p.id} onClick={() => {
+                      const params = new URLSearchParams({
+                        workspace: workspace.id,
+                        property: p.id,
+                        category: dispatchSuggestion!.category,
+                        prefill: dispatchSuggestion!.title,
+                        description: dispatchSuggestion!.description,
+                      });
+                      setDispatchSuggestion(null);
+                      navigate(`/business/chat?${params.toString()}`);
+                    }} style={{
+                      display: 'flex', alignItems: 'center', padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                      border: isRecommended ? `2px solid ${O}` : '1px solid #E0DAD4',
+                      background: isRecommended ? `${O}04` : '#fff', textAlign: 'left',
+                      fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={e => { if (!isRecommended) e.currentTarget.style.borderColor = O; }}
+                      onMouseLeave={e => { if (!isRecommended) e.currentTarget.style.borderColor = '#E0DAD4'; }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{p.name}</div>
+                        {p.city && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{p.city}{p.state ? `, ${p.state}` : ''}</div>}
+                      </div>
+                      {isRecommended && <span style={{ fontSize: 10, fontWeight: 600, color: O, background: `${O}12`, padding: '2px 8px', borderRadius: 100, flexShrink: 0 }}>Suggested</span>}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
