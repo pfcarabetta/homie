@@ -2125,34 +2125,50 @@ router.post('/:workspaceId/dashboard/seasonal-suggestions', requireWorkspace, as
       return parts.join(' ');
     }).join('\n');
 
+    // Summarize properties by location (don't send all 44+ individual names)
+    const locationGroups: Record<string, { count: number; types: Set<string>; names: string[] }> = {};
+    for (const p of props) {
+      const loc = [p.city, p.state].filter(Boolean).join(', ') || 'Unknown location';
+      if (!locationGroups[loc]) locationGroups[loc] = { count: 0, types: new Set(), names: [] };
+      locationGroups[loc].count++;
+      if (p.propertyType) locationGroups[loc].types.add(p.propertyType);
+      if (locationGroups[loc].names.length < 3) locationGroups[loc].names.push(p.name);
+    }
+
+    const locationSummary = Object.entries(locationGroups).map(([loc, g]) =>
+      `${loc}: ${g.count} properties (${[...g.types].join(', ')}) — e.g. ${g.names.join(', ')}`
+    ).join('\n');
+
     const anthropic = new Anthropic();
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
-      system: 'You are a property maintenance expert. Generate seasonal maintenance suggestions for vacation rental and residential properties. Each suggestion should be a specific, actionable task that a property manager can dispatch to a vendor.',
+      max_tokens: 4096,
+      system: 'You are a property maintenance expert. Generate seasonal maintenance suggestions for vacation rental and residential properties. Each suggestion should be a specific, actionable task that a property manager can dispatch to a vendor. Keep property name arrays short — use 2-3 example names max.',
       messages: [
         {
           role: 'user',
-          content: `Current month: ${currentMonth} (${currentSeason})\n\nProperties:\n${propertyList}\n\nGenerate up to ${limit} seasonal maintenance suggestions as a JSON array. Each item should have: title (string), description (string), category (string, e.g. hvac, plumbing, landscaping, pest_control, roofing, general), priority (low/medium/high), properties (array of property names this applies to), reason (string explaining why this is timely).\n\nRespond with ONLY the JSON array, no other text.`,
+          content: `Current month: ${currentMonth} (${currentSeason})\nTotal properties: ${props.length}\n\nProperty locations:\n${locationSummary}\n\nGenerate exactly ${limit} seasonal maintenance suggestions as a JSON array. Each item: { "title": string, "description": string (1 sentence), "category": string (e.g. hvac, plumbing, landscaping, pest_control, pool, roofing, general, cleaning), "priority": "low"|"medium"|"high", "properties": [2-3 example property names], "reason": string (1 sentence) }.\n\nRespond with ONLY a valid JSON array. No markdown, no code blocks, no explanation.`,
         },
       ],
     });
 
-    // Parse Claude's response
     const textBlock = message.content.find(b => b.type === 'text');
-    const responseText = textBlock ? textBlock.text : '[]';
+    let responseText = textBlock ? textBlock.text.trim() : '[]';
 
-    // Extract JSON from response (handle potential markdown code blocks)
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    const suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) as Array<{
-      title: string;
-      description: string;
-      category: string;
-      priority: string;
-      properties: string[];
-      reason: string;
-    }> : [];
+    // Strip markdown code blocks if present
+    responseText = responseText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+
+    let suggestions: Array<{ title: string; description: string; category: string; priority: string; properties: string[]; reason: string }> = [];
+    try {
+      suggestions = JSON.parse(responseText);
+    } catch {
+      // Try to extract JSON array from the response
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        try { suggestions = JSON.parse(jsonMatch[0]); } catch { /* give up */ }
+      }
+    }
 
     res.json({ data: suggestions.slice(0, limit), error: null, meta: {} });
   } catch (err) {
