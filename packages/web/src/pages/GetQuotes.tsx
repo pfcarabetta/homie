@@ -1053,22 +1053,24 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
   };
 
   const handleTiming = (t: string) => {
-    setData(d => ({ ...d, timing: t }));
+    setData(d => {
+      // Fetch cost estimate using latest data from functional updater
+      const updated = { ...d, timing: t };
+      if (updated.category && updated.zip) {
+        const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
+        estimateService.generate({
+          category: updated.category,
+          subcategory: updated.a1 || updated.category,
+          zip_code: updated.zip,
+          urgency: urgencyMap[t] || 'flexible',
+        }).then(res => {
+          if (res.data) setCostEstimate(res.data);
+        }).catch(() => {});
+      }
+      return updated;
+    });
     setPhase('waiting');
     addUser(t);
-
-    // Fetch cost estimate in background
-    if (data.category && data.zip) {
-      const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
-      estimateService.generate({
-        category: data.category,
-        subcategory: data.a1 || data.category,
-        zip_code: data.zip,
-        urgency: urgencyMap[t] || 'flexible',
-      }).then(res => {
-        if (res.data) setCostEstimate(res.data);
-      }).catch(() => {});
-    }
 
     setTimeout(() => {
       addAssistant("Here's what I'll brief the providers on:");
