@@ -227,17 +227,26 @@ scheduleRouter.put(
   requireWorkspaceRole('admin', 'coordinator'),
   async (req: Request, res: Response) => {
     try {
-      const allowedFields = [
-        'propertyId', 'category', 'title', 'description', 'cadenceType',
-        'cadenceConfig', 'preferredProviderId', 'agreedRateCents', 'autoBook',
-        'autoBookMaxCents', 'advanceDispatchHours', 'escalationWindowMinutes',
-        'fallbackToMarketplace', 'blackoutDates',
-      ] as const;
+      // Map snake_case to camelCase
+      const fieldMap: Record<string, string> = {
+        property_id: 'propertyId', propertyId: 'propertyId',
+        category: 'category', title: 'title', description: 'description',
+        cadence_type: 'cadenceType', cadenceType: 'cadenceType',
+        cadence_config: 'cadenceConfig', cadenceConfig: 'cadenceConfig',
+        preferred_provider_id: 'preferredProviderId', preferredProviderId: 'preferredProviderId',
+        agreed_rate_cents: 'agreedRateCents', agreedRateCents: 'agreedRateCents',
+        auto_book: 'autoBook', autoBook: 'autoBook',
+        auto_book_max_cents: 'autoBookMaxCents', autoBookMaxCents: 'autoBookMaxCents',
+        advance_dispatch_hours: 'advanceDispatchHours', advanceDispatchHours: 'advanceDispatchHours',
+        escalation_window_minutes: 'escalationWindowMinutes', escalationWindowMinutes: 'escalationWindowMinutes',
+        fallback_to_marketplace: 'fallbackToMarketplace', fallbackToMarketplace: 'fallbackToMarketplace',
+        blackout_dates: 'blackoutDates', blackoutDates: 'blackoutDates',
+      };
 
       const updates: Record<string, unknown> = { updatedAt: new Date() };
-      for (const field of allowedFields) {
-        if (req.body[field] !== undefined) {
-          updates[field] = req.body[field];
+      for (const [bodyKey, dbKey] of Object.entries(fieldMap)) {
+        if (req.body[bodyKey] !== undefined) {
+          updates[dbKey] = req.body[bodyKey];
         }
       }
 

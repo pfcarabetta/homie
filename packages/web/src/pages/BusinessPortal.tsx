@@ -3073,6 +3073,9 @@ function SchedulesTab({ workspaceId, plan }: { workspaceId: string; plan: string
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState<DispatchSchedule | null>(null);
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const loadSchedules = () => {
     setLoading(true);
@@ -3149,43 +3152,90 @@ function SchedulesTab({ workspaceId, plan }: { workspaceId: string; plan: string
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {schedules.map(sched => {
             const catColor = SCHEDULE_CAT_COLORS[sched.category] ?? '#6B6560';
-            const statusColor = sched.status === 'active' ? G : sched.status === 'needs_attention' ? '#D4A437' : '#9B9490';
+            const isActive = sched.status === 'active';
+            const statusColor = isActive ? G : sched.status === 'needs_attention' ? '#D4A437' : '#9B9490';
             return (
               <div key={sched.id} style={{
                 background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10,
                 borderLeft: `4px solid ${catColor}`, padding: '16px 20px',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
+                opacity: sched.status === 'paused' ? 0.7 : 1,
               }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--bp-text)' }}>{sched.title}</span>
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 2 }}>
-                    {sched.propertyName ?? 'All properties'}
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>
-                    {formatCadence(sched.cadenceType, sched.cadenceConfig)}
-                    {sched.preferredProviderName ? ` · ${sched.preferredProviderName}` : ' · Marketplace'}
-                    {sched.agreedRateCents ? ` · $${(sched.agreedRateCents / 100).toFixed(0)}` : ''}
-                  </div>
-                  {sched.nextDispatchAt && (
-                    <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 4 }}>
-                      Next: {relativeTime(sched.nextDispatchAt)}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--bp-text)' }}>{sched.title}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: catColor, background: `${catColor}15`, padding: '1px 8px', borderRadius: 100, textTransform: 'capitalize' }}>
+                        {sched.category.replace(/_/g, ' ')}
+                      </span>
                     </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <button
-                    disabled={toggling === sched.id}
-                    onClick={() => handleToggle(sched)}
-                    style={{
-                      padding: '6px 14px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)',
-                      fontSize: 12, fontWeight: 600, cursor: 'pointer', color: sched.status === 'active' ? '#D4A437' : G,
-                      opacity: toggling === sched.id ? 0.5 : 1,
-                    }}>
-                    {sched.status === 'active' ? 'Pause' : 'Resume'}
-                  </button>
+                    <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 2 }}>
+                      {sched.propertyName ?? 'All properties'}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>
+                      {formatCadence(sched.cadenceType, sched.cadenceConfig)}
+                      {sched.preferredProviderName ? ` · ${sched.preferredProviderName}` : ' · Marketplace'}
+                      {sched.agreedRateCents ? ` · $${(sched.agreedRateCents / 100).toFixed(0)}` : ''}
+                    </div>
+                    {sched.nextDispatchAt && isActive && (
+                      <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 4 }}>
+                        Next: {relativeTime(sched.nextDispatchAt)}
+                      </div>
+                    )}
+                    {sched.status === 'paused' && (
+                      <div style={{ fontSize: 12, color: '#9B9490', marginTop: 4, fontStyle: 'italic' }}>Paused</div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                    {/* Active/Paused toggle */}
+                    <div
+                      onClick={() => { if (toggling !== sched.id) handleToggle(sched); }}
+                      style={{
+                        width: 44, height: 24, borderRadius: 12, cursor: 'pointer', position: 'relative',
+                        background: isActive ? G : '#D0CBC6', transition: 'background 0.2s',
+                        opacity: toggling === sched.id ? 0.5 : 1,
+                      }}>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute',
+                        top: 2, left: isActive ? 22 : 2, transition: 'left 0.2s',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                      }} />
+                    </div>
+
+                    {/* Edit + Cancel buttons */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => setEditingSchedule(sched)}
+                        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--bp-muted)' }}>
+                        Edit
+                      </button>
+                      {cancelConfirmId === sched.id ? (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button disabled={cancelling} onClick={async () => {
+                            setCancelling(true);
+                            try {
+                              await businessService.deleteSchedule(workspaceId, sched.id);
+                              setSchedules(prev => prev.filter(s => s.id !== sched.id));
+                            } catch { /* ignore */ }
+                            setCancelling(false);
+                            setCancelConfirmId(null);
+                          }} style={{ padding: '4px 8px', borderRadius: 6, border: 'none', background: '#DC2626', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: cancelling ? 0.5 : 1 }}>
+                            Confirm
+                          </button>
+                          <button onClick={() => setCancelConfirmId(null)}
+                            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 11, cursor: 'pointer', color: 'var(--bp-muted)' }}>
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setCancelConfirmId(sched.id)}
+                          style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #FCA5A5', background: '#FEF2F2', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#DC2626' }}>
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             );
@@ -3196,6 +3246,13 @@ function SchedulesTab({ workspaceId, plan }: { workspaceId: string; plan: string
       {/* New Schedule Modal */}
       {showNew && (
         <NewScheduleModal workspaceId={workspaceId} onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); loadSchedules(); }} />
+      )}
+
+      {/* Edit Schedule Modal */}
+      {editingSchedule && (
+        <EditScheduleModal workspaceId={workspaceId} schedule={editingSchedule}
+          onClose={() => setEditingSchedule(null)}
+          onSaved={() => { setEditingSchedule(null); loadSchedules(); }} />
       )}
     </div>
   );
@@ -4092,6 +4149,83 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+/* ── Edit Schedule Modal ───────────────────────────────────────────────── */
+
+function EditScheduleModal({ workspaceId, schedule, onClose, onSaved }: {
+  workspaceId: string; schedule: DispatchSchedule; onClose: () => void; onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(schedule.title);
+  const [description, setDescription] = useState(schedule.description ?? '');
+  const [agreedRate, setAgreedRate] = useState(schedule.agreedRateCents ? (schedule.agreedRateCents / 100).toFixed(0) : '');
+  const [autoBook, setAutoBook] = useState(schedule.autoBook);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSave() {
+    if (!title.trim()) { setError('Title is required'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await businessService.updateSchedule(workspaceId, schedule.id, {
+        title: title.trim(),
+        description: description.trim() || null,
+        agreed_rate_cents: agreedRate ? Math.round(parseFloat(agreedRate) * 100) : null,
+        auto_book: autoBook,
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update');
+    }
+    setSaving(false);
+  }
+
+  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
+  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+      onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
+        onClick={e => e.stopPropagation()}>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 4px' }}>Edit Schedule</h3>
+        <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 20 }}>
+          {formatCadence(schedule.cadenceType, schedule.cadenceConfig)} · {schedule.category.replace(/_/g, ' ')}
+        </div>
+
+        <label style={labelStyle}>Title</label>
+        <input value={title} onChange={e => setTitle(e.target.value)} style={inputStyle} />
+
+        <label style={labelStyle}>Description / Scope</label>
+        <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
+          style={{ ...inputStyle, resize: 'vertical' as const }} />
+
+        <label style={labelStyle}>Agreed Rate ($)</label>
+        <input value={agreedRate} onChange={e => setAgreedRate(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="Leave blank for market rate"
+          style={inputStyle} />
+
+        <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 16 }}>
+          <input type="checkbox" checked={autoBook} onChange={e => setAutoBook(e.target.checked)}
+            style={{ width: 16, height: 16, accentColor: O }} />
+          Auto-book when provider confirms
+        </label>
+
+        {error && <div style={{ color: '#DC2626', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onClose}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: D }}>
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
