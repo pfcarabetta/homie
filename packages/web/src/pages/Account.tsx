@@ -7,9 +7,9 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
-const TABS = ['profile', 'home', 'quotes', 'bookings', 'payment'] as const;
+const TABS = ['profile', 'home', 'quotes', 'bookings'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { profile: 'Profile', home: 'My Home', quotes: 'My Quotes', bookings: 'Bookings', payment: 'Payment' };
+const TAB_LABELS: Record<Tab, string> = { profile: 'Profile', home: 'My Home', quotes: 'My Quotes', bookings: 'Bookings' };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   open: { bg: '#EFF6FF', text: '#2563EB' },
@@ -807,19 +807,6 @@ function MyHomeTab() {
   );
 }
 
-/* -- Payment Tab -- */
-function PaymentTab() {
-  return (
-    <div style={{ textAlign: 'center', padding: '40px 0', color: '#9B9490' }}>
-      <div style={{ fontSize: 32, marginBottom: 8 }}>&#128179;</div>
-      <div style={{ fontSize: 15, fontWeight: 500, color: D }}>Payment details coming soon</div>
-      <div style={{ fontSize: 13, marginTop: 4, maxWidth: 300, margin: '4px auto 0', lineHeight: 1.5 }}>
-        You'll be able to add payment methods and view your billing history here.
-      </div>
-    </div>
-  );
-}
-
 /* -- Main Account Page -- */
 export default function Account() {
   useDocumentTitle('My Account');
@@ -868,7 +855,6 @@ export default function Account() {
         {activeTab === 'home' && <MyHomeTab />}
         {activeTab === 'quotes' && <QuotesTab />}
         {activeTab === 'bookings' && <BookingsTab />}
-        {activeTab === 'payment' && <PaymentTab />}
       </div>
     </div>
   );
