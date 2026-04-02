@@ -840,7 +840,7 @@ export interface DashboardData {
   dispatches_last_month: number;
   bookings_this_month: number;
   bookings_last_month: number;
-  recent_activity: Array<{ type: string; title: string; property_name: string | null; provider_name: string | null; created_at: string }>;
+  recent_activity: Array<{ type: string; title: string; property_name: string | null; provider_name: string | null; job_id: string; created_at: string }>;
   top_vendors: Array<{ name: string; booking_count: number; avg_rating: string | null }>;
   dispatches_by_category: Array<{ category: string; count: number }>;
 }

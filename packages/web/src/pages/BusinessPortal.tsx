@@ -1017,7 +1017,7 @@ function trendArrow(current: number, previous: number): { text: string; color: s
   return { text: '→ 0%', color: '#9B9490' };
 }
 
-function DashboardTab({ workspace }: { workspace: WorkspaceDetail }) {
+function DashboardTab({ workspace, onTabChange }: { workspace: WorkspaceDetail; onTabChange: (tab: Tab) => void }) {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [suggestions, setSuggestions] = useState<SeasonalSuggestion[]>([]);
@@ -1165,7 +1165,12 @@ function DashboardTab({ workspace }: { workspace: WorkspaceDetail }) {
               const icon = a.type === 'dispatch' ? '📡' : a.type === 'quote' ? '💬' : a.type === 'booking' ? '✅' : '❌';
               const typeColor = a.type === 'dispatch' ? O : a.type === 'quote' ? '#3B82F6' : a.type === 'booking' ? G : '#DC2626';
               return (
-                <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < data.recent_activity.length - 1 ? '1px solid #F0EDE9' : 'none' }}>
+                <div key={i} onClick={() => {
+                  if (a.type === 'booking') onTabChange('bookings');
+                  else onTabChange('dispatches');
+                }} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < data.recent_activity.length - 1 ? '1px solid #F0EDE9' : 'none', cursor: 'pointer', borderRadius: 6, transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#FAFAF8'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <span style={{ fontSize: 16, flexShrink: 0, marginTop: 2 }}>{icon}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, color: D }}>{a.title}</div>
@@ -4275,7 +4280,7 @@ export default function BusinessPortal() {
             </div>
 
             {/* Tab content */}
-            {workspace && tab === 'dashboard' && <DashboardTab workspace={workspace} />}
+            {workspace && tab === 'dashboard' && <DashboardTab workspace={workspace} onTabChange={setTab} />}
             {workspace && tab === 'billing' && workspace.user_role === 'admin' && (
               <BillingTab workspace={workspace} onUpdated={w => setWorkspace(w)} />
             )}

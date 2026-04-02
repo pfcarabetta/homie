@@ -1989,6 +1989,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
         title: sql<string>`COALESCE(${jobs.diagnosis}->>'category', 'Job')`,
         propertyName: sql<string | null>`NULL`,
         providerName: sql<string | null>`NULL`,
+        jobId: jobs.id,
         createdAt: jobs.createdAt,
       })
       .from(jobs)
@@ -2002,6 +2003,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
         title: sql<string>`'Quote received'`,
         propertyName: sql<string | null>`NULL`,
         providerName: providers.name,
+        jobId: providerResponses.jobId,
         createdAt: providerResponses.createdAt,
       })
       .from(providerResponses)
@@ -2017,6 +2019,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
         title: sql<string>`'Booking confirmed'`,
         propertyName: sql<string | null>`NULL`,
         providerName: providers.name,
+        jobId: bookings.jobId,
         createdAt: bookings.confirmedAt,
       })
       .from(bookings)
@@ -2027,9 +2030,9 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .limit(10);
 
     const allActivity = [
-      ...recentDispatches.map(r => ({ type: r.type, title: r.title, property_name: r.propertyName, provider_name: r.providerName, created_at: r.createdAt.toISOString() })),
-      ...recentQuotes.map(r => ({ type: r.type, title: r.title, property_name: r.propertyName, provider_name: r.providerName, created_at: r.createdAt.toISOString() })),
-      ...recentBookings.map(r => ({ type: r.type, title: r.title, property_name: r.propertyName, provider_name: r.providerName, created_at: r.createdAt.toISOString() })),
+      ...recentDispatches.map(r => ({ type: r.type, title: r.title, property_name: r.propertyName, provider_name: r.providerName, job_id: r.jobId, created_at: r.createdAt.toISOString() })),
+      ...recentQuotes.map(r => ({ type: r.type, title: r.title, property_name: r.propertyName, provider_name: r.providerName, job_id: r.jobId, created_at: r.createdAt.toISOString() })),
+      ...recentBookings.map(r => ({ type: r.type, title: r.title, property_name: r.propertyName, provider_name: r.providerName, job_id: r.jobId, created_at: r.createdAt.toISOString() })),
     ]
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 10);
