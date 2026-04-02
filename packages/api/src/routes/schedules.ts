@@ -86,23 +86,22 @@ scheduleRouter.post(
   requireWorkspaceRole('admin', 'coordinator'),
   async (req: Request, res: Response) => {
     try {
-      const {
-        propertyId,
-        templateId,
-        category,
-        title,
-        description,
-        cadenceType,
-        cadenceConfig,
-        preferredProviderId,
-        agreedRateCents,
-        autoBook,
-        autoBookMaxCents,
-        advanceDispatchHours,
-        escalationWindowMinutes,
-        fallbackToMarketplace,
-        blackoutDates,
-      } = req.body as Record<string, unknown>;
+      const b = req.body as Record<string, unknown>;
+      const propertyId = b.property_id ?? b.propertyId;
+      const templateId = b.template_id ?? b.templateId;
+      const category = b.category;
+      const title = b.title;
+      const description = b.description;
+      const cadenceType = b.cadence_type ?? b.cadenceType;
+      const cadenceConfig = b.cadence_config ?? b.cadenceConfig;
+      const preferredProviderId = b.preferred_provider_id ?? b.preferredProviderId;
+      const agreedRateCents = b.agreed_rate_cents ?? b.agreedRateCents;
+      const autoBook = b.auto_book ?? b.autoBook;
+      const autoBookMaxCents = b.auto_book_max_cents ?? b.autoBookMaxCents;
+      const advanceDispatchHours = b.advance_dispatch_hours ?? b.advanceDispatchHours;
+      const escalationWindowMinutes = b.escalation_window_minutes ?? b.escalationWindowMinutes;
+      const fallbackToMarketplace = b.fallback_to_marketplace ?? b.fallbackToMarketplace;
+      const blackoutDates = b.blackout_dates ?? b.blackoutDates;
 
       if (!category || !title || !cadenceType) {
         res.status(400).json({ data: null, error: 'category, title, and cadenceType are required', meta: {} });
