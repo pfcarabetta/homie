@@ -159,6 +159,100 @@ router.patch('/', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/account/home
+router.get('/home', async (req: Request, res: Response) => {
+  try {
+    const [homeowner] = await db
+      .select({
+        homeAddress: homeowners.homeAddress,
+        homeCity: homeowners.homeCity,
+        homeState: homeowners.homeState,
+        homeBedrooms: homeowners.homeBedrooms,
+        homeBathrooms: homeowners.homeBathrooms,
+        homeSqft: homeowners.homeSqft,
+        homeDetails: homeowners.homeDetails,
+      })
+      .from(homeowners)
+      .where(eq(homeowners.id, req.homeownerId))
+      .limit(1);
+
+    if (!homeowner) {
+      res.status(404).json({ data: null, error: 'Account not found', meta: {} });
+      return;
+    }
+
+    res.json({
+      data: {
+        address: homeowner.homeAddress,
+        city: homeowner.homeCity,
+        state: homeowner.homeState,
+        bedrooms: homeowner.homeBedrooms,
+        bathrooms: homeowner.homeBathrooms,
+        sqft: homeowner.homeSqft,
+        details: homeowner.homeDetails,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/home]');
+    res.status(500).json({ data: null, error: 'Failed to fetch home data', meta: {} });
+  }
+});
+
+// PATCH /api/v1/account/home
+router.patch('/home', async (req: Request, res: Response) => {
+  const body = req.body as {
+    address?: string;
+    city?: string;
+    state?: string;
+    bedrooms?: number;
+    bathrooms?: string;
+    sqft?: number;
+    details?: Record<string, unknown>;
+  };
+
+  const updates: Record<string, unknown> = {};
+
+  if (body.address !== undefined) updates.homeAddress = body.address || null;
+  if (body.city !== undefined) updates.homeCity = body.city || null;
+  if (body.state !== undefined) updates.homeState = body.state || null;
+  if (body.bedrooms !== undefined) updates.homeBedrooms = body.bedrooms || null;
+  if (body.bathrooms !== undefined) updates.homeBathrooms = body.bathrooms || null;
+  if (body.sqft !== undefined) updates.homeSqft = body.sqft || null;
+  if (body.details !== undefined) updates.homeDetails = body.details || null;
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ data: null, error: 'No fields to update', meta: {} });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(homeowners)
+      .set(updates)
+      .where(eq(homeowners.id, req.homeownerId))
+      .returning();
+
+    res.json({
+      data: {
+        address: updated.homeAddress,
+        city: updated.homeCity,
+        state: updated.homeState,
+        bedrooms: updated.homeBedrooms,
+        bathrooms: updated.homeBathrooms,
+        sqft: updated.homeSqft,
+        details: updated.homeDetails,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /account/home]');
+    res.status(500).json({ data: null, error: 'Failed to update home data', meta: {} });
+  }
+});
+
 // GET /api/v1/account/jobs
 router.get('/jobs', async (req: Request, res: Response) => {
   try {

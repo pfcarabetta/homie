@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem } from '@/services/api';
+import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, accountService, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem, type HomeData } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -667,6 +667,61 @@ function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | nu
   );
 }
 
+/* -- Home context builder -- */
+function buildHomeContext(home: HomeData): string {
+  const parts: string[] = [];
+
+  const basicParts: string[] = [];
+  if (home.bedrooms) basicParts.push(`${home.bedrooms} bed`);
+  if (home.bathrooms) basicParts.push(`${home.bathrooms} bath`);
+  if (home.sqft) basicParts.push(`${home.sqft.toLocaleString()} sqft`);
+  if (basicParts.length > 0) parts.push(`Home: ${basicParts.join(' / ')}.`);
+
+  const d = home.details;
+  if (!d) return parts.join(' ');
+
+  if (d.hvac) {
+    const hvacParts: string[] = [];
+    if (d.hvac.acType) hvacParts.push(`${d.hvac.acType}${d.hvac.acBrand ? ` (${d.hvac.acBrand})` : ''}${d.hvac.acAge ? `, ${d.hvac.acAge} old` : ''}`);
+    if (d.hvac.heatingType) hvacParts.push(`Heating: ${d.hvac.heatingType}`);
+    if (hvacParts.length > 0) parts.push(`HVAC: ${hvacParts.join('. ')}.`);
+  }
+
+  if (d.waterHeater) {
+    const whParts: string[] = [];
+    if (d.waterHeater.type) whParts.push(d.waterHeater.type);
+    if (d.waterHeater.brand) whParts.push(d.waterHeater.brand);
+    if (d.waterHeater.fuel) whParts.push(d.waterHeater.fuel);
+    if (d.waterHeater.location) whParts.push(`in ${d.waterHeater.location}`);
+    if (whParts.length > 0) parts.push(`Water heater: ${whParts.join(', ')}.`);
+  }
+
+  if (d.appliances) {
+    const appParts: string[] = [];
+    for (const [name, info] of Object.entries(d.appliances)) {
+      if (info && typeof info === 'object') {
+        const appInfo = info as Record<string, string>;
+        if (appInfo.brand) appParts.push(`${name}: ${appInfo.brand}`);
+      }
+    }
+    if (appParts.length > 0) parts.push(`Appliances: ${appParts.join(', ')}.`);
+  }
+
+  if (d.plumbing) {
+    const plParts: string[] = [];
+    if (d.plumbing.kitchenFaucetBrand) plParts.push(`Kitchen faucet: ${d.plumbing.kitchenFaucetBrand}`);
+    if (d.plumbing.toiletBrand) plParts.push(`Toilet: ${d.plumbing.toiletBrand}`);
+    if (d.plumbing.septicOrSewer) plParts.push(d.plumbing.septicOrSewer);
+    if (plParts.length > 0) parts.push(`Plumbing: ${plParts.join('. ')}.`);
+  }
+
+  if (d.electrical?.panelAmperage) parts.push(`Electrical: Panel ${d.electrical.panelAmperage}.`);
+  if (d.exterior?.roofType) parts.push(`Roof: ${d.exterior.roofType}${d.exterior.roofAge ? `, ${d.exterior.roofAge} old` : ''}.`);
+  if (d.general?.yearBuilt) parts.push(`Built: ${d.general.yearBuilt}.`);
+
+  return parts.join(' ');
+}
+
 /* -- MAIN COMPONENT -- */
 export default function GetQuotes() {
   useDocumentTitle('Get Home Repair Quotes in Minutes');
@@ -681,6 +736,7 @@ export default function GetQuotes() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
+  const homeContextRef = useRef<string>('');
 
   const scrollDown = () => setTimeout(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -796,6 +852,17 @@ export default function GetQuotes() {
     return () => { abortRef.current?.abort(); };
   }, []);
 
+  // Load home details for context
+  useEffect(() => {
+    if (authService.isAuthenticated()) {
+      accountService.getHome().then(res => {
+        if (res.data) {
+          homeContextRef.current = buildHomeContext(res.data);
+        }
+      }).catch(() => { /* ignore */ });
+    }
+  }, []);
+
   const flow = data.category ? CATEGORY_FLOWS[data.category] : null;
   const [activeGroup, setActiveGroup] = useState<CatGroup | null>(null);
 
@@ -839,7 +906,8 @@ export default function GetQuotes() {
 
     // Build conversation history for the AI
     if (isFirst) {
-      aiConvoRef.current = [{ role: 'user', content: `I need help with ${cat?.label}. Specifically: ${userAnswer}.` }];
+      const homeCtx = homeContextRef.current ? `[Home details: ${homeContextRef.current}] ` : '';
+      aiConvoRef.current = [{ role: 'user', content: `${homeCtx}I need help with ${cat?.label}. Specifically: ${userAnswer}.` }];
     } else {
       aiConvoRef.current.push({ role: 'user', content: userAnswer });
     }

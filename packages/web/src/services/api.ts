@@ -639,12 +639,24 @@ export const trackingService = {
 
 // ── accountService ─────────────────────────────────────────────────────────
 
+export interface HomeData {
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  bedrooms: number | null;
+  bathrooms: string | null;
+  sqft: number | null;
+  details: PropertyDetails | null;
+}
+
 export const accountService = {
   getProfile: () => fetchAPI<AccountProfile>('/api/v1/account'),
   updateProfile: (data: Partial<{ email: string; phone: string; zip_code: string; current_password: string; new_password: string }>) =>
     fetchAPI<AccountProfile>('/api/v1/account', { method: 'PATCH', body: JSON.stringify(data) }),
   getJobs: () => fetchAPI<{ jobs: AccountJob[] }>('/api/v1/account/jobs'),
   getBookings: () => fetchAPI<{ bookings: AccountBooking[] }>('/api/v1/account/bookings'),
+  getHome: () => fetchAPI<HomeData>('/api/v1/account/home'),
+  updateHome: (data: Partial<HomeData>) => fetchAPI<HomeData>('/api/v1/account/home', { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 // ── businessService ─────────────────────────────────────────────────────────

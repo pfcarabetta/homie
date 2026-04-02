@@ -1,4 +1,7 @@
-import { pgTable, uuid, text, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, integer, jsonb } from 'drizzle-orm/pg-core';
+import { PropertyDetails } from './properties';
+
+export type HomeDetails = PropertyDetails;
 
 export const homeowners = pgTable('homeowners', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -16,6 +19,13 @@ export const homeowners = pgTable('homeowners', {
   smsOptInAt: timestamp('sms_opt_in_at', { withTimezone: true }),
   passwordResetToken: text('password_reset_token'),
   passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
+  homeAddress: text('home_address'),
+  homeCity: text('home_city'),
+  homeState: text('home_state'),
+  homeBedrooms: integer('home_bedrooms'),
+  homeBathrooms: text('home_bathrooms'),
+  homeSqft: integer('home_sqft'),
+  homeDetails: jsonb('home_details').$type<PropertyDetails>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

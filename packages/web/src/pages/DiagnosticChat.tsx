@@ -16,7 +16,9 @@ import {
   paymentService,
   fetchAPI,
   connectJobSocket,
+  accountService,
   type JobStatusResponse,
+  type HomeData,
 } from '@/services/api';
 import {
   mockStreamResponse,
@@ -425,6 +427,87 @@ function normalizeDiagnosis(raw: Record<string, unknown>): DiagnosisData {
   };
 }
 
+// ── Home context builder ────────────────────────────────────────────────────
+
+function buildHomeContext(home: HomeData): string {
+  const parts: string[] = [];
+
+  const basicParts: string[] = [];
+  if (home.bedrooms) basicParts.push(`${home.bedrooms} bed`);
+  if (home.bathrooms) basicParts.push(`${home.bathrooms} bath`);
+  if (home.sqft) basicParts.push(`${home.sqft.toLocaleString()} sqft`);
+  if (basicParts.length > 0) parts.push(`Home: ${basicParts.join(' / ')}.`);
+  if (home.address) parts.push(`Address: ${home.address}${home.city ? `, ${home.city}` : ''}${home.state ? ` ${home.state}` : ''}.`);
+
+  const d = home.details;
+  if (!d) return parts.join(' ');
+
+  if (d.hvac) {
+    const hvacParts: string[] = [];
+    if (d.hvac.acType) hvacParts.push(`${d.hvac.acType}${d.hvac.acBrand ? ` (${d.hvac.acBrand})` : ''}${d.hvac.acAge ? `, ${d.hvac.acAge} old` : ''}`);
+    if (d.hvac.heatingType) hvacParts.push(`Heating: ${d.hvac.heatingType}${d.hvac.heatingBrand ? ` (${d.hvac.heatingBrand})` : ''}`);
+    if (d.hvac.thermostatBrand) hvacParts.push(`Thermostat: ${d.hvac.thermostatBrand}`);
+    if (d.hvac.filterSize) hvacParts.push(`Filter: ${d.hvac.filterSize}`);
+    if (hvacParts.length > 0) parts.push(`HVAC: ${hvacParts.join('. ')}.`);
+  }
+
+  if (d.waterHeater) {
+    const whParts: string[] = [];
+    if (d.waterHeater.type) whParts.push(d.waterHeater.type);
+    if (d.waterHeater.brand) whParts.push(d.waterHeater.brand);
+    if (d.waterHeater.fuel) whParts.push(d.waterHeater.fuel);
+    if (d.waterHeater.capacity) whParts.push(d.waterHeater.capacity);
+    if (d.waterHeater.location) whParts.push(`in ${d.waterHeater.location}`);
+    if (whParts.length > 0) parts.push(`Water heater: ${whParts.join(', ')}.`);
+  }
+
+  if (d.appliances) {
+    const appParts: string[] = [];
+    for (const [name, info] of Object.entries(d.appliances)) {
+      if (info && typeof info === 'object') {
+        const appInfo = info as Record<string, string>;
+        if (appInfo.brand) appParts.push(`${name}: ${appInfo.brand}${appInfo.model ? ` ${appInfo.model}` : ''}`);
+      }
+    }
+    if (appParts.length > 0) parts.push(`Appliances: ${appParts.join('. ')}.`);
+  }
+
+  if (d.plumbing) {
+    const plParts: string[] = [];
+    if (d.plumbing.kitchenFaucetBrand) plParts.push(`Kitchen faucet: ${d.plumbing.kitchenFaucetBrand}`);
+    if (d.plumbing.bathroomFaucetBrand) plParts.push(`Bath faucet: ${d.plumbing.bathroomFaucetBrand}`);
+    if (d.plumbing.toiletBrand) plParts.push(`Toilet: ${d.plumbing.toiletBrand}`);
+    if (d.plumbing.septicOrSewer) plParts.push(d.plumbing.septicOrSewer);
+    if (plParts.length > 0) parts.push(`Plumbing: ${plParts.join('. ')}.`);
+  }
+
+  if (d.electrical) {
+    const elParts: string[] = [];
+    if (d.electrical.panelAmperage) elParts.push(`Panel: ${d.electrical.panelAmperage}`);
+    if (d.electrical.hasSolar && d.electrical.solarSystem) elParts.push(`Solar: ${d.electrical.solarSystem}`);
+    if (d.electrical.hasGenerator && d.electrical.generatorType) elParts.push(`Generator: ${d.electrical.generatorType}`);
+    if (elParts.length > 0) parts.push(`Electrical: ${elParts.join('. ')}.`);
+  }
+
+  if (d.poolSpa) {
+    const poolParts: string[] = [];
+    if (d.poolSpa.poolType) poolParts.push(`Pool: ${d.poolSpa.poolType}`);
+    if (d.poolSpa.hotTubBrand) poolParts.push(`Hot tub: ${d.poolSpa.hotTubBrand}`);
+    if (poolParts.length > 0) parts.push(poolParts.join('. ') + '.');
+  }
+
+  if (d.exterior) {
+    const extParts: string[] = [];
+    if (d.exterior.roofType) extParts.push(`Roof: ${d.exterior.roofType}${d.exterior.roofAge ? `, ${d.exterior.roofAge} old` : ''}`);
+    if (d.exterior.sidingMaterial) extParts.push(`Siding: ${d.exterior.sidingMaterial}`);
+    if (extParts.length > 0) parts.push(`Exterior: ${extParts.join('. ')}.`);
+  }
+
+  if (d.general?.yearBuilt) parts.push(`Built: ${d.general.yearBuilt}.`);
+
+  return parts.join(' ');
+}
+
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function DiagnosticChat() {
@@ -441,8 +524,20 @@ export default function DiagnosticChat() {
   const sessionIdRef = useRef(crypto.randomUUID());
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const homeContextRef = useRef<string>('');
 
   useDocumentTitle('Free DIY Home Repair Diagnostic');
+
+  // Load home details for context
+  useEffect(() => {
+    if (authService.isAuthenticated()) {
+      accountService.getHome().then(res => {
+        if (res.data) {
+          homeContextRef.current = buildHomeContext(res.data);
+        }
+      }).catch(() => { /* ignore */ });
+    }
+  }, []);
 
   // Auto-scroll to bottom when messages change (skip if only welcome/empty)
   useEffect(() => {
@@ -601,7 +696,11 @@ export default function DiagnosticChat() {
         .filter((m) => m.id !== 'welcome' && m.content.length > 0)
         .map((m) => ({ role: m.role, content: m.content }));
 
-      const messageText = text.trim() || (image ? 'What do you see in this photo? What might be wrong and how can I fix it?' : '');
+      let messageText = text.trim() || (image ? 'What do you see in this photo? What might be wrong and how can I fix it?' : '');
+      // Prepend home context to the first message if available
+      if (history.length === 0 && homeContextRef.current) {
+        messageText = `[Home details: ${homeContextRef.current}]\n\n${messageText}`;
+      }
       abortRef.current = diagnosticService.sendMessage(
         sessionIdRef.current,
         messageText,
