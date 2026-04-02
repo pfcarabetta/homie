@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, accountService, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem, type HomeData } from '@/services/api';
+import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, accountService, estimateService, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem, type HomeData, type CostEstimate } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
+import EstimateCard from '@/components/EstimateCard';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -733,6 +734,7 @@ export default function GetQuotes() {
   const aiConvoRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -1054,6 +1056,20 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     setData(d => ({ ...d, timing: t }));
     setPhase('waiting');
     addUser(t);
+
+    // Fetch cost estimate in background
+    if (data.category && data.zip) {
+      const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
+      estimateService.generate({
+        category: data.category,
+        subcategory: data.a1 || data.category,
+        zip_code: data.zip,
+        urgency: urgencyMap[t] || 'flexible',
+      }).then(res => {
+        if (res.data) setCostEstimate(res.data);
+      }).catch(() => {});
+    }
+
     setTimeout(() => {
       addAssistant("Here's what I'll brief the providers on:");
       setTimeout(() => {
@@ -1268,7 +1284,16 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             : <UserMsg key={i} text={m.text} />
         ))}
 
-        {(phase === 'diagnosis' || phase === 'tier' || phase === 'outreach') && data.a1 && <DiagnosisSummary data={data} />}
+        {(phase === 'diagnosis' || phase === 'tier' || phase === 'outreach') && data.a1 && (
+          <>
+            <DiagnosisSummary data={data} />
+            {costEstimate && (
+              <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+                <EstimateCard estimate={costEstimate} />
+              </div>
+            )}
+          </>
+        )}
 
         {phase === 'category' && (
           <>
