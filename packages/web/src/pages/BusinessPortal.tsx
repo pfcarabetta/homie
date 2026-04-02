@@ -840,23 +840,6 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
         </div>
       )}
 
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24 }}>
-        <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 16px' }}>Workspace Details</h4>
-        <div style={{ display: 'grid', gap: 12, fontSize: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B6560' }}>Workspace ID</span>
-            <span style={{ color: D, fontFamily: 'DM Mono, monospace', fontSize: 12 }}>{workspace.id}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B6560' }}>Slug</span>
-            <span style={{ color: D }}>{workspace.slug}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B6560' }}>Created</span>
-            <span style={{ color: D }}>{new Date(workspace.createdAt).toLocaleDateString()}</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -3349,6 +3332,29 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
           style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
+      </div>
+
+      {/* Workspace Details */}
+      <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24, marginTop: 20 }}>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 12 }}>Workspace Details</label>
+        <div style={{ display: 'grid', gap: 10, fontSize: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--bp-muted)' }}>Workspace ID</span>
+            <span style={{ color: 'var(--bp-text)', fontFamily: 'DM Mono, monospace', fontSize: 12 }}>{workspace.id}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--bp-muted)' }}>Slug</span>
+            <span style={{ color: 'var(--bp-text)' }}>{workspace.slug}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--bp-muted)' }}>Plan</span>
+            <span style={{ color: 'var(--bp-text)', textTransform: 'capitalize' }}>{workspace.plan}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--bp-muted)' }}>Created</span>
+            <span style={{ color: 'var(--bp-text)' }}>{new Date(workspace.createdAt).toLocaleDateString()}</span>
+          </div>
+        </div>
       </div>
 
       {/* Brand Logo */}
