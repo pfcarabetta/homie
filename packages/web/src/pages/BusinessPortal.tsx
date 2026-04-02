@@ -2686,9 +2686,11 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Dispatches</h3>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => onTabChange?.('schedules')}
-            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-            🔄 Auto-Dispatch
+          <button onClick={() => { if (isPro) onTabChange?.('schedules'); }}
+            title={isPro ? 'Set up recurring dispatches' : 'Upgrade to Professional to use Auto-Dispatch'}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 13, fontWeight: 600,
+              color: isPro ? D : '#ccc', cursor: isPro ? 'pointer' : 'default', opacity: isPro ? 1 : 0.6 }}>
+            🔄 Auto-Dispatch{!isPro && ' (Pro+)'}
           </button>
           <button onClick={() => navigate(`/business/chat?workspace=${workspaceId}`)}
             style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
