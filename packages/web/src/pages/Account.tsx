@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { accountService, jobService, type AccountProfile, type AccountJob, type AccountBooking, type ProviderResponseItem, type HomeData, type PropertyDetails } from '@/services/api';
+import { accountService, jobService, estimateService, type AccountProfile, type AccountJob, type AccountBooking, type ProviderResponseItem, type HomeData, type PropertyDetails, type CostEstimate } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
+import EstimateCard from '@/components/EstimateCard';
+import EstimateBadge from '@/components/EstimateBadge';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -172,6 +174,7 @@ function QuotesTab() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
+  const [estimates, setEstimates] = useState<Record<string, CostEstimate>>({});
 
   useEffect(() => {
     accountService.getJobs().then(res => {
@@ -180,9 +183,21 @@ function QuotesTab() {
     }).catch(() => setLoading(false));
   }, []);
 
+  async function fetchEstimate(job: AccountJob) {
+    if (estimates[job.id] || !job.diagnosis?.category || !job.zip_code) return;
+    try {
+      const cat = job.diagnosis.category;
+      const sub = job.diagnosis.subcategory || cat;
+      const res = await estimateService.generate({ category: cat, subcategory: sub, zip_code: job.zip_code });
+      if (res.data) setEstimates(prev => ({ ...prev, [job.id]: res.data! }));
+    } catch { /* ignore */ }
+  }
+
   async function toggleExpand(jobId: string) {
     if (expandedId === jobId) { setExpandedId(null); return; }
     setExpandedId(jobId);
+    const job = jobs.find(j => j.id === jobId);
+    if (job) fetchEstimate(job);
     if (!responses[jobId]) {
       setLoadingResponses(jobId);
       try {
@@ -316,6 +331,13 @@ function QuotesTab() {
                   </div>
                 )}
 
+                {/* AI Cost Estimate */}
+                {estimates[j.id] && (
+                  <div style={{ marginBottom: 12 }}>
+                    <EstimateCard estimate={estimates[j.id]} />
+                  </div>
+                )}
+
                 {/* Provider Responses */}
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Provider Quotes</div>
@@ -341,7 +363,14 @@ function QuotesTab() {
                               <span style={{ color: '#9B9490', fontSize: 11, marginLeft: 6 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
                             </div>
                             {r.quoted_price && (
-                              <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                                {estimates[j.id] ? (
+                                  <EstimateBadge quotedPrice={r.quoted_price} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
+                                ) : (
+                                  <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
+                                )}
+                              </div>
                             )}
                           </div>
                           {r.availability && <div style={{ fontSize: 12, color: D, marginBottom: 3 }}>📅 {r.availability}</div>}
