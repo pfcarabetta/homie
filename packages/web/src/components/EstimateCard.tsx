@@ -34,6 +34,11 @@ export default function EstimateCard({ estimate, diyEstimate }: EstimateCardProp
       marginTop: 8,
       animation: 'dcFadeSlide 0.4s ease',
     }}>
+      {/* Label */}
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: O, marginBottom: 6 }}>
+        AI Cost Estimate
+      </div>
+
       {/* Cost range */}
       <div style={{
         fontFamily: "'Fraunces', serif",
