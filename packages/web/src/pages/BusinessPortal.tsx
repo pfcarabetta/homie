@@ -1973,7 +1973,14 @@ function DispatchesTab({ workspaceId, onTabChange, plan }: { workspaceId: string
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [preferredProviderIds, setPreferredProviderIds] = useState<Set<string>>(new Set());
   const isPro = ['professional', 'business', 'enterprise'].includes(plan);
+
+  useEffect(() => {
+    businessService.listVendors(workspaceId).then(res => {
+      if (res.data) setPreferredProviderIds(new Set(res.data.map(v => v.providerId)));
+    }).catch(() => {});
+  }, [workspaceId]);
 
   async function handleDownloadEstimate(jobId: string) {
     setDownloadingPdf(jobId);
@@ -2218,9 +2225,12 @@ function DispatchesTab({ workspaceId, onTabChange, plan }: { workspaceId: string
                             border: '1px solid rgba(0,0,0,0.04)',
                           }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                              <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <span style={{ fontWeight: 600, fontSize: 14, color: D }}>{r.provider.name}</span>
-                                <span style={{ color: '#9B9490', fontSize: 11, marginLeft: 6 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
+                                {preferredProviderIds.has(r.provider.id) && (
+                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: O, padding: '2px 6px', borderRadius: 4, letterSpacing: '0.04em' }}>PREFERRED</span>
+                                )}
+                                <span style={{ color: '#9B9490', fontSize: 11 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
                               </div>
                               {r.quoted_price && (
                                 <div style={{ textAlign: 'right' }}>
