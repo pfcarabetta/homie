@@ -2527,7 +2527,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
   const navigate = useNavigate();
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(focusJobId ?? null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -2571,16 +2571,19 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
     businessService.listDispatches(workspaceId).then(res => {
       if (res.data) setDispatches(res.data);
       setLoading(false);
-      // Auto-scroll to focused job after data loads
-      if (focusJobId) {
-        setTimeout(() => {
-          const el = document.getElementById(`dispatch-${focusJobId}`);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          onFocusHandled?.();
-        }, 200);
-      }
     }).catch(() => setLoading(false));
   }, [workspaceId]);
+
+  // Auto-expand and scroll to focused job
+  useEffect(() => {
+    if (!focusJobId || loading) return;
+    setExpandedId(focusJobId);
+    setTimeout(() => {
+      const el = document.getElementById(`dispatch-${focusJobId}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      onFocusHandled?.();
+    }, 300);
+  }, [focusJobId, loading]);
 
   async function toggleExpand(jobId: string) {
     if (expandedId === jobId) { setExpandedId(null); return; }
@@ -3277,20 +3280,22 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
     businessService.listBookings(workspaceId).then(res => {
       setBookingsList(res.data?.bookings ?? []);
       setLoading(false);
-      if (focusJobId) {
-        // Find booking by job ID and expand it
-        const match = (res.data?.bookings ?? []).find(b => b.jobId === focusJobId);
-        if (match) {
-          setExpandedId(match.id);
-          setTimeout(() => {
-            const el = document.getElementById(`booking-${match.id}`);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 200);
-        }
-        onFocusHandled?.();
-      }
     }).catch(() => setLoading(false));
   }, [workspaceId]);
+
+  // Auto-expand and scroll to focused booking
+  useEffect(() => {
+    if (!focusJobId || loading || bookingsList.length === 0) return;
+    const match = bookingsList.find(b => b.jobId === focusJobId);
+    if (match) {
+      setExpandedId(match.id);
+      setTimeout(() => {
+        const el = document.getElementById(`booking-${match.id}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+    onFocusHandled?.();
+  }, [focusJobId, loading, bookingsList]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading bookings...</div>;
 
