@@ -3457,6 +3457,15 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>
               Properties <span style={{ fontWeight: 400, color: '#9B9490' }}>(none = all properties)</span>
             </label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+              <button onClick={() => setSelectedPropertyIds(properties.map(p => p.id))}
+                style={{ background: 'none', border: 'none', color: O, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Select all</button>
+              {selectedPropertyIds.length > 0 && (
+                <><span style={{ color: '#E0DAD4' }}>|</span>
+                <button onClick={() => setSelectedPropertyIds([])}
+                  style={{ background: 'none', border: 'none', color: '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Clear</button></>
+              )}
+            </div>
             <div style={{ border: '1px solid #E0DAD4', borderRadius: 8, maxHeight: 140, overflowY: 'auto', marginBottom: 16 }}>
               {properties.map(p => {
                 const checked = selectedPropertyIds.includes(p.id);
