@@ -4997,6 +4997,7 @@ export default function BusinessPortal() {
             <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--bp-border)', marginBottom: 24, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x' }}>
               {TABS.filter(t => {
                 if (t === 'settings' && workspace?.user_role !== 'admin') return false;
+                if (t === 'schedules') return false; // accessed via Auto-Dispatch button on Dispatches tab
                 return true;
               }).map(t => {
                 const isLocked = (t === 'reports' || t === 'schedules') && !['professional', 'business', 'enterprise'].includes(workspace?.plan ?? '');
