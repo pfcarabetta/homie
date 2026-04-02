@@ -2575,15 +2575,24 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
   }, [workspaceId]);
 
   // Auto-expand and scroll to focused job
+  const focusHandledRef = useRef(false);
   useEffect(() => {
-    if (!focusJobId || loading) return;
+    if (!focusJobId || loading || dispatches.length === 0 || focusHandledRef.current) return;
+    focusHandledRef.current = true;
     setExpandedId(focusJobId);
+    // Also load responses for the focused job
+    if (!responses[focusJobId]) {
+      setLoadingResponses(focusJobId);
+      jobService.getResponses(focusJobId).then(res => {
+        if (res.data) setResponses(prev => ({ ...prev, [focusJobId]: res.data!.responses }));
+      }).catch(() => {}).finally(() => setLoadingResponses(null));
+    }
     setTimeout(() => {
       const el = document.getElementById(`dispatch-${focusJobId}`);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       onFocusHandled?.();
-    }, 300);
-  }, [focusJobId, loading]);
+    }, 400);
+  }, [focusJobId, loading, dispatches]);
 
   async function toggleExpand(jobId: string) {
     if (expandedId === jobId) { setExpandedId(null); return; }
@@ -3284,15 +3293,17 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
   }, [workspaceId]);
 
   // Auto-expand and scroll to focused booking
+  const focusHandledRef = useRef(false);
   useEffect(() => {
-    if (!focusJobId || loading || bookingsList.length === 0) return;
+    if (!focusJobId || loading || bookingsList.length === 0 || focusHandledRef.current) return;
+    focusHandledRef.current = true;
     const match = bookingsList.find(b => b.jobId === focusJobId);
     if (match) {
       setExpandedId(match.id);
       setTimeout(() => {
         const el = document.getElementById(`booking-${match.id}`);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 300);
+      }, 400);
     }
     onFocusHandled?.();
   }, [focusJobId, loading, bookingsList]);
