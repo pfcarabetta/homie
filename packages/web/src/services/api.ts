@@ -1069,6 +1069,27 @@ export const businessService = {
   // Dashboard
   getDashboard: (workspaceId: string) => fetchAPI<DashboardData>(`/api/v1/business/${workspaceId}/dashboard`),
   getSeasonalSuggestions: (workspaceId: string) => fetchAPI<SeasonalSuggestion[]>(`/api/v1/business/${workspaceId}/dashboard/seasonal-suggestions`, { method: 'POST' }),
+
+  // Schedules
+  listSchedules: (workspaceId: string, params?: { property_id?: string; category?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.property_id) q.set('property_id', params.property_id);
+    if (params?.category) q.set('category', params.category);
+    if (params?.status) q.set('status', params.status);
+    return fetchAPI<DispatchSchedule[]>(`/api/v1/business/${workspaceId}/schedules?${q}`);
+  },
+  createSchedule: (workspaceId: string, data: Record<string, unknown>) =>
+    fetchAPI<DispatchSchedule>(`/api/v1/business/${workspaceId}/schedules`, { method: 'POST', body: JSON.stringify(data) }),
+  updateSchedule: (workspaceId: string, id: string, data: Record<string, unknown>) =>
+    fetchAPI<DispatchSchedule>(`/api/v1/business/${workspaceId}/schedules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  pauseSchedule: (workspaceId: string, id: string) =>
+    fetchAPI<DispatchSchedule>(`/api/v1/business/${workspaceId}/schedules/${id}/pause`, { method: 'PUT' }),
+  resumeSchedule: (workspaceId: string, id: string) =>
+    fetchAPI<DispatchSchedule>(`/api/v1/business/${workspaceId}/schedules/${id}/resume`, { method: 'PUT' }),
+  deleteSchedule: (workspaceId: string, id: string) =>
+    fetchAPI<{ archived: boolean }>(`/api/v1/business/${workspaceId}/schedules/${id}`, { method: 'DELETE' }),
+  getScheduleRuns: (workspaceId: string, id: string) =>
+    fetchAPI<ScheduleRun[]>(`/api/v1/business/${workspaceId}/schedules/${id}/runs`),
 };
 
 export interface SlackSettings {
@@ -1110,6 +1131,76 @@ export const estimateService = {
 };
 
 // ── Slack Integration ───────────────────────────────────────────────────────
+
+// ── Schedule Types ──────────────────────────────────────────────────────────
+
+export interface ScheduleTemplate {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  suggestedCadenceType: string;
+  suggestedCadenceConfig: Record<string, unknown> | null;
+  propertyTypes: string[] | null;
+  climateZones: string[] | null;
+  amenityTags: string[] | null;
+  estimatedCostRange: string | null;
+  whyItMatters: string | null;
+  seasonalRelevance: string[] | null;
+  sortPriority: number;
+  usageCount: number;
+}
+
+export interface DispatchSchedule {
+  id: string;
+  workspaceId: string;
+  propertyId: string | null;
+  propertyName?: string | null;
+  templateId: string | null;
+  category: string;
+  title: string;
+  description: string | null;
+  cadenceType: string;
+  cadenceConfig: Record<string, unknown> | null;
+  preferredProviderId: string | null;
+  preferredProviderName?: string | null;
+  agreedRateCents: number | null;
+  autoBook: boolean;
+  autoBookMaxCents: number | null;
+  advanceDispatchHours: number;
+  status: string;
+  lastDispatchedAt: string | null;
+  nextDispatchAt: string | null;
+  createdAt: string;
+}
+
+export interface ScheduleRun {
+  id: string;
+  scheduledFor: string;
+  dispatchedAt: string | null;
+  status: string;
+  providerId: string | null;
+  providerName?: string | null;
+  confirmedRateCents: number | null;
+  failureReason: string | null;
+  requiredIntervention: boolean;
+  createdAt: string;
+}
+
+// ── templateService ─────────────────────────────────────────────────────────
+
+export const templateService = {
+  list: (params?: { category?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.category) q.set('category', params.category);
+    return fetchAPI<ScheduleTemplate[]>(`/api/v1/schedule-templates?${q}`);
+  },
+  recommended: (workspaceId: string, propertyId?: string) => {
+    const q = new URLSearchParams({ workspace_id: workspaceId });
+    if (propertyId) q.set('property_id', propertyId);
+    return fetchAPI<ScheduleTemplate[]>(`/api/v1/schedule-templates/recommended?${q}`);
+  },
+};
 
 export const slackService = {
   getSettings: (workspaceId: string) =>

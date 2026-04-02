@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { businessService, jobService, slackService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule } from '@/services/api';
+import { businessService, jobService, slackService, templateService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -2998,6 +2998,505 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
   );
 }
 
+/* ── Schedules Tab (Auto-Dispatch) ────────────────────────────────────── */
+
+const SCHEDULE_CAT_COLORS: Record<string, string> = {
+  cleaning: '#1B9E77', pool: '#2E86C1', hot_tub: '#2E86C1',
+  hvac: '#E8632B', pest_control: '#C0392B', landscaping: '#D4A437',
+  general: '#2D2926', restocking: '#17A589', trash: '#6C757D',
+  inspection: '#2D2926', roofing: '#6366F1',
+};
+
+function formatCadence(type: string, config: Record<string, unknown> | null): string {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  if (!config) return type.replace(/_/g, ' ');
+  switch (type) {
+    case 'weekly': return `Every ${days[(config.day_of_week as number) ?? 1]} at ${config.time ?? '10:00'}`;
+    case 'biweekly': return `Every other ${days[(config.day_of_week as number) ?? 1]} at ${config.time ?? '10:00'}`;
+    case 'monthly': return `${ordinal((config.day_of_month as number) ?? 1)} of every month at ${config.time ?? '10:00'}`;
+    case 'quarterly': return `Every quarter on the ${ordinal((config.day_of_month as number) ?? 1)}`;
+    case 'semi_annual': return 'Twice a year';
+    case 'annual': return 'Once a year';
+    case 'per_checkout': return 'After each guest checkout';
+    default: return type.replace(/_/g, ' ');
+  }
+}
+
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function relativeTime(dateStr: string): string {
+  const now = new Date();
+  const d = new Date(dateStr);
+  const diffMs = d.getTime() - now.getTime();
+  const diffH = Math.round(diffMs / 3600000);
+  const diffD = Math.round(diffMs / 86400000);
+  if (diffMs < 0) {
+    const ago = Math.abs(diffD);
+    if (ago === 0) return 'today';
+    if (ago === 1) return 'yesterday';
+    return `${ago} days ago`;
+  }
+  if (diffH < 1) return 'in less than an hour';
+  if (diffH < 24) return `in ${diffH}h`;
+  if (diffD === 1) return 'tomorrow';
+  return `in ${diffD} days`;
+}
+
+const TEMPLATE_CATEGORIES = [
+  { key: '', label: 'All' },
+  { key: 'cleaning', label: 'Cleaning' },
+  { key: 'landscaping', label: 'Outdoor' },
+  { key: 'pool', label: 'Pool' },
+  { key: 'hvac', label: 'HVAC' },
+  { key: 'pest_control', label: 'Pest' },
+  { key: 'inspection', label: 'Safety' },
+  { key: 'restocking', label: 'Supplies' },
+  { key: 'trash', label: 'Trash' },
+];
+
+const CADENCE_OPTIONS = [
+  { value: 'weekly', label: 'Weekly', desc: 'Once per week' },
+  { value: 'biweekly', label: 'Biweekly', desc: 'Every 2 weeks' },
+  { value: 'monthly', label: 'Monthly', desc: 'Once per month' },
+  { value: 'quarterly', label: 'Quarterly', desc: 'Every 3 months' },
+  { value: 'semi_annual', label: 'Semi-annual', desc: 'Twice a year' },
+  { value: 'annual', label: 'Annual', desc: 'Once a year' },
+  { value: 'per_checkout', label: 'After checkout', desc: 'Per guest stay' },
+];
+
+function SchedulesTab({ workspaceId, plan }: { workspaceId: string; plan: string }) {
+  const [schedules, setSchedules] = useState<DispatchSchedule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const loadSchedules = () => {
+    setLoading(true);
+    businessService.listSchedules(workspaceId).then(res => {
+      if (res.data) setSchedules(res.data);
+    }).catch(() => {}).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadSchedules(); }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeCount = schedules.filter(s => s.status === 'active').length;
+  const now = new Date();
+  const weekEnd = new Date(now.getTime() + 7 * 86400000);
+  const thisWeek = schedules.filter(s => s.nextDispatchAt && new Date(s.nextDispatchAt) <= weekEnd).length;
+  const monthlyCost = schedules.filter(s => s.status === 'active' && s.agreedRateCents).reduce((sum, s) => sum + (s.agreedRateCents ?? 0), 0);
+
+  const handleToggle = async (sched: DispatchSchedule) => {
+    setToggling(sched.id);
+    try {
+      const res = sched.status === 'active'
+        ? await businessService.pauseSchedule(workspaceId, sched.id)
+        : await businessService.resumeSchedule(workspaceId, sched.id);
+      if (res.data) {
+        setSchedules(prev => prev.map(s => s.id === sched.id ? res.data! : s));
+      }
+    } catch { /* ignore */ }
+    setToggling(null);
+  };
+
+  const stats = [
+    { label: 'Active Schedules', value: String(activeCount) },
+    { label: 'This Week', value: String(thisWeek) },
+    { label: 'Success Rate', value: '--' },
+    { label: 'Monthly Cost', value: monthlyCost > 0 ? `$${(monthlyCost / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '--' },
+  ];
+
+  return (
+    <div>
+      {/* Stats bar */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
+        {stats.map(s => (
+          <div key={s.label} style={{ background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10, padding: '16px 20px' }}>
+            <div style={{ fontSize: 12, color: 'var(--bp-subtle)', fontWeight: 600, marginBottom: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--bp-text)', fontFamily: 'Fraunces, serif' }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Header + New button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: 'var(--bp-text)', margin: 0 }}>Schedules</h3>
+        <button onClick={() => setShowNew(true)}
+          style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+          + New Schedule
+        </button>
+      </div>
+
+      {/* Schedule list */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 48, color: 'var(--bp-subtle)' }}>Loading schedules...</div>
+      ) : schedules.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 48, color: 'var(--bp-subtle)' }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>📅</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 8 }}>No schedules yet</div>
+          <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 20, maxWidth: 360, margin: '0 auto 20px' }}>
+            Set up recurring maintenance dispatches so your properties stay in great shape automatically.
+          </div>
+          <button onClick={() => setShowNew(true)}
+            style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+            Create your first schedule
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {schedules.map(sched => {
+            const catColor = SCHEDULE_CAT_COLORS[sched.category] ?? '#6B6560';
+            const statusColor = sched.status === 'active' ? G : sched.status === 'needs_attention' ? '#D4A437' : '#9B9490';
+            return (
+              <div key={sched.id} style={{
+                background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10,
+                borderLeft: `4px solid ${catColor}`, padding: '16px 20px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--bp-text)' }}>{sched.title}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 2 }}>
+                    {sched.propertyName ?? 'All properties'}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>
+                    {formatCadence(sched.cadenceType, sched.cadenceConfig)}
+                    {sched.preferredProviderName ? ` · ${sched.preferredProviderName}` : ' · Marketplace'}
+                    {sched.agreedRateCents ? ` · $${(sched.agreedRateCents / 100).toFixed(0)}` : ''}
+                  </div>
+                  {sched.nextDispatchAt && (
+                    <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 4 }}>
+                      Next: {relativeTime(sched.nextDispatchAt)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <button
+                    disabled={toggling === sched.id}
+                    onClick={() => handleToggle(sched)}
+                    style={{
+                      padding: '6px 14px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer', color: sched.status === 'active' ? '#D4A437' : G,
+                      opacity: toggling === sched.id ? 0.5 : 1,
+                    }}>
+                    {sched.status === 'active' ? 'Pause' : 'Resume'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* New Schedule Modal */}
+      {showNew && (
+        <NewScheduleModal workspaceId={workspaceId} onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); loadSchedules(); }} />
+      )}
+    </div>
+  );
+}
+
+/* ── New Schedule Modal ──────────────────────────────────────────────── */
+
+function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: string; onClose: () => void; onCreated: () => void }) {
+  const [step, setStep] = useState<'templates' | 'form'>('templates');
+  const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
+  const [templateCat, setTemplateCat] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [vendors, setVendors] = useState<PreferredVendor[]>([]);
+
+  // Form state
+  const [propertyId, setPropertyId] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [cadenceType, setCadenceType] = useState('weekly');
+  const [dayOfWeek, setDayOfWeek] = useState(1);
+  const [dayOfMonth, setDayOfMonth] = useState(1);
+  const [timeVal, setTimeVal] = useState('10:00');
+  const [vendorId, setVendorId] = useState('');
+  const [agreedRate, setAgreedRate] = useState('');
+  const [autoBook, setAutoBook] = useState(true);
+  const [category, setCategory] = useState('general');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setLoadingTemplates(true);
+    templateService.list(templateCat ? { category: templateCat } : undefined).then(res => {
+      if (res.data) setTemplates(res.data);
+    }).catch(() => {}).finally(() => setLoadingTemplates(false));
+  }, [templateCat]);
+
+  useEffect(() => {
+    businessService.listProperties(workspaceId).then(res => { if (res.data) setProperties(res.data); }).catch(() => {});
+    businessService.listVendors(workspaceId).then(res => { if (res.data) setVendors(res.data); }).catch(() => {});
+  }, [workspaceId]);
+
+  const selectTemplate = (t: ScheduleTemplate) => {
+    setTitle(t.title);
+    setDescription(t.description);
+    setCategory(t.category);
+    if (t.suggestedCadenceType) setCadenceType(t.suggestedCadenceType);
+    if (t.suggestedCadenceConfig) {
+      if (typeof t.suggestedCadenceConfig.day_of_week === 'number') setDayOfWeek(t.suggestedCadenceConfig.day_of_week);
+      if (typeof t.suggestedCadenceConfig.day_of_month === 'number') setDayOfMonth(t.suggestedCadenceConfig.day_of_month);
+      if (typeof t.suggestedCadenceConfig.time === 'string') setTimeVal(t.suggestedCadenceConfig.time);
+    }
+    setStep('form');
+  };
+
+  const handleSave = async () => {
+    if (!title.trim()) { setError('Title is required'); return; }
+    setSaving(true);
+    setError('');
+    const cadenceConfig: Record<string, unknown> = {};
+    if (['weekly', 'biweekly'].includes(cadenceType)) {
+      cadenceConfig.day_of_week = dayOfWeek;
+      cadenceConfig.time = timeVal;
+    } else if (['monthly', 'quarterly'].includes(cadenceType)) {
+      cadenceConfig.day_of_month = dayOfMonth;
+      cadenceConfig.time = timeVal;
+    } else if (['semi_annual', 'annual'].includes(cadenceType)) {
+      cadenceConfig.time = timeVal;
+    }
+    try {
+      await businessService.createSchedule(workspaceId, {
+        property_id: propertyId || null,
+        title: title.trim(),
+        description: description.trim() || null,
+        category,
+        cadence_type: cadenceType,
+        cadence_config: Object.keys(cadenceConfig).length > 0 ? cadenceConfig : null,
+        preferred_provider_id: vendorId || null,
+        agreed_rate_cents: agreedRate ? Math.round(parseFloat(agreedRate) * 100) : null,
+        auto_book: autoBook,
+      });
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create schedule');
+    }
+    setSaving(false);
+  };
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, overflowY: 'auto', padding: 20 }}
+      onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 680, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E0DAD4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>
+            {step === 'templates' ? 'Choose a template' : 'Configure schedule'}
+          </h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9B9490', padding: 4 }}>×</button>
+        </div>
+
+        {step === 'templates' ? (
+          <div style={{ padding: 24 }}>
+            {/* Category filter */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+              {TEMPLATE_CATEGORIES.map(c => (
+                <button key={c.key} onClick={() => setTemplateCat(c.key)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 20, border: '1px solid #E0DAD4',
+                    background: templateCat === c.key ? O : '#fff', color: templateCat === c.key ? '#fff' : '#6B6560',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Template grid */}
+            {loadingTemplates ? (
+              <div style={{ textAlign: 'center', padding: 32, color: '#9B9490' }}>Loading templates...</div>
+            ) : templates.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 32, color: '#9B9490' }}>No templates found for this category.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                {templates.map(t => {
+                  const catColor = SCHEDULE_CAT_COLORS[t.category] ?? '#6B6560';
+                  return (
+                    <div key={t.id} style={{
+                      border: '1px solid #E0DAD4', borderRadius: 10, padding: 16, cursor: 'pointer',
+                      transition: 'border-color 0.15s',
+                    }}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = O)}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = '#E0DAD4')}
+                      onClick={() => selectTemplate(t)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                          background: catColor + '18', color: catColor, textTransform: 'uppercase',
+                        }}>
+                          {t.category.replace(/_/g, ' ')}
+                        </span>
+                        <span style={{ fontSize: 11, color: '#9B9490' }}>{t.suggestedCadenceType?.replace(/_/g, ' ')}</span>
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 4 }}>{t.title}</div>
+                      {t.whyItMatters && (
+                        <div style={{ fontSize: 12, color: '#9B9490', fontStyle: 'italic', marginBottom: 6, lineHeight: 1.4 }}>{t.whyItMatters}</div>
+                      )}
+                      {t.estimatedCostRange && (
+                        <div style={{ fontSize: 12, color: '#6B6560' }}>{t.estimatedCostRange}</div>
+                      )}
+                      <button style={{
+                        marginTop: 10, padding: '6px 16px', borderRadius: 6, border: 'none',
+                        background: O, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      }}>
+                        Use this
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ textAlign: 'center', marginTop: 20 }}>
+              <button onClick={() => { setStep('form'); }} style={{ background: 'none', border: 'none', color: O, fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
+                Start from scratch
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: 24 }}>
+            {step === 'form' && templates.length > 0 && (
+              <button onClick={() => setStep('templates')} style={{ background: 'none', border: 'none', color: '#9B9490', fontSize: 13, cursor: 'pointer', marginBottom: 16, padding: 0 }}>
+                ← Back to templates
+              </button>
+            )}
+
+            {error && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: '#DC2626' }}>{error}</div>}
+
+            {/* Property selector */}
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Property</label>
+            <select value={propertyId} onChange={e => setPropertyId(e.target.value)}
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }}>
+              <option value="">All properties</option>
+              {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+
+            {/* Title */}
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Title *</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Weekly pool cleaning"
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }} />
+
+            {/* Description */}
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Description</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional notes for the provider"
+              rows={3} style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
+
+            {/* Cadence type cards */}
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 10 }}>Cadence</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16 }}>
+              {CADENCE_OPTIONS.map(c => (
+                <button key={c.value} onClick={() => setCadenceType(c.value)}
+                  style={{
+                    padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                    border: cadenceType === c.value ? `2px solid ${O}` : '1px solid #E0DAD4',
+                    background: cadenceType === c.value ? '#FFF5F0' : '#fff',
+                  }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: cadenceType === c.value ? O : D }}>{c.label}</div>
+                  <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>{c.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Day & Time pickers */}
+            {['weekly', 'biweekly'].includes(cadenceType) && (
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Day of week</label>
+                  <select value={dayOfWeek} onChange={e => setDayOfWeek(Number(e.target.value))}
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}>
+                    {dayNames.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Time</label>
+                  <input type="time" value={timeVal} onChange={e => setTimeVal(e.target.value)}
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+              </div>
+            )}
+            {['monthly', 'quarterly'].includes(cadenceType) && (
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Day of month</label>
+                  <select value={dayOfMonth} onChange={e => setDayOfMonth(Number(e.target.value))}
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}>
+                    {Array.from({ length: 28 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Time</label>
+                  <input type="time" value={timeVal} onChange={e => setTimeVal(e.target.value)}
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+              </div>
+            )}
+
+            {/* Vendor */}
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Preferred vendor (optional)</label>
+            <select value={vendorId} onChange={e => setVendorId(e.target.value)}
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }}>
+              <option value="">Use marketplace</option>
+              {vendors.map(v => <option key={v.id} value={v.providerId}>{v.providerName}</option>)}
+            </select>
+
+            {/* Agreed rate */}
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Agreed rate (optional)</label>
+            <div style={{ position: 'relative', marginBottom: 16 }}>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9B9490', fontSize: 14 }}>$</span>
+              <input type="number" min="0" step="0.01" value={agreedRate} onChange={e => setAgreedRate(e.target.value)}
+                placeholder="0.00"
+                style={{ width: '100%', padding: '10px 14px 10px 28px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+            </div>
+
+            {/* Auto-book toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+              <button onClick={() => setAutoBook(!autoBook)}
+                style={{
+                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative',
+                  background: autoBook ? G : '#D0CBC6', transition: 'background 0.2s',
+                }}>
+                <span style={{
+                  position: 'absolute', top: 2, left: autoBook ? 22 : 2,
+                  width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                  transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                }} />
+              </button>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book</div>
+                <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically book the preferred vendor or best marketplace response</div>
+              </div>
+            </div>
+
+            {/* Save */}
+            <button onClick={handleSave} disabled={saving}
+              style={{
+                width: '100%', padding: '14px 0', borderRadius: 10, border: 'none',
+                background: O, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                opacity: saving ? 0.6 : 1,
+              }}>
+              {saving ? 'Creating...' : 'Create schedule'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Reports Tab ──────────────────────────────────────────────────────── */
 
 type ReportView = 'summary' | 'property' | 'category' | 'vendor' | 'monthly' | 'scorecards';
@@ -4179,9 +4678,9 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
 
 /* ── Main Page ──────────────────────────────────────────────────────────── */
 
-const TABS = ['dashboard', 'dispatches', 'bookings', 'reports', 'properties', 'vendors', 'team', 'settings', 'billing'] as const;
+const TABS = ['dashboard', 'dispatches', 'bookings', 'schedules', 'reports', 'properties', 'vendors', 'team', 'settings', 'billing'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings', schedules: 'Auto-Dispatch', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
 
 function useThemeMode() {
   const [mode, setMode] = useState<'light' | 'dark' | 'auto'>(() => {
@@ -4360,7 +4859,7 @@ export default function BusinessPortal() {
                 if (t === 'settings' && workspace?.user_role !== 'admin') return false;
                 return true;
               }).map(t => {
-                const isLocked = t === 'reports' && !['professional', 'business', 'enterprise'].includes(workspace?.plan ?? '');
+                const isLocked = (t === 'reports' || t === 'schedules') && !['professional', 'business', 'enterprise'].includes(workspace?.plan ?? '');
                 return (
                   <button key={t} onClick={() => {
                     if (isLocked) { setShowReportsUpgrade(true); return; }
@@ -4388,6 +4887,9 @@ export default function BusinessPortal() {
             )}
             {workspace && tab === 'bookings' && (
               <BusinessBookingsTab workspaceId={workspace.id} focusJobId={focusJobId} onFocusHandled={() => setFocusJobId(null)} />
+            )}
+            {workspace && tab === 'schedules' && (
+              <SchedulesTab workspaceId={workspace.id} plan={workspace.plan} />
             )}
             {workspace && tab === 'reports' && (
               <ReportsTab workspaceId={workspace.id} plan={workspace.plan} />
