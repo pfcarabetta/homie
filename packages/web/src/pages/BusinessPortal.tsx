@@ -1017,7 +1017,7 @@ function trendArrow(current: number, previous: number): { text: string; color: s
   return { text: '→ 0%', color: '#9B9490' };
 }
 
-function DashboardTab({ workspace, onTabChange }: { workspace: WorkspaceDetail; onTabChange: (tab: Tab) => void }) {
+function DashboardTab({ workspace, onNavigate }: { workspace: WorkspaceDetail; onNavigate: (tab: Tab, jobId?: string) => void }) {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [suggestions, setSuggestions] = useState<SeasonalSuggestion[]>([]);
@@ -1166,8 +1166,8 @@ function DashboardTab({ workspace, onTabChange }: { workspace: WorkspaceDetail; 
               const typeColor = a.type === 'dispatch' ? O : a.type === 'quote' ? '#3B82F6' : a.type === 'booking' ? G : '#DC2626';
               return (
                 <div key={i} onClick={() => {
-                  if (a.type === 'booking') onTabChange('bookings');
-                  else onTabChange('dispatches');
+                  if (a.type === 'booking') onNavigate('bookings', a.job_id);
+                  else onNavigate('dispatches', a.job_id);
                 }} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < data.recent_activity.length - 1 ? '1px solid #F0EDE9' : 'none', cursor: 'pointer', borderRadius: 6, transition: 'background 0.15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#FAFAF8'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -2523,11 +2523,11 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-function DispatchesTab({ workspaceId, onTabChange, plan }: { workspaceId: string; onTabChange?: (tab: Tab) => void; plan: string }) {
+function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHandled }: { workspaceId: string; onTabChange?: (tab: Tab) => void; plan: string; focusJobId?: string | null; onFocusHandled?: () => void }) {
   const navigate = useNavigate();
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(focusJobId ?? null);
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -2571,6 +2571,14 @@ function DispatchesTab({ workspaceId, onTabChange, plan }: { workspaceId: string
     businessService.listDispatches(workspaceId).then(res => {
       if (res.data) setDispatches(res.data);
       setLoading(false);
+      // Auto-scroll to focused job after data loads
+      if (focusJobId) {
+        setTimeout(() => {
+          const el = document.getElementById(`dispatch-${focusJobId}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          onFocusHandled?.();
+        }, 200);
+      }
     }).catch(() => setLoading(false));
   }, [workspaceId]);
 
@@ -2639,7 +2647,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan }: { workspaceId: string
           }
 
           return (
-            <div key={j.id} onClick={() => toggleExpand(j.id)} style={{
+            <div key={j.id} id={`dispatch-${j.id}`} onClick={() => toggleExpand(j.id)} style={{
               background: 'white', borderRadius: 12,
               border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
               cursor: 'pointer', transition: 'all 0.15s', overflow: 'hidden',
@@ -3256,7 +3264,7 @@ function ReportsTab({ workspaceId, plan }: { workspaceId: string; plan: string }
 
 /* ── Bookings Tab ─────────────────────────────────────────────────────── */
 
-function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
+function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { workspaceId: string; focusJobId?: string | null; onFocusHandled?: () => void }) {
   const [bookingsList, setBookingsList] = useState<WorkspaceBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -3269,6 +3277,18 @@ function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
     businessService.listBookings(workspaceId).then(res => {
       setBookingsList(res.data?.bookings ?? []);
       setLoading(false);
+      if (focusJobId) {
+        // Find booking by job ID and expand it
+        const match = (res.data?.bookings ?? []).find(b => b.jobId === focusJobId);
+        if (match) {
+          setExpandedId(match.id);
+          setTimeout(() => {
+            const el = document.getElementById(`booking-${match.id}`);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 200);
+        }
+        onFocusHandled?.();
+      }
     }).catch(() => setLoading(false));
   }, [workspaceId]);
 
@@ -3292,7 +3312,7 @@ function BusinessBookingsTab({ workspaceId }: { workspaceId: string }) {
           const catLabel = b.diagnosis?.category ? b.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Service';
 
           return (
-            <div key={b.id} onClick={() => setExpandedId(isExpanded ? null : b.id)} style={{
+            <div key={b.id} id={`booking-${b.id}`} onClick={() => setExpandedId(isExpanded ? null : b.id)} style={{
               background: 'white', borderRadius: 12,
               border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
               cursor: 'pointer', transition: 'all 0.15s', overflow: 'hidden',
@@ -4119,6 +4139,7 @@ export default function BusinessPortal() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceDetail | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
+  const [focusJobId, setFocusJobId] = useState<string | null>(null);
   const [showReportsUpgrade, setShowReportsUpgrade] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -4280,15 +4301,15 @@ export default function BusinessPortal() {
             </div>
 
             {/* Tab content */}
-            {workspace && tab === 'dashboard' && <DashboardTab workspace={workspace} onTabChange={setTab} />}
+            {workspace && tab === 'dashboard' && <DashboardTab workspace={workspace} onNavigate={(t, jobId) => { setFocusJobId(jobId ?? null); setTab(t); }} />}
             {workspace && tab === 'billing' && workspace.user_role === 'admin' && (
               <BillingTab workspace={workspace} onUpdated={w => setWorkspace(w)} />
             )}
             {workspace && tab === 'dispatches' && (
-              <DispatchesTab workspaceId={workspace.id} onTabChange={setTab} plan={workspace.plan} />
+              <DispatchesTab workspaceId={workspace.id} onTabChange={setTab} plan={workspace.plan} focusJobId={focusJobId} onFocusHandled={() => setFocusJobId(null)} />
             )}
             {workspace && tab === 'bookings' && (
-              <BusinessBookingsTab workspaceId={workspace.id} />
+              <BusinessBookingsTab workspaceId={workspace.id} focusJobId={focusJobId} onFocusHandled={() => setFocusJobId(null)} />
             )}
             {workspace && tab === 'reports' && (
               <ReportsTab workspaceId={workspace.id} plan={workspace.plan} />
