@@ -785,6 +785,7 @@ function DashboardTab({ workspace }: { workspace: WorkspaceDetail }) {
   const [suggestions, setSuggestions] = useState<SeasonalSuggestion[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [suggestionsGeneratedAt, setSuggestionsGeneratedAt] = useState<string | null>(null);
 
   useEffect(() => {
     businessService.getDashboard(workspace.id).then(res => {
@@ -793,10 +794,32 @@ function DashboardTab({ workspace }: { workspace: WorkspaceDetail }) {
     }).catch(() => setLoading(false));
   }, [workspace.id]);
 
-  function loadSuggestions() {
+  function loadSuggestions(force = false) {
+    // Check localStorage cache (24-hour TTL)
+    const cacheKey = `homie_seasonal_${workspace.id}`;
+    if (!force) {
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const { suggestions: cachedSuggestions, generatedAt } = JSON.parse(cached) as { suggestions: SeasonalSuggestion[]; generatedAt: string };
+          const age = Date.now() - new Date(generatedAt).getTime();
+          if (age < 24 * 60 * 60 * 1000 && cachedSuggestions.length > 0) {
+            setSuggestions(cachedSuggestions);
+            setSuggestionsGeneratedAt(generatedAt);
+            return;
+          }
+        }
+      } catch { /* ignore bad cache */ }
+    }
+
     setLoadingSuggestions(true);
     businessService.getSeasonalSuggestions(workspace.id).then(res => {
-      if (res.data) setSuggestions(res.data);
+      if (res.data && res.data.length > 0) {
+        setSuggestions(res.data);
+        const now = new Date().toISOString();
+        setSuggestionsGeneratedAt(now);
+        try { localStorage.setItem(cacheKey, JSON.stringify({ suggestions: res.data, generatedAt: now })); } catch { /* ignore */ }
+      }
     }).catch(() => {}).finally(() => setLoadingSuggestions(false));
   }
 
@@ -931,10 +954,17 @@ function DashboardTab({ workspace }: { workspace: WorkspaceDetail }) {
             <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: 0 }}>Seasonal Prep Suggestions</h4>
             <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>AI-generated based on your properties, locations, and time of year</div>
           </div>
-          <button onClick={loadSuggestions} disabled={loadingSuggestions}
-            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B6560', cursor: 'pointer', opacity: loadingSuggestions ? 0.5 : 1 }}>
-            {loadingSuggestions ? 'Generating...' : '🔄 Refresh'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {suggestionsGeneratedAt && (
+              <span style={{ fontSize: 11, color: '#9B9490' }}>
+                Generated {new Date(suggestionsGeneratedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            )}
+            <button onClick={() => loadSuggestions(true)} disabled={loadingSuggestions}
+              style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B6560', cursor: 'pointer', opacity: loadingSuggestions ? 0.5 : 1 }}>
+              {loadingSuggestions ? 'Generating...' : '🔄 Regenerate'}
+            </button>
+          </div>
         </div>
 
         {loadingSuggestions && suggestions.length === 0 && (
