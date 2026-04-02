@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { businessService, jobService, slackService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings } from '@/services/api';
+import { businessService, jobService, slackService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -769,26 +769,215 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
   );
 }
 
-/* ── Overview Tab ───────────────────────────────────────────────────────── */
+/* ── Dashboard Tab ──────────────────────────────────────────────────────── */
 
-function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
-  const stats = [
-    { label: 'Properties', value: workspace.property_count, icon: '🏠' },
-    { label: 'Team Members', value: workspace.member_count, icon: '👥' },
-    { label: 'Plan', value: workspace.plan.charAt(0).toUpperCase() + workspace.plan.slice(1), icon: '📋' },
-    { label: 'Your Role', value: workspace.user_role.charAt(0).toUpperCase() + workspace.user_role.slice(1), icon: '🔑' },
-  ];
+function trendArrow(current: number, previous: number): { text: string; color: string } {
+  if (previous === 0) return current > 0 ? { text: `+${current}`, color: G } : { text: '—', color: '#9B9490' };
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct > 0) return { text: `↑ ${pct}%`, color: G };
+  if (pct < 0) return { text: `↓ ${Math.abs(pct)}%`, color: '#DC2626' };
+  return { text: '→ 0%', color: '#9B9490' };
+}
+
+function DashboardTab({ workspace }: { workspace: WorkspaceDetail }) {
+  const navigate = useNavigate();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [suggestions, setSuggestions] = useState<SeasonalSuggestion[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    businessService.getDashboard(workspace.id).then(res => {
+      if (res.data) setData(res.data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [workspace.id]);
+
+  function loadSuggestions() {
+    setLoadingSuggestions(true);
+    businessService.getSeasonalSuggestions(workspace.id).then(res => {
+      if (res.data) setSuggestions(res.data);
+    }).catch(() => {}).finally(() => setLoadingSuggestions(false));
+  }
+
+  useEffect(() => { loadSuggestions(); }, [workspace.id]);
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading dashboard...</div>;
+  if (!data) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Failed to load dashboard</div>;
+
+  const dispatchTrend = trendArrow(data.dispatches_this_month, data.dispatches_last_month);
+  const bookingTrend = trendArrow(data.bookings_this_month, data.bookings_last_month);
+
+  const CAT_COLORS: Record<string, string> = {
+    plumbing: '#3B82F6', electrical: '#F59E0B', hvac: '#8B5CF6', appliance: '#EC4899',
+    roofing: '#6366F1', cleaning: '#14B8A6', pool: '#06B6D4', landscaping: '#22C55E',
+    pest_control: '#EF4444', painting: '#F97316', general: '#6B7280',
+  };
+
+  const maxCatCount = Math.max(...data.dispatches_by_category.map(c => c.count), 1);
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
-        {stats.map(s => (
-          <div key={s.label} style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 20, textAlign: 'center' }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>{s.icon}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: D }}>{s.value}</div>
-            <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>{s.label}</div>
+      {/* ── KPI Cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 24 }}>
+        {[
+          { label: 'Active Dispatches', value: data.active_dispatches, icon: '📡', color: O, sub: null },
+          { label: 'Completed This Month', value: data.completed_this_month, icon: '✅', color: G, sub: dispatchTrend },
+          { label: 'Total Bookings', value: data.total_bookings, icon: '📋', color: '#3B82F6', sub: bookingTrend },
+          { label: 'Avg Response Time', value: data.avg_response_minutes != null ? `${data.avg_response_minutes}m` : '—', icon: '⚡', color: '#8B5CF6', sub: null },
+        ].map(kpi => (
+          <div key={kpi.label} style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: '18px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>{kpi.label}</span>
+              <span style={{ fontSize: 20 }}>{kpi.icon}</span>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: D }}>{kpi.value}</div>
+            {kpi.sub && (
+              <div style={{ fontSize: 12, fontWeight: 600, color: kpi.sub.color, marginTop: 4 }}>
+                {kpi.sub.text} vs last month
+              </div>
+            )}
           </div>
         ))}
+      </div>
+
+      {/* ── Middle row: Category breakdown + Top vendors ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
+        {/* Category breakdown */}
+        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20 }}>
+          <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Dispatches by Category</h4>
+          {data.dispatches_by_category.length === 0 ? (
+            <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No dispatches yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {data.dispatches_by_category.slice(0, 8).map(cat => (
+                <div key={cat.category}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: '#6B6560', textTransform: 'capitalize' }}>{cat.category.replace(/_/g, ' ')}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: D }}>{cat.count}</span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 3, background: '#F0EDE9' }}>
+                    <div style={{ height: '100%', borderRadius: 3, background: CAT_COLORS[cat.category] ?? O, width: `${(cat.count / maxCatCount) * 100}%`, transition: 'width 0.5s ease' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Top vendors */}
+        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20 }}>
+          <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Top Vendors</h4>
+          {data.top_vendors.length === 0 ? (
+            <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No bookings yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {data.top_vendors.map((v, i) => (
+                <div key={v.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', background: `${O}15`, color: O,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0,
+                  }}>
+                    {i + 1}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</div>
+                    <div style={{ fontSize: 11, color: '#9B9490' }}>
+                      {v.booking_count} booking{v.booking_count !== 1 ? 's' : ''}{v.avg_rating ? ` · ★ ${v.avg_rating}` : ''}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Recent Activity ── */}
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20, marginBottom: 24 }}>
+        <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Recent Activity</h4>
+        {data.recent_activity.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No recent activity</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {data.recent_activity.map((a, i) => {
+              const icon = a.type === 'dispatch' ? '📡' : a.type === 'quote' ? '💬' : a.type === 'booking' ? '✅' : '❌';
+              const typeColor = a.type === 'dispatch' ? O : a.type === 'quote' ? '#3B82F6' : a.type === 'booking' ? G : '#DC2626';
+              return (
+                <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < data.recent_activity.length - 1 ? '1px solid #F0EDE9' : 'none' }}>
+                  <span style={{ fontSize: 16, flexShrink: 0, marginTop: 2 }}>{icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: D }}>{a.title}</div>
+                    <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>
+                      {a.property_name && <span>{a.property_name}</span>}
+                      {a.provider_name && <span> · {a.provider_name}</span>}
+                      <span> · {new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: typeColor, textTransform: 'uppercase', flexShrink: 0, marginTop: 2 }}>
+                    {a.type}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Seasonal Prep Suggestions ── */}
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div>
+            <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: 0 }}>Seasonal Prep Suggestions</h4>
+            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>AI-generated based on your properties, locations, and time of year</div>
+          </div>
+          <button onClick={loadSuggestions} disabled={loadingSuggestions}
+            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B6560', cursor: 'pointer', opacity: loadingSuggestions ? 0.5 : 1 }}>
+            {loadingSuggestions ? 'Generating...' : '🔄 Refresh'}
+          </button>
+        </div>
+
+        {loadingSuggestions && suggestions.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '30px 0' }}>
+            <div style={{ width: 24, height: 24, border: `3px solid ${O}30`, borderTopColor: O, borderRadius: '50%', margin: '0 auto 10px', animation: 'spin 0.7s linear infinite' }} />
+            <div style={{ fontSize: 13, color: '#9B9490' }}>Analyzing your properties and generating suggestions...</div>
+          </div>
+        )}
+
+        {suggestions.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {suggestions.map((s, i) => {
+              const priorityColor = s.priority === 'high' ? '#DC2626' : s.priority === 'medium' ? '#D4A017' : G;
+              return (
+                <div key={i} style={{ background: W, borderRadius: 12, padding: 16, border: '1px solid #E0DAD4' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: D, lineHeight: 1.3 }}>{s.title}</div>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: priorityColor, background: `${priorityColor}15`, padding: '2px 8px', borderRadius: 100, flexShrink: 0, marginLeft: 8, textTransform: 'capitalize' }}>{s.priority}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>{s.description}</div>
+                  <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 10 }}>
+                    <span style={{ textTransform: 'capitalize' }}>{s.category.replace(/_/g, ' ')}</span>
+                    {s.properties.length > 0 && <span> · {s.properties.slice(0, 3).join(', ')}{s.properties.length > 3 ? ` +${s.properties.length - 3} more` : ''}</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: O, fontStyle: 'italic', marginBottom: 10 }}>{s.reason}</div>
+                  <button onClick={() => navigate(`/business/chat?workspace=${workspace.id}`)}
+                    style={{
+                      width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
+                      background: O, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}>
+                    Dispatch
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!loadingSuggestions && suggestions.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '30px 0', color: '#9B9490', fontSize: 13 }}>
+            No seasonal suggestions available. Add properties to get AI-driven maintenance recommendations.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3619,9 +3808,9 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
 
 /* ── Main Page ──────────────────────────────────────────────────────────── */
 
-const TABS = ['overview', 'dispatches', 'bookings', 'billing', 'reports', 'properties', 'vendors', 'team', 'settings'] as const;
+const TABS = ['dashboard', 'dispatches', 'bookings', 'billing', 'reports', 'properties', 'vendors', 'team', 'settings'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', dispatches: 'Dispatches', bookings: 'Bookings', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
 
 function useThemeMode() {
   const [mode, setMode] = useState<'light' | 'dark' | 'auto'>(() => {
@@ -3656,7 +3845,7 @@ export default function BusinessPortal() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceDetail | null>(null);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>('dashboard');
   const [showReportsUpgrade, setShowReportsUpgrade] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -3720,6 +3909,7 @@ export default function BusinessPortal() {
         .bp-portal[data-theme="dark"] button {
           transition: background 0.15s, color 0.15s;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
         @media (max-width: 640px) {
           .bp-prop-card { flex-direction: column !important; }
           .bp-prop-img { width: 100% !important; height: 140px !important; min-height: auto !important; }
@@ -3770,7 +3960,7 @@ export default function BusinessPortal() {
             {/* Workspace selector */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <select value={selectedId || ''} onChange={e => { setSelectedId(e.target.value); setTab('overview'); }}
+                <select value={selectedId || ''} onChange={e => { setSelectedId(e.target.value); setTab('dashboard'); }}
                   style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 600, color: D, border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 8px', maxWidth: '60vw' }}>
                   {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
@@ -3817,7 +4007,7 @@ export default function BusinessPortal() {
             </div>
 
             {/* Tab content */}
-            {workspace && tab === 'overview' && <OverviewTab workspace={workspace} />}
+            {workspace && tab === 'dashboard' && <DashboardTab workspace={workspace} />}
             {workspace && tab === 'billing' && workspace.user_role === 'admin' && (
               <BillingTab workspace={workspace} onUpdated={w => setWorkspace(w)} />
             )}

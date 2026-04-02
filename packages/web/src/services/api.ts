@@ -778,6 +778,29 @@ export interface ProviderSearchResult {
   categories: string[] | null;
 }
 
+export interface DashboardData {
+  active_dispatches: number;
+  completed_this_month: number;
+  total_bookings: number;
+  avg_response_minutes: number | null;
+  dispatches_this_month: number;
+  dispatches_last_month: number;
+  bookings_this_month: number;
+  bookings_last_month: number;
+  recent_activity: Array<{ type: string; title: string; property_name: string | null; provider_name: string | null; created_at: string }>;
+  top_vendors: Array<{ name: string; booking_count: number; avg_rating: string | null }>;
+  dispatches_by_category: Array<{ category: string; count: number }>;
+}
+
+export interface SeasonalSuggestion {
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  properties: string[];
+  reason: string;
+}
+
 export const businessChatService = {
   sendMessage(
     message: string,
@@ -977,6 +1000,10 @@ export const businessService = {
     fetchAPI<{ bookings: WorkspaceBooking[] }>(`/api/v1/business/${workspaceId}/bookings`),
   cancelBooking: (workspaceId: string, bookingId: string) =>
     fetchAPI<{ cancelled: boolean; provider_notified: string }>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/cancel`, { method: 'POST' }),
+
+  // Dashboard
+  getDashboard: (workspaceId: string) => fetchAPI<DashboardData>(`/api/v1/business/${workspaceId}/dashboard`),
+  getSeasonalSuggestions: (workspaceId: string) => fetchAPI<SeasonalSuggestion[]>(`/api/v1/business/${workspaceId}/dashboard/seasonal-suggestions`, { method: 'POST' }),
 };
 
 // ── Slack Integration ───────────────────────────────────────────────────────

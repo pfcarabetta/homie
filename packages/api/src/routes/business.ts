@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { eq, and, or, desc, ne, sql, gte, lte, count } from 'drizzle-orm';
+import Anthropic from '@anthropic-ai/sdk';
 import logger from '../logger';
 import { db } from '../db';
 import { workspaces } from '../db/schema/workspaces';
@@ -1897,6 +1898,266 @@ router.get('/:workspaceId/jobs/:jobId/estimate-pdf', requireWorkspace, requireWo
   } catch (err) {
     logger.error({ err }, '[GET /business/:id/jobs/:jobId/estimate-pdf]');
     res.status(500).json({ data: null, error: 'Failed to generate estimate PDF', meta: {} });
+  }
+});
+
+// ── Dashboard ────────────────────────────────────────────────────────────────
+
+// GET /:workspaceId/dashboard
+router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const firstOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    // KPIs
+    const [{ value: activeDispatches }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(jobs)
+      .where(and(
+        eq(jobs.workspaceId, req.workspaceId),
+        sql`${jobs.status} IN ('open', 'collecting', 'dispatching')`,
+      ));
+
+    const [{ value: completedThisMonth }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(jobs)
+      .where(and(
+        eq(jobs.workspaceId, req.workspaceId),
+        eq(jobs.status, 'completed'),
+        gte(jobs.createdAt, firstOfMonth),
+      ));
+
+    const [{ value: totalBookings }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .where(eq(jobs.workspaceId, req.workspaceId));
+
+    // Avg response minutes this month
+    const [avgRow] = await db
+      .select({
+        avg: sql<number | null>`avg(EXTRACT(EPOCH FROM (${outreachAttempts.respondedAt} - ${outreachAttempts.attemptedAt})) / 60)`,
+      })
+      .from(outreachAttempts)
+      .innerJoin(jobs, eq(outreachAttempts.jobId, jobs.id))
+      .where(and(
+        eq(jobs.workspaceId, req.workspaceId),
+        sql`${outreachAttempts.respondedAt} IS NOT NULL`,
+        gte(outreachAttempts.attemptedAt, firstOfMonth),
+      ));
+    const avgResponseMinutes = avgRow.avg !== null ? Math.round(avgRow.avg * 10) / 10 : null;
+
+    // This month vs last month dispatches
+    const [{ value: dispatchesThisMonth }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(jobs)
+      .where(and(eq(jobs.workspaceId, req.workspaceId), gte(jobs.createdAt, firstOfMonth)));
+
+    const [{ value: dispatchesLastMonth }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(jobs)
+      .where(and(
+        eq(jobs.workspaceId, req.workspaceId),
+        gte(jobs.createdAt, firstOfLastMonth),
+        lte(jobs.createdAt, firstOfMonth),
+      ));
+
+    // Bookings this/last month
+    const [{ value: bookingsThisMonth }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .where(and(eq(jobs.workspaceId, req.workspaceId), gte(bookings.confirmedAt, firstOfMonth)));
+
+    const [{ value: bookingsLastMonth }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .where(and(
+        eq(jobs.workspaceId, req.workspaceId),
+        gte(bookings.confirmedAt, firstOfLastMonth),
+        lte(bookings.confirmedAt, firstOfMonth),
+      ));
+
+    // Recent activity (last 10 events) — union of dispatches, quotes, bookings
+    const recentDispatches = await db
+      .select({
+        type: sql<string>`'dispatch'`,
+        title: sql<string>`COALESCE(${jobs.diagnosis}->>'category', 'Job')`,
+        propertyName: sql<string | null>`NULL`,
+        providerName: sql<string | null>`NULL`,
+        createdAt: jobs.createdAt,
+      })
+      .from(jobs)
+      .where(eq(jobs.workspaceId, req.workspaceId))
+      .orderBy(desc(jobs.createdAt))
+      .limit(10);
+
+    const recentQuotes = await db
+      .select({
+        type: sql<string>`'quote'`,
+        title: sql<string>`'Quote received'`,
+        propertyName: sql<string | null>`NULL`,
+        providerName: providers.name,
+        createdAt: providerResponses.createdAt,
+      })
+      .from(providerResponses)
+      .innerJoin(jobs, eq(providerResponses.jobId, jobs.id))
+      .innerJoin(providers, eq(providerResponses.providerId, providers.id))
+      .where(eq(jobs.workspaceId, req.workspaceId))
+      .orderBy(desc(providerResponses.createdAt))
+      .limit(10);
+
+    const recentBookings = await db
+      .select({
+        type: sql<string>`'booking'`,
+        title: sql<string>`'Booking confirmed'`,
+        propertyName: sql<string | null>`NULL`,
+        providerName: providers.name,
+        createdAt: bookings.confirmedAt,
+      })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .innerJoin(providers, eq(bookings.providerId, providers.id))
+      .where(eq(jobs.workspaceId, req.workspaceId))
+      .orderBy(desc(bookings.confirmedAt))
+      .limit(10);
+
+    const allActivity = [
+      ...recentDispatches.map(r => ({ type: r.type, title: r.title, property_name: r.propertyName, provider_name: r.providerName, created_at: r.createdAt.toISOString() })),
+      ...recentQuotes.map(r => ({ type: r.type, title: r.title, property_name: r.propertyName, provider_name: r.providerName, created_at: r.createdAt.toISOString() })),
+      ...recentBookings.map(r => ({ type: r.type, title: r.title, property_name: r.propertyName, provider_name: r.providerName, created_at: r.createdAt.toISOString() })),
+    ]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 10);
+
+    // Top vendors by booking count
+    const topVendors = await db
+      .select({
+        name: providers.name,
+        bookingCount: sql<number>`count(*)::int`,
+        avgRating: providers.googleRating,
+      })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .innerJoin(providers, eq(bookings.providerId, providers.id))
+      .where(eq(jobs.workspaceId, req.workspaceId))
+      .groupBy(providers.id, providers.name, providers.googleRating)
+      .orderBy(sql`count(*) DESC`)
+      .limit(5);
+
+    // Dispatches by category
+    const dispatchesByCategory = await db
+      .select({
+        category: sql<string>`COALESCE(${jobs.diagnosis}->>'category', 'general')`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(jobs)
+      .where(eq(jobs.workspaceId, req.workspaceId))
+      .groupBy(sql`${jobs.diagnosis}->>'category'`)
+      .orderBy(sql`count(*) DESC`);
+
+    res.json({
+      data: {
+        active_dispatches: activeDispatches,
+        completed_this_month: completedThisMonth,
+        total_bookings: totalBookings,
+        avg_response_minutes: avgResponseMinutes,
+        dispatches_this_month: dispatchesThisMonth,
+        dispatches_last_month: dispatchesLastMonth,
+        bookings_this_month: bookingsThisMonth,
+        bookings_last_month: bookingsLastMonth,
+        recent_activity: allActivity,
+        top_vendors: topVendors.map(v => ({
+          name: v.name,
+          booking_count: v.bookingCount,
+          avg_rating: v.avgRating,
+        })),
+        dispatches_by_category: dispatchesByCategory.map(d => ({
+          category: d.category,
+          count: d.count,
+        })),
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/dashboard]');
+    res.status(500).json({ data: null, error: 'Failed to fetch dashboard data', meta: {} });
+  }
+});
+
+// POST /:workspaceId/dashboard/seasonal-suggestions
+router.post('/:workspaceId/dashboard/seasonal-suggestions', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const { count: maxCount } = (req.body ?? {}) as { count?: number };
+    const limit = Math.min(maxCount ?? 8, 8);
+
+    // Load workspace properties
+    const props = await db
+      .select({
+        name: properties.name,
+        city: properties.city,
+        state: properties.state,
+        zipCode: properties.zipCode,
+        beds: properties.beds,
+        propertyType: properties.propertyType,
+      })
+      .from(properties)
+      .where(and(eq(properties.workspaceId, req.workspaceId), eq(properties.active, true)));
+
+    if (props.length === 0) {
+      res.json({ data: [], error: null, meta: {} });
+      return;
+    }
+
+    const now = new Date();
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const currentMonth = months[now.getMonth()];
+    const seasons: Record<number, string> = { 0: 'winter', 1: 'winter', 2: 'spring', 3: 'spring', 4: 'spring', 5: 'summer', 6: 'summer', 7: 'summer', 8: 'fall', 9: 'fall', 10: 'fall', 11: 'winter' };
+    const currentSeason = seasons[now.getMonth()];
+
+    const propertyList = props.map(p => {
+      const parts = [p.name];
+      if (p.city || p.state) parts.push(`(${[p.city, p.state].filter(Boolean).join(', ')})`);
+      if (p.propertyType) parts.push(`- ${p.propertyType}`);
+      return parts.join(' ');
+    }).join('\n');
+
+    const anthropic = new Anthropic();
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      system: 'You are a property maintenance expert. Generate seasonal maintenance suggestions for vacation rental and residential properties. Each suggestion should be a specific, actionable task that a property manager can dispatch to a vendor.',
+      messages: [
+        {
+          role: 'user',
+          content: `Current month: ${currentMonth} (${currentSeason})\n\nProperties:\n${propertyList}\n\nGenerate up to ${limit} seasonal maintenance suggestions as a JSON array. Each item should have: title (string), description (string), category (string, e.g. hvac, plumbing, landscaping, pest_control, roofing, general), priority (low/medium/high), properties (array of property names this applies to), reason (string explaining why this is timely).\n\nRespond with ONLY the JSON array, no other text.`,
+        },
+      ],
+    });
+
+    // Parse Claude's response
+    const textBlock = message.content.find(b => b.type === 'text');
+    const responseText = textBlock ? textBlock.text : '[]';
+
+    // Extract JSON from response (handle potential markdown code blocks)
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    const suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) as Array<{
+      title: string;
+      description: string;
+      category: string;
+      priority: string;
+      properties: string[];
+      reason: string;
+    }> : [];
+
+    res.json({ data: suggestions.slice(0, limit), error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/dashboard/seasonal-suggestions]');
+    res.status(500).json({ data: null, error: 'Failed to generate seasonal suggestions', meta: {} });
   }
 });
 
