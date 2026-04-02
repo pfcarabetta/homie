@@ -3455,7 +3455,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
 
             {/* Property multi-select */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>
-              Properties <span style={{ fontWeight: 400, color: '#9B9490' }}>(none = all properties)</span>
+              Properties
             </label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
               <button onClick={() => setSelectedPropertyIds(properties.map(p => p.id))}
