@@ -488,6 +488,8 @@ export default function BusinessChat() {
   const [bookedName, setBookedName] = useState<string | null>(null);
   const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
 
+  const [imgPreview, setImgPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sessionIdRef = useRef(`b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -539,7 +541,7 @@ export default function BusinessChat() {
   }
 
   // Stream AI response
-  function streamAI(userMsg: string, history: Message[], onDone?: (fullText: string, rawText: string) => void) {
+  function streamAI(userMsg: string, history: Message[], onDone?: (fullText: string, rawText: string) => void, images?: string[]) {
     setStreaming(true);
     setStreamText('');
     let full = '';
@@ -606,6 +608,7 @@ export default function BusinessChat() {
       callbacks,
       {
         history: history.map(m => ({ role: m.role, content: m.content })),
+        images,
         propertyContext: getPropertyContext(),
       },
     );
@@ -654,9 +657,12 @@ export default function BusinessChat() {
   function handleUserInput(text: string) {
     setSuggestions([]);
     setShowFreeInput(false);
-    const newMsgs: Message[] = [...messages, { role: 'user', content: text }];
+    const currentImage = imgPreview;
+    const newMsgs: Message[] = [...messages, { role: 'user', content: currentImage ? `📷 ${text}` : text }];
     setMessages(newMsgs);
     setInputVal('');
+    setImgPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
 
     // If we've had enough exchanges, skip the AI call and go to budget
     if (exchangeCount >= 2) {
@@ -670,7 +676,7 @@ export default function BusinessChat() {
     streamAI(text, newMsgs.slice(0, -1), () => {
       setExchangeCount(exchangeCount + 1);
       setStep('extra');
-    });
+    }, currentImage ? [currentImage] : undefined);
   }
 
   // Handle budget selection
@@ -1049,25 +1055,54 @@ export default function BusinessChat() {
 
               {/* Free text input — shown when no suggestions or user tapped "Something else" */}
               {(suggestions.length === 0 || showFreeInput) && (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                  <input value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder="Type your answer..."
-                    onKeyDown={e => { if (e.key === 'Enter' && inputVal.trim()) handleUserInput(inputVal.trim()); }}
-                    autoFocus
-                    style={{
-                      flex: 1, padding: '12px 16px', borderRadius: 100, fontSize: 15, border: '2px solid rgba(0,0,0,0.08)',
-                      fontFamily: "'DM Sans', sans-serif", outline: 'none', color: D,
-                    }}
-                    onFocus={e => e.target.style.borderColor = O}
-                    onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
-                  />
-                  <button onClick={() => { if (inputVal.trim()) handleUserInput(inputVal.trim()); }}
-                    style={{
-                      width: 44, height: 44, borderRadius: '50%', border: 'none',
-                      background: inputVal.trim() ? O : 'rgba(0,0,0,0.06)',
-                      color: 'white', fontSize: 18, cursor: inputVal.trim() ? 'pointer' : 'default',
-                      transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>↑</button>
-                </div>
+                <>
+                  {/* Image preview */}
+                  {imgPreview && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, marginLeft: 0 }}>
+                      <div style={{ position: 'relative' }}>
+                        <img src={imgPreview} alt="Preview" style={{ height: 56, borderRadius: 10, border: '1px solid rgba(0,0,0,0.08)' }} />
+                        <button onClick={() => { setImgPreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                          style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', background: D, color: '#fff', border: '2px solid white', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                      </div>
+                      <span style={{ fontSize: 12, color: '#9B9490' }}>Photo attached</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <input type="file" ref={fileInputRef} accept="image/*" hidden onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = ev => setImgPreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }} />
+                    <button onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(0,0,0,0.08)',
+                        background: 'white', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = O}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'}
+                    >📷</button>
+                    <input value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder={imgPreview ? "Describe what you see..." : "Type your answer..."}
+                      onKeyDown={e => { if (e.key === 'Enter' && (inputVal.trim() || imgPreview)) handleUserInput(inputVal.trim() || 'What do you see in this photo?'); }}
+                      autoFocus
+                      style={{
+                        flex: 1, padding: '12px 16px', borderRadius: 100, fontSize: 15, border: '2px solid rgba(0,0,0,0.08)',
+                        fontFamily: "'DM Sans', sans-serif", outline: 'none', color: D,
+                      }}
+                      onFocus={e => e.target.style.borderColor = O}
+                      onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
+                    />
+                    <button onClick={() => { if (inputVal.trim() || imgPreview) handleUserInput(inputVal.trim() || 'What do you see in this photo?'); }}
+                      style={{
+                        width: 44, height: 44, borderRadius: '50%', border: 'none',
+                        background: (inputVal.trim() || imgPreview) ? O : 'rgba(0,0,0,0.06)',
+                        color: 'white', fontSize: 18, cursor: (inputVal.trim() || imgPreview) ? 'pointer' : 'default',
+                        transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>↑</button>
+                  </div>
+                </>
               )}
 
             </div>
