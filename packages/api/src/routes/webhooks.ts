@@ -182,6 +182,28 @@ async function createProviderResponse(
       });
     }
   } catch { /* Slack failure must not break response handling */ }
+
+  // Record quote in repair_cost_data for cost estimation — fire-and-forget
+  try {
+    const [jobData] = await db.select({ diagnosis: jobs.diagnosis, zipCode: jobs.zipCode, workspaceId: jobs.workspaceId }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
+    if (jobData) {
+      const diagnosis = jobData.diagnosis as { category?: string } | null;
+      const category = diagnosis?.category ?? 'general';
+      const { repairCostData } = await import('../db/schema/cost-estimates');
+      void db.insert(repairCostData).values({
+        jobId,
+        workspaceId: jobData.workspaceId ?? undefined,
+        zipCode: jobData.zipCode ?? undefined,
+        category,
+        subcategory: 'provider_quote',
+        complexity: 'moderate',
+        quotedPriceCents: undefined, // raw text quotes parsed later
+        providerId,
+        dataSource: 'outreach_quote',
+        region: undefined,
+      }).catch((err) => logger.error({ err }, '[webhooks] Failed to record quote in repair_cost_data'));
+    }
+  } catch { /* cost data recording must not break response handling */ }
 }
 
 // ── POST /twilio/voice/conversation ──────────────────────────────────────────

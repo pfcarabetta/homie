@@ -18,6 +18,7 @@ import demoEstimateRouter from './routes/demo-estimate';
 import businessChatRouter from './routes/business-chat';
 import { trackingPublicRouter, trackingAuthRouter } from './routes/tracking';
 import { slackAuthRouter, slackPublicRouter } from './routes/slack-integration';
+import estimatesRouter from './routes/estimates';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
 import { requireProviderAuth } from './middleware/provider-auth';
@@ -78,6 +79,7 @@ app.use('/api/v1/tracking', apiLimiter, trackingPublicRouter);
 app.use('/api/v1/jobs', apiLimiter, requireAuth, trackingAuthRouter);
 app.use('/api/v1/integrations/slack', apiLimiter, slackAuthRouter);
 app.use('/api/v1/slack', slackPublicRouter);
+app.use('/api/v1/estimates', apiLimiter, requireAuth, estimatesRouter);
 
 // Sentry error handler — must be after all routes
 Sentry.setupExpressErrorHandler(app);

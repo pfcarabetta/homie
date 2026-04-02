@@ -1071,8 +1071,6 @@ export const businessService = {
   getSeasonalSuggestions: (workspaceId: string) => fetchAPI<SeasonalSuggestion[]>(`/api/v1/business/${workspaceId}/dashboard/seasonal-suggestions`, { method: 'POST' }),
 };
 
-// ── Slack Integration ───────────────────────────────────────────────────────
-
 export interface SlackSettings {
   connected: boolean;
   slackTeamName?: string;
@@ -1088,6 +1086,30 @@ export interface SlackSettings {
   approvalThresholdCents: number;
   digestTime: string;
 }
+
+// ── Cost Estimates ──────────────────────────────────────────────────────────
+
+export interface CostEstimate {
+  estimateLowCents: number;
+  estimateHighCents: number;
+  estimateMedianCents: number;
+  confidence: number;
+  dataPointsUsed: number;
+  adjustmentFactors: Array<{ name: string; direction: 'up' | 'down' | 'neutral'; percentage: number; reason: string }>;
+  dataSourceLabel: string;
+  comparableRangeLabel: string;
+}
+
+export const estimateService = {
+  generate: (data: {
+    category: string; subcategory: string; complexity?: string;
+    zip_code: string; workspace_id?: string; property_type?: string;
+    brand?: string; system_age_years?: number; urgency?: string;
+    photo_analysis_summary?: string;
+  }) => fetchAPI<CostEstimate>('/api/v1/estimates/generate', { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// ── Slack Integration ───────────────────────────────────────────────────────
 
 export const slackService = {
   getSettings: (workspaceId: string) =>

@@ -3,11 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import {
-  businessService, businessChatService, jobService, connectJobSocket, trackingService,
+  businessService, businessChatService, jobService, connectJobSocket, trackingService, estimateService,
   type Property, type PropertyDetails, type Workspace, type DiagnosticStreamCallbacks,
-  type JobStatusResponse, type ProviderResponseItem,
+  type JobStatusResponse, type ProviderResponseItem, type CostEstimate,
 } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
+import EstimateCard from '@/components/EstimateCard';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -325,9 +326,9 @@ function TrackingShareCard({ jobId, propertyName, trackingUrl, setTrackingUrl }:
   );
 }
 
-function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching }: {
+function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching, estimate }: {
   category: CatDef; property: Property; summary: string; isService: boolean;
-  onDispatch: () => void; dispatching: boolean;
+  onDispatch: () => void; dispatching: boolean; estimate?: CostEstimate;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = summary.length > 300;
@@ -362,6 +363,11 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
             <span style={{ color: '#9B9490' }}>Type:</span> <span style={{ fontWeight: 600, color: D }}>{isService ? 'Service' : 'Repair'}</span>
           </div>
         </div>
+        {estimate && (
+          <div style={{ marginBottom: 16 }}>
+            <EstimateCard estimate={estimate} />
+          </div>
+        )}
         <p style={{ fontSize: 12, color: '#9B9490', lineHeight: 1.5, marginBottom: 16 }}>
           This {isService ? 'scope' : 'diagnosis'} will be shared with providers so they can respond quickly — no need to explain twice.
         </p>
@@ -576,6 +582,7 @@ export default function BusinessChat() {
   const [selectedResponse, setSelectedResponse] = useState<number | null>(null);
   const [bookedName, setBookedName] = useState<string | null>(null);
   const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
 
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -978,6 +985,40 @@ export default function BusinessChat() {
           setStreamText('');
           setAiDiagnosis(visible.trim());
           setStep('summary');
+
+          // Fetch cost estimate
+          const zip = selectedProperty?.zipCode;
+          if (zip && category) {
+            const details = selectedProperty?.details as PropertyDetails | null;
+            const catId = category.id;
+            // Extract brand info from property details based on category
+            let brand: string | undefined;
+            let systemAgeYears: number | undefined;
+            if (details?.hvac && ['hvac', 'chimney', 'insulation'].includes(catId)) {
+              brand = details.hvac.acBrand || details.hvac.heatingBrand;
+              if (details.hvac.acAge) {
+                const parsed = parseInt(details.hvac.acAge, 10);
+                if (!isNaN(parsed)) systemAgeYears = parsed;
+              }
+            } else if (details?.waterHeater && ['water_heater', 'plumbing'].includes(catId)) {
+              brand = details.waterHeater.brand;
+              if (details.waterHeater.age) {
+                const parsed = parseInt(details.waterHeater.age, 10);
+                if (!isNaN(parsed)) systemAgeYears = parsed;
+              }
+            }
+            estimateService.generate({
+              category: catId,
+              subcategory: q1Answer || catId,
+              zip_code: zip,
+              workspace_id: selectedWorkspace || undefined,
+              property_type: selectedProperty?.propertyType,
+              brand,
+              system_age_years: systemAgeYears,
+            }).then(res => {
+              if (res.data) setCostEstimate(res.data);
+            }).catch(() => { /* non-critical */ });
+          }
         },
         onError: () => {
           setStreaming(false);
@@ -1418,6 +1459,7 @@ export default function BusinessChat() {
               isService={category.group === 'service'}
               onDispatch={handleDispatch}
               dispatching={dispatching}
+              estimate={costEstimate ?? undefined}
             />
           )}
 

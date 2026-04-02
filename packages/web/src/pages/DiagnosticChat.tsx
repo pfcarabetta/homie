@@ -17,9 +17,12 @@ import {
   fetchAPI,
   connectJobSocket,
   accountService,
+  estimateService,
   type JobStatusResponse,
   type HomeData,
+  type CostEstimate,
 } from '@/services/api';
+import EstimateCard from '@/components/EstimateCard';
 import {
   mockStreamResponse,
   simulateOutreach,
@@ -515,7 +518,7 @@ export default function DiagnosticChat() {
   const isDemo = new URLSearchParams(window.location.search).has('demo');
   const [state, dispatch] = useReducer(reducer, initialState);
   // useAuth() ensures AuthProvider context is available
-  useAuth();
+  const { homeowner } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const matchFlowRef = useRef<HTMLDivElement>(null);
@@ -523,6 +526,7 @@ export default function DiagnosticChat() {
   const cleanupOutreachRef = useRef<(() => void) | null>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
   const [imgPreview, setImgPreview] = useState<string | null>(null);
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const homeContextRef = useRef<string>('');
 
@@ -538,6 +542,30 @@ export default function DiagnosticChat() {
       }).catch(() => { /* ignore */ });
     }
   }, []);
+
+  // Fetch cost estimate when diagnosis arrives
+  useEffect(() => {
+    if (!state.diagnosis) return;
+    const diag = state.diagnosis;
+    // Extract zip from user's auth profile or from chat messages
+    const zipFromAuth = homeowner?.zip_code;
+    const zipFromMessages = state.messages
+      .filter(m => m.role === 'user')
+      .map(m => m.content.match(/\b(\d{5})\b/))
+      .filter(Boolean)
+      .map(m => m![1])
+      .pop();
+    const zip = zipFromMessages || zipFromAuth;
+    if (!zip || !diag.category) return;
+
+    estimateService.generate({
+      category: diag.category,
+      subcategory: diag.issue || diag.category,
+      zip_code: zip,
+    }).then(res => {
+      if (res.data) setCostEstimate(res.data);
+    }).catch(() => { /* estimate unavailable — non-critical */ });
+  }, [state.diagnosis]);
 
   // Auto-scroll to bottom when messages change (skip if only welcome/empty)
   useEffect(() => {
@@ -1087,6 +1115,12 @@ export default function DiagnosticChat() {
                     {msg.diagnosis && (
                       <div style={{ marginTop: 8 }}>
                         <DiagnosisCard diagnosis={msg.diagnosis} onFindPro={openMatchFlow} />
+                        {costEstimate && (
+                          <EstimateCard
+                            estimate={costEstimate}
+                            diyEstimate={msg.diagnosis.diy_feasible ? msg.diagnosis.estimated_cost_diy : undefined}
+                          />
+                        )}
                       </div>
                     )}
                     {!msg.diagnosis && msg.jobSummary && (
