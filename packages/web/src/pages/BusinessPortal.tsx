@@ -3275,16 +3275,17 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
   const [vendors, setVendors] = useState<PreferredVendor[]>([]);
 
   // Form state
-  const [propertyId, setPropertyId] = useState('');
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [cadenceType, setCadenceType] = useState('weekly');
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [dayOfMonth, setDayOfMonth] = useState(1);
   const [timeVal, setTimeVal] = useState('10:00');
-  const [vendorId, setVendorId] = useState('');
+  const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
   const [agreedRate, setAgreedRate] = useState('');
-  const [autoBook, setAutoBook] = useState(true);
+  const [autoBookPreferred, setAutoBookPreferred] = useState(true);
+  const [autoBookMarketplace, setAutoBookMarketplace] = useState(false);
   const [category, setCategory] = useState('general');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -3329,17 +3330,22 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
       cadenceConfig.time = timeVal;
     }
     try {
-      await businessService.createSchedule(workspaceId, {
-        property_id: propertyId || null,
-        title: title.trim(),
-        description: description.trim() || null,
-        category,
-        cadence_type: cadenceType,
-        cadence_config: Object.keys(cadenceConfig).length > 0 ? cadenceConfig : null,
-        preferred_provider_id: vendorId || null,
-        agreed_rate_cents: agreedRate ? Math.round(parseFloat(agreedRate) * 100) : null,
-        auto_book: autoBook,
-      });
+      // Create a schedule for each selected property (or one for "all")
+      const propIds = selectedPropertyIds.length > 0 ? selectedPropertyIds : [null];
+      for (const pid of propIds) {
+        await businessService.createSchedule(workspaceId, {
+          property_id: pid,
+          title: title.trim(),
+          description: description.trim() || null,
+          category,
+          cadence_type: cadenceType,
+          cadence_config: Object.keys(cadenceConfig).length > 0 ? cadenceConfig : null,
+          preferred_provider_ids: selectedVendorIds.length > 0 ? selectedVendorIds : null,
+          agreed_rate_cents: agreedRate ? Math.round(parseFloat(agreedRate) * 100) : null,
+          auto_book_preferred: autoBookPreferred,
+          auto_book_marketplace: autoBookMarketplace,
+        });
+      }
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create schedule');
@@ -3440,13 +3446,28 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
 
             {error && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: '#DC2626' }}>{error}</div>}
 
-            {/* Property selector */}
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Property</label>
-            <select value={propertyId} onChange={e => setPropertyId(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }}>
-              <option value="">All properties</option>
-              {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            {/* Property multi-select */}
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>
+              Properties <span style={{ fontWeight: 400, color: '#9B9490' }}>(none = all properties)</span>
+            </label>
+            <div style={{ border: '1px solid #E0DAD4', borderRadius: 8, maxHeight: 140, overflowY: 'auto', marginBottom: 16 }}>
+              {properties.map(p => {
+                const checked = selectedPropertyIds.includes(p.id);
+                return (
+                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #F5F3F0', background: checked ? `${O}04` : '#fff' }}>
+                    <input type="checkbox" checked={checked} onChange={() => setSelectedPropertyIds(prev => checked ? prev.filter(x => x !== p.id) : [...prev, p.id])}
+                      style={{ width: 14, height: 14, accentColor: O }} />
+                    <span style={{ fontSize: 13, color: D }}>{p.name}</span>
+                    {p.city && <span style={{ fontSize: 11, color: '#9B9490' }}>· {p.city}</span>}
+                  </label>
+                );
+              })}
+            </div>
+            {selectedPropertyIds.length > 0 && (
+              <div style={{ fontSize: 12, color: O, fontWeight: 600, marginTop: -12, marginBottom: 12 }}>
+                {selectedPropertyIds.length} selected · <button onClick={() => setSelectedPropertyIds([])} style={{ background: 'none', border: 'none', color: '#9B9490', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Clear</button>
+              </div>
+            )}
 
             {/* Title */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Title *</label>
@@ -3508,13 +3529,29 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
               </div>
             )}
 
-            {/* Vendor */}
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Preferred vendor (optional)</label>
-            <select value={vendorId} onChange={e => setVendorId(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }}>
-              <option value="">Use marketplace</option>
-              {vendors.map(v => <option key={v.id} value={v.providerId}>{v.providerName}</option>)}
-            </select>
+            {/* Vendor multi-select */}
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>
+              Preferred vendors <span style={{ fontWeight: 400, color: '#9B9490' }}>(optional — select one or more)</span>
+            </label>
+            <div style={{ border: '1px solid #E0DAD4', borderRadius: 8, maxHeight: 120, overflowY: 'auto', marginBottom: 16 }}>
+              {[...new Map(vendors.map(v => [v.providerId, v])).values()].map(v => {
+                const checked = selectedVendorIds.includes(v.providerId);
+                return (
+                  <label key={v.providerId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #F5F3F0', background: checked ? `${G}08` : '#fff' }}>
+                    <input type="checkbox" checked={checked} onChange={() => setSelectedVendorIds(prev => checked ? prev.filter(x => x !== v.providerId) : [...prev, v.providerId])}
+                      style={{ width: 14, height: 14, accentColor: G }} />
+                    <span style={{ fontSize: 13, color: D }}>{v.providerName}</span>
+                    {v.providerRating && <span style={{ fontSize: 11, color: '#9B9490' }}>★ {v.providerRating}</span>}
+                  </label>
+                );
+              })}
+              {vendors.length === 0 && <div style={{ padding: '12px', fontSize: 12, color: '#9B9490', textAlign: 'center' }}>No preferred vendors set up</div>}
+            </div>
+            {selectedVendorIds.length > 0 && (
+              <div style={{ fontSize: 12, color: G, fontWeight: 600, marginTop: -12, marginBottom: 12 }}>
+                {selectedVendorIds.length} vendor{selectedVendorIds.length > 1 ? 's' : ''} selected
+              </div>
+            )}
 
             {/* Agreed rate */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Agreed rate (optional)</label>
@@ -3525,22 +3562,41 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                 style={{ width: '100%', padding: '10px 14px 10px 28px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
             </div>
 
-            {/* Auto-book toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-              <button onClick={() => setAutoBook(!autoBook)}
-                style={{
-                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative',
-                  background: autoBook ? G : '#D0CBC6', transition: 'background 0.2s',
-                }}>
-                <span style={{
-                  position: 'absolute', top: 2, left: autoBook ? 22 : 2,
-                  width: 20, height: 20, borderRadius: '50%', background: '#fff',
-                  transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                }} />
-              </button>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book</div>
-                <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically book the preferred vendor or best marketplace response</div>
+            {/* Auto-book toggles */}
+            <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button onClick={() => setAutoBookPreferred(!autoBookPreferred)}
+                  style={{
+                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative',
+                    background: autoBookPreferred ? G : '#D0CBC6', transition: 'background 0.2s', flexShrink: 0,
+                  }}>
+                  <span style={{
+                    position: 'absolute', top: 2, left: autoBookPreferred ? 22 : 2,
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </button>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book preferred vendors</div>
+                  <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm when a preferred vendor accepts</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button onClick={() => setAutoBookMarketplace(!autoBookMarketplace)}
+                  style={{
+                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative',
+                    background: autoBookMarketplace ? G : '#D0CBC6', transition: 'background 0.2s', flexShrink: 0,
+                  }}>
+                  <span style={{
+                    position: 'absolute', top: 2, left: autoBookMarketplace ? 22 : 2,
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </button>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book marketplace vendors</div>
+                  <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm marketplace responses (if no preferred vendor available)</div>
+                </div>
               </div>
             </div>
 
