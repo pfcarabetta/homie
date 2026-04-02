@@ -18,6 +18,95 @@ interface CatDef {
   q1: { text: string; options: string[] };
 }
 
+interface CatGroup {
+  icon: string; label: string; type: 'repair' | 'service';
+  subs: Array<{ id: string; icon: string; label: string }>;
+}
+
+const B2B_CATEGORY_TREE: CatGroup[] = [
+  // ── Repair ──
+  { icon: '🔧', label: 'Plumbing', type: 'repair', subs: [
+    { id: 'plumbing', icon: '🔧', label: 'General Plumbing' },
+    { id: 'septic_sewer', icon: '🕳️', label: 'Septic & Sewer' },
+    { id: 'water_heater', icon: '🔥', label: 'Water Heater' },
+    { id: 'sprinkler_irrigation', icon: '💦', label: 'Sprinkler & Irrigation' },
+  ]},
+  { icon: '⚡', label: 'Electrical', type: 'repair', subs: [
+    { id: 'electrical', icon: '⚡', label: 'General Electrical' },
+    { id: 'generator_install', icon: '🔋', label: 'Generator Install' },
+    { id: 'ev_charger_install', icon: '🔌', label: 'EV Charger Install' },
+    { id: 'solar', icon: '☀️', label: 'Solar' },
+    { id: 'security_systems', icon: '📹', label: 'Security Systems' },
+  ]},
+  { icon: '❄️', label: 'HVAC', type: 'repair', subs: [
+    { id: 'hvac', icon: '❄️', label: 'AC & Heating' },
+    { id: 'chimney', icon: '🏠', label: 'Chimney' },
+    { id: 'insulation', icon: '🧱', label: 'Insulation' },
+  ]},
+  { icon: '🍳', label: 'Appliance', type: 'repair', subs: [
+    { id: 'appliance', icon: '🍳', label: 'Appliance Repair' },
+  ]},
+  { icon: '🏠', label: 'Roofing & Exterior', type: 'repair', subs: [
+    { id: 'roofing', icon: '🏠', label: 'Roofing' },
+    { id: 'gutter', icon: '🌧️', label: 'Gutter Cleaning' },
+    { id: 'siding', icon: '🪵', label: 'Siding' },
+    { id: 'window_door_install', icon: '🪟', label: 'Window & Door Install' },
+    { id: 'garage_door', icon: '🚨', label: 'Garage Door' },
+  ]},
+  { icon: '🔨', label: 'Handyman & Structural', type: 'repair', subs: [
+    { id: 'general', icon: '🔨', label: 'Handyman' },
+    { id: 'drywall', icon: '🪧', label: 'Drywall' },
+    { id: 'concrete', icon: '🧱', label: 'Concrete' },
+    { id: 'masonry', icon: '🏗️', label: 'Masonry' },
+    { id: 'foundation_waterproofing', icon: '💧', label: 'Foundation & Waterproofing' },
+    { id: 'welding_metal_work', icon: '⚒️', label: 'Welding & Metal Work' },
+    { id: 'tv_mounting', icon: '📺', label: 'TV Mounting' },
+    { id: 'furniture_assembly', icon: '🪑', label: 'Furniture Assembly' },
+  ]},
+  // ── Service ──
+  { icon: '✨', label: 'Cleaning', type: 'service', subs: [
+    { id: 'cleaning', icon: '✨', label: 'Turnover Clean' },
+    { id: 'carpet_cleaning', icon: '🧹', label: 'Carpet Cleaning' },
+    { id: 'window_cleaning', icon: '🪟', label: 'Window Cleaning' },
+    { id: 'pressure_washing', icon: '💦', label: 'Pressure Wash' },
+    { id: 'steam_cleaning', icon: '♨️', label: 'Steam Cleaning' },
+  ]},
+  { icon: '🏊', label: 'Pool & Spa', type: 'service', subs: [
+    { id: 'pool', icon: '🏊', label: 'Pool Service' },
+    { id: 'hot_tub', icon: '♨️', label: 'Hot Tub' },
+  ]},
+  { icon: '🌿', label: 'Outdoor & Landscaping', type: 'service', subs: [
+    { id: 'landscaping', icon: '🌿', label: 'Landscaping' },
+    { id: 'tree_trimming', icon: '🌳', label: 'Tree Trimming' },
+    { id: 'fencing', icon: '🏡', label: 'Fencing' },
+    { id: 'deck_patio', icon: '🪵', label: 'Deck & Patio' },
+    { id: 'pest_control', icon: '🐛', label: 'Pest Control' },
+  ]},
+  { icon: '🎨', label: 'Painting & Flooring', type: 'service', subs: [
+    { id: 'painting', icon: '🎨', label: 'Painting' },
+    { id: 'flooring', icon: '🪵', label: 'Flooring' },
+    { id: 'tile', icon: '🔲', label: 'Tile' },
+  ]},
+  { icon: '🏗️', label: 'Remodeling', type: 'service', subs: [
+    { id: 'kitchen_remodel', icon: '🍽️', label: 'Kitchen Remodel' },
+    { id: 'bathroom_remodel', icon: '🛁', label: 'Bathroom Remodel' },
+  ]},
+  { icon: '📦', label: 'Property Ops', type: 'service', subs: [
+    { id: 'restocking', icon: '📦', label: 'Supplies Restock' },
+    { id: 'inspection', icon: '🔍', label: 'Inspection' },
+    { id: 'trash', icon: '🗑️', label: 'Trash Valet' },
+    { id: 'locksmith', icon: '🔑', label: 'Locksmith' },
+    { id: 'concierge', icon: '🎩', label: 'Concierge' },
+  ]},
+  { icon: '🚚', label: 'Moving & Hauling', type: 'service', subs: [
+    { id: 'junk_removal', icon: '🚛', label: 'Junk Removal' },
+    { id: 'moving', icon: '🚚', label: 'Moving' },
+  ]},
+  { icon: '📸', label: 'Photography', type: 'service', subs: [
+    { id: 'photography', icon: '📸', label: 'Professional Photography' },
+  ]},
+];
+
 const B2B_CATEGORIES: CatDef[] = [
   // ── Repair ──
   { id: 'plumbing', icon: '🔧', label: 'Plumbing', group: 'repair',
@@ -445,7 +534,7 @@ function StreamingMsg({ text }: { text: string }) {
 
 /* ── Main component ─────────────────────────────────────────────────────── */
 
-type Step = 'property' | 'category' | 'q1' | 'chat' | 'extra' | 'budget' | 'generating' | 'summary' | 'outreach' | 'results';
+type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'budget' | 'generating' | 'summary' | 'outreach' | 'results';
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -761,8 +850,28 @@ export default function BusinessChat() {
   }
 
   // Handle category selection
+  const [activeGroup, setActiveGroup] = useState<CatGroup | null>(null);
+
+  function handleGroupSelect(group: CatGroup) {
+    if (group.subs.length === 1) {
+      // Single sub — skip drill-down
+      const cat = B2B_CATEGORIES.find(c => c.id === group.subs[0].id);
+      if (cat) selectCategory(cat);
+      return;
+    }
+    setActiveGroup(group);
+    setMessages([{ role: 'assistant', content: `What type of **${group.label.toLowerCase()}** do you need?` }]);
+    setStep('subcategory');
+  }
+
+  function handleSubSelect(subId: string) {
+    const cat = B2B_CATEGORIES.find(c => c.id === subId);
+    if (cat) selectCategory(cat);
+  }
+
   function selectCategory(cat: CatDef) {
     setCategory(cat);
+    setActiveGroup(null);
     const propName = selectedProperty?.name || 'this property';
     if (cat.group === 'service') {
       setMessages([{ role: 'assistant', content: `${cat.icon} **${cat.label}** for ${propName} — got it. ${cat.q1.text}` }]);
@@ -937,8 +1046,6 @@ export default function BusinessChat() {
 
   if (!homeowner) return null;
 
-  const repairCats = B2B_CATEGORIES.filter(c => c.group === 'repair');
-  const serviceCats = B2B_CATEGORIES.filter(c => c.group === 'service');
 
   return (
     <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
@@ -1072,8 +1179,8 @@ export default function BusinessChat() {
               <div style={{ marginLeft: 42, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6 }}>REPAIR</div>
                 <div className="b2b-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
-                  {repairCats.map(c => (
-                    <button key={c.id} onClick={() => selectCategory(c)} style={{
+                  {B2B_CATEGORY_TREE.filter(g => g.type === 'repair').map(g => (
+                    <button key={g.label} onClick={() => handleGroupSelect(g)} style={{
                       padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
                       background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                       fontFamily: "'DM Sans', sans-serif",
@@ -1081,16 +1188,16 @@ export default function BusinessChat() {
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
                     >
-                      <div style={{ fontSize: 22, marginBottom: 4 }}>{c.icon}</div>
-                      <div>{c.label}</div>
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>{g.icon}</div>
+                      <div>{g.label}</div>
                     </button>
                   ))}
                 </div>
 
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6 }}>SERVICE</div>
                 <div className="b2b-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                  {serviceCats.map(c => (
-                    <button key={c.id} onClick={() => selectCategory(c)} style={{
+                  {B2B_CATEGORY_TREE.filter(g => g.type === 'service').map(g => (
+                    <button key={g.label} onClick={() => handleGroupSelect(g)} style={{
                       padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
                       background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                       fontFamily: "'DM Sans', sans-serif",
@@ -1098,8 +1205,8 @@ export default function BusinessChat() {
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
                     >
-                      <div style={{ fontSize: 22, marginBottom: 4 }}>{c.icon}</div>
-                      <div>{c.label}</div>
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>{g.icon}</div>
+                      <div>{g.label}</div>
                     </button>
                   ))}
                 </div>
@@ -1115,6 +1222,27 @@ export default function BusinessChat() {
               ))}
               {streaming && <StreamingMsg text={streamText} />}
             </>
+          )}
+
+          {/* Subcategory selection */}
+          {step === 'subcategory' && activeGroup && (
+            <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease' }}>
+              <div className="b2b-cat-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(activeGroup.subs.length, 3)}, 1fr)`, gap: 8, marginBottom: 12 }}>
+                {activeGroup.subs.map(s => (
+                  <button key={s.id} onClick={() => handleSubSelect(s.id)} style={{
+                    padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
+                    background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                  >
+                    <div style={{ fontSize: 22, marginBottom: 4 }}>{s.icon}</div>
+                    <div>{s.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Q1 options */}
