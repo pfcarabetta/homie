@@ -507,10 +507,17 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
             </div>
           ) : (
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setShowTrackImport(true)}
-                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                Import from Track
-              </button>
+              {['professional', 'business', 'enterprise'].includes(plan) ? (
+                <button onClick={() => setShowTrackImport(true)}
+                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  Import from Track
+                </button>
+              ) : (
+                <button disabled title="Upgrade to Professional to import from PMS"
+                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: '#ccc', cursor: 'default', fontSize: 13, fontWeight: 600 }}>
+                  Import from Track (Pro+)
+                </button>
+              )}
               <button onClick={() => {
                 if (checkTierWarning(1)) return;
                 setShowAdd(true);
