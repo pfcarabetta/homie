@@ -2685,10 +2685,16 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Dispatches</h3>
-        <button onClick={() => navigate(`/business/chat?workspace=${workspaceId}`)}
-          style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
-          + New Dispatch
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => onTabChange?.('schedules')}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            🔄 Auto-Dispatch
+          </button>
+          <button onClick={() => navigate(`/business/chat?workspace=${workspaceId}`)}
+            style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+            + New Dispatch
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
