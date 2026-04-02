@@ -3055,12 +3055,12 @@ function relativeTime(dateStr: string): string {
 const TEMPLATE_CATEGORIES = [
   { key: '', label: 'All' },
   { key: 'cleaning', label: 'Cleaning' },
-  { key: 'landscaping', label: 'Outdoor' },
+  { key: 'outdoor', label: 'Outdoor' },
   { key: 'pool', label: 'Pool' },
   { key: 'hvac', label: 'HVAC' },
-  { key: 'pest_control', label: 'Pest' },
-  { key: 'inspection', label: 'Safety' },
-  { key: 'restocking', label: 'Supplies' },
+  { key: 'pest', label: 'Pest' },
+  { key: 'safety', label: 'Safety' },
+  { key: 'supplies', label: 'Supplies' },
   { key: 'trash', label: 'Trash' },
 ];
 
@@ -3371,6 +3371,18 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
 
         {step === 'templates' ? (
           <div style={{ padding: 24 }}>
+            {/* Start from scratch */}
+            <button onClick={() => setStep('form')} style={{
+              width: '100%', padding: '12px 0', borderRadius: 10, border: '1px solid #E0DAD4',
+              background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              marginBottom: 20, transition: 'all 0.15s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = O; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#E0DAD4'; e.currentTarget.style.color = D; }}
+            >
+              + Start from scratch
+            </button>
+
             {/* Category filter */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
               {TEMPLATE_CATEGORIES.map(c => (
@@ -3430,11 +3442,6 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
               </div>
             )}
 
-            <div style={{ textAlign: 'center', marginTop: 20 }}>
-              <button onClick={() => { setStep('form'); }} style={{ background: 'none', border: 'none', color: O, fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
-                Start from scratch
-              </button>
-            </div>
           </div>
         ) : (
           <div style={{ padding: 24 }}>
