@@ -140,9 +140,10 @@ router.get('/:workspaceId', requireWorkspace, async (req: Request, res: Response
 // ── PATCH /:workspaceId — Update workspace ───────────────────────────────────
 
 router.patch('/:workspaceId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
-  const { name, slug, logo_url, company_address, company_phone, company_email } = req.body as {
+  const { name, slug, logo_url, company_address, company_phone, company_email, plan } = req.body as {
     name?: string; slug?: string; logo_url?: string | null;
     company_address?: string | null; company_phone?: string | null; company_email?: string | null;
+    plan?: string;
   };
   const updates: Record<string, unknown> = {};
 
@@ -152,6 +153,7 @@ router.patch('/:workspaceId', requireWorkspace, requireWorkspaceRole('admin'), a
   if (company_address !== undefined) updates.companyAddress = company_address;
   if (company_phone !== undefined) updates.companyPhone = company_phone;
   if (company_email !== undefined) updates.companyEmail = company_email;
+  if (plan !== undefined && ['starter', 'professional', 'business', 'enterprise'].includes(plan)) updates.plan = plan;
   if (Object.keys(updates).length > 0) updates.updatedAt = new Date();
 
   if (Object.keys(updates).length === 0) {

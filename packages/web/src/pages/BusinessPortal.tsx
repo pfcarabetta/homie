@@ -772,20 +772,6 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
 /* ── Overview Tab ───────────────────────────────────────────────────────── */
 
 function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
-  const [usage, setUsage] = useState<{
-    plan: string; searches_used: number; searches_limit: number;
-    searches_remaining: number;
-    base_price: number; per_property_price: number;
-    searches_per_property: number; property_count: number;
-    billing_cycle_start: string; billing_cycle_end: string;
-  } | null>(null);
-
-  useEffect(() => {
-    businessService.getUsage(workspace.id).then(res => {
-      if (res.data) setUsage(res.data);
-    }).catch(() => {});
-  }, [workspace.id]);
-
   const stats = [
     { label: 'Properties', value: workspace.property_count, icon: '🏠' },
     { label: 'Team Members', value: workspace.member_count, icon: '👥' },
@@ -795,7 +781,7 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
         {stats.map(s => (
           <div key={s.label} style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 20, textAlign: 'center' }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>{s.icon}</div>
@@ -804,11 +790,55 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
 
-      {/* Usage & billing */}
+/* ── Billing Tab ───────────────────────────────────────────────────────── */
+
+const BILLING_PLANS = [
+  { plan: 'starter', label: 'Starter', price: 0, perProperty: 10, maxProperties: 10, maxMembers: 1, features: ['Up to 10 properties', '1 user', 'Unlimited searches', 'Preferred vendors (up to 5)', 'Basic cost tracking'] },
+  { plan: 'professional', label: 'Professional', price: 99, perProperty: 10, maxProperties: 50, maxMembers: 5, features: ['Up to 50 properties', '5 team members', 'PMS import with sync', 'Full cost reporting', 'Vendor scorecards', 'Slack integration', 'Estimate summary PDF'] },
+  { plan: 'business', label: 'Business', price: 249, perProperty: 10, maxProperties: 150, maxMembers: 15, features: ['Up to 150 properties', '15 team members with roles', 'Multi-PMS import', 'Priority outreach', 'Advanced analytics', 'API access'] },
+];
+
+function BillingTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUpdated: (w: WorkspaceDetail) => void }) {
+  const [usage, setUsage] = useState<{
+    plan: string; searches_used: number; searches_limit: number;
+    searches_remaining: number;
+    base_price: number; per_property_price: number;
+    searches_per_property: number; property_count: number;
+    billing_cycle_start: string; billing_cycle_end: string;
+  } | null>(null);
+  const [changingPlan, setChangingPlan] = useState<string | null>(null);
+  const [showCancel, setShowCancel] = useState(false);
+
+  useEffect(() => {
+    businessService.getUsage(workspace.id).then(res => {
+      if (res.data) setUsage(res.data);
+    }).catch(() => {});
+  }, [workspace.id]);
+
+  async function handlePlanChange(newPlan: string) {
+    setChangingPlan(newPlan);
+    try {
+      const res = await businessService.updateWorkspace(workspace.id, { plan: newPlan } as Record<string, unknown>);
+      if (res.data) {
+        onUpdated({ ...workspace, plan: newPlan });
+        // Refresh usage
+        const usageRes = await businessService.getUsage(workspace.id);
+        if (usageRes.data) setUsage(usageRes.data);
+      }
+    } catch { /* ignore */ }
+    setChangingPlan(null);
+  }
+
+  return (
+    <div>
+      {/* Current plan & usage */}
       {usage && (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24, marginBottom: 24 }}>
-          <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 20px' }}>Usage & Billing</h4>
+          <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 20px' }}>Current Plan & Usage</h4>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
@@ -840,6 +870,91 @@ function OverviewTab({ workspace }: { workspace: WorkspaceDetail }) {
         </div>
       )}
 
+      {/* Plan comparison */}
+      <div style={{ marginBottom: 24 }}>
+        <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 16px' }}>Change Plan</h4>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          {BILLING_PLANS.map(p => {
+            const isCurrent = workspace.plan === p.plan;
+            const isDowngrade = BILLING_PLANS.findIndex(x => x.plan === workspace.plan) > BILLING_PLANS.findIndex(x => x.plan === p.plan);
+            return (
+              <div key={p.plan} style={{
+                background: '#fff', borderRadius: 14, padding: 20,
+                border: isCurrent ? `2px solid ${O}` : '1px solid #E0DAD4',
+                position: 'relative',
+              }}>
+                {isCurrent && (
+                  <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50)', background: O, color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 12px', borderRadius: 100 }}>CURRENT</div>
+                )}
+                <div style={{ fontSize: 18, fontWeight: 700, color: D, marginBottom: 2 }}>{p.label}</div>
+                <div style={{ marginBottom: 12 }}>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: D }}>${p.price}</span>
+                  <span style={{ fontSize: 13, color: '#9B9490' }}>/mo</span>
+                  <span style={{ fontSize: 12, color: '#6B6560', marginLeft: 4 }}>+ $10/property</span>
+                </div>
+                <div style={{ borderTop: '1px solid #E0DAD4', paddingTop: 12, marginBottom: 14 }}>
+                  {p.features.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 13, color: '#6B6560' }}>
+                      <span style={{ color: G, fontSize: 11 }}>✓</span> {f}
+                    </div>
+                  ))}
+                </div>
+                {isCurrent ? (
+                  <div style={{ textAlign: 'center', fontSize: 13, color: '#9B9490', fontWeight: 600, padding: '10px 0' }}>Your current plan</div>
+                ) : (
+                  <button disabled={changingPlan === p.plan} onClick={() => handlePlanChange(p.plan)}
+                    style={{
+                      width: '100%', padding: '10px 0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                      border: isDowngrade ? '1px solid #E0DAD4' : 'none',
+                      background: isDowngrade ? '#fff' : O,
+                      color: isDowngrade ? D : '#fff',
+                      opacity: changingPlan === p.plan ? 0.6 : 1,
+                    }}>
+                    {changingPlan === p.plan ? 'Changing...' : isDowngrade ? 'Downgrade' : 'Upgrade'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <span style={{ fontSize: 13, color: '#9B9490' }}>Need 150+ properties? </span>
+          <a href="mailto:yo@homiepro.ai" style={{ fontSize: 13, color: O, fontWeight: 600, textDecoration: 'none' }}>Contact us for Enterprise pricing →</a>
+        </div>
+      </div>
+
+      {/* Cancel service */}
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24 }}>
+        <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 8px' }}>Cancel Service</h4>
+        {!showCancel ? (
+          <>
+            <p style={{ fontSize: 14, color: '#6B6560', marginBottom: 12, lineHeight: 1.6 }}>
+              If you cancel, your workspace will remain accessible until the end of your current billing cycle. After that, all data will be retained for 30 days before deletion.
+            </p>
+            <button onClick={() => setShowCancel(true)}
+              style={{ fontSize: 13, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}>
+              Cancel my subscription
+            </button>
+          </>
+        ) : (
+          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#DC2626', marginBottom: 6 }}>Are you sure?</div>
+            <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.6 }}>
+              Your workspace and all associated data (properties, dispatches, bookings, vendor settings) will be deactivated at the end of your billing cycle.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setShowCancel(false)}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: D }}>
+                Keep my plan
+              </button>
+              <button onClick={() => { alert('Please contact yo@homiepro.ai to complete your cancellation.'); setShowCancel(false); }}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#DC2626', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Yes, cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -3504,9 +3619,9 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
 
 /* ── Main Page ──────────────────────────────────────────────────────────── */
 
-const TABS = ['overview', 'dispatches', 'bookings', 'reports', 'properties', 'vendors', 'team', 'settings'] as const;
+const TABS = ['overview', 'dispatches', 'bookings', 'billing', 'reports', 'properties', 'vendors', 'team', 'settings'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', dispatches: 'Dispatches', bookings: 'Bookings', reports: 'Reports', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = { overview: 'Overview', dispatches: 'Dispatches', bookings: 'Bookings', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
 
 function useThemeMode() {
   const [mode, setMode] = useState<'light' | 'dark' | 'auto'>(() => {
@@ -3703,6 +3818,9 @@ export default function BusinessPortal() {
 
             {/* Tab content */}
             {workspace && tab === 'overview' && <OverviewTab workspace={workspace} />}
+            {workspace && tab === 'billing' && workspace.user_role === 'admin' && (
+              <BillingTab workspace={workspace} onUpdated={w => setWorkspace(w)} />
+            )}
             {workspace && tab === 'dispatches' && (
               <DispatchesTab workspaceId={workspace.id} onTabChange={setTab} plan={workspace.plan} />
             )}
