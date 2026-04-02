@@ -4117,7 +4117,7 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
 
 /* ── Main Page ──────────────────────────────────────────────────────────── */
 
-const TABS = ['dashboard', 'dispatches', 'bookings', 'billing', 'reports', 'properties', 'vendors', 'team', 'settings'] as const;
+const TABS = ['dashboard', 'dispatches', 'bookings', 'reports', 'properties', 'vendors', 'team', 'settings', 'billing'] as const;
 type Tab = typeof TABS[number];
 const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
 
