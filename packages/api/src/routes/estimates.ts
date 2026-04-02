@@ -10,18 +10,17 @@ const router = Router();
 // POST /generate — generate a cost estimate
 router.post('/generate', async (req: Request, res: Response) => {
   try {
-    const { category, subcategory, complexity, zipCode, workspaceId, propertyType, brand, systemAgeYears, urgency, photoAnalysisSummary } = req.body as {
-      category?: string;
-      subcategory?: string;
-      complexity?: string;
-      zipCode?: string;
-      workspaceId?: string;
-      propertyType?: string;
-      brand?: string;
-      systemAgeYears?: number;
-      urgency?: string;
-      photoAnalysisSummary?: string;
-    };
+    const body = req.body as Record<string, unknown>;
+    const category = (body.category ?? body.category) as string | undefined;
+    const subcategory = (body.subcategory ?? body.subcategory) as string | undefined;
+    const complexity = (body.complexity) as string | undefined;
+    const zipCode = (body.zip_code ?? body.zipCode) as string | undefined;
+    const workspaceId = (body.workspace_id ?? body.workspaceId) as string | undefined;
+    const propertyType = (body.property_type ?? body.propertyType) as string | undefined;
+    const brand = (body.brand) as string | undefined;
+    const systemAgeYears = (body.system_age_years ?? body.systemAgeYears) as number | undefined;
+    const urgency = (body.urgency) as string | undefined;
+    const photoAnalysisSummary = (body.photo_analysis_summary ?? body.photoAnalysisSummary) as string | undefined;
 
     if (!category || !subcategory || !zipCode) {
       const response: ApiResponse<null> = { data: null, error: 'category, subcategory, and zipCode are required', meta: {} };
