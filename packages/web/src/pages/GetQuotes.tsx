@@ -1052,25 +1052,28 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     setTimeout(() => { addAssistant('When do you need this done?'); setPhase('timing'); }, 500);
   };
 
+  // Keep a ref to latest data so async handlers can access it
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
   const handleTiming = (t: string) => {
-    setData(d => {
-      // Fetch cost estimate using latest data from functional updater
-      const updated = { ...d, timing: t };
-      if (updated.category && updated.zip) {
-        const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
-        estimateService.generate({
-          category: updated.category,
-          subcategory: updated.a1 || updated.category,
-          zip_code: updated.zip,
-          urgency: urgencyMap[t] || 'flexible',
-        }).then(res => {
-          if (res.data) setCostEstimate(res.data);
-        }).catch(() => {});
-      }
-      return updated;
-    });
+    setData(d => ({ ...d, timing: t }));
     setPhase('waiting');
     addUser(t);
+
+    // Use ref to get the latest data (zip is set from previous step)
+    const latest = dataRef.current;
+    if (latest.category && latest.zip) {
+      const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
+      estimateService.generate({
+        category: latest.category,
+        subcategory: latest.a1 || latest.category,
+        zip_code: latest.zip,
+        urgency: urgencyMap[t] || 'flexible',
+      }).then(res => {
+        if (res.data) setCostEstimate(res.data);
+      }).catch(() => {});
+    }
 
     setTimeout(() => {
       addAssistant("Here's what I'll brief the providers on:");
