@@ -936,7 +936,7 @@ export default function Account() {
             background: O, color: '#fff', fontSize: 13, fontWeight: 600,
             cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
           }}>+ Get New Quote</button>
-          <button onClick={() => navigate('/diagnostic')} style={{
+          <button onClick={() => navigate('/chat')} style={{
             padding: '9px 18px', borderRadius: 100,
             border: `1px solid ${O}`, background: '#fff',
             color: O, fontSize: 13, fontWeight: 600,
