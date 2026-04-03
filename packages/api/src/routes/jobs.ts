@@ -23,7 +23,7 @@ const router = Router();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VALID_TIERS: JobTier[] = ['standard', 'priority', 'emergency'];
 const VALID_TIMINGS: JobTiming[] = ['asap', 'this_week', 'this_month', 'flexible'];
-const RESPONDED_STATUSES = new Set(['responded', 'accepted', 'declined']);
+const RESPONDED_STATUSES = new Set(['responded', 'accepted']);
 
 function estimatedResultsAt(tier: JobTier): Date {
   const minutes = tier === 'emergency' ? 15 : tier === 'priority' ? 30 : 120;
