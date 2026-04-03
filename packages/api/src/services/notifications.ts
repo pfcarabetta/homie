@@ -6,6 +6,15 @@ import logger from '../logger';
  * Sends a plain SMS via Twilio.
  * Silently skips (with a warning) if Twilio credentials are not configured.
  */
+/** Normalize phone to E.164 format (+1XXXXXXXXXX for US numbers) */
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('1') && digits.length === 11) return `+${digits}`;
+  if (digits.length === 10) return `+1${digits}`;
+  if (phone.startsWith('+')) return phone;
+  return `+${digits}`;
+}
+
 export async function sendSms(to: string, body: string): Promise<void> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -17,7 +26,7 @@ export async function sendSms(to: string, body: string): Promise<void> {
   }
 
   const client = twilio(accountSid, authToken);
-  await client.messages.create({ to, from: fromNumber, body });
+  await client.messages.create({ to: normalizePhone(to), from: fromNumber, body });
 }
 
 /**
