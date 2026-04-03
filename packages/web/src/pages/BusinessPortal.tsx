@@ -2216,6 +2216,7 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
   const [showAdd, setShowAdd] = useState(false);
   const [editingVendor, setEditingVendor] = useState<GroupedVendor | null>(null);
   const [allProperties, setAllProperties] = useState<Property[]>([]);
+  const [expandedVendorId, setExpandedVendorId] = useState<string | null>(null);
 
   const canEdit = role === 'admin' || role === 'coordinator';
   const vendorLimit = PLAN_VENDOR_LIMITS[plan] ?? 5;
@@ -2249,30 +2250,23 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Preferred Vendors</h3>
-          <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>
-            {uniqueVendorCount} of {vendorLimit === 9999 ? 'unlimited' : vendorLimit} vendors · {plan.charAt(0).toUpperCase() + plan.slice(1)} plan
+          <div style={{ fontSize: 12, color: '#9B9490', marginTop: 3 }}>
+            {uniqueVendorCount} of {vendorLimit === 9999 ? '∞' : vendorLimit} · {plan.charAt(0).toUpperCase() + plan.slice(1)}
           </div>
         </div>
         {canEdit && (
           atLimit ? (
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 13, color: '#DC2626', fontWeight: 600, marginBottom: 4 }}>Vendor limit reached</div>
-              <div style={{ fontSize: 12, color: '#9B9490' }}>Upgrade to Professional for unlimited vendors</div>
-            </div>
+            <div style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>Limit reached</div>
           ) : (
             <button onClick={() => setShowAdd(true)}
-              style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+              style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
               + Add Vendor
             </button>
           )
         )}
-      </div>
-
-      <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 20, lineHeight: 1.5 }}>
-        Preferred vendors are contacted first when jobs are dispatched. If they decline or don't respond, backup vendors are tried before falling back to marketplace discovery.
       </div>
 
       {vendors.length === 0 ? (
@@ -2282,77 +2276,140 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
           <div style={{ fontSize: 14, color: '#9B9490' }}>Add vendors you trust to get priority dispatch on your jobs.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {groupVendors(vendors).map(g => {
             const isWorkspaceWide = g.propertyIds.includes(null);
             const assignedProps = allProperties.filter(p => g.propertyIds.includes(p.id));
+            const isExpVendor = expandedVendorId === g.providerId;
+            const propSummary = isWorkspaceWide ? 'All properties' : `${assignedProps.length} propert${assignedProps.length === 1 ? 'y' : 'ies'}`;
+
             return (
-              <div key={g.providerId} style={{ background: '#fff', borderRadius: 10, border: '1px solid #E0DAD4', padding: '16px 20px', opacity: g.active ? 1 : 0.55, transition: 'opacity 0.2s' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 16, fontWeight: 600, color: D }}>{g.providerName}</span>
-                      {!g.active && <span style={{ fontSize: 10, fontWeight: 700, color: '#9B9490', background: '#F3F4F6', padding: '2px 8px', borderRadius: 4 }}>INACTIVE</span>}
-                      <span style={{
-                        fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600,
-                        background: g.priority === 1 ? '#FEF3C7' : g.priority === 2 ? '#DBEAFE' : '#F3F4F6',
-                        color: g.priority === 1 ? '#B45309' : g.priority === 2 ? '#2563EB' : '#6B7280',
-                      }}>
-                        Priority {g.priority}
-                      </span>
+              <div key={g.providerId}
+                onClick={() => setExpandedVendorId(isExpVendor ? null : g.providerId)}
+                style={{
+                  background: '#fff', borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+                  border: isExpVendor ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
+                  opacity: g.active ? 1 : 0.55, transition: 'all 0.2s',
+                  boxShadow: isExpVendor ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
+                }}>
+                {/* ── Collapsed row ── */}
+                <div style={{ padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {/* Avatar circle */}
+                    <div style={{
+                      width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                      background: g.active ? `${O}10` : '#F3F4F6',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      border: `2px solid ${g.active ? `${O}25` : '#E0DAD4'}`,
+                      fontSize: 16, fontWeight: 700, color: g.active ? O : '#9B9490',
+                      fontFamily: 'Fraunces, serif',
+                    }}>
+                      {g.providerName.charAt(0)}
                     </div>
-                    <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4, display: 'flex', gap: 16 }}>
-                      {g.providerPhone && <span>{g.providerPhone}</span>}
-                      {g.providerEmail && <span>{g.providerEmail}</span>}
-                      {g.providerRating && <span>Rating: {g.providerRating} ({g.providerReviewCount})</span>}
+
+                    {/* Name + meta */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontWeight: 600, fontSize: 14, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.providerName}</span>
+                        {!g.active && <span style={{ fontSize: 8, fontWeight: 700, color: '#9B9490', background: '#F3F4F6', padding: '1px 6px', borderRadius: 3, flexShrink: 0 }}>INACTIVE</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {g.providerRating && <span>★ {g.providerRating}</span>}
+                        <span>{propSummary}</span>
+                        <span style={{
+                          fontSize: 9, padding: '1px 6px', borderRadius: 10, fontWeight: 600,
+                          background: g.priority === 1 ? '#FEF3C7' : g.priority === 2 ? '#DBEAFE' : '#F3F4F6',
+                          color: g.priority === 1 ? '#B45309' : g.priority === 2 ? '#2563EB' : '#6B7280',
+                        }}>P{g.priority}</span>
+                      </div>
                     </div>
+
+                    {/* Toggle + chevron */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      {canEdit && (
+                        <button onClick={(e) => {
+                          e.stopPropagation();
+                          businessService.toggleVendor(workspaceId, g.providerId, !g.active).then(() => loadVendors());
+                        }}
+                          title={g.active ? 'Deactivate' : 'Activate'}
+                          style={{ width: 34, height: 18, borderRadius: 9, border: 'none', cursor: 'pointer', background: g.active ? G : '#D1D5DB', position: 'relative', transition: 'background 0.2s', padding: 0 }}>
+                          <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: g.active ? 18 : 2, transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
+                        </button>
+                      )}
+                      <span style={{ fontSize: 11, color: '#C0BBB6' }}>{isExpVendor ? '▲' : '▼'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Expanded detail ── */}
+                {isExpVendor && (
+                  <div style={{ padding: '0 14px 14px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
+                    {/* Contact info */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, marginBottom: 10 }}>
+                      {g.providerPhone && (
+                        <a href={`tel:${g.providerPhone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>📞 {g.providerPhone}</a>
+                      )}
+                      {g.providerEmail && (
+                        <a href={`mailto:${g.providerEmail}`} style={{ fontSize: 12, color: '#2563EB', textDecoration: 'none', fontWeight: 500 }}>✉ {g.providerEmail}</a>
+                      )}
+                      {g.providerRating && (
+                        <span style={{ fontSize: 12, color: '#9B9490' }}>★ {g.providerRating} ({g.providerReviewCount} reviews)</span>
+                      )}
+                    </div>
+
+                    {/* Details grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6, marginBottom: 10 }}>
+                      <div style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
+                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Priority</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: g.priority === 1 ? '#B45309' : g.priority === 2 ? '#2563EB' : D }}>Level {g.priority}</div>
+                      </div>
+                      <div style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
+                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Properties</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: isWorkspaceWide ? '#9B9490' : '#2563EB' }}>{propSummary}</div>
+                      </div>
+                      <div style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
+                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Hours</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatScheduleSummary(g.availabilitySchedule)}</div>
+                      </div>
+                    </div>
+
+                    {/* Assigned properties list */}
+                    {!isWorkspaceWide && assignedProps.length > 0 && (
+                      <div style={{ fontSize: 11, color: '#6B6560', marginBottom: 10, lineHeight: 1.6 }}>
+                        📍 {assignedProps.map(p => p.name).join(', ')}
+                      </div>
+                    )}
+
+                    {/* Categories */}
                     {g.categories && g.categories.length > 0 && (
-                      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
                         {g.categories.map(c => (
-                          <span key={c} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, background: `${G}15`, color: G, fontWeight: 500 }}>{c}</span>
+                          <span key={c} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: `${G}12`, color: G, fontWeight: 500 }}>{c}</span>
                         ))}
                       </div>
                     )}
-                    <div style={{ fontSize: 12, color: isWorkspaceWide ? '#9B9490' : '#2563EB', marginTop: 6 }}>
-                      {isWorkspaceWide ? '🏢 All properties' : `📍 ${assignedProps.length} ${assignedProps.length === 1 ? 'property' : 'properties'}: ${assignedProps.map(p => p.name).join(', ')}`}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#9B9490', marginTop: 4 }}>
-                      🕐 {formatScheduleSummary(g.availabilitySchedule)}
-                    </div>
-                    {g.notes && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 6, fontStyle: 'italic' }}>{g.notes}</div>}
+
+                    {/* Notes */}
+                    {g.notes && <div style={{ fontSize: 12, color: '#6B6560', fontStyle: 'italic', marginBottom: 10 }}>{g.notes}</div>}
+
+                    {/* Action buttons */}
+                    {canEdit && (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.04)' }}>
+                        <button onClick={() => setEditingVendor(g)}
+                          style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 600 }}>
+                          Edit
+                        </button>
+                        <button onClick={() => {
+                          if (!confirm(`Remove ${g.providerName} from preferred vendors?`)) return;
+                          Promise.all(g.entries.map(e => businessService.removeVendor(workspaceId, e.id).catch(() => {}))).then(() => loadVendors());
+                        }}
+                          style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #FCA5A5', background: '#FEF2F2', fontSize: 12, cursor: 'pointer', color: '#DC2626', fontWeight: 600 }}>
+                          Remove
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {canEdit && (
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
-                      <button onClick={() => {
-                        const newActive = !g.active;
-                        businessService.toggleVendor(workspaceId, g.providerId, newActive).then(() => loadVendors());
-                      }}
-                        title={g.active ? 'Deactivate vendor' : 'Activate vendor'}
-                        style={{
-                          width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
-                          background: g.active ? G : '#D1D5DB', position: 'relative', transition: 'background 0.2s', padding: 0,
-                        }}>
-                        <div style={{
-                          width: 16, height: 16, borderRadius: '50%', background: '#fff',
-                          position: 'absolute', top: 2,
-                          left: g.active ? 18 : 2,
-                          transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                        }} />
-                      </button>
-                      <button onClick={() => setEditingVendor(g)}
-                        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 500 }}>
-                        Edit
-                      </button>
-                      <button onClick={() => {
-                        if (!confirm(`Remove ${g.providerName} from preferred vendors?`)) return;
-                        Promise.all(g.entries.map(e => businessService.removeVendor(workspaceId, e.id).catch(() => {}))).then(() => loadVendors());
-                      }}
-                        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #FCA5A5', background: '#FEF2F2', fontSize: 12, cursor: 'pointer', color: '#DC2626' }}>
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             );
           })}
