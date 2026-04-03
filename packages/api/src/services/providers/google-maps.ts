@@ -10,30 +10,59 @@ const CATEGORY_TO_GOOGLE_TYPE: Record<string, string> = {
   roofing: 'roofing_contractor',
   general: 'general_contractor',
   garage_door: 'garage_door_supplier',
+  // Electrical subcategories — all map to electrician
+  ev_charger_install: 'electrician',
+  generator_install: 'electrician',
+  solar: 'solar_energy_contractor',
+  security_systems: 'electrician',
+  // Plumbing subcategories
+  water_heater: 'plumber',
+  septic_sewer: 'plumber',
+  sprinkler_irrigation: 'landscaper',
+  // HVAC subcategories
+  chimney: 'general_contractor',
+  insulation: 'insulation_contractor',
   // Services
   house_cleaning: 'house_cleaning_service',
   cleaning: 'house_cleaning_service',
   landscaping: 'landscaper',
   pool: 'swimming_pool_contractor',
+  hot_tub: 'swimming_pool_contractor',
   pest_control: 'pest_control_service',
   painting: 'painter',
   moving: 'moving_company',
   pressure_washing: 'pressure_washing_service',
   locksmith: 'locksmith',
-  // Other common
+  // Structural
   handyman: 'general_contractor',
+  drywall: 'general_contractor',
   flooring: 'flooring_contractor',
+  tile: 'flooring_contractor',
   fence: 'fence_contractor',
+  fencing: 'fence_contractor',
   tree_trimming: 'tree_service',
   gutter: 'gutter_cleaning_service',
   carpet_cleaning: 'carpet_cleaning_service',
   window_cleaning: 'window_cleaning_service',
+  steam_cleaning: 'carpet_cleaning_service',
   concrete: 'concrete_contractor',
   masonry: 'masonry_contractor',
   siding: 'siding_contractor',
-  insulation: 'insulation_contractor',
-  solar: 'solar_energy_contractor',
-  security: 'security_system_supplier',
+  security: 'electrician',
+  // Property ops
+  trash: 'waste_management',
+  junk_removal: 'moving_company',
+  // Remodeling
+  kitchen_remodel: 'general_contractor',
+  bathroom_remodel: 'general_contractor',
+  // Other
+  window_door_install: 'general_contractor',
+  deck_patio: 'general_contractor',
+  foundation_waterproofing: 'general_contractor',
+  welding_metal_work: 'general_contractor',
+  tv_mounting: 'general_contractor',
+  furniture_assembly: 'general_contractor',
+  photography: 'photographer',
 };
 
 export interface NearbyPlace {
@@ -71,6 +100,28 @@ interface PlaceResult {
   types?: string[];
 }
 
+// Override the keyword used in search (when category name alone is misleading)
+const CATEGORY_KEYWORD_OVERRIDE: Record<string, string> = {
+  ev_charger_install: 'EV charger installation electrician',
+  generator_install: 'generator installation electrician',
+  security_systems: 'security system installer',
+  water_heater: 'water heater repair plumber',
+  septic_sewer: 'septic sewer plumber',
+  sprinkler_irrigation: 'sprinkler irrigation repair',
+  hot_tub: 'hot tub spa repair service',
+  drywall: 'drywall repair contractor',
+  tv_mounting: 'TV mounting installation handyman',
+  furniture_assembly: 'furniture assembly handyman',
+  deck_patio: 'deck patio contractor',
+  foundation_waterproofing: 'foundation waterproofing contractor',
+  welding_metal_work: 'welding metal fabrication',
+  kitchen_remodel: 'kitchen remodeling contractor',
+  bathroom_remodel: 'bathroom remodeling contractor',
+  window_door_install: 'window door installation',
+  junk_removal: 'junk removal hauling',
+  photography: 'real estate photographer',
+};
+
 // Business types that indicate non-service businesses (filter these out)
 const EXCLUDED_TYPES = new Set([
   'store', 'shopping_mall', 'supermarket', 'grocery_or_supermarket',
@@ -79,6 +130,7 @@ const EXCLUDED_TYPES = new Set([
   'bank', 'atm', 'finance', 'insurance_agency',
   'hospital', 'doctor', 'dentist', 'pharmacy', 'drugstore',
   'gas_station', 'car_dealer', 'car_rental', 'car_wash',
+  'electric_vehicle_charging_station',
   'gym', 'spa', 'beauty_salon', 'hair_care',
   'church', 'school', 'university', 'library',
   'lodging', 'hotel', 'travel_agency',
@@ -123,11 +175,11 @@ export async function searchNearby(params: {
   minRating: number;
 }): Promise<NearbyPlace[]> {
   const googleType = CATEGORY_TO_GOOGLE_TYPE[params.category];
-  const categoryLabel = params.category.replace(/_/g, ' ');
+  const keyword = CATEGORY_KEYWORD_OVERRIDE[params.category] ?? params.category.replace(/_/g, ' ');
   const qs = new URLSearchParams({
     location: `${params.lat},${params.lng}`,
     radius: params.radiusMeters.toString(),
-    keyword: categoryLabel,
+    keyword,
     key: apiKey(),
   });
   if (googleType) {
