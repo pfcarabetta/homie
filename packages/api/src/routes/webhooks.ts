@@ -129,6 +129,42 @@ function isWebTokenValid(attemptId: string, action: string, token: string): bool
   }
 }
 
+/** Normalize raw speech/text price into clean dollar format. "150 dollars." → "$150", "two fifty" → "$250" */
+function formatQuotedPrice(raw: string | null): string | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[.,!?]+$/g, '').trim();
+
+  // Already formatted: "$150", "$150-200", "$150 - $200"
+  if (/^\$[\d]/.test(cleaned)) return cleaned;
+
+  // "150 dollars", "200 bucks", plain "150"
+  const numMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|usd)?$/i);
+  if (numMatch) {
+    const n = parseFloat(numMatch[1]);
+    return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
+  }
+
+  // Range: "150 to 200", "150-200", "150 - 200 dollars"
+  const rangeMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|usd)?$/i);
+  if (rangeMatch) {
+    const low = parseFloat(rangeMatch[1]);
+    const high = parseFloat(rangeMatch[2]);
+    return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
+  }
+
+  // "about/around/approximately 150"
+  const approxMatch = cleaned.match(/^(?:about|around|approximately|roughly|maybe|like)\s+\$?(\d+(?:\.\d+)?)/i);
+  if (approxMatch) {
+    const n = parseFloat(approxMatch[1]);
+    return `~$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+  }
+
+  // Fallback: return cleaned with $ prefix if it starts with a digit
+  if (/^\d/.test(cleaned)) return `$${cleaned.replace(/\s*(dollars?|bucks?|usd)\s*/gi, '')}`;
+
+  return cleaned;
+}
+
 const ACCEPT_REPLIES = new Set(['yes', 'y', '1', 'accept', 'ok', 'sure', 'yep', 'yeah']);
 const DECLINE_REPLIES = new Set(['no', 'n', '2', 'decline', 'busy', 'nope', 'pass', 'cant', "can't"]);
 
@@ -286,11 +322,12 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
           .where(eq(outreachAttempts.id, attemptId));
 
         if (state.accepted) {
+          const normalizedPrice = formatQuotedPrice(state.quotedPrice);
           await db.insert(providerResponses).values({
             jobId: attempt.jobId,
             providerId: attempt.providerId,
             channel: 'voice',
-            quotedPrice: state.quotedPrice,
+            quotedPrice: normalizedPrice,
             availability: state.availability,
             message: state.notes,
           });
@@ -311,9 +348,10 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
         const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
         void recordProviderResponse(attempt.providerId, responseTimeSec);
         if (state.accepted) {
+          const normalizedPrice = formatQuotedPrice(state.quotedPrice);
           void captureJobPayment(attempt.jobId);
           const [prov] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
-          void notifyHomeownerOfQuote(attempt.jobId, prov?.name ?? 'A provider', state.quotedPrice, state.availability, state.notes);
+          void notifyHomeownerOfQuote(attempt.jobId, prov?.name ?? 'A provider', normalizedPrice, state.availability, state.notes);
         }
 
         logger.info({ attemptId, accepted: state.accepted, quote: state.quotedPrice, availability: state.availability }, '[voice-conversation] Conversation complete');
@@ -564,16 +602,17 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
         .where(eq(outreachAttempts.id, attempt.id));
 
       if (state.accepted) {
+        const normalizedPrice = formatQuotedPrice(state.quotedPrice);
         await db.insert(providerResponses).values({
           jobId: attempt.jobId,
           providerId: attempt.providerId,
           channel: 'sms',
-          quotedPrice: state.quotedPrice,
+          quotedPrice: normalizedPrice,
           availability: state.availability,
           message: state.notes,
         });
         void captureJobPayment(attempt.jobId);
-        void notifyHomeownerOfQuote(attempt.jobId, provider.name, state.quotedPrice, state.availability, state.notes);
+        void notifyHomeownerOfQuote(attempt.jobId, provider.name, normalizedPrice, state.availability, state.notes);
 
         // Emit tracking event
         try {
