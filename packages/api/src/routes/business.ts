@@ -571,19 +571,22 @@ router.post('/:workspaceId/vendors', requireWorkspace, requireWorkspaceRole('adm
       return;
     }
 
-    // Check for duplicate
-    const conditions = [
-      eq(preferredVendors.workspaceId, req.workspaceId),
-      eq(preferredVendors.providerId, body.provider_id),
-    ];
+    // Check for duplicate (only active entries)
     const [existing] = await db
       .select({ id: preferredVendors.id })
       .from(preferredVendors)
-      .where(and(...conditions))
+      .where(and(
+        eq(preferredVendors.workspaceId, req.workspaceId),
+        eq(preferredVendors.providerId, body.provider_id),
+        eq(preferredVendors.active, true),
+        body.property_id
+          ? eq(preferredVendors.propertyId, body.property_id)
+          : sql`${preferredVendors.propertyId} IS NULL`,
+      ))
       .limit(1);
 
     if (existing) {
-      res.status(409).json({ data: null, error: 'This provider is already a preferred vendor', meta: {} });
+      res.status(409).json({ data: null, error: 'This provider is already a preferred vendor for this property', meta: {} });
       return;
     }
 
