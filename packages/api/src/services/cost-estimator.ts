@@ -181,10 +181,44 @@ function applyAdjustments(cents: number, factors: AdjustmentFactor[]): number {
   return Math.round(result);
 }
 
+// Map frontend category IDs to benchmark category names
+const CATEGORY_ALIASES: Record<string, string> = {
+  house_cleaning: 'cleaning',
+  carpet_cleaning: 'cleaning',
+  window_cleaning: 'cleaning',
+  pressure_washing: 'cleaning',
+  steam_cleaning: 'cleaning',
+  tree_trimming: 'landscaping',
+  stump_removal: 'landscaping',
+  deck_patio: 'general',
+  gutter: 'roofing',
+  siding: 'roofing',
+  window_door_install: 'general',
+  drywall: 'general',
+  furniture_assembly: 'general',
+  tv_mounting: 'general',
+  generator_install: 'electrical',
+  ev_charger_install: 'electrical',
+  solar: 'electrical',
+  chimney: 'hvac',
+  insulation: 'hvac',
+  water_heater: 'plumbing',
+  septic_sewer: 'plumbing',
+  sprinkler_irrigation: 'landscaping',
+  foundation_waterproofing: 'concrete',
+  welding_metal_work: 'general',
+  junk_removal: 'trash',
+  moving: 'general',
+  concierge: 'general',
+};
+
 export async function generateEstimate(input: EstimateInput): Promise<EstimateOutput> {
+  const category = CATEGORY_ALIASES[input.category] ?? input.category;
+  const subcategory = CATEGORY_ALIASES[input.subcategory] ?? input.subcategory;
+
   const region = zipToRegion(input.zipCode);
   const { rows, sourceLabel } = await fetchPriceData(
-    input.category, input.subcategory, input.zipCode, region, input.complexity,
+    category, subcategory, input.zipCode, region, input.complexity,
   );
 
   if (rows.length === 0) {
@@ -199,7 +233,7 @@ export async function generateEstimate(input: EstimateInput): Promise<EstimateOu
   const adjustedP50 = Math.round(p50 * multiplier);
   const adjustedP75 = Math.round(p75 * multiplier);
 
-  const factors = buildAdjustments(input);
+  const factors = buildAdjustments({ ...input, category });
   const estimateLowCents = applyAdjustments(adjustedP25, factors);
   const estimateHighCents = applyAdjustments(adjustedP75, factors);
   const estimateMedianCents = applyAdjustments(adjustedP50, factors);
