@@ -552,7 +552,7 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
 
   // Handle HELP keyword
   if (Body.trim().toLowerCase() === 'help') {
-    twiml.message("HomiePro connects you with real homeowners who need your services. It's 100% free for pros — no referral fees, no commissions, just real jobs. Reply STOP to unsubscribe. For support, visit homiepro.ai or email support@homiepro.ai");
+    twiml.message("HomiePro connects you with real homeowners who need your services. It's 100% free for pros — no referral fees, no commissions, just real jobs. Reply STOP to unsubscribe. For support, visit homiepro.ai or email yo@homiepro.ai");
     res.type('text/xml').send(twiml.toString());
     return;
   }
