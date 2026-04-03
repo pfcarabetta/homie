@@ -4,6 +4,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, accountService, estimateService, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem, type HomeData, type CostEstimate } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
+import EstimateBadge from '@/components/EstimateBadge';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -459,7 +460,7 @@ interface RealProvider {
   distance: string;
 }
 
-function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | null }) {
+function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId?: string | null; costEstimate?: CostEstimate | null }) {
   const navigate = useNavigate();
   const [log, setLog] = useState<typeof OUTREACH_LOG>([]);
   const [providers, setProviders] = useState<(typeof MOCK_PROVIDERS[number] | RealProvider)[]>([]);
@@ -576,6 +577,13 @@ function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | nu
         </div>
       </div>
 
+      {/* AI Cost Estimate */}
+      {costEstimate && (
+        <div style={{ marginLeft: 42, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
+          <EstimateCard estimate={costEstimate} />
+        </div>
+      )}
+
       {/* Provider cards */}
       {providers.map((p, i) => (
         <div key={i} style={{ marginLeft: 42, marginBottom: 10, animation: 'fadeSlide 0.4s ease' }}>
@@ -590,9 +598,13 @@ function OutreachView({ isDemo, jobId }: { isDemo?: boolean; jobId?: string | nu
                 <span style={{ fontWeight: 700, fontSize: 16, color: D }}>{p.name}</span>
                 <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'\u2605'} {p.rating} ({p.reviews}) · {p.distance}</span>
               </div>
-              <div style={{ textAlign: 'right' }}>
+              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                 <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{p.quote}</span>
-                <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 500 }}>estimate</div>
+                {costEstimate ? (
+                  <EstimateBadge quotedPrice={p.quote} estimateLow={costEstimate.estimateLowCents} estimateHigh={costEstimate.estimateHighCents} />
+                ) : (
+                  <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
+                )}
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1371,7 +1383,7 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             </div>
           </div>
         )}
-        {phase === 'outreach' && <OutreachView isDemo={isDemo} jobId={jobId} />}
+        {phase === 'outreach' && <OutreachView isDemo={isDemo} jobId={jobId} costEstimate={costEstimate} />}
 
         <div ref={bottomRef} />
       </div>
