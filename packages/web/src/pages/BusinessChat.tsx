@@ -9,6 +9,7 @@ import {
 } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
+import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -1498,11 +1499,38 @@ export default function BusinessChat() {
           {/* Outreach live view */}
           {(step === 'outreach' || step === 'results') && (
             <>
-              {/* Safe to leave notice */}
-              <div style={{ marginLeft: 42, marginBottom: 16, background: '#EFF6FF', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(37,99,235,0.1)', animation: 'fadeSlide 0.3s ease' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#2563EB', marginBottom: 4 }}>You can close this page</div>
-                <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5 }}>We'll notify you when quotes arrive. You can also check status in your <span onClick={() => navigate('/business')} style={{ color: O, cursor: 'pointer', fontWeight: 600 }}>business portal</span>.</div>
-              </div>
+              {/* Outreach progress */}
+              {outreachStatus && (() => {
+                const outreachStatusObj: OutreachStatus = {
+                  providers_contacted: outreachStatus.providers_contacted,
+                  providers_responded: outreachStatus.providers_responded,
+                  outreach_channels: {
+                    voice: { attempted: outreachStatus.outreach_channels.voice.attempted, connected: outreachStatus.outreach_channels.voice.connected },
+                    sms: { attempted: outreachStatus.outreach_channels.sms.attempted, connected: outreachStatus.outreach_channels.sms.connected },
+                    web: { attempted: outreachStatus.outreach_channels.web.attempted, connected: outreachStatus.outreach_channels.web.connected },
+                  },
+                  status: step === 'results' ? 'completed' : outreachStatus.status,
+                };
+                const logEntries: LogEntry[] = [];
+                if (outreachStatus.providers_contacted > 0) logEntries.push({ msg: `Contacting ${outreachStatus.providers_contacted} providers...`, type: 'system' });
+                if (outreachStatus.outreach_channels.voice.attempted > 0) logEntries.push({ msg: `${outreachStatus.outreach_channels.voice.attempted} voice calls`, type: 'voice' });
+                if (outreachStatus.outreach_channels.sms.attempted > 0) logEntries.push({ msg: `${outreachStatus.outreach_channels.sms.attempted} SMS messages`, type: 'sms' });
+                if (outreachStatus.outreach_channels.web.attempted > 0) logEntries.push({ msg: `${outreachStatus.outreach_channels.web.attempted} email contacts`, type: 'web' });
+                if (outreachStatus.providers_responded > 0) logEntries.push({ msg: `${outreachStatus.providers_responded} quote(s) received!`, type: 'success' });
+                if (step === 'results') logEntries.push({ msg: `${responses.length} quotes ready!`, type: 'done' });
+                const isDone = step === 'results';
+                return (
+                  <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+                    <HomieOutreachLive
+                      status={outreachStatusObj}
+                      log={logEntries}
+                      done={isDone}
+                      showSafeNotice={!isDone}
+                      accountLink="/business"
+                    />
+                  </div>
+                );
+              })()}
 
               {/* Share status tracker */}
               <TrackingShareCard
@@ -1511,52 +1539,6 @@ export default function BusinessChat() {
                 trackingUrl={trackingUrl}
                 setTrackingUrl={setTrackingUrl}
               />
-
-              {/* Compact stats */}
-              {outreachStatus && (
-                <div style={{ marginLeft: 42, display: 'flex', gap: 8, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
-                  {[
-                    { label: 'Contacted', val: outreachStatus.providers_contacted, icon: '📡' },
-                    { label: 'Quoted', val: outreachStatus.providers_responded, icon: '✅' },
-                    { label: 'Voice', val: outreachStatus.outreach_channels.voice.attempted, icon: '📞' },
-                    { label: 'SMS', val: outreachStatus.outreach_channels.sms.attempted, icon: '💬' },
-                  ].map((s, i) => (
-                    <div key={i} style={{ flex: 1, background: W, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 14 }}>{s.icon}</div>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: D }}>{s.val}</div>
-                      <div style={{ fontSize: 10, color: '#9B9490' }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Live log */}
-              {outreachStatus && (
-                <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
-                  <div style={{
-                    background: D, borderRadius: 14, padding: 14, maxHeight: 160, overflowY: 'auto',
-                    fontFamily: "'DM Mono', monospace", fontSize: 12, lineHeight: 1.9,
-                  }}>
-                    <div style={{ color: 'rgba(255,255,255,0.45)' }}>  Contacting {outreachStatus.providers_contacted} providers...</div>
-                    {outreachStatus.outreach_channels.voice.attempted > 0 && (
-                      <div style={{ color: 'rgba(255,255,255,0.45)' }}>  {outreachStatus.outreach_channels.voice.attempted} voice calls</div>
-                    )}
-                    {outreachStatus.outreach_channels.sms.attempted > 0 && (
-                      <div style={{ color: 'rgba(255,255,255,0.45)' }}>  {outreachStatus.outreach_channels.sms.attempted} SMS messages</div>
-                    )}
-                    {outreachStatus.outreach_channels.web.attempted > 0 && (
-                      <div style={{ color: 'rgba(255,255,255,0.45)' }}>  {outreachStatus.outreach_channels.web.attempted} email contacts</div>
-                    )}
-                    {outreachStatus.providers_responded > 0 && (
-                      <div style={{ color: G, animation: 'fadeIn 0.2s ease' }}>{'✓ '}{outreachStatus.providers_responded} quote(s) received!</div>
-                    )}
-                    {step === 'results' && (
-                      <div style={{ color: G, animation: 'fadeIn 0.2s ease' }}>{'✓ '}{responses.length} quotes ready!</div>
-                    )}
-                    {step === 'outreach' && <span style={{ color: O, animation: 'pulse 1s infinite' }}>{'▌'}</span>}
-                  </div>
-                </div>
-              )}
 
               {/* Provider cards */}
               {responses.map((r, i) => (

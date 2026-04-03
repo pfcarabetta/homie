@@ -5,6 +5,7 @@ import { diagnosticService, authService, jobService, paymentService, fetchAPI, c
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
+import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -535,46 +536,30 @@ function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
 
+  // Build OutreachStatus and LogEntry[] for HomieOutreachLive
+  const outreachStatusObj: OutreachStatus = {
+    providers_contacted: stats.contacted,
+    providers_responded: stats.responded,
+    outreach_channels: {
+      voice: { attempted: log.filter(l => l.type === 'voice').length, connected: 0 },
+      sms: { attempted: log.filter(l => l.type === 'sms').length, connected: 0 },
+      web: { attempted: log.filter(l => l.type === 'web').length, connected: 0 },
+    },
+    status: done ? 'completed' : 'dispatching',
+  };
+  const logEntries: LogEntry[] = log.map(e => ({ msg: e.msg, type: e.type as LogEntry['type'] }));
+
   return (
     <>
-      {/* Safe to leave notice */}
-      <div style={{ marginLeft: 42, marginBottom: 16, background: '#EFF6FF', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(37,99,235,0.1)', animation: 'fadeSlide 0.3s ease' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#2563EB', marginBottom: 4 }}>You can close this page</div>
-        <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5 }}>We'll notify you by text and email when quotes arrive. You can also check your quotes anytime in your <a href="/account?tab=quotes" style={{ color: '#E8632B', textDecoration: 'none', fontWeight: 600 }}>account portal</a>.</div>
-      </div>
-
-      {/* Compact stats */}
-      <div style={{ marginLeft: 42, display: 'flex', gap: 8, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
-        {[
-          { label: 'Contacted', val: stats.contacted, icon: '\uD83D\uDCE1' },
-          { label: 'Quoted', val: stats.responded, icon: '\u2705' },
-          { label: 'Voice', val: log.filter(l => l.type === 'voice').length, icon: '\uD83D\uDCDE' },
-          { label: 'SMS', val: log.filter(l => l.type === 'sms').length, icon: '\uD83D\uDCAC' },
-        ].map((s, i) => (
-          <div key={i} style={{ flex: 1, background: W, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
-            <div style={{ fontSize: 14 }}>{s.icon}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: D }}>{s.val}</div>
-            <div style={{ fontSize: 10, color: '#9B9490' }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Live log */}
+      {/* Outreach progress */}
       <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
-        <div ref={logRef} style={{
-          background: D, borderRadius: 14, padding: 14, maxHeight: 160, overflowY: 'auto',
-          fontFamily: "'DM Mono', monospace", fontSize: 12, lineHeight: 1.9,
-        }}>
-          {log.map((e, i) => (
-            <div key={i} style={{
-              color: e.type === 'success' ? G : e.type === 'decline' ? '#E24B4A' : e.type === 'fallback' ? '#EF9F27' : e.type === 'done' ? G : 'rgba(255,255,255,0.45)',
-              animation: 'fadeIn 0.2s ease',
-            }}>
-              {e.type === 'success' ? '\u2713 ' : e.type === 'decline' ? '\u2717 ' : e.type === 'fallback' ? '\u21BB ' : '  '}{e.msg}
-            </div>
-          ))}
-          {!done && <span style={{ color: O, animation: 'pulse 1s infinite' }}>{'\u258C'}</span>}
-        </div>
+        <HomieOutreachLive
+          status={outreachStatusObj}
+          log={logEntries}
+          done={done}
+          showSafeNotice={!done}
+          accountLink="/account?tab=quotes"
+        />
       </div>
 
       {/* AI Cost Estimate */}

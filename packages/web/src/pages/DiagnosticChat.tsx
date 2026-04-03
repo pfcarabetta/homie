@@ -2,8 +2,8 @@ import { useReducer, useRef, useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import DiagnosisCard, { type DiagnosisData } from '@/components/DiagnosisCard';
-import OutreachProgress from '@/components/OutreachProgress';
 import ProviderCard from '@/components/ProviderCard';
+import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 import ErrorState from '@/components/ErrorState';
 import { Spinner } from '@/components/Skeleton';
 import { HomieAvatar, HomieLogo } from '@/components/HomieAvatar';
@@ -1352,15 +1352,35 @@ function ProviderModal({
           <>
             {state.matchStep === 'tier' && <TierStep state={state} dispatch={dispatch} />}
             {state.matchStep === 'preferences' && <PreferencesStep state={state} dispatch={dispatch} startOutreach={startOutreach} />}
-            {state.matchStep === 'outreach' && (
-              <>
-                <OutreachProgress providersContacted={state.outreach.providersContacted} channels={state.outreach.channels} active={state.outreach.active} expiresAt={state.expiresAt} />
-                <div className="mt-4 bg-blue-50 rounded-xl p-3 border border-blue-100">
-                  <p className="text-[13px] font-semibold text-blue-600 mb-1">You can close this page</p>
-                  <p className="text-xs text-dark/60 leading-relaxed">We'll notify you by text and email when quotes arrive. You can also check your quotes anytime in your <a href="/account?tab=quotes" className="text-orange-500 font-semibold no-underline">account portal</a>.</p>
-                </div>
-              </>
-            )}
+            {state.matchStep === 'outreach' && (() => {
+              const outreachStatusObj: OutreachStatus = {
+                providers_contacted: state.outreach.providersContacted,
+                providers_responded: Object.values(state.outreach.channels).reduce((sum, ch) => sum + ch.responded, 0),
+                outreach_channels: {
+                  voice: { attempted: state.outreach.channels.voice.attempted, connected: state.outreach.channels.voice.responded },
+                  sms: { attempted: state.outreach.channels.sms.attempted, connected: state.outreach.channels.sms.responded },
+                  web: { attempted: state.outreach.channels.web.attempted, connected: state.outreach.channels.web.responded },
+                },
+                status: state.outreach.active ? 'dispatching' : 'completed',
+              };
+              const logEntries: LogEntry[] = [];
+              if (state.outreach.providersContacted > 0) logEntries.push({ msg: `Contacting ${state.outreach.providersContacted} providers...`, type: 'system' });
+              if (state.outreach.channels.voice.attempted > 0) logEntries.push({ msg: `${state.outreach.channels.voice.attempted} voice calls`, type: 'voice' });
+              if (state.outreach.channels.sms.attempted > 0) logEntries.push({ msg: `${state.outreach.channels.sms.attempted} SMS messages`, type: 'sms' });
+              if (state.outreach.channels.web.attempted > 0) logEntries.push({ msg: `${state.outreach.channels.web.attempted} web contacts`, type: 'web' });
+              const responded = Object.values(state.outreach.channels).reduce((sum, ch) => sum + ch.responded, 0);
+              if (responded > 0) logEntries.push({ msg: `${responded} quote(s) received!`, type: 'success' });
+              if (!state.outreach.active) logEntries.push({ msg: responded > 0 ? `${responded} quotes ready!` : 'Outreach complete', type: 'done' });
+              return (
+                <HomieOutreachLive
+                  status={outreachStatusObj}
+                  log={logEntries}
+                  done={!state.outreach.active}
+                  showSafeNotice={state.outreach.active}
+                  accountLink="/account?tab=quotes"
+                />
+              );
+            })()}
             {state.matchStep === 'results' && <ResultsStep providers={state.respondedProviders} onBook={handleBook} />}
           </>
         )}
