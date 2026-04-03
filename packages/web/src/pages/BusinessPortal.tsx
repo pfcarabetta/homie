@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { businessService, jobService, slackService, templateService, estimateService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate } from '@/services/api';
+import { businessService, jobService, slackService, templateService, estimateService, trackingService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -2656,6 +2656,96 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
+function TrackingShareModal({ jobId, propertyName, onClose }: { jobId: string; propertyName?: string; onClose: () => void }) {
+  const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
+  const [creating, setCreating] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [notifySaved, setNotifySaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    trackingService.createLink(jobId, { property_name: propertyName })
+      .then(res => { if (res.data) setTrackingUrl(res.data.tracking_url); })
+      .catch(() => {})
+      .finally(() => setCreating(false));
+  }, [jobId, propertyName]);
+
+  async function saveNotify() {
+    if (!phone.trim() && !email.trim()) return;
+    setSaving(true);
+    try {
+      await trackingService.createLink(jobId, {
+        notify_phone: phone.trim() || undefined,
+        notify_email: email.trim() || undefined,
+        property_name: propertyName,
+      });
+      setNotifySaved(true);
+    } catch { /* ignore */ }
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: 0 }}>Share maintenance status</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, color: '#9B9490', cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 16, lineHeight: 1.5 }}>
+          Share a live tracking link with property owners or guests. They'll see real-time status updates as providers are contacted and quotes come in.
+        </div>
+
+        {creating && <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 12 }}>Creating tracking link...</div>}
+
+        {trackingUrl && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: W, borderRadius: 8, padding: '10px 12px', border: '1px solid rgba(0,0,0,0.06)', marginBottom: 16 }}>
+            <input readOnly value={trackingUrl} style={{ flex: 1, border: 'none', outline: 'none', fontSize: 12, color: D, fontFamily: "'DM Mono', monospace", background: 'transparent' }} />
+            <button onClick={() => { navigator.clipboard.writeText(trackingUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+              style={{ padding: '6px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600, background: copied ? G : O, color: '#fff', cursor: 'pointer', flexShrink: 0 }}>
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        )}
+
+        {trackingUrl && !notifySaved && (
+          <>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', marginBottom: 8 }}>Also send automatic updates via (optional)</div>
+            <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone for SMS updates"
+                style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
+              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email for updates"
+                style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
+            </div>
+            {(phone.trim() || email.trim()) && (
+              <button disabled={saving} onClick={saveNotify} style={{
+                width: '100%', padding: '10px 0', borderRadius: 100, border: 'none',
+                background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                fontFamily: "'DM Sans', sans-serif", opacity: saving ? 0.7 : 1,
+              }}>
+                {saving ? 'Saving...' : 'Send updates'}
+              </button>
+            )}
+          </>
+        )}
+
+        {notifySaved && (
+          <div style={{ fontSize: 13, color: G, fontWeight: 600 }}>
+            ✓ Updates will be sent{phone ? ` to ${phone}` : ''}{phone && email ? ' and' : ''}{email ? ` to ${email}` : ''}
+          </div>
+        )}
+
+        {trackingUrl && (
+          <div style={{ marginTop: 12, textAlign: 'center' }}>
+            <a href={trackingUrl} target="_blank" rel="noopener" style={{ fontSize: 12, color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}>Preview tracking page →</a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHandled }: { workspaceId: string; onTabChange?: (tab: Tab) => void; plan: string; focusJobId?: string | null; onFocusHandled?: () => void }) {
   const navigate = useNavigate();
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
@@ -2666,6 +2756,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [sharingJobId, setSharingJobId] = useState<string | null>(null);
   const [preferredProviderIds, setPreferredProviderIds] = useState<Set<string>>(new Set());
   const [estimates, setEstimates] = useState<Record<string, CostEstimate>>({});
   const isPro = ['professional', 'business', 'enterprise'].includes(plan);
@@ -2936,6 +3027,16 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                     </div>
                   )}
 
+                  {/* Share Status */}
+                  {!['expired', 'refunded'].includes(j.status) && (
+                    <div style={{ marginBottom: 14 }}>
+                      <button onClick={() => setSharingJobId(j.id)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: `1px solid ${G}40`, background: `${G}08`, color: G, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        🔗 Share Maintenance Status
+                      </button>
+                    </div>
+                  )}
+
                   {/* AI Cost Estimate */}
                   {estimates[j.id] && (
                     <div style={{ marginBottom: 14 }}>
@@ -3039,6 +3140,15 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
           );
         })}
       </div>
+
+      {/* Share tracking modal */}
+      {sharingJobId && (
+        <TrackingShareModal
+          jobId={sharingJobId}
+          propertyName={dispatches.find(d => d.id === sharingJobId)?.propertyName ?? undefined}
+          onClose={() => setSharingJobId(null)}
+        />
+      )}
 
       {/* Cancel confirmation modal */}
       {showCancelConfirm && (
