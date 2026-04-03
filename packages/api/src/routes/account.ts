@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq, desc, and, isNull } from 'drizzle-orm';
+import { eq, desc, and, isNull, inArray, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
@@ -262,6 +262,17 @@ router.get('/jobs', async (req: Request, res: Response) => {
       .where(and(eq(jobs.homeownerId, req.homeownerId), isNull(jobs.workspaceId)))
       .orderBy(desc(jobs.createdAt));
 
+    // Find which jobs already have a booking
+    const jobIds = rows.map(j => j.id);
+    const bookedJobIds = new Set<string>();
+    if (jobIds.length > 0) {
+      const bookedRows = await db
+        .select({ jobId: bookings.jobId })
+        .from(bookings)
+        .where(inArray(bookings.jobId, jobIds));
+      for (const r of bookedRows) bookedJobIds.add(r.jobId);
+    }
+
     res.json({
       data: {
         jobs: rows.map((j) => ({
@@ -275,6 +286,7 @@ router.get('/jobs', async (req: Request, res: Response) => {
           diagnosis: j.diagnosis,
           created_at: j.createdAt.toISOString(),
           expires_at: j.expiresAt?.toISOString() ?? null,
+          has_booking: bookedJobIds.has(j.id),
         })),
       },
       error: null,

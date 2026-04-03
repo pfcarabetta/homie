@@ -381,7 +381,7 @@ function QuotesTab() {
                               <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
                             )}
                           </div>
-                          {j.status !== 'completed' && (
+                          {!j.has_booking && !['expired', 'refunded'].includes(j.status) && (
                             <div style={{ marginTop: 10 }}>
                               <input
                                 id={`address-${r.id}`}
@@ -400,7 +400,7 @@ function QuotesTab() {
                                 if (!address) { alert('Please enter your service address'); return; }
                                 try {
                                   await jobService.bookProvider(j.id, r.id, r.provider.id, address);
-                                  setJobs(prev => prev.map(job => job.id === j.id ? { ...job, status: 'completed' } : job));
+                                  setJobs(prev => prev.map(job => job.id === j.id ? { ...job, has_booking: true } : job));
                                 } catch (err) {
                                   alert((err as Error).message || 'Booking failed');
                                 }

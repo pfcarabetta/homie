@@ -587,6 +587,7 @@ export interface AccountJob {
   diagnosis: DiagnosisPayload | null;
   created_at: string;
   expires_at: string | null;
+  has_booking: boolean;
 }
 
 export interface AccountBooking {
