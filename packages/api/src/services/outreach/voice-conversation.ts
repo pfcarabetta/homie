@@ -78,7 +78,11 @@ If they decline or aren't interested, thank them politely and say goodbye.
 
 When the conversation is DONE (after collecting notes or after a decline), mention that they can manage their Homie jobs anytime at homiepro.ai/portal
 
-IMPORTANT: You must respond with ONLY what you would SAY on the phone. No actions, descriptions, or stage directions. Just the spoken words.`;
+IMPORTANT: You must respond with ONLY what you would SAY on the phone. No actions, descriptions, or stage directions. Just the spoken words.
+
+If a provider's response seems garbled, unclear, or doesn't make sense in context, politely ask them to repeat. For the notes phase, if they seem to be saying "no" or declining to add notes, just confirm and wrap up.
+
+When collecting a price, note context like "service call and diagnosis" vs "full repair" — include that context when confirming back to them.`;
 
 export async function processProviderSpeech(
   attemptId: string,
@@ -135,26 +139,39 @@ export async function processProviderSpeech(
   const isQuestion = questionIndicators.some(q => lower.includes(q));
   const isAccept = acceptWords.some(w => lower.includes(w));
 
+  // Detect garbled/nonsensical speech (very short with no real words, or carrier messages)
+  const garbledIndicators = ['powered by t-mobile', 'powered by verizon', 'powered by at&t', 'bds powered'];
+  const isGarbled = garbledIndicators.some(g => lower.includes(g)) ||
+    (providerSpeech.length < 4 && !/\b(yes|no|ok|yep|nah|nope)\b/i.test(providerSpeech));
+
+  // Price detection: $ prefix or standalone number that looks like a price
+  const hasPrice = /\$\d/.test(providerSpeech) || /(?:^|\s)(\d{2,5})(?:\s*(?:dollars?|bucks?|per|flat|total|each)|\s*[.,]?\s*$)/i.test(providerSpeech);
+
   if (conv.phase === 'interest') {
-    // Only advance if clear acceptance — questions stay in interest phase
     if (isAccept && !isQuestion) {
       conv.accepted = true;
       conv.phase = 'quote';
     }
-    // Otherwise let Claude handle the question naturally
   } else if (conv.phase === 'quote') {
-    // Only capture price if it looks like a price (has numbers or dollar signs)
-    if (/[\d$]/.test(providerSpeech)) {
+    if (hasPrice && !isQuestion) {
       conv.quotedPrice = providerSpeech;
       conv.phase = 'availability';
     }
-    // Otherwise it's probably a question — stay in quote phase
   } else if (conv.phase === 'availability') {
-    conv.availability = providerSpeech;
-    conv.phase = 'notes';
+    if (!isGarbled) {
+      conv.availability = providerSpeech;
+      conv.phase = 'notes';
+    }
   } else if (conv.phase === 'notes') {
-    conv.notes = lower === 'no' || lower === 'none' || lower === 'nope' ? null : providerSpeech;
-    conv.phase = 'done';
+    if (isGarbled) {
+      // Skip garbled speech — don't store it, stay in notes phase for one more try
+      conv.notes = null;
+      conv.phase = 'done';
+    } else {
+      const skipWords = ['no', 'none', 'nope', 'nothing', 'n a', 'that is all', "that's all", "that's it", 'nah'];
+      conv.notes = skipWords.some(w => lower === w || lower.startsWith(w + ' ') || lower.startsWith(w + '.')) ? null : providerSpeech;
+      conv.phase = 'done';
+    }
   }
 
   try {
