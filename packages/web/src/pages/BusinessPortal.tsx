@@ -2688,7 +2688,7 @@ function TrackingShareModal({ jobId, propertyName, onClose }: { jobId: string; p
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={onClose}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 440, margin: '0 12px', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: 0 }}>Share maintenance status</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, color: '#9B9490', cursor: 'pointer' }}>×</button>
@@ -2860,17 +2860,17 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Dispatches</h3>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => { if (isPro) onTabChange?.('schedules'); }}
             title={isPro ? 'Set up recurring dispatches' : 'Upgrade to Professional to use Auto-Dispatch'}
-            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 13, fontWeight: 600,
+            style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, fontWeight: 600,
               color: isPro ? D : '#ccc', cursor: isPro ? 'pointer' : 'default', opacity: isPro ? 1 : 0.6 }}>
             🔄 Auto-Dispatch{!isPro && ' (Pro+)'}
           </button>
           <button onClick={() => navigate(`/business/chat?workspace=${workspaceId}`)}
-            style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+            style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
             + New Dispatch
           </button>
         </div>
@@ -2895,50 +2895,50 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
               boxShadow: isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
             }}>
               {/* ── Collapsed header ── */}
-              <div style={{ padding: '14px 18px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   {isActive ? (
-                    <div style={{ position: 'relative', width: ringSize, height: ringSize, flexShrink: 0 }}>
+                    <div style={{ position: 'relative', width: 38, height: 38, flexShrink: 0 }}>
                       <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid #F0EBE6' }} />
                       <div className="dpc-spin-cw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid transparent', borderTopColor: O, animation: 'dpc-spin-cw 1.8s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
                       <div className="dpc-spin-ccw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid transparent', borderBottomColor: G, animation: 'dpc-spin-ccw 2.4s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
-                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 20, color: O, lineHeight: 1 }}>h</div>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 17, color: O, lineHeight: 1 }}>h</div>
                     </div>
                   ) : (
-                    <div style={{ width: ringSize, height: ringSize, borderRadius: '50%', flexShrink: 0, background: responseCount > 0 ? `${G}12` : W, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${responseCount > 0 ? `${G}30` : '#F0EBE6'}` }}>
-                      <span style={{ fontSize: 18 }}>{responseCount > 0 ? '✓' : j.status === 'expired' ? '⏰' : '✓'}</span>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: responseCount > 0 ? `${G}12` : W, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${responseCount > 0 ? `${G}30` : '#F0EBE6'}` }}>
+                      <span style={{ fontSize: 16 }}>{responseCount > 0 ? '✓' : j.status === 'expired' ? '⏰' : '✓'}</span>
                     </div>
                   )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                      <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 16, color: D }}>{catLabel}</span>
-                      <span style={{ background: sc.bg, color: sc.text, padding: '2px 8px', borderRadius: 100, fontSize: 10, fontWeight: 600 }}>{sc.text === sc.text ? j.status.charAt(0).toUpperCase() + j.status.slice(1) : ''}</span>
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{catLabel}</span>
+                      <span style={{ background: sc.bg, color: sc.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0 }}>{j.status.charAt(0).toUpperCase() + j.status.slice(1)}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: '#9B9490', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      {j.propertyName && <span>🏠 {j.propertyName}</span>}
+                    <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {j.propertyName && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>🏠 {j.propertyName}</span>}
                       <span>{new Date(j.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                       <span>{j.zipCode}</span>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 50 }}>
                     {responseCount > 0 ? (
                       <>
-                        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: G }}>{responseCount}</div>
-                        <div style={{ fontSize: 10, color: '#9B9490' }}>quote{responseCount > 1 ? 's' : ''}</div>
+                        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: G }}>{responseCount}</div>
+                        <div style={{ fontSize: 9, color: '#9B9490' }}>quote{responseCount > 1 ? 's' : ''}</div>
                       </>
                     ) : isActive ? (
-                      <div style={{ fontSize: 11, fontWeight: 600, color: O, animation: 'dpc-pulse 1.5s infinite' }}>Searching...</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: O, animation: 'dpc-pulse 1.5s infinite' }}>Searching</div>
                     ) : (
                       <span style={{ fontSize: 12, color: '#C0BBB6' }}>—</span>
                     )}
                   </div>
-                  <span style={{ fontSize: 12, color: '#C0BBB6', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
+                  <span style={{ fontSize: 11, color: '#C0BBB6', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
                 </div>
               </div>
 
               {/* ── Expanded detail ── */}
               {isExpanded && (
-                <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
+                <div style={{ padding: '0 14px 16px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
 
                   {/* Active outreach animation + channel counts */}
                   {isActive && (
@@ -2990,7 +2990,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                   )}
 
                   {/* Details grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6, marginBottom: 14 }}>
                     {[
                       { label: 'Category', value: catLabel },
                       { label: 'Severity', value: (j.diagnosis?.severity ?? 'medium').replace(/^\w/, c => c.toUpperCase()), color: j.diagnosis?.severity === 'high' ? '#DC2626' : j.diagnosis?.severity === 'low' ? G : D },
@@ -2999,7 +2999,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                     ].map((item, i) => (
                       <div key={i} style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
                         <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: (item as { color?: string }).color ?? D }}>{item.value}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: (item as { color?: string }).color ?? D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
                       </div>
                     ))}
                   </div>
@@ -3011,29 +3011,27 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                     </div>
                   )}
 
-                  {/* Download Estimate Summary */}
-                  {jobResponses.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      {isPro ? (
-                        <button onClick={() => handleDownloadEstimate(j.id)} disabled={downloadingPdf === j.id}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: `1px solid ${O}40`, background: `${O}08`, color: O, fontSize: 13, fontWeight: 600, cursor: downloadingPdf === j.id ? 'default' : 'pointer', opacity: downloadingPdf === j.id ? 0.6 : 1 }}>
-                          {downloadingPdf === j.id ? 'Generating PDF...' : '📄 Download Estimate Summary'}
-                        </button>
-                      ) : (
-                        <button disabled style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#F5F3F0', color: '#B0AAA4', fontSize: 13, fontWeight: 600, cursor: 'default' }}>
-                          📄 Download Estimate Summary <span style={{ fontSize: 11, fontWeight: 500 }}>(Professional+)</span>
+                  {/* Action buttons */}
+                  {(jobResponses.length > 0 || !['expired', 'refunded'].includes(j.status)) && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                      {jobResponses.length > 0 && (
+                        isPro ? (
+                          <button onClick={() => handleDownloadEstimate(j.id)} disabled={downloadingPdf === j.id}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${O}40`, background: `${O}08`, color: O, fontSize: 12, fontWeight: 600, cursor: downloadingPdf === j.id ? 'default' : 'pointer', opacity: downloadingPdf === j.id ? 0.6 : 1 }}>
+                            {downloadingPdf === j.id ? 'Generating...' : '📄 Estimate PDF'}
+                          </button>
+                        ) : (
+                          <button disabled style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#F5F3F0', color: '#B0AAA4', fontSize: 12, fontWeight: 600, cursor: 'default' }}>
+                            📄 Estimate PDF <span style={{ fontSize: 10 }}>(Pro+)</span>
+                          </button>
+                        )
+                      )}
+                      {!['expired', 'refunded'].includes(j.status) && (
+                        <button onClick={() => setSharingJobId(j.id)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${G}40`, background: `${G}08`, color: G, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          🔗 Share Status
                         </button>
                       )}
-                    </div>
-                  )}
-
-                  {/* Share Status */}
-                  {!['expired', 'refunded'].includes(j.status) && (
-                    <div style={{ marginBottom: 14 }}>
-                      <button onClick={() => setSharingJobId(j.id)}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: `1px solid ${G}40`, background: `${G}08`, color: G, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                        🔗 Share Maintenance Status
-                      </button>
                     </div>
                   )}
 
@@ -3070,18 +3068,20 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {jobResponses.map(r => (
-                          <div key={r.id} style={{ background: W, borderRadius: 10, padding: '12px 14px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontWeight: 600, fontSize: 14, color: D }}>{r.provider.name}</span>
-                                {preferredProviderIds.has(r.provider.id) && (
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: O, padding: '2px 6px', borderRadius: 4, letterSpacing: '0.04em' }}>PREFERRED</span>
-                                )}
-                                <span style={{ color: '#9B9490', fontSize: 11 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
+                          <div key={r.id} style={{ background: W, borderRadius: 10, padding: '10px 12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, fontSize: 13, color: D }}>{r.provider.name}</span>
+                                  {preferredProviderIds.has(r.provider.id) && (
+                                    <span style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: O, padding: '2px 5px', borderRadius: 3, letterSpacing: '0.04em' }}>PREFERRED</span>
+                                  )}
+                                </div>
+                                <div style={{ color: '#9B9490', fontSize: 10, marginTop: 1 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</div>
                               </div>
                               {r.quoted_price && (
-                                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: O }}>{r.quoted_price}</span>
                                   {estimates[j.id] ? (
                                     <EstimateBadge quotedPrice={r.quoted_price} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
                                   ) : (
