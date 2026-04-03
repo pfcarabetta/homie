@@ -20,7 +20,7 @@ const EMA_RETAIN = 1 - EMA_ALPHA;
  */
 function emaUpdate(column: AnyColumn, newValue: number): ReturnType<typeof sql> {
   return sql`ROUND(
-    (${EMA_ALPHA} * ${newValue} + ${EMA_RETAIN} * COALESCE(${column}::numeric, ${newValue}))::numeric,
+    (${EMA_ALPHA}::numeric * ${newValue}::numeric + ${EMA_RETAIN}::numeric * COALESCE(${column}::numeric, ${newValue}::numeric))::numeric,
     4
   )`;
 }
