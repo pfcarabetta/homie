@@ -53,8 +53,9 @@ const GENERATE_SCRIPTS_TOOL: Anthropic.Tool = {
       sms: {
         type: 'string',
         description:
-          'SMS message (≤160 characters). Must be terse: job category, zip code, budget range, and ask the provider to reply YES if interested. ' +
-          'Do NOT include any URLs or links. Use {{category}}, {{zip_code}}, {{budget}}.',
+          'SMS message (≤280 characters). Must start with "A homeowner needs" to establish this is a real homeowner request. ' +
+          'Include the job description, zip code, budget, and end with "Reply YES if interested." ' +
+          'Do NOT include any URLs or links. Use {{category}}, {{summary}}, {{zip_code}}, {{budget}}.',
       },
       web: {
         type: 'string',
