@@ -490,7 +490,11 @@ router.post('/twilio/voice/status', async (req: Request, res: Response) => {
 // Uses conversational AI to collect quote details over multiple messages.
 
 router.post('/twilio/sms', async (req: Request, res: Response) => {
+  logger.info({ from: req.body?.From, body: req.body?.Body?.slice(0, 50) }, '[sms-webhook] Incoming SMS received');
+
   if (!isTwilioRequestValid(req)) {
+    const url = `${process.env.API_BASE_URL}${req.originalUrl}`;
+    logger.warn({ url, hasSignature: !!req.headers['x-twilio-signature'], hasAuthToken: !!process.env.TWILIO_AUTH_TOKEN }, '[sms-webhook] Twilio signature validation failed');
     res.status(403).send('Forbidden');
     return;
   }
