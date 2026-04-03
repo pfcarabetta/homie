@@ -168,6 +168,13 @@ const PAYMENT_LABELS: Record<string, { text: string; color: string }> = {
   refunded: { text: 'Refunded', color: '#DC2626' },
 };
 
+const ENCOURAGEMENT_MSGS = [
+  'Calling around so you don\u2019t have to',
+  'Nobody got you like your Homie',
+  'Sit tight \u2014 quotes incoming',
+  'Making moves behind the scenes',
+];
+
 const QUOTE_CARD_STYLES = `
 @keyframes qtc-spin-cw {
   0% { transform: rotate(0deg); }
@@ -181,8 +188,14 @@ const QUOTE_CARD_STYLES = `
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+@keyframes qtc-rotate-msgs {
+  0%, 22% { transform: translateY(0); }
+  25%, 47% { transform: translateY(-25%); }
+  50%, 72% { transform: translateY(-50%); }
+  75%, 97% { transform: translateY(-75%); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .qtc-spin-cw, .qtc-spin-ccw { animation: none !important; }
+  .qtc-spin-cw, .qtc-spin-ccw, .qtc-msg-rotate { animation: none !important; }
 }
 `;
 
@@ -324,8 +337,12 @@ function QuotesTab() {
                       </div>
                       <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, textAlign: 'center' }}>Your Homie's on it</div>
                       <div style={{ fontSize: 12, color: '#9B9490', textAlign: 'center', marginTop: 2 }}>Contacting pros in {j.zip_code}</div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: O, marginTop: 8, animation: 'qtc-pulse 2s infinite' }}>
-                        Calling around so you don't have to
+                      <div style={{ height: 18, overflow: 'hidden', marginTop: 8, textAlign: 'center' }}>
+                        <div className="qtc-msg-rotate" style={{ animation: 'qtc-rotate-msgs 10s ease-in-out infinite' }}>
+                          {ENCOURAGEMENT_MSGS.map((msg, i) => (
+                            <div key={i} style={{ height: 18, lineHeight: '18px', fontSize: 12, fontWeight: 500, color: O }}>{msg}</div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   )}
