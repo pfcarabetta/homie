@@ -532,7 +532,7 @@ router.get('/:workspaceId/vendors', requireWorkspace, async (req: Request, res: 
       })
       .from(preferredVendors)
       .innerJoin(providers, eq(preferredVendors.providerId, providers.id))
-      .where(and(eq(preferredVendors.workspaceId, req.workspaceId), eq(preferredVendors.active, true)))
+      .where(eq(preferredVendors.workspaceId, req.workspaceId))
       .orderBy(preferredVendors.priority);
 
     res.json({ data: rows, error: null, meta: {} });

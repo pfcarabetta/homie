@@ -2164,6 +2164,7 @@ interface GroupedVendor {
   priority: number;
   notes: string | null;
   availabilitySchedule: VendorSched | null;
+  active: boolean;
   entries: PreferredVendor[]; // one per property assignment
   propertyIds: (string | null)[]; // null = workspace-wide
 }
@@ -2187,6 +2188,7 @@ function groupVendors(vendors: PreferredVendor[]): GroupedVendor[] {
         priority: v.priority,
         notes: v.notes,
         availabilitySchedule: v.availabilitySchedule,
+        active: v.active,
         entries: [v],
         propertyIds: [v.propertyId],
       });
@@ -2276,11 +2278,12 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
             const isWorkspaceWide = g.propertyIds.includes(null);
             const assignedProps = allProperties.filter(p => g.propertyIds.includes(p.id));
             return (
-              <div key={g.providerId} style={{ background: '#fff', borderRadius: 10, border: '1px solid #E0DAD4', padding: '16px 20px' }}>
+              <div key={g.providerId} style={{ background: '#fff', borderRadius: 10, border: '1px solid #E0DAD4', padding: '16px 20px', opacity: g.active ? 1 : 0.55, transition: 'opacity 0.2s' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 16, fontWeight: 600, color: D }}>{g.providerName}</span>
+                      {!g.active && <span style={{ fontSize: 10, fontWeight: 700, color: '#9B9490', background: '#F3F4F6', padding: '2px 8px', borderRadius: 4 }}>INACTIVE</span>}
                       <span style={{
                         fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600,
                         background: g.priority === 1 ? '#FEF3C7' : g.priority === 2 ? '#DBEAFE' : '#F3F4F6',
@@ -2310,7 +2313,25 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
                     {g.notes && <div style={{ fontSize: 13, color: '#6B6560', marginTop: 6, fontStyle: 'italic' }}>{g.notes}</div>}
                   </div>
                   {canEdit && (
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                      <button onClick={() => {
+                        const newActive = !g.active;
+                        Promise.all(g.entries.map(e =>
+                          businessService.updateVendor(workspaceId, e.id, { active: newActive })
+                        )).then(() => loadVendors());
+                      }}
+                        title={g.active ? 'Deactivate vendor' : 'Activate vendor'}
+                        style={{
+                          width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
+                          background: g.active ? G : '#D1D5DB', position: 'relative', transition: 'background 0.2s', padding: 0,
+                        }}>
+                        <div style={{
+                          width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                          position: 'absolute', top: 2,
+                          left: g.active ? 18 : 2,
+                          transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                        }} />
+                      </button>
                       <button onClick={() => setEditingVendor(g)}
                         style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 500 }}>
                         Edit
@@ -2603,7 +2624,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
 
   useEffect(() => {
     businessService.listVendors(workspaceId).then(res => {
-      if (res.data) setPreferredProviderIds(new Set(res.data.map(v => v.providerId)));
+      if (res.data) setPreferredProviderIds(new Set(res.data.filter(v => v.active).map(v => v.providerId)));
     }).catch(() => {});
   }, [workspaceId]);
 
