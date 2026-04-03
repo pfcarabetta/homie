@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import twilio from 'twilio';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { eq, and, inArray, desc } from 'drizzle-orm';
+import { eq, and, inArray, desc, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerResponses } from '../db/schema/provider-responses';
@@ -509,11 +509,12 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
     return;
   }
 
-  // Find the provider by phone number
+  // Find the provider by phone number (normalize: strip all non-digits for comparison)
+  const fromDigits = From.replace(/\D/g, '').slice(-10);
   const [provider] = await db
     .select({ id: providers.id, name: providers.name })
     .from(providers)
-    .where(eq(providers.phone, From))
+    .where(sql`REGEXP_REPLACE(${providers.phone}, '[^0-9]', '', 'g') LIKE ${'%' + fromDigits}`)
     .limit(1);
 
   if (!provider) {
