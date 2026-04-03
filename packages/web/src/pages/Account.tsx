@@ -929,6 +929,21 @@ export default function Account() {
           Welcome back{homeowner?.first_name ? `, ${homeowner.first_name}` : ''}!
         </h1>
 
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          <button onClick={() => navigate('/quote')} style={{
+            padding: '9px 18px', borderRadius: 100, border: 'none',
+            background: O, color: '#fff', fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}>+ Get New Quote</button>
+          <button onClick={() => navigate('/diagnostic')} style={{
+            padding: '9px 18px', borderRadius: 100,
+            border: `1px solid ${O}`, background: '#fff',
+            color: O, fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}>Free Diagnostic Chat</button>
+        </div>
+
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 28, borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: 0 }}>
           {TABS.map(tab => (
