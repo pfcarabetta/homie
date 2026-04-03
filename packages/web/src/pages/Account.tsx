@@ -151,22 +151,40 @@ function ProfileTab() {
 }
 
 /* -- Quotes Tab -- */
-const STATUS_MESSAGES: Record<string, { icon: string; label: string; desc: string }> = {
-  open: { icon: '\uD83D\uDCCB', label: 'Open', desc: 'Your quote request has been created' },
-  dispatching: { icon: '\uD83D\uDE80', label: 'Searching', desc: 'Our AI agent is finding and contacting providers in your area' },
-  collecting: { icon: '\uD83D\uDCE1', label: 'Collecting Quotes', desc: 'Providers are being contacted — quotes will appear as they respond' },
-  completed: { icon: '\u2705', label: 'Complete', desc: 'Outreach is complete — your quotes are ready' },
-  expired: { icon: '\u23F0', label: 'Expired', desc: 'This quote request has expired' },
-  refunded: { icon: '\uD83D\uDCB0', label: 'Refunded', desc: 'Your payment has been refunded' },
+const QUOTE_STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
+  open: { color: '#2563EB', bg: '#EFF6FF', label: 'Open' },
+  dispatching: { color: '#C2410C', bg: '#FFF7ED', label: 'Searching' },
+  collecting: { color: '#7C3AED', bg: '#F5F3FF', label: 'Collecting' },
+  completed: { color: '#16A34A', bg: '#F0FDF4', label: 'Complete' },
+  expired: { color: '#9B9490', bg: '#F5F5F5', label: 'Expired' },
+  refunded: { color: '#DC2626', bg: '#FEF2F2', label: 'Refunded' },
 };
 
 const PAYMENT_LABELS: Record<string, { text: string; color: string }> = {
   unpaid: { text: 'Not paid', color: '#9B9490' },
-  authorized: { text: 'Card authorized', color: '#2563EB' },
-  pending: { text: 'Payment pending', color: '#C2410C' },
+  authorized: { text: 'Authorized', color: '#2563EB' },
+  pending: { text: 'Pending', color: '#C2410C' },
   paid: { text: 'Paid', color: '#16A34A' },
   refunded: { text: 'Refunded', color: '#DC2626' },
 };
+
+const QUOTE_CARD_STYLES = `
+@keyframes qtc-spin-cw {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes qtc-spin-ccw {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+@keyframes qtc-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qtc-spin-cw, .qtc-spin-ccw { animation: none !important; }
+}
+`;
 
 function QuotesTab() {
   const [jobs, setJobs] = useState<AccountJob[]>([]);
@@ -218,212 +236,238 @@ function QuotesTab() {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {jobs.map(j => {
-        const sc = STATUS_COLORS[j.status] || STATUS_COLORS.expired;
-        const sm = STATUS_MESSAGES[j.status] || STATUS_MESSAGES.open;
-        const pm = PAYMENT_LABELS[j.payment_status] || PAYMENT_LABELS.unpaid;
-        const isExpanded = expandedId === j.id;
-        const jobResponses = responses[j.id] ?? [];
-        const isActive = ['open', 'dispatching', 'collecting'].includes(j.status);
-        const catLabel = j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Quote';
+    <>
+      <style dangerouslySetInnerHTML={{ __html: QUOTE_CARD_STYLES }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {jobs.map(j => {
+          const sc = QUOTE_STATUS_CONFIG[j.status] ?? QUOTE_STATUS_CONFIG.expired;
+          const pm = PAYMENT_LABELS[j.payment_status] ?? PAYMENT_LABELS.unpaid;
+          const isExpanded = expandedId === j.id;
+          const jobResponses = responses[j.id] ?? [];
+          const isActive = ['open', 'dispatching', 'collecting'].includes(j.status);
+          const catLabel = j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Quote';
+          const responseCount = jobResponses.length;
+          const ringSize = 44;
 
-        // Response status for collapsed card
-        const responseCount = jobResponses.length;
-        const hasLoaded = responses[j.id] !== undefined;
-        let responseStatus = '';
-        let responseColor = '#9B9490';
-        let responseDot = false;
-        if (j.status === 'completed' && hasLoaded && responseCount > 0) {
-          responseStatus = `${responseCount} quote${responseCount > 1 ? 's' : ''} received`;
-          responseColor = G;
-        } else if (j.status === 'completed' && hasLoaded) {
-          responseStatus = 'No quotes received';
-        } else if (isActive) {
-          responseStatus = 'Awaiting provider quotes';
-          responseColor = '#C2410C';
-          responseDot = true;
-        } else if (j.status === 'expired') {
-          responseStatus = 'Expired';
-        } else {
-          responseStatus = sm.label;
-        }
-
-        return (
-          <div key={j.id} onClick={() => toggleExpand(j.id)} style={{
-            background: 'white', borderRadius: 12,
-            border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
-            cursor: 'pointer', transition: 'all 0.15s', overflow: 'hidden',
-          }}>
-            {/* Collapsed card */}
-            <div style={{ padding: '14px 18px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontWeight: 700, fontSize: 15, color: D }}>{catLabel}</span>
-                  <span style={{ background: sc.bg, color: sc.text, padding: '2px 10px', borderRadius: 100, fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
-                </div>
-                <span style={{ fontSize: 12, color: '#9B9490' }}>{isExpanded ? '▲' : '▼'}</span>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: '#6B6560', marginBottom: 10, flexWrap: 'wrap' }}>
-                <span>{j.zip_code}</span>
-                <span>{new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                <span style={{ textTransform: 'capitalize' }}>{j.tier}</span>
-              </div>
-
-              {/* Response status */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 12px', borderRadius: 8,
-                background: (hasLoaded && responseCount > 0) ? `${G}08` : isActive ? '#FFF7ED' : W,
-                border: (hasLoaded && responseCount > 0) ? `1px solid ${G}20` : '1px solid rgba(0,0,0,0.04)',
-              }}>
-                {responseDot && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#C2410C', animation: 'pulse 1.5s infinite', flexShrink: 0 }} />}
-                {hasLoaded && responseCount > 0 && <span style={{ fontSize: 14 }}>✅</span>}
-                <span style={{ fontSize: 13, fontWeight: 600, color: responseColor }}>{responseStatus}</span>
-              </div>
-            </div>
-
-            {/* Expanded Detail */}
-            {isExpanded && (
-              <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(0,0,0,0.05)' }} onClick={e => e.stopPropagation()}>
-
-                {/* Full summary */}
-                {j.diagnosis?.summary && (
-                  <div style={{ padding: '14px 0', fontSize: 14, color: '#6B6560', lineHeight: 1.6 }}>
-                    {j.diagnosis.summary}
-                  </div>
-                )}
-
-                {/* Status Banner */}
-                <div style={{ background: isActive ? '#FFF7ED' : sc.bg, borderRadius: 10, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {isActive && <div style={{ width: 8, height: 8, borderRadius: '50%', background: O, animation: 'pulse 1.2s infinite' }} />}
-                  {!isActive && <span style={{ fontSize: 16 }}>{sm.icon}</span>}
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{sm.label}</div>
-                    <div style={{ fontSize: 12, color: '#6B6560' }}>{sm.desc}</div>
-                  </div>
-                </div>
-
-                {/* Details grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-                  <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                    <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Category</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{catLabel}</div>
-                  </div>
-                  <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                    <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Severity</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.severity ?? 'Medium'}</div>
-                  </div>
-                  <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                    <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Timing</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{j.preferred_timing ?? 'Flexible'}</div>
-                  </div>
-                  <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                    <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Payment</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: pm.color }}>{pm.text}</div>
-                  </div>
-                </div>
-
-                {j.expires_at && (
-                  <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 14 }}>
-                    {isActive ? 'Expires' : 'Expired'}: {new Date(j.expires_at).toLocaleString()}
-                  </div>
-                )}
-
-                {/* AI Cost Estimate */}
-                {estimates[j.id] && (
-                  <div style={{ marginBottom: 12 }}>
-                    <EstimateCard estimate={estimates[j.id]} />
-                  </div>
-                )}
-
-                {/* Provider Responses */}
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Provider Quotes</div>
-
-                  {loadingResponses === j.id ? (
-                    <div style={{ color: '#9B9490', fontSize: 13 }}>Loading quotes...</div>
-                  ) : jobResponses.length === 0 ? (
-                    <div style={{ background: W, borderRadius: 8, padding: '14px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, color: '#9B9490' }}>
-                        {isActive ? 'Waiting for providers to respond...' : 'No providers responded'}
-                      </div>
+          return (
+            <div key={j.id} onClick={() => toggleExpand(j.id)} style={{
+              background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+              border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
+              transition: 'all 0.2s',
+              boxShadow: isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
+            }}>
+              {/* ── Collapsed header ── */}
+              <div style={{ padding: '14px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Mini spinner for active, static icon for others */}
+                  {isActive ? (
+                    <div style={{ position: 'relative', width: ringSize, height: ringSize, flexShrink: 0 }}>
+                      <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid #F0EBE6' }} />
+                      <div className="qtc-spin-cw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid transparent', borderTopColor: O, animation: 'qtc-spin-cw 1.8s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
+                      <div className="qtc-spin-ccw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid transparent', borderBottomColor: G, animation: 'qtc-spin-ccw 2.4s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 20, color: O, lineHeight: 1 }}>h</div>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {jobResponses.map(r => (
-                        <div key={r.id} style={{
-                          background: W, borderRadius: 10, padding: '12px 14px',
-                          border: '1px solid rgba(0,0,0,0.04)',
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <div>
-                              <span style={{ fontWeight: 600, fontSize: 14, color: D }}>{r.provider.name}</span>
-                              <span style={{ color: '#9B9490', fontSize: 11, marginLeft: 6 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
+                    <div style={{
+                      width: ringSize, height: ringSize, borderRadius: '50%', flexShrink: 0,
+                      background: responseCount > 0 ? `${G}12` : W,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      border: `2px solid ${responseCount > 0 ? `${G}30` : '#F0EBE6'}`,
+                    }}>
+                      <span style={{ fontSize: 18 }}>{responseCount > 0 ? '✓' : j.status === 'expired' ? '⏰' : '✓'}</span>
+                    </div>
+                  )}
+
+                  {/* Title + meta */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 16, color: D }}>{catLabel}</span>
+                      <span style={{ background: sc.bg, color: sc.color, padding: '2px 8px', borderRadius: 100, fontSize: 10, fontWeight: 600 }}>{sc.label}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#9B9490', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <span>{j.zip_code}</span>
+                      <span>{new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      <span style={{ textTransform: 'capitalize' }}>{j.tier}</span>
+                    </div>
+                  </div>
+
+                  {/* Right: quote count or searching */}
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    {responseCount > 0 ? (
+                      <>
+                        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: G }}>{responseCount}</div>
+                        <div style={{ fontSize: 10, color: '#9B9490' }}>quote{responseCount > 1 ? 's' : ''}</div>
+                      </>
+                    ) : isActive ? (
+                      <div style={{ fontSize: 11, fontWeight: 600, color: O, animation: 'qtc-pulse 1.5s infinite' }}>Searching...</div>
+                    ) : (
+                      <span style={{ fontSize: 12, color: '#C0BBB6' }}>—</span>
+                    )}
+                  </div>
+
+                  <span style={{ fontSize: 12, color: '#C0BBB6', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
+                </div>
+              </div>
+
+              {/* ── Expanded detail ── */}
+              {isExpanded && (
+                <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
+
+                  {/* Active outreach animation */}
+                  {isActive && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0 16px' }}>
+                      <div style={{ position: 'relative', width: 72, height: 72, marginBottom: 12 }}>
+                        <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2.5px solid #F0EBE6' }} />
+                        <div className="qtc-spin-cw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2.5px solid transparent', borderTopColor: O, animation: 'qtc-spin-cw 1.8s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
+                        <div className="qtc-spin-ccw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2.5px solid transparent', borderBottomColor: G, animation: 'qtc-spin-ccw 2.4s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 30, color: O, lineHeight: 1 }}>h</div>
+                      </div>
+                      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, textAlign: 'center' }}>Your Homie's on it</div>
+                      <div style={{ fontSize: 12, color: '#9B9490', textAlign: 'center', marginTop: 2 }}>Contacting pros in {j.zip_code}</div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: O, marginTop: 8, animation: 'qtc-pulse 2s infinite' }}>
+                        Calling around so you don't have to
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary */}
+                  {j.diagnosis?.summary && (
+                    <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, marginBottom: 14, paddingTop: isActive ? 0 : 12 }}>
+                      {j.diagnosis.summary}
+                    </div>
+                  )}
+
+                  {/* Details grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 14 }}>
+                    {[
+                      { label: 'Category', value: catLabel },
+                      { label: 'Severity', value: (j.diagnosis?.severity ?? 'medium').replace(/^\w/, c => c.toUpperCase()), color: j.diagnosis?.severity === 'high' ? '#DC2626' : j.diagnosis?.severity === 'low' ? G : D },
+                      { label: 'Timing', value: j.preferred_timing ?? 'Flexible' },
+                      { label: 'Payment', value: pm.text, color: pm.color },
+                    ].map((item, i) => (
+                      <div key={i} style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
+                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: item.color ?? D }}>{item.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Expiry */}
+                  {j.expires_at && isActive && (
+                    <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 12 }}>
+                      Expires: {new Date(j.expires_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </div>
+                  )}
+
+                  {/* AI Cost Estimate */}
+                  {estimates[j.id] && (
+                    <div style={{ marginBottom: 14 }}>
+                      <EstimateCard estimate={estimates[j.id]} />
+                    </div>
+                  )}
+
+                  {/* Provider Quotes */}
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: D, marginBottom: 8, letterSpacing: '0.02em' }}>
+                      {responseCount > 0 ? `Provider Quotes (${responseCount})` : 'Provider Quotes'}
+                    </div>
+
+                    {loadingResponses === j.id ? (
+                      <div style={{ color: '#9B9490', fontSize: 13 }}>Loading quotes...</div>
+                    ) : responseCount === 0 ? (
+                      <div style={{
+                        background: W, borderRadius: 10, padding: '16px 14px', textAlign: 'center',
+                        border: '1px dashed rgba(0,0,0,0.08)',
+                      }}>
+                        {isActive ? (
+                          <>
+                            <div style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>Waiting for providers to respond...</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 8 }}>
+                              {[0, 1, 2].map(i => (
+                                <div key={i} style={{
+                                  width: 6, height: 6, borderRadius: '50%', background: O,
+                                  animation: `qtc-pulse 1.2s ${i * 0.3}s infinite`,
+                                }} />
+                              ))}
                             </div>
-                            {r.quoted_price && (
-                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                                <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
-                                {estimates[j.id] ? (
-                                  <EstimateBadge quotedPrice={r.quoted_price} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
-                                ) : (
-                                  <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
-                                )}
+                          </>
+                        ) : (
+                          <div style={{ fontSize: 13, color: '#9B9490' }}>No providers responded</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {jobResponses.map(r => (
+                          <div key={r.id} style={{
+                            background: W, borderRadius: 10, padding: '12px 14px',
+                            border: '1px solid rgba(0,0,0,0.04)',
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                              <div>
+                                <span style={{ fontWeight: 600, fontSize: 14, color: D }}>{r.provider.name}</span>
+                                <span style={{ color: '#9B9490', fontSize: 11, marginLeft: 6 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
+                              </div>
+                              {r.quoted_price && (
+                                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                                  {estimates[j.id] ? (
+                                    <EstimateBadge quotedPrice={r.quoted_price} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
+                                  ) : (
+                                    <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            {r.availability && <div style={{ fontSize: 12, color: D, marginBottom: 3 }}>📅 {r.availability}</div>}
+                            {r.message && <div style={{ fontSize: 12, color: '#6B6560', fontStyle: 'italic' }}>"{r.message}"</div>}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                              <span style={{ fontSize: 11, color: '#9B9490' }}>via {r.channel} · {timeAgo(r.responded_at)}</span>
+                              {r.provider.phone && (
+                                <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
+                              )}
+                            </div>
+                            {!j.has_booking && !['expired', 'refunded'].includes(j.status) && (
+                              <div style={{ marginTop: 10 }}>
+                                <input
+                                  id={`address-${r.id}`}
+                                  placeholder="Enter your service address"
+                                  onClick={e => e.stopPropagation()}
+                                  style={{
+                                    width: '100%', padding: '10px 14px', borderRadius: 10, fontSize: 14,
+                                    border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: D,
+                                    fontFamily: "'DM Sans', sans-serif", marginBottom: 8, boxSizing: 'border-box' as const,
+                                  }}
+                                />
+                                <button onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const addressInput = document.getElementById(`address-${r.id}`) as HTMLInputElement;
+                                  const address = addressInput?.value?.trim();
+                                  if (!address) { alert('Please enter your service address'); return; }
+                                  try {
+                                    await jobService.bookProvider(j.id, r.id, r.provider.id, address);
+                                    setJobs(prev => prev.map(job => job.id === j.id ? { ...job, has_booking: true } : job));
+                                  } catch (err) {
+                                    alert((err as Error).message || 'Booking failed');
+                                  }
+                                }} style={{
+                                  width: '100%', padding: '10px 0', borderRadius: 100, border: 'none',
+                                  background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                                  fontFamily: "'DM Sans', sans-serif",
+                                }}>Book {r.provider.name.split(' ')[0]}</button>
                               </div>
                             )}
                           </div>
-                          {r.availability && <div style={{ fontSize: 12, color: D, marginBottom: 3 }}>📅 {r.availability}</div>}
-                          {r.message && <div style={{ fontSize: 12, color: '#6B6560', fontStyle: 'italic' }}>"{r.message}"</div>}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                            <span style={{ fontSize: 11, color: '#9B9490' }}>via {r.channel} · {timeAgo(r.responded_at)}</span>
-                            {r.provider.phone && (
-                              <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
-                            )}
-                          </div>
-                          {!j.has_booking && !['expired', 'refunded'].includes(j.status) && (
-                            <div style={{ marginTop: 10 }}>
-                              <input
-                                id={`address-${r.id}`}
-                                placeholder="Enter your service address"
-                                onClick={e => e.stopPropagation()}
-                                style={{
-                                  width: '100%', padding: '10px 14px', borderRadius: 10, fontSize: 14,
-                                  border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: D,
-                                  fontFamily: "'DM Sans', sans-serif", marginBottom: 8, boxSizing: 'border-box' as const,
-                                }}
-                              />
-                              <button onClick={async (e) => {
-                                e.stopPropagation();
-                                const addressInput = document.getElementById(`address-${r.id}`) as HTMLInputElement;
-                                const address = addressInput?.value?.trim();
-                                if (!address) { alert('Please enter your service address'); return; }
-                                try {
-                                  await jobService.bookProvider(j.id, r.id, r.provider.id, address);
-                                  setJobs(prev => prev.map(job => job.id === j.id ? { ...job, has_booking: true } : job));
-                                } catch (err) {
-                                  alert((err as Error).message || 'Booking failed');
-                                }
-                              }} style={{
-                                width: '100%', padding: '10px 0', borderRadius: 100, border: 'none',
-                                background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                                fontFamily: "'DM Sans', sans-serif",
-                              }}>Book {r.provider.name.split(' ')[0]}</button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      <style>{`@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }`}</style>
-    </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
