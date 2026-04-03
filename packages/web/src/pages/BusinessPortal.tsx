@@ -1403,6 +1403,8 @@ function BillingTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUp
           {BILLING_PLANS.map(p => {
             const isCurrent = workspace.plan === p.plan;
             const isDowngrade = BILLING_PLANS.findIndex(x => x.plan === workspace.plan) > BILLING_PLANS.findIndex(x => x.plan === p.plan);
+            const propertyCount = usage?.property_count ?? 0;
+            const exceedsLimit = isDowngrade && propertyCount > p.maxProperties;
             return (
               <div key={p.plan} style={{
                 background: '#fff', borderRadius: 14, padding: 20,
@@ -1427,6 +1429,13 @@ function BillingTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUp
                 </div>
                 {isCurrent ? (
                   <div style={{ textAlign: 'center', fontSize: 13, color: '#9B9490', fontWeight: 600, padding: '10px 0' }}>Your current plan</div>
+                ) : exceedsLimit ? (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ padding: '10px 0', fontSize: 13, color: '#DC2626', fontWeight: 600 }}>
+                      You have {propertyCount} properties (max {p.maxProperties})
+                    </div>
+                    <div style={{ fontSize: 11, color: '#9B9490' }}>Remove properties to downgrade</div>
+                  </div>
                 ) : (
                   <button disabled={changingPlan === p.plan} onClick={() => handlePlanChange(p.plan)}
                     style={{
