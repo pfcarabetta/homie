@@ -109,12 +109,13 @@ export async function processSmsReply(
   const acceptWords = ['yes', 'yeah', 'yep', 'sure', 'interested', 'ok', 'okay', 'absolutely', 'definitely', 'i can', 'send', 'tell me more'];
   const isAccept = acceptWords.some(w => lower.includes(w));
   const isQuestion = ['?', 'what', 'who', 'how', 'why', 'where', 'when', 'is there', 'do i', 'cost', 'fee'].some(q => lower.includes(q));
-  const hasPrice = /[\d$]/.test(providerReply);
+  // Price detection: must have $ or a standalone number that looks like a price (not embedded in technical specs like "240V")
+  const hasPrice = /\$\d/.test(providerReply) || /(?:^|\s)(\d{2,5})(?:\s*(?:dollars?|bucks?|per|flat|total|each)|\s*$)/i.test(providerReply);
 
   if (conv.phase === 'interest' && isAccept && !isQuestion) {
     conv.accepted = true;
     conv.phase = 'quote';
-  } else if (conv.phase === 'quote' && hasPrice) {
+  } else if (conv.phase === 'quote' && hasPrice && !isQuestion) {
     conv.quotedPrice = providerReply;
     conv.phase = 'availability';
   } else if (conv.phase === 'availability' && !isQuestion) {
