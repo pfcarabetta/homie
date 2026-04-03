@@ -2604,6 +2604,47 @@ const DISPATCH_STATUS_MESSAGES: Record<string, { icon: string; label: string; de
   refunded: { icon: '💰', label: 'Refunded', desc: 'Payment has been refunded' },
 };
 
+const DISPATCH_ENCOURAGEMENT = [
+  'Calling around so you don\u2019t have to',
+  'Nobody got you like your Homie',
+  'Sit tight \u2014 quotes incoming',
+  'Making moves behind the scenes',
+];
+
+const DISPATCH_CARD_STYLES = `
+@keyframes dpc-spin-cw {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes dpc-spin-ccw {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+@keyframes dpc-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes dpc-channel-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes dpc-rotate-msgs {
+  0%, 22% { transform: translateY(0); }
+  25%, 47% { transform: translateY(-25%); }
+  50%, 72% { transform: translateY(-50%); }
+  75%, 97% { transform: translateY(-75%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dpc-spin-cw, .dpc-spin-ccw, .dpc-channel-pulse, .dpc-msg-rotate { animation: none !important; }
+}
+`;
+
+const DPC_CHANNELS = [
+  { key: 'voice' as const, label: 'Voice', bg: '#FAECE7', color: O },
+  { key: 'sms' as const, label: 'SMS', bg: '#E1F5EE', color: G },
+  { key: 'web' as const, label: 'Web', bg: '#E6F1FB', color: '#2E86C1' },
+];
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -2744,87 +2785,112 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <style dangerouslySetInnerHTML={{ __html: DISPATCH_CARD_STYLES }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {dispatches.map(j => {
           const sc = DISPATCH_STATUS_COLORS[j.status] || DISPATCH_STATUS_COLORS.expired;
-          const sm = DISPATCH_STATUS_MESSAGES[j.status] || DISPATCH_STATUS_MESSAGES.open;
           const isExpanded = expandedId === j.id;
           const jobResponses = responses[j.id] ?? [];
           const isActive = ['open', 'dispatching', 'collecting'].includes(j.status);
           const catLabel = j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Dispatch';
-
-          // Response status line
-          let responseStatus = '';
-          let responseColor = '#9B9490';
-          let responseDot = false;
-          if (isActive && j.responseCount === 0) {
-            responseStatus = 'Awaiting provider responses';
-            responseColor = '#C2410C';
-            responseDot = true;
-          } else if (j.responseCount > 0) {
-            responseStatus = `${j.responseCount} provider response${j.responseCount > 1 ? 's' : ''}`;
-            responseColor = G;
-          } else if (j.status === 'expired' && j.responseCount === 0) {
-            responseStatus = 'No responses — no charge';
-            responseColor = '#9B9490';
-          } else {
-            responseStatus = 'No responses';
-          }
+          const responseCount = j.responseCount;
+          const ringSize = 44;
 
           return (
             <div key={j.id} id={`dispatch-${j.id}`} onClick={() => toggleExpand(j.id)} style={{
-              background: 'white', borderRadius: 12,
+              background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
               border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
-              cursor: 'pointer', transition: 'all 0.15s', overflow: 'hidden',
+              transition: 'all 0.2s',
+              boxShadow: isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
             }}>
-              {/* Collapsed card */}
+              {/* ── Collapsed header ── */}
               <div style={{ padding: '14px 18px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: D }}>{catLabel}</span>
-                    <span style={{ background: sc.bg, color: sc.text, padding: '2px 10px', borderRadius: 100, fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>{j.status}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {isActive ? (
+                    <div style={{ position: 'relative', width: ringSize, height: ringSize, flexShrink: 0 }}>
+                      <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid #F0EBE6' }} />
+                      <div className="dpc-spin-cw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid transparent', borderTopColor: O, animation: 'dpc-spin-cw 1.8s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
+                      <div className="dpc-spin-ccw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid transparent', borderBottomColor: G, animation: 'dpc-spin-ccw 2.4s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 20, color: O, lineHeight: 1 }}>h</div>
+                    </div>
+                  ) : (
+                    <div style={{ width: ringSize, height: ringSize, borderRadius: '50%', flexShrink: 0, background: responseCount > 0 ? `${G}12` : W, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${responseCount > 0 ? `${G}30` : '#F0EBE6'}` }}>
+                      <span style={{ fontSize: 18 }}>{responseCount > 0 ? '✓' : j.status === 'expired' ? '⏰' : '✓'}</span>
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 16, color: D }}>{catLabel}</span>
+                      <span style={{ background: sc.bg, color: sc.text, padding: '2px 8px', borderRadius: 100, fontSize: 10, fontWeight: 600 }}>{sc.text === sc.text ? j.status.charAt(0).toUpperCase() + j.status.slice(1) : ''}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#9B9490', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      {j.propertyName && <span>🏠 {j.propertyName}</span>}
+                      <span>{new Date(j.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      <span>{j.zipCode}</span>
+                    </div>
                   </div>
-                  <span style={{ fontSize: 12, color: '#9B9490' }}>{isExpanded ? '▲' : '▼'}</span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: '#6B6560', marginBottom: 10, flexWrap: 'wrap' }}>
-                  {j.propertyName && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>🏠 {j.propertyName}</span>}
-                  <span>{new Date(j.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                </div>
-
-                {/* Response status */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 12px', borderRadius: 8,
-                  background: j.responseCount > 0 ? `${G}08` : isActive ? '#FFF7ED' : W,
-                  border: j.responseCount > 0 ? `1px solid ${G}20` : '1px solid rgba(0,0,0,0.04)',
-                }}>
-                  {responseDot && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#C2410C', animation: 'pulse 1.5s infinite', flexShrink: 0 }} />}
-                  {j.responseCount > 0 && <span style={{ fontSize: 14 }}>✅</span>}
-                  <span style={{ fontSize: 13, fontWeight: 600, color: responseColor }}>{responseStatus}</span>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    {responseCount > 0 ? (
+                      <>
+                        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: G }}>{responseCount}</div>
+                        <div style={{ fontSize: 10, color: '#9B9490' }}>quote{responseCount > 1 ? 's' : ''}</div>
+                      </>
+                    ) : isActive ? (
+                      <div style={{ fontSize: 11, fontWeight: 600, color: O, animation: 'dpc-pulse 1.5s infinite' }}>Searching...</div>
+                    ) : (
+                      <span style={{ fontSize: 12, color: '#C0BBB6' }}>—</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 12, color: '#C0BBB6', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
                 </div>
               </div>
 
-              {/* Expanded Detail */}
+              {/* ── Expanded detail ── */}
               {isExpanded && (
-                <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(0,0,0,0.05)' }} onClick={e => e.stopPropagation()}>
+                <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
 
-                  {/* Full summary */}
+                  {/* Active outreach animation + channel counts */}
+                  {isActive && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0 16px' }}>
+                      <div style={{ position: 'relative', width: 72, height: 72, marginBottom: 12 }}>
+                        <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2.5px solid #F0EBE6' }} />
+                        <div className="dpc-spin-cw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2.5px solid transparent', borderTopColor: O, animation: 'dpc-spin-cw 1.8s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
+                        <div className="dpc-spin-ccw" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2.5px solid transparent', borderBottomColor: G, animation: 'dpc-spin-ccw 2.4s cubic-bezier(0.45,0.05,0.55,0.95) infinite' }} />
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 30, color: O, lineHeight: 1 }}>h</div>
+                      </div>
+                      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, textAlign: 'center' }}>Your Homie's on it</div>
+                      <div style={{ fontSize: 12, color: '#9B9490', textAlign: 'center', marginTop: 2 }}>Contacting pros near {j.zipCode}</div>
+                      <div style={{ height: 18, overflow: 'hidden', marginTop: 8, textAlign: 'center' }}>
+                        <div className="dpc-msg-rotate" style={{ animation: 'dpc-rotate-msgs 10s ease-in-out infinite' }}>
+                          {DISPATCH_ENCOURAGEMENT.map((msg, i) => (
+                            <div key={i} style={{ height: 18, lineHeight: '18px', fontSize: 12, fontWeight: 500, color: O }}>{msg}</div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Channel outreach counts */}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 14, width: '100%' }}>
+                        {DPC_CHANNELS.map(({ key, label, bg, color: chColor }, ci) => (
+                          <div key={key} style={{ flex: 1, background: '#fff', borderRadius: 10, padding: '10px 6px', textAlign: 'center', border: '1px solid rgba(0,0,0,0.05)', position: 'relative', overflow: 'hidden' }}>
+                            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', background: bg, marginBottom: 4 }}>
+                              <div className="dpc-channel-pulse" style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: bg, animation: `dpc-channel-pulse 2.4s ease-in-out ${ci * 0.8}s infinite` }} />
+                              <span style={{ position: 'relative', fontSize: 12 }}>{key === 'voice' ? '📞' : key === 'sms' ? '💬' : '🌐'}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary */}
                   {j.diagnosis?.summary && (
-                    <div style={{ padding: '14px 0', fontSize: 14, color: '#6B6560', lineHeight: 1.6 }}>
+                    <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, marginBottom: 14, paddingTop: isActive ? 0 : 12 }}>
                       {renderBold(j.diagnosis.summary)}
                     </div>
                   )}
 
-                  {/* Status Banner */}
-                  <div style={{ background: isActive ? '#FFF7ED' : sc.bg, borderRadius: 10, padding: '12px 14px', marginBottom: j.status === 'expired' && j.responseCount === 0 ? 8 : 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {isActive && <div style={{ width: 8, height: 8, borderRadius: '50%', background: O, animation: 'pulse 1.2s infinite' }} />}
-                    {!isActive && <span style={{ fontSize: 16 }}>{sm.icon}</span>}
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{sm.label}</div>
-                      <div style={{ fontSize: 12, color: '#6B6560' }}>{sm.desc}</div>
-                    </div>
-                  </div>
+                  {/* No-charge notice for expired with 0 responses */}
                   {j.status === 'expired' && j.responseCount === 0 && (
                     <div style={{ background: '#EFF6FF', borderRadius: 8, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(37,99,235,0.1)' }}>
                       <span style={{ fontSize: 14 }}>💰</span>
@@ -2833,30 +2899,24 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                   )}
 
                   {/* Details grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Category</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.category ?? 'General'}</div>
-                    </div>
-                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Severity</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{j.diagnosis?.severity ?? 'Medium'}</div>
-                    </div>
-                    {j.propertyName && (
-                      <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Property</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{j.propertyName}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 14 }}>
+                    {[
+                      { label: 'Category', value: catLabel },
+                      { label: 'Severity', value: (j.diagnosis?.severity ?? 'medium').replace(/^\w/, c => c.toUpperCase()), color: j.diagnosis?.severity === 'high' ? '#DC2626' : j.diagnosis?.severity === 'low' ? G : D },
+                      ...(j.propertyName ? [{ label: 'Property', value: j.propertyName }] : []),
+                      { label: 'Timing', value: j.preferredTiming ?? 'ASAP' },
+                    ].map((item, i) => (
+                      <div key={i} style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
+                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: (item as { color?: string }).color ?? D }}>{item.value}</div>
                       </div>
-                    )}
-                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Timing</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{j.preferredTiming ?? 'ASAP'}</div>
-                    </div>
+                    ))}
                   </div>
 
-                  {j.expiresAt && (
-                    <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 14 }}>
-                      {isActive ? 'Expires' : 'Expired'}: {new Date(j.expiresAt).toLocaleString()}
+                  {/* Expiry */}
+                  {j.expiresAt && isActive && (
+                    <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 12 }}>
+                      Expires: {new Date(j.expiresAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                     </div>
                   )}
 
@@ -2864,34 +2924,12 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                   {jobResponses.length > 0 && (
                     <div style={{ marginBottom: 14 }}>
                       {isPro ? (
-                        <button
-                          onClick={() => handleDownloadEstimate(j.id)}
-                          disabled={downloadingPdf === j.id}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 8,
-                            padding: '9px 18px', borderRadius: 8,
-                            border: `1px solid ${O}40`, background: `${O}08`,
-                            color: O, fontSize: 13, fontWeight: 600, cursor: downloadingPdf === j.id ? 'default' : 'pointer',
-                            opacity: downloadingPdf === j.id ? 0.6 : 1,
-                          }}
-                        >
-                          {downloadingPdf === j.id ? (
-                            <>Generating PDF...</>
-                          ) : (
-                            <>📄 Download Estimate Summary</>
-                          )}
+                        <button onClick={() => handleDownloadEstimate(j.id)} disabled={downloadingPdf === j.id}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: `1px solid ${O}40`, background: `${O}08`, color: O, fontSize: 13, fontWeight: 600, cursor: downloadingPdf === j.id ? 'default' : 'pointer', opacity: downloadingPdf === j.id ? 0.6 : 1 }}>
+                          {downloadingPdf === j.id ? 'Generating PDF...' : '📄 Download Estimate Summary'}
                         </button>
                       ) : (
-                        <button
-                          disabled
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 8,
-                            padding: '9px 18px', borderRadius: 8,
-                            border: '1px solid #E0DAD4', background: '#F5F3F0',
-                            color: '#B0AAA4', fontSize: 13, fontWeight: 600,
-                            cursor: 'default',
-                          }}
-                        >
+                        <button disabled style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#F5F3F0', color: '#B0AAA4', fontSize: 13, fontWeight: 600, cursor: 'default' }}>
                           📄 Download Estimate Summary <span style={{ fontSize: 11, fontWeight: 500 }}>(Professional+)</span>
                         </button>
                       )}
@@ -2900,30 +2938,38 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
 
                   {/* AI Cost Estimate */}
                   {estimates[j.id] && (
-                    <div style={{ marginBottom: 12 }}>
+                    <div style={{ marginBottom: 14 }}>
                       <EstimateCard estimate={estimates[j.id]} />
                     </div>
                   )}
 
                   {/* Provider Responses */}
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 8 }}>Provider Responses</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: D, marginBottom: 8, letterSpacing: '0.02em' }}>
+                      {responseCount > 0 ? `Provider Responses (${responseCount})` : 'Provider Responses'}
+                    </div>
 
                     {loadingResponses === j.id ? (
                       <div style={{ color: '#9B9490', fontSize: 13 }}>Loading responses...</div>
                     ) : jobResponses.length === 0 ? (
-                      <div style={{ background: W, borderRadius: 8, padding: '14px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 13, color: '#9B9490' }}>
-                          {isActive ? 'Waiting for providers to respond...' : 'No providers responded'}
-                        </div>
+                      <div style={{ background: W, borderRadius: 10, padding: '16px 14px', textAlign: 'center', border: '1px dashed rgba(0,0,0,0.08)' }}>
+                        {isActive ? (
+                          <>
+                            <div style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>Waiting for providers to respond...</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 8 }}>
+                              {[0, 1, 2].map(i => (
+                                <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: O, animation: `dpc-pulse 1.2s ${i * 0.3}s infinite` }} />
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ fontSize: 13, color: '#9B9490' }}>No providers responded</div>
+                        )}
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {jobResponses.map(r => (
-                          <div key={r.id} style={{
-                            background: W, borderRadius: 10, padding: '12px 14px',
-                            border: '1px solid rgba(0,0,0,0.04)',
-                          }}>
+                          <div key={r.id} style={{ background: W, borderRadius: 10, padding: '12px 14px', border: '1px solid rgba(0,0,0,0.04)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <span style={{ fontWeight: 600, fontSize: 14, color: D }}>{r.provider.name}</span>
@@ -2953,11 +2999,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                             </div>
                             {j.status !== 'expired' && j.status !== 'refunded' && (
                               j.status === 'completed' ? (
-                                <div style={{
-                                  width: '100%', padding: '10px 0', borderRadius: 100, marginTop: 10,
-                                  background: '#E0DAD4', color: '#9B9490', fontSize: 14, fontWeight: 600,
-                                  fontFamily: "'DM Sans', sans-serif", textAlign: 'center',
-                                }}>Booked</div>
+                                <div style={{ width: '100%', padding: '10px 0', borderRadius: 100, marginTop: 10, background: '#E0DAD4', color: '#9B9490', fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", textAlign: 'center' }}>Booked</div>
                               ) : (
                                 <button onClick={async (e) => {
                                   e.stopPropagation();
@@ -2965,18 +3007,13 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                                     const propertyAddr = j.propertyName || undefined;
                                     await jobService.bookProvider(j.id, r.id, r.provider.id, propertyAddr);
                                     setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'completed' } : d));
-                                    if (onTabChange) {
-                                      onTabChange('bookings');
-                                    }
+                                    if (onTabChange) onTabChange('bookings');
                                   } catch (err) {
                                     alert((err as Error).message || 'Booking failed');
                                   }
-                                }} style={{
-                                  width: '100%', padding: '10px 0', borderRadius: 100, border: 'none', marginTop: 10,
-                                  background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                                  fontFamily: "'DM Sans', sans-serif",
-                                  boxShadow: `0 4px 16px ${O}40`,
-                                }}>Book {r.provider.name.split(' ')[0]}</button>
+                                }} style={{ width: '100%', padding: '10px 0', borderRadius: 100, border: 'none', marginTop: 10, background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40` }}>
+                                  Book {r.provider.name.split(' ')[0]}
+                                </button>
                               )
                             )}
                           </div>
@@ -2985,7 +3022,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                     )}
                   </div>
 
-                  {/* Cancel button — only for active dispatches */}
+                  {/* Cancel button */}
                   {isActive && (
                     <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 14 }}>
                       <button onClick={() => setShowCancelConfirm(j.id)} disabled={cancellingId === j.id} style={{
