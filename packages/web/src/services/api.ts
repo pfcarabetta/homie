@@ -1012,6 +1012,10 @@ export const businessService = {
     fetchAPI<{ removed: boolean }>(`/api/v1/business/${workspaceId}/vendors/${vendorId}`, {
       method: 'DELETE',
     }),
+  toggleVendor: (workspaceId: string, providerId: string, active: boolean) =>
+    fetchAPI<{ toggled: boolean }>(`/api/v1/business/${workspaceId}/vendors/provider/${providerId}/toggle`, {
+      method: 'PATCH', body: JSON.stringify({ active }),
+    }),
 
   // Reports
   getCostReport: (workspaceId: string) =>

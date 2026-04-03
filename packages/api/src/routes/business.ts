@@ -734,18 +734,36 @@ router.patch('/:workspaceId/vendors/:vendorId', requireWorkspace, requireWorkspa
   }
 });
 
-// DELETE /:workspaceId/vendors/:vendorId — Remove preferred vendor (soft delete)
+// DELETE /:workspaceId/vendors/:vendorId — Remove preferred vendor
 router.delete('/:workspaceId/vendors/:vendorId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
   try {
     await db
-      .update(preferredVendors)
-      .set({ active: false })
+      .delete(preferredVendors)
       .where(and(eq(preferredVendors.id, req.params.vendorId), eq(preferredVendors.workspaceId, req.workspaceId)));
 
     res.json({ data: { removed: true }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[DELETE /business/:id/vendors/:vid]');
     res.status(500).json({ data: null, error: 'Failed to remove vendor', meta: {} });
+  }
+});
+
+// PATCH /:workspaceId/vendors/provider/:providerId/toggle — Toggle active for all entries of a provider
+router.patch('/:workspaceId/vendors/provider/:providerId/toggle', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { active } = req.body as { active?: boolean };
+  if (active === undefined) {
+    res.status(400).json({ data: null, error: 'active is required', meta: {} });
+    return;
+  }
+  try {
+    await db
+      .update(preferredVendors)
+      .set({ active })
+      .where(and(eq(preferredVendors.workspaceId, req.workspaceId), eq(preferredVendors.providerId, req.params.providerId)));
+    res.json({ data: { toggled: true, active }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /business/:id/vendors/provider/:pid/toggle]');
+    res.status(500).json({ data: null, error: 'Failed to toggle vendor', meta: {} });
   }
 });
 

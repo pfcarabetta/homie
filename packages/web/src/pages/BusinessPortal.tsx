@@ -2325,9 +2325,7 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                       <button onClick={() => {
                         const newActive = !g.active;
-                        Promise.all(g.entries.map(e =>
-                          businessService.updateVendor(workspaceId, e.id, { active: newActive })
-                        )).then(() => loadVendors());
+                        businessService.toggleVendor(workspaceId, g.providerId, newActive).then(() => loadVendors());
                       }}
                         title={g.active ? 'Deactivate vendor' : 'Activate vendor'}
                         style={{
