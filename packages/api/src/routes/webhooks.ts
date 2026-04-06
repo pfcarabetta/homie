@@ -659,10 +659,10 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
 
       logger.info({ attemptId: attempt.id, accepted: state.accepted, quote: state.quotedPrice }, '[sms-conversation] Conversation complete');
     } else {
-      // Mark as responded (in progress) so we can find it on next reply
+      // Mark as responded (in progress) — save full conversation so far
       await db
         .update(outreachAttempts)
-        .set({ status: 'responded', responseRaw: Body })
+        .set({ status: 'responded', responseRaw: JSON.stringify(state.messages) })
         .where(eq(outreachAttempts.id, attempt.id));
     }
   } catch (err) {
