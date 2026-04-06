@@ -356,9 +356,19 @@ export async function dispatchJob(jobId: string): Promise<void> {
     logger.info(`[orchestration] dispatchJob: loaded ${eligible.length} preferred providers for job ${jobId}`);
   }
 
+  // Categories that should only use preferred vendors — no marketplace discovery
+  const INTERNAL_ONLY_CATEGORIES = new Set(['inspection', 'restocking', 'concierge', 'trash']);
+  const isInternalOnly = INTERNAL_ONLY_CATEGORIES.has(diagnosis.category.toLowerCase());
+
+  if (isInternalOnly && eligible.length === 0) {
+    logger.warn(`[orchestration] dispatchJob: internal-only category '${diagnosis.category}' has no preferred vendors for job ${jobId}`);
+    await db.update(jobs).set({ status: 'expired' }).where(eq(jobs.id, jobId));
+    return;
+  }
+
   // Fill remaining slots from marketplace discovery
   const remainingSlots = limit - eligible.length;
-  if (remainingSlots > 0) {
+  if (remainingSlots > 0 && !isInternalOnly) {
     let discoveredProviders: DiscoveredProvider[];
     try {
       logger.info(`[orchestration] dispatchJob: discovering ${remainingSlots} marketplace providers for job ${jobId} (${diagnosis.category}, ${job.zipCode})`);
