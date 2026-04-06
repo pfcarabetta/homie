@@ -129,37 +129,59 @@ function isWebTokenValid(attemptId: string, action: string, token: string): bool
   }
 }
 
-/** Normalize raw speech/text price into clean dollar format. "150 dollars." → "$150", "two fifty" → "$250" */
+/** Normalize raw speech/text price into clean dollar format. "Charge about $220" → "~$220" */
 function formatQuotedPrice(raw: string | null): string | null {
   if (!raw) return null;
   const cleaned = raw.replace(/[.,!?]+$/g, '').trim();
 
-  // Already formatted: "$150", "$150-200", "$150 - $200"
-  if (/^\$[\d]/.test(cleaned)) return cleaned;
+  // Already clean: "$150", "$150-200"
+  if (/^\$\d/.test(cleaned)) return cleaned;
 
-  // "150 dollars", "200 bucks", plain "150"
+  // Plain number: "150", "150 dollars", "200 bucks"
   const numMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|usd)?$/i);
   if (numMatch) {
     const n = parseFloat(numMatch[1]);
     return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
   }
 
-  // Range: "150 to 200", "150-200", "150 - 200 dollars"
-  const rangeMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|usd)?$/i);
+  // Range at start: "150 to 200", "150-200", "$150 - $200"
+  const rangeMatch = cleaned.match(/^[\$]?(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*[\$]?(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|usd)?$/i);
   if (rangeMatch) {
     const low = parseFloat(rangeMatch[1]);
     const high = parseFloat(rangeMatch[2]);
     return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
   }
 
-  // "about/around/approximately 150"
-  const approxMatch = cleaned.match(/^(?:about|around|approximately|roughly|maybe|like)\s+\$?(\d+(?:\.\d+)?)/i);
+  // Extract $XXX from anywhere in text: "Charge about $220", "it would be $350"
+  const embeddedDollar = cleaned.match(/\$(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*\$?(\d+(?:\.\d+)?)/);
+  if (embeddedDollar) {
+    const low = parseFloat(embeddedDollar[1]);
+    const high = parseFloat(embeddedDollar[2]);
+    return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
+  }
+  const singleDollar = cleaned.match(/\$(\d+(?:\.\d+)?)/);
+  if (singleDollar) {
+    const n = parseFloat(singleDollar[1]);
+    const hasApprox = /about|around|approximately|roughly|maybe|like|estimate/i.test(cleaned);
+    return hasApprox ? `~$${Number.isInteger(n) ? n : n.toFixed(2)}` : `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+  }
+
+  // "about/around 150" at start
+  const approxMatch = cleaned.match(/^(?:about|around|approximately|roughly|maybe|like|charge about|charge around)\s+(\d+(?:\.\d+)?)/i);
   if (approxMatch) {
     const n = parseFloat(approxMatch[1]);
     return `~$${Number.isInteger(n) ? n : n.toFixed(2)}`;
   }
 
-  // Fallback: return cleaned with $ prefix if it starts with a digit
+  // Extract bare number from phrase: "charge 220", "it would be 350 dollars"
+  const embeddedNum = cleaned.match(/(?:charge|cost|price|estimate|quote|be|pay)\s+(?:about|around|roughly)?\s*(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?)?/i);
+  if (embeddedNum) {
+    const n = parseFloat(embeddedNum[1]);
+    const hasApprox = /about|around|roughly/i.test(cleaned);
+    return hasApprox ? `~$${Number.isInteger(n) ? n : n.toFixed(2)}` : `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+  }
+
+  // Fallback: starts with digit
   if (/^\d/.test(cleaned)) return `$${cleaned.replace(/\s*(dollars?|bucks?|usd)\s*/gi, '')}`;
 
   return cleaned;
