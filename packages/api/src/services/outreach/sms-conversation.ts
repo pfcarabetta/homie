@@ -1,10 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { eq } from 'drizzle-orm';
 import { signProviderToken } from '../../middleware/provider-auth';
+import { db } from '../../db';
+import { outreachAttempts } from '../../db/schema/outreach-attempts';
 import logger from '../../logger';
 
 const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
 
-interface SmsConversationState {
+export interface SmsConversationState {
   messages: { role: 'user' | 'assistant'; content: string }[];
   phase: 'interest' | 'quote' | 'availability' | 'notes' | 'done';
   accepted: boolean;
@@ -15,11 +18,10 @@ interface SmsConversationState {
   providerId: string;
 }
 
-// In-memory state per provider phone (TTL: 30 minutes for SMS since responses are slower)
+// In-memory cache (fast path) — DB is the source of truth
 const conversations = new Map<string, { state: SmsConversationState; expiresAt: number }>();
 const TTL_MS = 30 * 60 * 1000;
 
-// Cleanup
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of conversations) {
@@ -27,10 +29,47 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-export function getSmsConversation(attemptId: string): SmsConversationState | null {
+function getCached(attemptId: string): SmsConversationState | null {
   const entry = conversations.get(attemptId);
   if (!entry || Date.now() > entry.expiresAt) return null;
   return entry.state;
+}
+
+function setCache(attemptId: string, state: SmsConversationState): void {
+  conversations.set(attemptId, { state, expiresAt: Date.now() + TTL_MS });
+}
+
+async function loadFromDb(attemptId: string): Promise<SmsConversationState | null> {
+  try {
+    const [row] = await db
+      .select({ conversationState: outreachAttempts.conversationState })
+      .from(outreachAttempts)
+      .where(eq(outreachAttempts.id, attemptId))
+      .limit(1);
+    if (row?.conversationState) {
+      const state = row.conversationState as SmsConversationState;
+      setCache(attemptId, state);
+      return state;
+    }
+  } catch (err) {
+    logger.warn({ err }, '[sms-conversation] Failed to load state from DB');
+  }
+  return null;
+}
+
+async function persistToDb(attemptId: string, state: SmsConversationState): Promise<void> {
+  try {
+    await db
+      .update(outreachAttempts)
+      .set({ conversationState: state })
+      .where(eq(outreachAttempts.id, attemptId));
+  } catch (err) {
+    logger.warn({ err }, '[sms-conversation] Failed to persist state to DB');
+  }
+}
+
+export function getSmsConversation(attemptId: string): SmsConversationState | null {
+  return getCached(attemptId);
 }
 
 export function initSmsConversation(attemptId: string, jobContext: string, initialMessage: string, providerId: string): SmsConversationState {
@@ -44,7 +83,7 @@ export function initSmsConversation(attemptId: string, jobContext: string, initi
     jobContext,
     providerId,
   };
-  conversations.set(attemptId, { state, expiresAt: Date.now() + TTL_MS });
+  setCache(attemptId, state);
   return state;
 }
 
@@ -82,7 +121,11 @@ export async function processSmsReply(
   jobContext?: string,
   providerId?: string,
 ): Promise<{ response: string; state: SmsConversationState }> {
-  let conv = getSmsConversation(attemptId);
+  // Try memory cache first, then DB, then initialize fresh
+  let conv = getCached(attemptId);
+  if (!conv) {
+    conv = await loadFromDb(attemptId);
+  }
   if (!conv) {
     conv = initSmsConversation(attemptId, jobContext ?? 'A home service job opportunity.', jobContext ?? 'Initial outreach sent.', providerId ?? '');
   }
@@ -91,7 +134,6 @@ export async function processSmsReply(
 
   const lower = providerReply.toLowerCase().trim();
 
-  // Build portal magic link
   const portalLink = conv.providerId ? `${APP_URL}/portal/login?token=${signProviderToken(conv.providerId)}` : `${APP_URL}/portal/login`;
 
   // Check for decline
@@ -101,7 +143,8 @@ export async function processSmsReply(
     conv.accepted = false;
     const response = `No problem! Thanks for your time. Manage future Homie jobs anytime: ${portalLink}`;
     conv.messages.push({ role: 'assistant', content: response });
-    conversations.set(attemptId, { state: conv, expiresAt: Date.now() + TTL_MS });
+    setCache(attemptId, conv);
+    void persistToDb(attemptId, conv);
     return { response, state: conv };
   }
 
@@ -109,7 +152,6 @@ export async function processSmsReply(
   const acceptWords = ['yes', 'yeah', 'yep', 'sure', 'interested', 'ok', 'okay', 'absolutely', 'definitely', 'i can', 'send', 'tell me more'];
   const isAccept = acceptWords.some(w => lower.includes(w));
   const isQuestion = ['?', 'what', 'who', 'how', 'why', 'where', 'when', 'is there', 'do i', 'cost', 'fee'].some(q => lower.includes(q));
-  // Price detection: must have $ or a standalone number that looks like a price (not embedded in technical specs like "240V")
   const hasPrice = /\$\d/.test(providerReply) || /(?:^|\s)(\d{2,5})(?:\s*(?:dollars?|bucks?|per|flat|total|each)|\s*$)/i.test(providerReply);
 
   if (conv.phase === 'interest' && isAccept && !isQuestion) {
@@ -142,7 +184,8 @@ export async function processSmsReply(
       .trim();
 
     conv.messages.push({ role: 'assistant', content: response });
-    conversations.set(attemptId, { state: conv, expiresAt: Date.now() + TTL_MS });
+    setCache(attemptId, conv);
+    void persistToDb(attemptId, conv);
     return { response, state: conv };
   } catch (err) {
     logger.error({ err }, '[sms-conversation] Claude error');
@@ -156,7 +199,8 @@ export async function processSmsReply(
       default: response = 'Thanks for getting back to us! Are you interested in this job? Reply YES or NO.';
     }
     conv.messages.push({ role: 'assistant', content: response });
-    conversations.set(attemptId, { state: conv, expiresAt: Date.now() + TTL_MS });
+    setCache(attemptId, conv);
+    void persistToDb(attemptId, conv);
     return { response, state: conv };
   }
 }

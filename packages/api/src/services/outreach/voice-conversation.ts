@@ -1,4 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { eq } from 'drizzle-orm';
+import { db } from '../../db';
+import { outreachAttempts } from '../../db/schema/outreach-attempts';
 import logger from '../../logger';
 
 interface ConversationState {
@@ -10,11 +13,10 @@ interface ConversationState {
   notes: string | null;
 }
 
-// In-memory conversation state per attempt (TTL: 10 minutes)
+// In-memory cache — DB is source of truth
 const conversations = new Map<string, { state: ConversationState; expiresAt: number }>();
 const TTL_MS = 10 * 60 * 1000;
 
-// Cleanup expired conversations every 5 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of conversations) {
@@ -30,6 +32,30 @@ export function getConversation(attemptId: string): ConversationState | null {
 
 function saveConversation(attemptId: string, state: ConversationState): void {
   conversations.set(attemptId, { state, expiresAt: Date.now() + TTL_MS });
+  // Persist to DB (fire-and-forget)
+  void db
+    .update(outreachAttempts)
+    .set({ conversationState: state })
+    .where(eq(outreachAttempts.id, attemptId))
+    .catch(err => logger.warn({ err }, '[voice-conversation] Failed to persist state to DB'));
+}
+
+export async function loadConversationFromDb(attemptId: string): Promise<ConversationState | null> {
+  try {
+    const [row] = await db
+      .select({ conversationState: outreachAttempts.conversationState })
+      .from(outreachAttempts)
+      .where(eq(outreachAttempts.id, attemptId))
+      .limit(1);
+    if (row?.conversationState) {
+      const state = row.conversationState as ConversationState;
+      conversations.set(attemptId, { state, expiresAt: Date.now() + TTL_MS });
+      return state;
+    }
+  } catch (err) {
+    logger.warn({ err }, '[voice-conversation] Failed to load state from DB');
+  }
+  return null;
 }
 
 export function initConversation(attemptId: string, jobScript: string): ConversationState {

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, numeric } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, numeric, jsonb } from 'drizzle-orm/pg-core';
 import { jobs } from './jobs';
 import { providers } from './providers';
 
@@ -16,6 +16,7 @@ export const outreachAttempts = pgTable('outreach_attempts', {
   responseRaw: text('response_raw'),
   durationSec: numeric('duration_sec', { precision: 8, scale: 3 }),
   sentimentScore: numeric('sentiment_score', { precision: 5, scale: 4 }),
+  conversationState: jsonb('conversation_state'),
   attemptedAt: timestamp('attempted_at', { withTimezone: true }).notNull().defaultNow(),
   respondedAt: timestamp('responded_at', { withTimezone: true }),
 });

@@ -8,7 +8,7 @@ import { providerResponses } from '../db/schema/provider-responses';
 import { providers } from '../db/schema/providers';
 import { suppressionList } from '../db/schema/suppression-list';
 import { buildWebhookToken } from '../services/outreach/web';
-import { processProviderSpeech, getConversation } from '../services/outreach/voice-conversation';
+import { processProviderSpeech, getConversation, loadConversationFromDb } from '../services/outreach/voice-conversation';
 import { processSmsReply } from '../services/outreach/sms-conversation';
 import { recordProviderResponse } from '../services/providers/scores';
 import { capturePayment } from '../services/stripe';
@@ -298,7 +298,8 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
   try {
     // Build job context for conversation initialization
     let jobContext: string | undefined;
-    const existingConv = getConversation(attemptId);
+    let existingConv = getConversation(attemptId);
+    if (!existingConv) existingConv = await loadConversationFromDb(attemptId);
     if (!existingConv) {
       const [attempt] = await db
         .select({ jobId: outreachAttempts.jobId, script: outreachAttempts.scriptUsed })
