@@ -355,11 +355,11 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
                   </summary>
 
                   {hasTranscript && (
-                    <div className="border-t border-dark/5 px-3 py-3 bg-dark/1">
+                    <div className="border-t border-dark/5 px-3 py-3 bg-dark/1 overflow-hidden">
                       {/* Contact info */}
-                      <div className="flex gap-4 text-[11px] text-dark/40 mb-3">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-dark/40 mb-3">
                         {a.providerPhone && <span>📞 {a.providerPhone}</span>}
-                        {a.providerEmail && <span>✉ {a.providerEmail}</span>}
+                        {a.providerEmail && <span className="truncate max-w-[200px]">✉ {a.providerEmail}</span>}
                         <span>Sent: {new Date(a.attemptedAt).toLocaleString()}</span>
                         {a.respondedAt && <span>Responded: {new Date(a.respondedAt).toLocaleString()}</span>}
                       </div>
@@ -369,17 +369,16 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
                         <div className="space-y-2 mb-3">
                           <div className="text-[10px] font-bold text-dark/30 uppercase tracking-wider">Voice Transcript</div>
                           {transcript.map((msg, i) => (
-                            <div key={i} className={`flex gap-2 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}>
-                              <div className={`text-[10px] font-bold shrink-0 mt-1 ${msg.role === 'assistant' ? 'text-orange-500' : 'text-emerald-600'}`}>
-                                {msg.role === 'assistant' ? 'HOMIE' : 'PROVIDER'}
-                              </div>
-                              <div className={`text-xs leading-relaxed rounded-lg px-3 py-2 max-w-[80%] ${
+                            <div key={i} className={`flex gap-2 min-w-0 ${msg.role === 'assistant' ? '' : 'justify-end'}`}>
+                              {msg.role === 'assistant' && <div className="text-[10px] font-bold shrink-0 mt-1 text-orange-500">HOMIE</div>}
+                              <div className={`text-xs leading-relaxed rounded-lg px-3 py-2 break-words ${
                                 msg.role === 'assistant'
                                   ? 'bg-orange-50 text-dark/70 border border-orange-100'
                                   : 'bg-emerald-50 text-dark/70 border border-emerald-100'
-                              }`}>
+                              }`} style={{ maxWidth: 'min(80%, 500px)' }}>
                                 {msg.content}
                               </div>
+                              {msg.role !== 'assistant' && <div className="text-[10px] font-bold shrink-0 mt-1 text-emerald-600">PROVIDER</div>}
                             </div>
                           ))}
                         </div>
@@ -437,7 +436,7 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
                       {a.scriptUsed && (
                         <details className="mt-2">
                           <summary className="text-[10px] font-semibold text-dark/30 cursor-pointer hover:text-dark/50">View outreach script</summary>
-                          <div className="text-xs text-dark/50 bg-dark/3 rounded-lg px-3 py-2 mt-1 leading-relaxed whitespace-pre-wrap">
+                          <div className="text-xs text-dark/50 bg-dark/3 rounded-lg px-3 py-2 mt-1 leading-relaxed whitespace-pre-wrap break-words overflow-hidden">
                             {a.scriptUsed}
                           </div>
                         </details>
