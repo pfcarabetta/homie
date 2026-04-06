@@ -165,7 +165,7 @@ export default function AdminJobs() {
                   </tr>
                   {selectedId === j.id && (
                     <tr key={`${j.id}-detail`}>
-                      <td colSpan={7} className="px-0 py-0 bg-warm/30">
+                      <td colSpan={7} className="px-0 py-0 bg-warm/30" style={{ maxWidth: 0 }}>
                         {detailLoading ? (
                           <div className="px-6 py-8 text-center text-dark/40">Loading details...</div>
                         ) : detail ? (
@@ -294,7 +294,7 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
   }
 
   return (
-    <div className="px-6 py-5 space-y-5">
+    <div className="px-6 py-5 space-y-5 overflow-hidden">
       {/* Job Info */}
       <div>
         <h3 className="text-sm font-bold text-dark mb-3">Job Details</h3>
@@ -330,7 +330,7 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
       </div>
 
       {/* Outreach Attempts */}
-      <div>
+      <div className="overflow-hidden">
         <h3 className="text-sm font-bold text-dark mb-3">Outreach Attempts ({outreach_attempts.length})</h3>
         {outreach_attempts.length === 0 ? (
           <div className="text-sm text-dark/40">No outreach attempts</div>
@@ -345,7 +345,7 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
               }
 
               return (
-                <details key={a.id} className="bg-white rounded-lg border border-dark/5 overflow-hidden group">
+                <details key={a.id} className="bg-white rounded-lg border border-dark/5 group" style={{ overflow: 'hidden', maxWidth: '100%' }}>
                   <summary className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-dark/2 transition-colors text-xs select-none">
                     <span className="text-dark font-semibold flex-1 min-w-0 truncate">{a.providerName ?? '-'}</span>
                     <span className="capitalize text-dark/50 w-12 shrink-0">{a.channel}</span>
@@ -355,7 +355,7 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
                   </summary>
 
                   {hasTranscript && (
-                    <div className="border-t border-dark/5 px-3 py-3 bg-dark/1 overflow-hidden">
+                    <div className="border-t border-dark/5 px-3 py-3 bg-dark/1" style={{ overflow: 'hidden', maxWidth: '100%', boxSizing: 'border-box' }}>
                       {/* Contact info */}
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-dark/40 mb-3">
                         {a.providerPhone && <span>📞 {a.providerPhone}</span>}
