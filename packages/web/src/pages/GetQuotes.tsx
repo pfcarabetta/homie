@@ -469,6 +469,7 @@ function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId
   const [selected, setSelected] = useState<number | null>(null);
   const [booked, setBooked] = useState<(typeof MOCK_PROVIDERS[number]) | null>(null);
   const [stats, setStats] = useState({ contacted: 0, responded: 0 });
+  const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
   const logRef = useRef<HTMLDivElement>(null);
   const fetchedResponses = useRef(false);
 
@@ -479,6 +480,11 @@ function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId
 
       const socket = connectJobSocket(jobId, (status: JobStatusResponse) => {
         setStats({ contacted: status.providers_contacted, responded: status.providers_responded });
+        setChannels({
+          voice: status.outreach_channels.voice.attempted,
+          sms: status.outreach_channels.sms.attempted,
+          web: status.outreach_channels.web.attempted,
+        });
 
         // Build log entries from channel stats
         const newLog: typeof OUTREACH_LOG = [{ t: 0, msg: `Contacting ${status.providers_contacted} providers...`, type: 'system' }];
@@ -541,9 +547,9 @@ function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId
     providers_contacted: stats.contacted,
     providers_responded: stats.responded,
     outreach_channels: {
-      voice: { attempted: log.filter(l => l.type === 'voice').length, connected: 0 },
-      sms: { attempted: log.filter(l => l.type === 'sms').length, connected: 0 },
-      web: { attempted: log.filter(l => l.type === 'web').length, connected: 0 },
+      voice: { attempted: channels.voice, connected: 0 },
+      sms: { attempted: channels.sms, connected: 0 },
+      web: { attempted: channels.web, connected: 0 },
     },
     status: done ? 'completed' : 'dispatching',
   };
