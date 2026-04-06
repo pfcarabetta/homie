@@ -385,43 +385,44 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
                         </div>
                       )}
 
-                      {/* SMS transcript — raw response */}
-                      {a.channel === 'sms' && a.responseRaw && !transcript && (
-                        <div className="mb-3">
-                          <div className="text-[10px] font-bold text-dark/30 uppercase tracking-wider mb-1">SMS Reply</div>
-                          <div className="text-xs text-dark/70 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
-                            {a.responseRaw}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* SMS transcript — JSON conversation */}
-                      {a.channel === 'sms' && a.responseRaw && (() => {
+                      {/* SMS transcript */}
+                      {a.channel === 'sms' && a.responseRaw && !transcript && (() => {
+                        let smsMessages: { role: string; content: string }[] | null = null;
                         try {
-                          const msgs = JSON.parse(a.responseRaw!);
-                          if (Array.isArray(msgs) && msgs[0]?.role) {
-                            return (
-                              <div className="space-y-2 mb-3">
-                                <div className="text-[10px] font-bold text-dark/30 uppercase tracking-wider">SMS Conversation</div>
-                                {msgs.map((msg: { role: string; content: string }, i: number) => (
-                                  <div key={i} className={`flex gap-2 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}>
-                                    <div className={`text-[10px] font-bold shrink-0 mt-1 ${msg.role === 'assistant' ? 'text-orange-500' : 'text-emerald-600'}`}>
-                                      {msg.role === 'assistant' ? 'HOMIE' : 'PROVIDER'}
-                                    </div>
-                                    <div className={`text-xs leading-relaxed rounded-lg px-3 py-2 max-w-[80%] ${
-                                      msg.role === 'assistant'
-                                        ? 'bg-orange-50 text-dark/70 border border-orange-100'
-                                        : 'bg-emerald-50 text-dark/70 border border-emerald-100'
-                                    }`}>
-                                      {msg.content}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          }
+                          const parsed = JSON.parse(a.responseRaw!);
+                          if (Array.isArray(parsed) && parsed[0]?.role) smsMessages = parsed;
                         } catch { /* not JSON */ }
-                        return null;
+
+                        if (smsMessages) {
+                          return (
+                            <div className="space-y-2 mb-3">
+                              <div className="text-[10px] font-bold text-dark/30 uppercase tracking-wider">SMS Conversation</div>
+                              {smsMessages.map((msg, i) => (
+                                <div key={i} className={`flex gap-2 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}>
+                                  <div className={`text-[10px] font-bold shrink-0 mt-1 ${msg.role === 'assistant' ? 'text-orange-500' : 'text-emerald-600'}`}>
+                                    {msg.role === 'assistant' ? 'HOMIE' : 'PROVIDER'}
+                                  </div>
+                                  <div className={`text-xs leading-relaxed rounded-lg px-3 py-2 max-w-[80%] ${
+                                    msg.role === 'assistant'
+                                      ? 'bg-orange-50 text-dark/70 border border-orange-100'
+                                      : 'bg-emerald-50 text-dark/70 border border-emerald-100'
+                                  }`}>
+                                    {msg.content}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="mb-3">
+                            <div className="text-[10px] font-bold text-dark/30 uppercase tracking-wider mb-1">SMS Reply</div>
+                            <div className="text-xs text-dark/70 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                              {a.responseRaw}
+                            </div>
+                          </div>
+                        );
                       })()}
 
                       {/* Web outreach — error or status */}
