@@ -541,7 +541,7 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
     .limit(1);
 
   // Test mode: if the reply is from the test phone, find the most recent pending SMS attempt
-  if (!provider && process.env.OUTREACH_TEST_MODE === 'true' && process.env.OUTREACH_TEST_PHONE) {
+  if (!provider && process.env.OUTREACH_TEST_MODE?.toLowerCase() === 'true' && process.env.OUTREACH_TEST_PHONE) {
     const testDigits = process.env.OUTREACH_TEST_PHONE.replace(/\D/g, '').slice(-10);
     if (fromDigits === testDigits) {
       const [testAttempt] = await db

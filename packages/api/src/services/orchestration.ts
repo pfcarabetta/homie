@@ -74,7 +74,7 @@ const TIER_PROVIDER_LIMITS: Record<JobTier, number> = {
 const DISCOVERY_BUFFER = 2;
 
 // Test mode: route all outreach to a single phone number
-const TEST_MODE = process.env.OUTREACH_TEST_MODE === 'true';
+const TEST_MODE = process.env.OUTREACH_TEST_MODE?.toLowerCase() === 'true';
 const TEST_PHONE = process.env.OUTREACH_TEST_PHONE ?? null;
 if (TEST_MODE) {
   logger.info(`[orchestration] TEST MODE ENABLED — all outreach routed to ${TEST_PHONE}`);
