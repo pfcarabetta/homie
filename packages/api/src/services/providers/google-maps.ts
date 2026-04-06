@@ -102,6 +102,8 @@ interface PlaceResult {
 
 // Override the keyword used in search (when category name alone is misleading)
 const CATEGORY_KEYWORD_OVERRIDE: Record<string, string> = {
+  general: 'handyman',
+  handyman: 'handyman',
   ev_charger_install: 'electrician',
   generator_install: 'electrician generator',
   security_systems: 'security system installer',
@@ -109,7 +111,7 @@ const CATEGORY_KEYWORD_OVERRIDE: Record<string, string> = {
   septic_sewer: 'septic sewer plumber',
   sprinkler_irrigation: 'sprinkler irrigation',
   hot_tub: 'hot tub spa repair',
-  drywall: 'drywall contractor',
+  drywall: 'handyman drywall',
   tv_mounting: 'handyman',
   furniture_assembly: 'handyman',
   deck_patio: 'deck patio contractor',
