@@ -534,11 +534,31 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
 
   // Find the provider by phone number (normalize: strip all non-digits for comparison)
   const fromDigits = From.replace(/\D/g, '').slice(-10);
-  const [provider] = await db
+  let [provider] = await db
     .select({ id: providers.id, name: providers.name })
     .from(providers)
     .where(sql`REGEXP_REPLACE(${providers.phone}, '[^0-9]', '', 'g') LIKE ${'%' + fromDigits}`)
     .limit(1);
+
+  // Test mode: if the reply is from the test phone, find the most recent pending SMS attempt
+  if (!provider && process.env.OUTREACH_TEST_MODE === 'true' && process.env.OUTREACH_TEST_PHONE) {
+    const testDigits = process.env.OUTREACH_TEST_PHONE.replace(/\D/g, '').slice(-10);
+    if (fromDigits === testDigits) {
+      const [testAttempt] = await db
+        .select({ providerId: outreachAttempts.providerId })
+        .from(outreachAttempts)
+        .where(and(eq(outreachAttempts.channel, 'sms'), inArray(outreachAttempts.status, ['pending', 'responded'])))
+        .orderBy(desc(outreachAttempts.attemptedAt))
+        .limit(1);
+      if (testAttempt) {
+        const [testProv] = await db.select({ id: providers.id, name: providers.name }).from(providers).where(eq(providers.id, testAttempt.providerId)).limit(1);
+        if (testProv) {
+          provider = testProv;
+          logger.info(`[sms-webhook] TEST MODE: matched test phone to provider ${provider.name}`);
+        }
+      }
+    }
+  }
 
   if (!provider) {
     res.type('text/xml').send(twiml.toString());

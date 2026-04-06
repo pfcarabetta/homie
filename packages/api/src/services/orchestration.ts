@@ -73,6 +73,13 @@ const TIER_PROVIDER_LIMITS: Record<JobTier, number> = {
 // Fetch extra from discovery so we still hit the limit after suppressed/rate-limited filtering
 const DISCOVERY_BUFFER = 2;
 
+// Test mode: route all outreach to a single phone number
+const TEST_MODE = process.env.OUTREACH_TEST_MODE === 'true';
+const TEST_PHONE = process.env.OUTREACH_TEST_PHONE ?? null;
+if (TEST_MODE) {
+  logger.info(`[orchestration] TEST MODE ENABLED — all outreach routed to ${TEST_PHONE}`);
+}
+
 // ── Adapters ──────────────────────────────────────────────────────────────────
 
 // Instantiated per-dispatch so that tests can override via jest.mock beforeEach.
@@ -166,7 +173,8 @@ async function sendOutreachToProvider(
           logger.info(`[orchestration] Sending voice follow-up to ${provider.name}`);
           const script = scriptByChannel.voice;
           const [attempt] = await db.insert(outreachAttempts).values({ jobId: job.id, providerId: provider.id, channel: 'voice', scriptUsed: script, status: 'pending' }).returning({ id: outreachAttempts.id });
-          const result = await adapters.voice.send({ attemptId: attempt.id, jobId: job.id, providerId: provider.id, providerName: provider.name, phone: provider.phone ?? null, email: null, website: null, script, channel: 'voice' });
+          const voicePhone = TEST_MODE && TEST_PHONE ? TEST_PHONE : (provider.phone ?? null);
+          const result = await adapters.voice.send({ attemptId: attempt.id, jobId: job.id, providerId: provider.id, providerName: provider.name, phone: voicePhone, email: null, website: null, script, channel: 'voice' });
           if (result.status === 'failed') {
             logger.warn(`[orchestration] Voice follow-up failed for ${provider.name}: ${result.error}`);
             await db.update(outreachAttempts).set({ status: 'failed', responseRaw: result.error ?? null }).where(eq(outreachAttempts.id, attempt.id));
@@ -205,14 +213,22 @@ async function sendOutreachToProvider(
         })
         .returning({ id: outreachAttempts.id });
 
+      // In test mode, route SMS/voice to test phone and skip web
+      const sendPhone = TEST_MODE && TEST_PHONE ? TEST_PHONE : (provider.phone ?? null);
+      if (TEST_MODE && channel === 'web') {
+        logger.info(`[orchestration] TEST MODE: skipping web outreach for ${provider.name}`);
+        await db.update(outreachAttempts).set({ status: 'failed', responseRaw: 'Skipped in test mode' }).where(eq(outreachAttempts.id, attempt.id));
+        continue;
+      }
+
       const result = await adapters[channel].send({
         attemptId: attempt.id,
         jobId: job.id,
         providerId: provider.id,
         providerName: provider.name,
-        phone: provider.phone ?? null,
-        email: provider.email ?? null,
-        website: provider.website ?? null,
+        phone: sendPhone,
+        email: TEST_MODE ? null : (provider.email ?? null),
+        website: TEST_MODE ? null : (provider.website ?? null),
         script,
         channel,
       });
@@ -414,6 +430,14 @@ export async function dispatchJob(jobId: string): Promise<void> {
   if (eligible.length === 0) {
     logger.warn(`[orchestration] dispatchJob: no eligible providers for job ${jobId} even at expanded radius`);
     return;
+  }
+
+  // Test mode: only contact the first provider
+  if (TEST_MODE) {
+    const testProvider = eligible[0];
+    logger.info(`[orchestration] TEST MODE: limiting outreach to 1 provider (${testProvider.name}) for job ${jobId}`);
+    eligible.length = 0;
+    eligible.push(testProvider);
   }
 
   // Enrich providers without email — try scraping their website
