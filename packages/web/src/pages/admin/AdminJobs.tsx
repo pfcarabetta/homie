@@ -47,6 +47,8 @@ interface JobDetail {
     providerEmail: string | null;
     attemptedAt: string;
     respondedAt: string | null;
+    scriptUsed: string | null;
+    responseRaw: string | null;
   }>;
   provider_responses: Array<{
     id: string;
@@ -333,31 +335,117 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
         {outreach_attempts.length === 0 ? (
           <div className="text-sm text-dark/40">No outreach attempts</div>
         ) : (
-          <div className="bg-white rounded-lg border border-dark/5 overflow-hidden">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-dark/3 border-b border-dark/5">
-                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Provider</th>
-                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Channel</th>
-                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Status</th>
-                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Contact</th>
-                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Sent</th>
-                  <th className="text-left px-3 py-2 font-semibold text-dark/50">Responded</th>
-                </tr>
-              </thead>
-              <tbody>
-                {outreach_attempts.map(a => (
-                  <tr key={a.id} className="border-b border-dark/3">
-                    <td className="px-3 py-2 text-dark font-medium">{a.providerName ?? '-'}</td>
-                    <td className="px-3 py-2 text-dark/60 capitalize">{a.channel}</td>
-                    <td className="px-3 py-2"><StatusBadge status={a.status} /></td>
-                    <td className="px-3 py-2 text-dark/50">{a.providerPhone ?? a.providerEmail ?? '-'}</td>
-                    <td className="px-3 py-2 text-dark/50">{new Date(a.attemptedAt).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-dark/50">{a.respondedAt ? new Date(a.respondedAt).toLocaleString() : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-2">
+            {outreach_attempts.map(a => {
+              const hasTranscript = !!(a.responseRaw || a.scriptUsed);
+              const isVoiceTranscript = a.channel === 'voice' && a.responseRaw;
+              let transcript: { role: string; content: string }[] | null = null;
+              if (isVoiceTranscript) {
+                try { transcript = JSON.parse(a.responseRaw!); } catch { /* not JSON */ }
+              }
+
+              return (
+                <details key={a.id} className="bg-white rounded-lg border border-dark/5 overflow-hidden group">
+                  <summary className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-dark/2 transition-colors text-xs select-none">
+                    <span className="text-dark font-semibold flex-1 min-w-0 truncate">{a.providerName ?? '-'}</span>
+                    <span className="capitalize text-dark/50 w-12 shrink-0">{a.channel}</span>
+                    <span className="w-20 shrink-0"><StatusBadge status={a.status} /></span>
+                    <span className="text-dark/40 w-16 shrink-0 text-right">{new Date(a.attemptedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    <span className="text-dark/30 text-[10px] shrink-0">{hasTranscript ? '▼' : ''}</span>
+                  </summary>
+
+                  {hasTranscript && (
+                    <div className="border-t border-dark/5 px-3 py-3 bg-dark/1">
+                      {/* Contact info */}
+                      <div className="flex gap-4 text-[11px] text-dark/40 mb-3">
+                        {a.providerPhone && <span>📞 {a.providerPhone}</span>}
+                        {a.providerEmail && <span>✉ {a.providerEmail}</span>}
+                        <span>Sent: {new Date(a.attemptedAt).toLocaleString()}</span>
+                        {a.respondedAt && <span>Responded: {new Date(a.respondedAt).toLocaleString()}</span>}
+                      </div>
+
+                      {/* Voice transcript — conversation format */}
+                      {transcript && (
+                        <div className="space-y-2 mb-3">
+                          <div className="text-[10px] font-bold text-dark/30 uppercase tracking-wider">Voice Transcript</div>
+                          {transcript.map((msg, i) => (
+                            <div key={i} className={`flex gap-2 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}>
+                              <div className={`text-[10px] font-bold shrink-0 mt-1 ${msg.role === 'assistant' ? 'text-orange-500' : 'text-emerald-600'}`}>
+                                {msg.role === 'assistant' ? 'HOMIE' : 'PROVIDER'}
+                              </div>
+                              <div className={`text-xs leading-relaxed rounded-lg px-3 py-2 max-w-[80%] ${
+                                msg.role === 'assistant'
+                                  ? 'bg-orange-50 text-dark/70 border border-orange-100'
+                                  : 'bg-emerald-50 text-dark/70 border border-emerald-100'
+                              }`}>
+                                {msg.content}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* SMS transcript — raw response */}
+                      {a.channel === 'sms' && a.responseRaw && !transcript && (
+                        <div className="mb-3">
+                          <div className="text-[10px] font-bold text-dark/30 uppercase tracking-wider mb-1">SMS Reply</div>
+                          <div className="text-xs text-dark/70 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                            {a.responseRaw}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* SMS transcript — JSON conversation */}
+                      {a.channel === 'sms' && a.responseRaw && (() => {
+                        try {
+                          const msgs = JSON.parse(a.responseRaw!);
+                          if (Array.isArray(msgs) && msgs[0]?.role) {
+                            return (
+                              <div className="space-y-2 mb-3">
+                                <div className="text-[10px] font-bold text-dark/30 uppercase tracking-wider">SMS Conversation</div>
+                                {msgs.map((msg: { role: string; content: string }, i: number) => (
+                                  <div key={i} className={`flex gap-2 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}>
+                                    <div className={`text-[10px] font-bold shrink-0 mt-1 ${msg.role === 'assistant' ? 'text-orange-500' : 'text-emerald-600'}`}>
+                                      {msg.role === 'assistant' ? 'HOMIE' : 'PROVIDER'}
+                                    </div>
+                                    <div className={`text-xs leading-relaxed rounded-lg px-3 py-2 max-w-[80%] ${
+                                      msg.role === 'assistant'
+                                        ? 'bg-orange-50 text-dark/70 border border-orange-100'
+                                        : 'bg-emerald-50 text-dark/70 border border-emerald-100'
+                                    }`}>
+                                      {msg.content}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }
+                        } catch { /* not JSON */ }
+                        return null;
+                      })()}
+
+                      {/* Web outreach — error or status */}
+                      {a.channel === 'web' && a.responseRaw && (
+                        <div className="mb-3">
+                          <div className="text-[10px] font-bold text-dark/30 uppercase tracking-wider mb-1">Web Outreach Result</div>
+                          <div className="text-xs text-dark/50 bg-dark/3 rounded-lg px-3 py-2">{a.responseRaw}</div>
+                        </div>
+                      )}
+
+                      {/* Outreach script */}
+                      {a.scriptUsed && (
+                        <details className="mt-2">
+                          <summary className="text-[10px] font-semibold text-dark/30 cursor-pointer hover:text-dark/50">View outreach script</summary>
+                          <div className="text-xs text-dark/50 bg-dark/3 rounded-lg px-3 py-2 mt-1 leading-relaxed whitespace-pre-wrap">
+                            {a.scriptUsed}
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  )}
+                </details>
+              );
+            })}
           </div>
         )}
       </div>

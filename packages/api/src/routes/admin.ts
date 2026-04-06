@@ -212,6 +212,8 @@ router.get('/jobs/:id', async (req: Request, res: Response) => {
         providerEmail: providers.email,
         attemptedAt: outreachAttempts.attemptedAt,
         respondedAt: outreachAttempts.respondedAt,
+        scriptUsed: outreachAttempts.scriptUsed,
+        responseRaw: outreachAttempts.responseRaw,
       })
       .from(outreachAttempts)
       .leftJoin(providers, eq(outreachAttempts.providerId, providers.id))

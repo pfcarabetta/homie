@@ -144,6 +144,8 @@ export const adminService = {
         providerEmail: string | null;
         attemptedAt: string;
         respondedAt: string | null;
+        scriptUsed: string | null;
+        responseRaw: string | null;
       }>;
       provider_responses: Array<{
         id: string;
