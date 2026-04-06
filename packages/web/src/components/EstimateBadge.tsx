@@ -3,7 +3,7 @@ const G = '#1B9E77';
 
 function parsePriceToCents(price: string): number | null {
   // Handle "$185", "$150-200", "$150 - $200", "TBD", etc.
-  const cleaned = price.replace(/[,$\s]/g, '');
+  const cleaned = price.replace(/[,$\s~≈]/g, '');
 
   // Range: take the midpoint
   const rangeMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)$/);
