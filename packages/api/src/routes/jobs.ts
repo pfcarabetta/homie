@@ -183,9 +183,15 @@ router.post('/', async (req: Request, res: Response) => {
       })
       .returning();
 
-    // Don't dispatch yet — wait for payment authorization
-    // Dispatch is triggered by the Stripe webhook or by the frontend after payment
-    logger.info(`[jobs] Job ${job.id} created, awaiting payment`);
+    // B2B jobs (workspace_id set) dispatch immediately — no payment required
+    // Consumer jobs wait for Stripe payment authorization
+    if (body.workspace_id) {
+      logger.info(`[jobs] B2B job ${job.id} created — launching outreach immediately`);
+      await db.update(jobs).set({ status: 'dispatching', paymentStatus: 'paid' }).where(eq(jobs.id, job.id));
+      void dispatchJob(job.id);
+    } else {
+      logger.info(`[jobs] Job ${job.id} created, awaiting payment`);
+    }
 
     const out: ApiResponse<CreateJobResponse> = {
       data: {
