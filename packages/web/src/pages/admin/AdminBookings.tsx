@@ -136,7 +136,7 @@ export default function AdminBookings() {
 
                     {/* Job summary */}
                     {b.jobSummary && (
-                      <div className="text-sm text-dark/60 leading-relaxed mb-4 bg-warm rounded-lg p-3 border border-dark/5">
+                      <div className="text-sm text-dark/60 leading-relaxed mb-4 bg-warm rounded-lg p-3 border border-dark/5 break-words">
                         {b.jobSummary}
                       </div>
                     )}
@@ -214,7 +214,7 @@ export default function AdminBookings() {
 
                     {/* Provider note */}
                     {b.message && (
-                      <div className="text-xs text-dark/50 italic border-l-2 border-orange-300 pl-3 mb-4">
+                      <div className="text-xs text-dark/50 italic border-l-2 border-orange-300 pl-3 mb-4 break-words">
                         "{b.message}"
                       </div>
                     )}
