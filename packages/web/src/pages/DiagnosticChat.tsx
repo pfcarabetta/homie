@@ -324,7 +324,7 @@ function reducer(state: State, action: Action): State {
       return { ...state, diagnosis: action.diagnosis };
 
     case 'SET_JOB_SUMMARY':
-      return { ...state, jobSummary: action.summary, showBanner: true };
+      return { ...state, jobSummary: action.summary, showBanner: true, matchFlowActive: true, matchStep: 'tier' };
 
     case 'DISMISS_BANNER':
       return { ...state, showBanner: false };
@@ -1216,6 +1216,21 @@ export default function DiagnosticChat() {
             }}>✕</button>
           </div>
           <span style={{ fontSize: 12, color: '#9B9490' }}>Image attached</span>
+        </div>
+      )}
+
+      {/* Find a Pro banner */}
+      {(state.diagnosis || state.jobSummary) && !state.matchFlowActive && !state.bookedProvider && (
+        <div style={{
+          background: `${O}08`, borderTop: `1px solid ${O}20`, padding: '12px 16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 13, color: D, fontWeight: 500 }}>Ready to find a pro?</span>
+          <button onClick={openMatchFlow} style={{
+            padding: '8px 20px', borderRadius: 100, border: 'none',
+            background: O, color: '#fff', fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}>Find a Pro</button>
         </div>
       )}
 
