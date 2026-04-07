@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { accountService, jobService, estimateService, type AccountProfile, type AccountJob, type AccountBooking, type ProviderResponseItem, type HomeData, type PropertyDetails, type CostEstimate } from '@/services/api';
+import { accountService, jobService, estimateService, businessService, type AccountProfile, type AccountJob, type AccountBooking, type ProviderResponseItem, type HomeData, type PropertyDetails, type CostEstimate } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -965,9 +965,11 @@ export default function Account() {
   const { isAuthenticated, homeowner } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as Tab) || 'profile';
+  const [hasWorkspace, setHasWorkspace] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/login');
+    else businessService.listWorkspaces().then(res => { if (res.data && res.data.length > 0) setHasWorkspace(true); }).catch(() => {});
   }, [isAuthenticated, navigate]);
 
   if (!isAuthenticated) return null;
@@ -1003,6 +1005,14 @@ export default function Account() {
             color: O, fontSize: 13, fontWeight: 600,
             cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
           }}>Free Diagnostic Chat</button>
+          {hasWorkspace && (
+            <button onClick={() => navigate('/business')} style={{
+              padding: '9px 18px', borderRadius: 100,
+              border: `1px solid ${D}`, background: D,
+              color: '#fff', fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+            }}>Homie for Business</button>
+          )}
         </div>
 
         {/* Tabs */}
