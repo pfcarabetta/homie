@@ -2,6 +2,17 @@ import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { adminService } from '@/services/admin-api';
 
+function cleanPrice(price: string): string {
+  let p = price.replace(/^\$+/, '$');
+  const bm = p.match(/between\s+\$?(\d+(?:\.\d+)?)\s*(?:and|to)\s*\$?(\d+(?:\.\d+)?)/i);
+  if (bm) return `$${bm[1]}-$${bm[2]}`;
+  const rm = p.match(/^(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*(\d+(?:\.\d+)?)$/);
+  if (rm) return `$${rm[1]}-$${rm[2]}`;
+  const nm = p.match(/^(\d+(?:\.\d+)?)$/);
+  if (nm) return `$${nm[1]}`;
+  return p;
+}
+
 function renderBold(text: string) {
   const parts = text.split(/\*\*(.+?)\*\*/g);
   return parts.map((part, i) =>
@@ -468,7 +479,7 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
                     {r.providerPhone && <span className="text-xs text-dark/40 ml-2">{r.providerPhone}</span>}
                     {r.channel === 'manual' && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 uppercase">Manual</span>}
                   </div>
-                  {r.quotedPrice && <span className="text-lg font-bold text-orange-500">{r.quotedPrice}</span>}
+                  {r.quotedPrice && <span className="text-lg font-bold text-orange-500">{cleanPrice(r.quotedPrice)}</span>}
                 </div>
                 <div className="flex gap-4 text-xs text-dark/50">
                   {r.availability && <span>Avail: {r.availability}</span>}

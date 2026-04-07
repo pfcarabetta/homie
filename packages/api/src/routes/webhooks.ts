@@ -28,12 +28,15 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
     const [homeowner] = await db.select({ email: homeowners.email, phone: homeowners.phone, firstName: homeowners.firstName }).from(homeowners).where(eq(homeowners.id, job.homeownerId)).limit(1);
     if (!homeowner) return;
 
+    // Normalize the price for display
+    const displayPrice = formatQuotedPrice(quotedPrice);
+
     const diagnosis = job.diagnosis as { category?: string; summary?: string } | null;
     const category = diagnosis?.category ? diagnosis.category.charAt(0).toUpperCase() + diagnosis.category.slice(1) : 'Home Service';
     const name = homeowner.firstName ?? 'there';
     const quotesUrl = `${APP_URL}/account?tab=quotes`;
 
-    const subject = `You got a quote! ${providerName}${quotedPrice ? ` quoted ${quotedPrice}` : ''}`;
+    const subject = `You got a quote! ${providerName}${displayPrice ? ` quoted ${displayPrice}` : ''}`;
 
     const html = `
     <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
@@ -46,7 +49,7 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
 
         <div style="background:#F9F5F2;border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
           <div style="font-size:17px;font-weight:700;color:#2D2926;margin-bottom:12px">${providerName}</div>
-          ${quotedPrice ? `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#6B6560;font-size:14px">Estimated Price</span><span style="color:#E8632B;font-size:18px;font-weight:700">${quotedPrice}</span></div>` : ''}
+          ${displayPrice ? `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#6B6560;font-size:14px">Estimated Price</span><span style="color:#E8632B;font-size:18px;font-weight:700">${displayPrice}</span></div>` : ''}
           ${availability ? `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#6B6560;font-size:14px">Availability</span><span style="color:#2D2926;font-size:14px;font-weight:600">${availability}</span></div>` : ''}
           ${message ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06)"><span style="color:#9B9490;font-size:12px">Provider's note:</span><div style="color:#6B6560;font-size:14px;font-style:italic;margin-top:4px">"${message}"</div></div>` : ''}
         </div>
@@ -65,7 +68,7 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
 
     // Also send SMS if homeowner has a phone number
     if (homeowner.phone) {
-      const smsText = `Homie: ${providerName} responded to your ${category.toLowerCase()} request!${quotedPrice ? ` Quote: ${quotedPrice}.` : ''}${availability ? ` Available: ${availability}.` : ''} View all quotes: ${quotesUrl}`;
+      const smsText = `Homie: ${providerName} responded to your ${category.toLowerCase()} request!${displayPrice ? ` Quote: ${displayPrice}.` : ''}${availability ? ` Available: ${availability}.` : ''} View all quotes: ${quotesUrl}`;
       await sendSms(homeowner.phone, smsText);
       logger.info(`[notification] Quote SMS sent to ${homeowner.phone} for job ${jobId}`);
     }
