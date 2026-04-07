@@ -894,9 +894,9 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [showTrackImport, setShowTrackImport] = useState(false);
   const [showTierWarning, setShowTierWarning] = useState<{ adding: number; nextTier: typeof PLAN_TIERS_ORDERED[number] } | null>(null);
-  const [trackDomain, setTrackDomain] = useState('');
-  const [trackKey, setTrackKey] = useState('');
-  const [trackSecret, setTrackSecret] = useState('');
+  const [trackDomain, setTrackDomain] = useState(() => localStorage.getItem('homie_track_domain') || '');
+  const [trackKey, setTrackKey] = useState(() => localStorage.getItem('homie_track_key') || '');
+  const [trackSecret, setTrackSecret] = useState(() => localStorage.getItem('homie_track_secret') || '');
   const [trackImporting, setTrackImporting] = useState(false);
   const [trackResult, setTrackResult] = useState<{ imported: number; updated: number; skipped: number; total: number } | null>(null);
   const [trackError, setTrackError] = useState('');
@@ -1168,7 +1168,6 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
                 </div>
                 <button onClick={() => {
                   setShowTrackImport(false); setTrackResult(null); setTrackError('');
-                  setTrackDomain(''); setTrackKey(''); setTrackSecret('');
                   // Refresh properties list
                   businessService.listProperties(workspaceId).then(res => { if (res.data) setProperties(res.data.sort((a, b) => a.name.localeCompare(b.name))); });
                 }} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: O, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
@@ -1180,18 +1179,18 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>Track Domain</label>
-                    <input value={trackDomain} onChange={e => setTrackDomain(e.target.value)} placeholder="yourcompany.trackhs.com"
+                    <input value={trackDomain} onChange={e => { setTrackDomain(e.target.value); localStorage.setItem('homie_track_domain', e.target.value); }} placeholder="yourcompany.trackhs.com"
                       style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
                     <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>e.g. yourcompany.trackhs.com or yourcompany.trackhs.com/api</div>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>API Key</label>
-                    <input value={trackKey} onChange={e => setTrackKey(e.target.value)} placeholder="Your Track API key"
+                    <input value={trackKey} onChange={e => { setTrackKey(e.target.value); localStorage.setItem('homie_track_key', e.target.value); }} placeholder="Your Track API key"
                       style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>API Secret</label>
-                    <input value={trackSecret} onChange={e => setTrackSecret(e.target.value)} placeholder="Your Track API secret" type="password"
+                    <input value={trackSecret} onChange={e => { setTrackSecret(e.target.value); localStorage.setItem('homie_track_secret', e.target.value); }} placeholder="Your Track API secret" type="password"
                       style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                 </div>
