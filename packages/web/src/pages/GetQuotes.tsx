@@ -797,6 +797,19 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
   // Reset fetch counter when jobId changes
   useEffect(() => { fetchedResponses.current = 0; }, [jobId]);
 
+  // Fetch cost estimate when entering outreach step if we don't have one
+  useEffect(() => {
+    if (step === 'outreach' && !costEstimate && category && zip) {
+      const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
+      estimateService.generate({
+        category,
+        subcategory: subcategory || category,
+        zip_code: zip,
+        urgency: urgencyMap[timing ?? ''] || 'flexible',
+      }).then(res => { if (res.data) setCostEstimate(res.data); }).catch(() => {});
+    }
+  }, [step]);
+
   useEffect(() => {
     if (initialJobId) {
       setJobId(initialJobId);

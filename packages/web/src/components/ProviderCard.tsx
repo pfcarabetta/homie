@@ -1,3 +1,5 @@
+import EstimateBadge from './EstimateBadge';
+
 type Channel = 'voice' | 'sms' | 'web';
 
 interface ProviderCardProps {
@@ -9,6 +11,8 @@ interface ProviderCardProps {
   message?: string;
   channel: Channel;
   onBook: () => void;
+  estimateLow?: number;
+  estimateHigh?: number;
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -46,6 +50,15 @@ const CHANNEL_ICONS: Record<Channel, { label: string; icon: string }> = {
   web: { label: 'Web', icon: '🌐' },
 };
 
+/** Strip leading duplicate $ and normalize unformatted prices */
+function cleanQuote(price: string): string {
+  let p = price.replace(/^\$+/, '$');
+  if (/^\$/.test(p)) return p;
+  const m = p.match(/^(\d+(?:\.\d+)?)$/);
+  if (m) return `$${m[1]}`;
+  return p;
+}
+
 export default function ProviderCard({
   name,
   googleRating,
@@ -55,8 +68,11 @@ export default function ProviderCard({
   message,
   channel,
   onBook,
+  estimateLow,
+  estimateHigh,
 }: ProviderCardProps) {
   const ch = CHANNEL_ICONS[channel];
+  const displayPrice = cleanQuote(quotedPrice);
 
   return (
     <div className="bg-white rounded-2xl border border-dark/10 shadow-sm p-5 animate-fade-in">
@@ -74,10 +90,16 @@ export default function ProviderCard({
         </span>
       </div>
 
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-3">
-        <p className="text-3xl font-bold text-dark">${quotedPrice}</p>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-1">
+        <p className="text-3xl font-bold text-dark">{displayPrice}</p>
         <p className="text-sm text-green-600 font-medium">{availability}</p>
       </div>
+
+      {estimateLow != null && estimateHigh != null && (
+        <div className="mb-3">
+          <EstimateBadge quotedPrice={displayPrice} estimateLow={estimateLow} estimateHigh={estimateHigh} />
+        </div>
+      )}
 
       {message && (
         <p className="text-sm text-dark/60 italic border-l-2 border-orange-500/30 pl-3 mb-4">

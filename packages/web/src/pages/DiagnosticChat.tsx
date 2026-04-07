@@ -1200,6 +1200,7 @@ export default function DiagnosticChat() {
           handleBook={handleBook}
           onClose={() => dispatch({ type: 'CLOSE_MATCH_FLOW' })}
           isDemo={isDemo}
+          costEstimate={costEstimate}
         />
       )}
 
@@ -1307,6 +1308,7 @@ function ProviderModal({
   handleBook,
   onClose,
   isDemo,
+  costEstimate,
 }: {
   state: State;
   dispatch: React.Dispatch<Action>;
@@ -1314,6 +1316,7 @@ function ProviderModal({
   handleBook: (p: MatchedProvider) => void;
   onClose: () => void;
   isDemo?: boolean;
+  costEstimate?: CostEstimate | null;
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-50" onClick={onClose}>
@@ -1372,16 +1375,23 @@ function ProviderModal({
               if (responded > 0) logEntries.push({ msg: `${responded} quote(s) received!`, type: 'success' });
               if (!state.outreach.active) logEntries.push({ msg: responded > 0 ? `${responded} quotes ready!` : 'Outreach complete', type: 'done' });
               return (
-                <HomieOutreachLive
-                  status={outreachStatusObj}
-                  log={logEntries}
-                  done={!state.outreach.active}
-                  showSafeNotice={state.outreach.active}
-                  accountLink="/account?tab=quotes"
-                />
+                <>
+                  <HomieOutreachLive
+                    status={outreachStatusObj}
+                    log={logEntries}
+                    done={!state.outreach.active}
+                    showSafeNotice={state.outreach.active}
+                    accountLink="/account?tab=quotes"
+                  />
+                  {costEstimate && (
+                    <div style={{ marginTop: 12 }}>
+                      <EstimateCard estimate={costEstimate} />
+                    </div>
+                  )}
+                </>
               );
             })()}
-            {state.matchStep === 'results' && <ResultsStep providers={state.respondedProviders} onBook={handleBook} />}
+            {state.matchStep === 'results' && <ResultsStep providers={state.respondedProviders} onBook={handleBook} costEstimate={costEstimate} />}
           </>
         )}
       </div>
@@ -1497,7 +1507,7 @@ function PreferencesStep({ state, dispatch, startOutreach }: { state: State; dis
   );
 }
 
-function ResultsStep({ providers, onBook }: { providers: MatchedProvider[]; onBook: (p: MatchedProvider) => void }) {
+function ResultsStep({ providers, onBook, costEstimate }: { providers: MatchedProvider[]; onBook: (p: MatchedProvider) => void; costEstimate?: CostEstimate | null }) {
   if (providers.length === 0) {
     return (
       <div className="text-center py-8">
@@ -1516,7 +1526,7 @@ function ResultsStep({ providers, onBook }: { providers: MatchedProvider[]; onBo
       </div>
       <div className="space-y-3">
         {providers.map((p) => (
-          <ProviderCard key={p.id} name={p.name} googleRating={p.googleRating} reviewCount={p.reviewCount} quotedPrice={p.quotedPrice} availability={p.availability} message={p.message} channel={p.channel} onBook={() => onBook(p)} />
+          <ProviderCard key={p.id} name={p.name} googleRating={p.googleRating} reviewCount={p.reviewCount} quotedPrice={p.quotedPrice} availability={p.availability} message={p.message} channel={p.channel} onBook={() => onBook(p)} estimateLow={costEstimate?.estimateLowCents} estimateHigh={costEstimate?.estimateHighCents} />
         ))}
       </div>
     </div>
