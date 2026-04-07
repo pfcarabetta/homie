@@ -1849,27 +1849,17 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
 
     try {
       const testPerUnit = await fetch(perUnitUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-      logger.info({ status: testPerUnit.status, url: perUnitUrl }, '[Track reservations] per-unit endpoint test');
       if (testPerUnit.ok) reservationEndpointStyle = 'per-unit';
-    } catch (err) { logger.warn({ err, url: perUnitUrl }, '[Track reservations] per-unit endpoint test failed'); }
+    } catch { /* per-unit endpoint not available */ }
 
     if (!reservationEndpointStyle) {
       try {
         const testGlobal = await fetch(globalUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-        logger.info({ status: testGlobal.status, url: globalUrl }, '[Track reservations] global endpoint test');
         if (testGlobal.ok) {
           reservationEndpointStyle = 'global';
-          // Log sample response
-          const ct = testGlobal.headers.get('content-type') || '';
-          if (ct.includes('json')) {
-            const sample = await testGlobal.json() as Record<string, unknown>;
-            logger.info({ keys: Object.keys(sample), embeddedKeys: sample._embedded ? Object.keys(sample._embedded as Record<string, unknown>) : null, isArray: Array.isArray(sample) }, '[Track reservations] global response structure');
-          }
         }
-      } catch (err) { logger.warn({ err, url: globalUrl }, '[Track reservations] global endpoint test failed'); }
+      } catch { /* global endpoint not available */ }
     }
-
-    logger.info({ style: reservationEndpointStyle }, '[Track reservations] endpoint detection result');
 
     if (!reservationEndpointStyle) {
       res.json({ data: { imported: 0, updated: 0, total: 0 }, error: null, meta: { message: 'Track API does not support reservations endpoint' } });
@@ -1912,10 +1902,8 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           if (testRes.ok) {
             const testData = await testRes.json() as Record<string, unknown>;
             const filteredTotal = testData.total_items as number;
-            logger.info({ filter, filteredTotal, originalTotal: pageCount * 50 }, '[Track reservations] date filter test');
             if (filteredTotal != null && filteredTotal < 11000) {
               dateFilterParam = filter;
-              logger.info({ filter, filteredTotal }, '[Track reservations] found working date filter');
               break;
             }
           }
@@ -1938,7 +1926,6 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
       while (nextUrl && currentPage <= maxPages && !stopPaginating) {
         currentPage--;
         try {
-          logger.info({ page: currentPage + 1, url: nextUrl }, '[Track reservations] fetching page');
           const gRes = await fetch(nextUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
           if (!gRes.ok) {
             logger.warn({ status: gRes.status, page: currentPage + 1 }, '[Track reservations] page fetch failed');
@@ -1959,14 +1946,6 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
               gData.reservations ?? gData.contents ?? gData.results ??
               gData.data ?? gData.items ?? gData.records ?? []
             ) as TrackReservation[];
-          }
-
-          // Log first reservation's keys to understand the data shape
-          if (items.length > 0) {
-            const sample = items[0] as Record<string, unknown>;
-            logger.info({ totalItems: (gData as Record<string, unknown>).total_items, fetchedCount: items.length, sampleKeys: Object.keys(sample), sample: JSON.stringify(sample).slice(0, 800) }, '[Track reservations] global fetch sample');
-          } else {
-            logger.info({ totalItems: (gData as Record<string, unknown>).total_items }, '[Track reservations] global fetch returned 0 items');
           }
 
           // Stop if all reservations on this page have old departure dates (>90 days ago)
