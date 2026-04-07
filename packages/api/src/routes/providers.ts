@@ -7,6 +7,7 @@ import { suppressionList } from '../db/schema/suppression-list';
 import { discoverProviders } from '../services/providers/discovery';
 import { SuppressionReason, DiscoveryResult } from '../types/providers';
 import { ApiResponse } from '../types/api';
+import { diagnosticLimiter, authLimiter } from '../middleware/rate-limit';
 
 const router = Router();
 
@@ -19,7 +20,7 @@ const VALID_REASONS: SuppressionReason[] = [
 ];
 
 // GET /api/v1/providers/discover
-router.get('/discover', async (req: Request, res: Response) => {
+router.get('/discover', diagnosticLimiter, async (req: Request, res: Response) => {
   const { category, zip_code, radius_miles, min_rating, limit } = req.query;
 
   if (!category || typeof category !== 'string') {
@@ -66,7 +67,7 @@ router.get('/discover', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/providers/:id/suppress
-router.post('/:id/suppress', async (req: Request, res: Response) => {
+router.post('/:id/suppress', authLimiter, async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!UUID_RE.test(id)) {
     const out: ApiResponse<null> = { data: null, error: 'Invalid provider ID', meta: {} };
