@@ -4338,101 +4338,78 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
     <div>
       <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 20px' }}>Bookings</h3>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {bookingsList.map(b => {
           const isExpanded = expandedId === b.id;
           const catLabel = b.diagnosis?.category ? b.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Service';
+          const sc = b.status === 'confirmed' ? { bg: '#F0FDF4', text: '#16A34A' } : b.status === 'completed' ? { bg: '#EFF6FF', text: '#2563EB' } : { bg: '#F5F5F5', text: '#9B9490' };
 
           return (
             <div key={b.id} id={`booking-${b.id}`} onClick={() => setExpandedId(isExpanded ? null : b.id)} style={{
-              background: 'white', borderRadius: 12,
+              background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
               border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
-              cursor: 'pointer', transition: 'all 0.15s', overflow: 'hidden',
+              transition: 'all 0.2s',
+              boxShadow: isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
             }}>
-              {/* Collapsed */}
-              <div style={{ padding: '14px 18px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: D }}>{b.providerName}</span>
-                    <span style={{
-                      padding: '2px 10px', borderRadius: 100, fontSize: 11, fontWeight: 600, textTransform: 'capitalize',
-                      background: b.status === 'confirmed' ? '#F0FDF4' : b.status === 'completed' ? '#EFF6FF' : '#F5F5F5',
-                      color: b.status === 'confirmed' ? '#16A34A' : b.status === 'completed' ? '#2563EB' : '#9B9490',
-                    }}>{b.status}</span>
+              {/* ── Collapsed header ── */}
+              <div style={{ padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: b.status === 'confirmed' ? `${G}12` : b.status === 'completed' ? '#EFF6FF' : W, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${b.status === 'confirmed' ? `${G}30` : b.status === 'completed' ? '#93C5FD' : '#F0EBE6'}` }}>
+                    <span style={{ fontSize: 16 }}>{b.status === 'confirmed' ? '✓' : b.status === 'completed' ? '✓' : '✕'}</span>
                   </div>
-                  <span style={{ fontSize: 12, color: '#9B9490' }}>{isExpanded ? '▲' : '▼'}</span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: '#6B6560', marginBottom: 10, flexWrap: 'wrap' }}>
-                  <span>{catLabel}</span>
-                  {b.propertyName && <span>🏠 {b.propertyName}</span>}
-                  <span>{new Date(b.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                </div>
-
-                {/* Quote + contact summary */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '8px 12px', borderRadius: 8, background: `${G}08`, border: `1px solid ${G}20`,
-                }}>
-                  {b.quotedPrice && <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: O }}>{b.quotedPrice}</span>}
-                  {b.providerPhone && <span style={{ fontSize: 13, color: G, fontWeight: 600 }}>📞 {b.providerPhone}</span>}
-                  {!b.quotedPrice && !b.providerPhone && <span style={{ fontSize: 13, color: G, fontWeight: 600 }}>✅ Booked</span>}
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{catLabel}</span>
+                      <span style={{ background: sc.bg, color: sc.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0, textTransform: 'capitalize' }}>{b.status}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120, fontWeight: 500 }}>{b.providerName}</span>
+                      {b.propertyName && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>🏠 {b.propertyName}</span>}
+                      <span>{new Date(b.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 50 }}>
+                    {b.quotedPrice ? (
+                      <>
+                        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: O }}>{b.quotedPrice}</div>
+                        <div style={{ fontSize: 9, color: '#9B9490' }}>quoted</div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 10, fontWeight: 600, color: G }}>Booked</div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 11, color: '#C0BBB6', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
                 </div>
               </div>
 
-              {/* Expanded */}
+              {/* ── Expanded detail ── */}
               {isExpanded && (
-                <div style={{ padding: '0 18px 18px', borderTop: '1px solid rgba(0,0,0,0.05)' }} onClick={e => e.stopPropagation()}>
+                <div style={{ padding: '0 14px 16px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
 
                   {/* Summary */}
                   {b.diagnosis?.summary && (
-                    <div style={{ padding: '14px 0', fontSize: 14, color: '#6B6560', lineHeight: 1.6 }}>
+                    <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, marginBottom: 14, paddingTop: 12 }}>
                       {renderBold(b.diagnosis.summary)}
                     </div>
                   )}
 
                   {/* Details grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Provider</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.providerName}</div>
-                    </div>
-                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Category</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{catLabel}</div>
-                    </div>
-                    {b.propertyName && (
-                      <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Property</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.propertyName}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6, marginBottom: 14 }}>
+                    {[
+                      { label: 'Provider', value: b.providerName },
+                      { label: 'Category', value: catLabel },
+                      ...(b.propertyName ? [{ label: 'Property', value: b.propertyName }] : []),
+                      ...(b.quotedPrice ? [{ label: 'Quoted Price', value: b.quotedPrice, color: O }] : []),
+                      ...(b.availability ? [{ label: 'Availability', value: b.availability }] : []),
+                      ...(b.serviceAddress ? [{ label: 'Service Address', value: b.serviceAddress }] : []),
+                      { label: 'Booked', value: new Date(b.confirmedAt).toLocaleString() },
+                      { label: 'Timing', value: b.preferredTiming ?? 'ASAP' },
+                    ].map((item, i) => (
+                      <div key={i} style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
+                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: (item as { color?: string }).color ?? D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
                       </div>
-                    )}
-                    {b.quotedPrice && (
-                      <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Quoted Price</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: O }}>{b.quotedPrice}</div>
-                      </div>
-                    )}
-                    {b.availability && (
-                      <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Availability</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.availability}</div>
-                      </div>
-                    )}
-                    {b.serviceAddress && (
-                      <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Service Address</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.serviceAddress}</div>
-                      </div>
-                    )}
-                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Booked</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{new Date(b.confirmedAt).toLocaleString()}</div>
-                    </div>
-                    <div style={{ background: W, borderRadius: 8, padding: '8px 12px' }}>
-                      <div style={{ fontSize: 10, color: '#9B9490', marginBottom: 1 }}>Timing</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: D }}>{b.preferredTiming ?? 'ASAP'}</div>
-                    </div>
+                    ))}
                   </div>
 
                   {/* Provider contact */}
@@ -4442,6 +4419,7 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
                         flex: 1, padding: '10px 0', borderRadius: 100, border: 'none',
                         background: O, color: 'white', fontSize: 14, fontWeight: 600,
                         textAlign: 'center', textDecoration: 'none', display: 'block',
+                        boxShadow: `0 4px 16px ${O}40`,
                       }}>📞 Call {b.providerName.split(' ')[0]}</a>
                     )}
                     {b.providerEmail && (
@@ -4487,7 +4465,7 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
 
                   {/* Cancel booking */}
                   {b.status === 'confirmed' && (
-                    <div style={{ marginTop: 10, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 10 }}>
+                    <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 14 }}>
                       <button onClick={() => setShowCancelBooking(b.id)} disabled={cancellingBooking === b.id} style={{
                         width: '100%', padding: '10px 0', borderRadius: 100,
                         border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#DC2626',
