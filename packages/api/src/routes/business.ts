@@ -2058,7 +2058,7 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           embeddedKeys: embedded ? Object.keys(embedded) : null,
           linkKeys: links ? Object.keys(links) : null,
           contactId: sample.contactId,
-        }, '[Track reservations] checking reservation for embedded contact');
+        }, '[Track reservations] embedded contact check');
         if (embedded?.contact || embedded?.guest) {
           contactsEmbedded = true;
         }
@@ -2076,7 +2076,6 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           const contact = (embedded?.contact ?? embedded?.guest) as Record<string, unknown> | undefined;
           if (contact) {
             if (!loggedContactSample) {
-              logger.info({ contactKeys: Object.keys(contact), sample: JSON.stringify(contact).slice(0, 800) }, '[Track reservations] sample embedded contact');
               loggedContactSample = true;
             }
             const cid = String(rr.contactId ?? rr.contact_id ?? '');
@@ -2125,7 +2124,6 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
             }
             break;
           } else {
-            logger.info({ path, status: res.status }, '[Track reservations] contact endpoint test');
           }
         } catch { /* try next */ }
       }
@@ -2145,7 +2143,6 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           const contactData = await contactRes.json() as Record<string, unknown>;
 
           if (!loggedSample) {
-            logger.info({ contactKeys: Object.keys(contactData), sample: JSON.stringify(contactData).slice(0, 500) }, '[Track reservations] sample contact data');
             loggedSample = true;
           }
 
