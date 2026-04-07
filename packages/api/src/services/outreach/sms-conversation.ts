@@ -153,18 +153,49 @@ export async function processSmsReply(
   const isAccept = acceptWords.some(w => lower.includes(w));
   const isQuestion = ['?', 'what', 'who', 'how', 'why', 'where', 'when', 'is there', 'do i', 'cost', 'fee'].some(q => lower.includes(q));
   const hasPrice = /\$\d/.test(providerReply) || /(?:^|\s)(\d{2,5})(?:\s*(?:dollars?|bucks?|per|flat|total|each)|\s*$)/i.test(providerReply);
+  const hasFreeEstimate = /free estimate|no (?:service )?(?:fee|charge|cost)|on[- ]?site (?:assessment|evaluation)|need to (?:see|assess|look)/i.test(providerReply);
+  const hasAvailability = /available|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|24\/7|next week|this week|morning|afternoon|evening|asap|right away|schedule/i.test(lower);
 
   if (conv.phase === 'interest' && isAccept && !isQuestion) {
     conv.accepted = true;
     conv.phase = 'quote';
-  } else if (conv.phase === 'quote' && hasPrice && !isQuestion) {
-    conv.quotedPrice = providerReply;
-    conv.phase = 'availability';
+    // Check if they also included price or availability in the same message
+    if (hasPrice) {
+      conv.quotedPrice = providerReply;
+      conv.phase = 'availability';
+    } else if (hasFreeEstimate) {
+      conv.quotedPrice = 'Free estimate';
+      conv.phase = 'availability';
+    }
+    if (conv.phase === 'availability' && hasAvailability) {
+      conv.availability = providerReply;
+      conv.phase = 'notes';
+    }
+  } else if (conv.phase === 'quote') {
+    if (hasPrice && !isQuestion) {
+      conv.quotedPrice = providerReply;
+      conv.phase = 'availability';
+    } else if (hasFreeEstimate) {
+      conv.quotedPrice = 'Free estimate';
+      conv.phase = 'availability';
+    }
+    // If they skipped price but gave availability, advance both
+    if (conv.phase === 'availability' && hasAvailability) {
+      conv.availability = providerReply;
+      conv.phase = 'notes';
+    }
   } else if (conv.phase === 'availability' && !isQuestion) {
     conv.availability = providerReply;
     conv.phase = 'notes';
   } else if (conv.phase === 'notes') {
     conv.notes = ['no', 'none', 'nope', 'n/a', 'nothing'].includes(lower) ? null : providerReply;
+    conv.phase = 'done';
+  }
+
+  // Stuck phase detection: if we've exchanged 6+ messages and phase hasn't reached 'done',
+  // auto-complete with whatever we have — the provider has clearly engaged
+  if (conv.phase !== 'done' && conv.accepted && conv.messages.length >= 8) {
+    logger.info(`[sms-conversation] Auto-completing stuck conversation for attempt ${attemptId} (phase: ${conv.phase}, messages: ${conv.messages.length})`);
     conv.phase = 'done';
   }
 
