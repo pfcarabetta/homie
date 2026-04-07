@@ -1892,20 +1892,50 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
       const pageCount = (metaData.page_count as number) || 1;
       logger.info({ pageCount, totalItems: metaData.total_items }, '[Track reservations] starting backward pagination');
 
-      // Track limits pagination to page 200 max. Use size=100 to fit all reservations
-      // within 200 pages (11721/100 = ~118 pages). Start from last page backward.
-      const pageSize = 100;
-      const metaRes2 = await fetch(`${base}/pms/reservations?size=${pageSize}&page=1`, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-      let lastPage = 1;
-      if (metaRes2.ok) {
-        const m2 = await metaRes2.json() as Record<string, unknown>;
-        lastPage = Math.min((m2.page_count as number) || 1, 200);
-      }
-      let currentPage = lastPage;
-      logger.info({ lastPage, pageSize }, '[Track reservations] starting backward pagination with larger page size');
+      // Track has a hard limit of page*size <= 10,000, so we must filter by date
+      // to get recent reservations. Try various date filter param formats.
+      const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const dateFilters = [
+        `arrivalStart=${sixMonthsAgo}`,      // Track documented filter
+        `arrival_start=${sixMonthsAgo}`,      // snake_case variant
+        `startDate=${sixMonthsAgo}`,          // alternative name
+        `from=${sixMonthsAgo}`,               // generic
+        `arrivalDate[gte]=${sixMonthsAgo}`,   // bracket filter syntax
+      ];
 
-      while (currentPage >= 1 && !stopPaginating) {
-        nextUrl = `${base}/pms/reservations?size=${pageSize}&page=${currentPage}`;
+      // Test which date filter Track accepts by checking if it reduces total_items
+      let dateFilterParam = '';
+      for (const filter of dateFilters) {
+        try {
+          const testUrl = `${base}/pms/reservations?size=1&${filter}`;
+          const testRes = await fetch(testUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+          if (testRes.ok) {
+            const testData = await testRes.json() as Record<string, unknown>;
+            const filteredTotal = testData.total_items as number;
+            logger.info({ filter, filteredTotal, originalTotal: pageCount * 50 }, '[Track reservations] date filter test');
+            if (filteredTotal != null && filteredTotal < 11000) {
+              dateFilterParam = filter;
+              logger.info({ filter, filteredTotal }, '[Track reservations] found working date filter');
+              break;
+            }
+          }
+        } catch { /* try next */ }
+      }
+
+      // If no date filter works, fall back to paginating from page 1 forward and skip old ones
+      const pageSize = 50;
+      let currentPage = 1;
+      const maxPages = 200;
+
+      if (dateFilterParam) {
+        // With date filter, paginate forward — all results should be recent
+        nextUrl = `${base}/pms/reservations?size=${pageSize}&${dateFilterParam}`;
+      } else {
+        logger.warn('[Track reservations] no date filter worked, paginating forward from page 1');
+        nextUrl = `${base}/pms/reservations?size=${pageSize}`;
+      }
+
+      while (nextUrl && currentPage <= maxPages && !stopPaginating) {
         currentPage--;
         try {
           logger.info({ page: currentPage + 1, url: nextUrl }, '[Track reservations] fetching page');
@@ -1959,9 +1989,17 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
             stopPaginating = true;
           }
 
-          // We control pagination via currentPage decrement — no need for _links
+          // Forward pagination via _links.next
+          currentPage++;
+          const links = gData._links as Record<string, { href?: string }> | undefined;
+          const rawNext = links?.next?.href;
+          if (rawNext && typeof rawNext === 'string') {
+            nextUrl = rawNext.startsWith('http') ? rawNext : `https://${domain}${rawNext}`;
+          } else {
+            nextUrl = null;
+          }
         } catch (pageErr) {
-          logger.warn({ err: pageErr, page: currentPage + 1 }, '[Track reservations] page fetch error');
+          logger.warn({ err: pageErr, page: currentPage }, '[Track reservations] page fetch error');
           break;
         }
       }
