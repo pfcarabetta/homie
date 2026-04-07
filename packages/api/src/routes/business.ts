@@ -1892,12 +1892,20 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
       const pageCount = (metaData.page_count as number) || 1;
       logger.info({ pageCount, totalItems: metaData.total_items }, '[Track reservations] starting backward pagination');
 
-      // Track page_count=235 but page 235 returns 422 — pages are likely 1-indexed through page_count-1,
-      // or the last partial page has a different index. Start from page_count and skip 422s.
-      let currentPage = pageCount;
+      // Track limits pagination to page 200 max. Use size=100 to fit all reservations
+      // within 200 pages (11721/100 = ~118 pages). Start from last page backward.
+      const pageSize = 100;
+      const metaRes2 = await fetch(`${base}/pms/reservations?size=${pageSize}&page=1`, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+      let lastPage = 1;
+      if (metaRes2.ok) {
+        const m2 = await metaRes2.json() as Record<string, unknown>;
+        lastPage = Math.min((m2.page_count as number) || 1, 200);
+      }
+      let currentPage = lastPage;
+      logger.info({ lastPage, pageSize }, '[Track reservations] starting backward pagination with larger page size');
 
       while (currentPage >= 1 && !stopPaginating) {
-        nextUrl = `${base}/pms/reservations?size=50&page=${currentPage}`;
+        nextUrl = `${base}/pms/reservations?size=${pageSize}&page=${currentPage}`;
         currentPage--;
         try {
           logger.info({ page: currentPage + 1, url: nextUrl }, '[Track reservations] fetching page');
