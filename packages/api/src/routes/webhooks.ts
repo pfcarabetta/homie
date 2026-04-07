@@ -22,7 +22,7 @@ const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localh
 /** Notify homeowner via email when a provider submits a quote */
 async function notifyHomeownerOfQuote(jobId: string, providerName: string, quotedPrice: string | null, availability: string | null, message: string | null): Promise<void> {
   try {
-    const [job] = await db.select({ homeownerId: jobs.homeownerId, diagnosis: jobs.diagnosis }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
+    const [job] = await db.select({ homeownerId: jobs.homeownerId, diagnosis: jobs.diagnosis, workspaceId: jobs.workspaceId }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
     if (!job) return;
 
     const [homeowner] = await db.select({ email: homeowners.email, phone: homeowners.phone, firstName: homeowners.firstName }).from(homeowners).where(eq(homeowners.id, job.homeownerId)).limit(1);
@@ -34,7 +34,9 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
     const diagnosis = job.diagnosis as { category?: string; summary?: string } | null;
     const category = diagnosis?.category ? diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Home Service';
     const name = homeowner.firstName ?? 'there';
-    const quotesUrl = `${APP_URL}/account?tab=quotes`;
+    const quotesUrl = job.workspaceId
+      ? `${APP_URL}/business?tab=dispatches`
+      : `${APP_URL}/account?tab=quotes`;
 
     const subject = `You got a quote! ${providerName}${displayPrice ? ` quoted ${displayPrice}` : ''}`;
 
@@ -55,7 +57,7 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
         </div>
 
         <div style="text-align:center">
-          <a href="${quotesUrl}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View All Quotes</a>
+          <a href="${quotesUrl}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">${job.workspaceId ? 'View Dispatches' : 'View All Quotes'}</a>
         </div>
       </div>
       <div style="padding:20px 32px;text-align:center">
@@ -68,7 +70,7 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
 
     // Also send SMS if homeowner has a phone number
     if (homeowner.phone) {
-      const smsText = `Homie: ${providerName} responded to your ${category.toLowerCase()} request!${displayPrice ? ` Quote: ${displayPrice}.` : ''}${availability ? ` Available: ${availability}.` : ''} View all quotes: ${quotesUrl}`;
+      const smsText = `Homie: ${providerName} responded to your ${category.toLowerCase()} request!${displayPrice ? ` Quote: ${displayPrice}.` : ''}${availability ? ` Available: ${availability}.` : ''} ${job.workspaceId ? 'View dispatches' : 'View quotes'}: ${quotesUrl}`;
       await sendSms(homeowner.phone, smsText);
       logger.info(`[notification] Quote SMS sent to ${homeowner.phone} for job ${jobId}`);
     }
