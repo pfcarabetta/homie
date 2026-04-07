@@ -4363,8 +4363,8 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
                       <span style={{ background: sc.bg, color: sc.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0, textTransform: 'capitalize' }}>{b.status}</span>
                     </div>
                     <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120, fontWeight: 500 }}>{b.providerName}</span>
-                      {b.propertyName && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>🏠 {b.propertyName}</span>}
+                      <span style={{ fontWeight: 500 }}>{b.providerName}</span>
+                      {b.propertyName && <span>🏠 {b.propertyName}</span>}
                       <span>{new Date(b.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     </div>
                   </div>
@@ -4407,7 +4407,7 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
                     ].map((item, i) => (
                       <div key={i} style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
                         <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: (item as { color?: string }).color ?? D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: (item as { color?: string }).color ?? D }}>{item.value}</div>
                       </div>
                     ))}
                   </div>
