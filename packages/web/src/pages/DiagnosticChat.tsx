@@ -1123,11 +1123,6 @@ export default function DiagnosticChat() {
                         )}
                       </div>
                     )}
-                    {!msg.diagnosis && msg.jobSummary && (
-                      <div style={{ marginTop: 8 }}>
-                        <EarlyMatchCard summary={msg.jobSummary} onRequestPro={openMatchFlow} />
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
