@@ -1560,7 +1560,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
             u.coverImage = images[0].url;
           }
         }
-      } catch { /* skip */ }
+      } catch (err) { logger.warn({ err, unitId: u.id }, '[Track import] Failed to fetch unit cover image'); }
     }
 
     // Fetch bed type definitions to map bedTypeId → name
@@ -1576,7 +1576,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
           if (bt.id != null && bt.name) bedTypeMap.set(bt.id, bt.name);
         }
       }
-    } catch { /* skip */ }
+    } catch (err) { logger.warn({ err }, '[Track import] Failed to fetch bed type definitions'); }
 
     // Fetch rooms (with nested beds) for each unit from /pms/units/{id}/rooms
     for (const u of units) {
@@ -1598,7 +1598,7 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
             u.rooms = roomList;
           }
         }
-      } catch { /* skip */ }
+      } catch (err) { logger.warn({ err, unitId: u.id }, '[Track import] Failed to fetch rooms for unit'); }
     }
 
     // Only import active units
@@ -2198,7 +2198,7 @@ router.post('/:workspaceId/dashboard/seasonal-suggestions', requireWorkspace, as
       // Try to extract JSON array from the response
       const jsonMatch = responseText.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        try { suggestions = JSON.parse(jsonMatch[0]); } catch { /* give up */ }
+        try { suggestions = JSON.parse(jsonMatch[0]); } catch (err) { logger.warn({ err }, '[business] Failed to parse seasonal suggestions JSON from AI response'); }
       }
     }
 

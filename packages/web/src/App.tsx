@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProviderAuthProvider } from '@/contexts/ProviderAuthContext';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import HomePage from '@/pages/HomePage';
 import DiagnosticChat from '@/pages/DiagnosticChat';
 import GetQuotes from '@/pages/GetQuotes';
@@ -36,6 +37,7 @@ import QuoteCardDemo from '@/pages/QuoteCardDemo';
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <ProviderAuthProvider>
       <BrowserRouter>
@@ -77,5 +79,6 @@ export default function App() {
       </BrowserRouter>
       </ProviderAuthProvider>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }

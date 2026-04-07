@@ -481,6 +481,7 @@ router.post('/bookings/:id/cancel', async (req: Request, res: Response) => {
       res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
       return;
     }
+    logger.info({ action: 'admin:cancel_booking', bookingId: updated.id }, 'Admin cancelled booking');
     res.json({ data: { id: updated.id, status: 'cancelled' }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[POST /admin/bookings/:id/cancel]');
@@ -547,6 +548,7 @@ router.post('/business-accounts', async (req: Request, res: Response) => {
       acceptedAt: new Date(),
     });
 
+    logger.info({ action: 'admin:create_business_account', workspaceId: workspace.id, ownerEmail: user.email, plan: selectedPlan }, 'Admin created business account');
     res.status(201).json({
       data: {
         workspace,
@@ -688,6 +690,7 @@ router.patch('/business-accounts/:id', async (req: Request, res: Response) => {
   try {
     const [updated] = await db.update(workspaces).set(updates).where(eq(workspaces.id, id)).returning();
     if (!updated) { res.status(404).json({ data: null, error: 'Not found', meta: {} }); return; }
+    logger.info({ action: 'admin:update_business_account', workspaceId: id, updates: Object.keys(updates).filter(k => k !== 'updatedAt') }, 'Admin updated business account');
     res.json({ data: updated, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[PATCH /admin/business-accounts/:id]');
@@ -705,6 +708,7 @@ router.post('/jobs/:jobId/cancel', async (req: Request, res: Response) => {
       res.status(400).json({ data: null, error: `Job is already ${job.status}`, meta: {} }); return;
     }
     await db.update(jobs).set({ status: 'expired' } as Record<string, unknown>).where(eq(jobs.id, jobId));
+    logger.info({ action: 'admin:cancel_job', jobId, previousStatus: job.status }, 'Admin cancelled job');
     res.json({ data: { cancelled: true }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[POST /admin/jobs/:jobId/cancel]');
@@ -798,8 +802,9 @@ router.post('/jobs/:jobId/quotes', async (req: Request, res: Response) => {
         `${provName} has responded.`,
         { provider_name: provName, ...(provInfo?.googleRating ? { rating: `${provInfo.googleRating} ★` } : {}) },
       );
-    } catch { /* non-fatal */ }
+    } catch (err) { logger.warn({ err, jobId }, '[admin] Failed to emit tracking event for quote received'); }
 
+    logger.info({ action: 'admin:add_quote', jobId, providerId, providerName: body.provider_name, responseId: response.id }, 'Admin added manual quote');
     res.status(201).json({
       data: {
         id: response.id,
@@ -837,7 +842,7 @@ router.get('/google-search', async (req: Request, res: Response) => {
 
   try {
     const { geocodeZip } = await import('../services/providers/google-maps');
-    const location = zip ? await geocodeZip(zip).catch(() => null) : null;
+    const location = zip ? await geocodeZip(zip).catch((err) => { logger.warn({ err, zip }, '[admin] Failed to geocode zip'); return null; }) : null;
     const locationParam = location ? `&location=${location.lat},${location.lng}&radius=40234` : ''; // ~25 miles
 
     const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}${locationParam}&key=${apiKey}`;

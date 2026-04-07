@@ -30,6 +30,15 @@ import {
 } from '@/mocks/diagnostic';
 import type { DiagnosisPayload, JobTier, JobTiming, JobSummary } from '@/services/api';
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Category icons ──────────────────────────────────────────────────────────
 
 const CAT_ICONS: Record<string, string> = {
@@ -1033,7 +1042,7 @@ export default function DiagnosticChat() {
                   maxWidth: '75%', fontSize: 15, lineHeight: 1.5, whiteSpace: 'pre-wrap',
                 }}
                   dangerouslySetInnerHTML={{
-                    __html: msg.content
+                    __html: escapeHtml(msg.content)
                       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                       .replace(/\*(.+?)\*/g, '<em>$1</em>'),
                   }}
@@ -1052,7 +1061,7 @@ export default function DiagnosticChat() {
                         maxWidth: '100%', fontSize: 15, lineHeight: 1.6, color: D, whiteSpace: 'pre-wrap',
                       }}
                         dangerouslySetInnerHTML={{
-                          __html: msg.content
+                          __html: escapeHtml(msg.content)
                             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                             .replace(/\*(.+?)\*/g, '<em>$1</em>'),
                         }}

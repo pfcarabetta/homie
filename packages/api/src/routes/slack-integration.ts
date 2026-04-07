@@ -465,7 +465,7 @@ slackPublicRouter.post('/actions', async (req: Request, res: Response) => {
         try {
           const { sendBookingNotifications } = await import('../services/orchestration');
           void sendBookingNotifications(jobId, providerId, jobId);
-        } catch { /* non-fatal */ }
+        } catch (err) { logger.warn({ err, jobId, providerId }, '[slack-integration] Failed to send booking notifications'); }
 
         res.status(200).json({
           replace_original: true,
@@ -479,7 +479,7 @@ slackPublicRouter.post('/actions', async (req: Request, res: Response) => {
         try {
           const { dispatchJob } = await import('../services/orchestration');
           void dispatchJob(jobId);
-        } catch { /* non-fatal */ }
+        } catch (err) { logger.warn({ err, jobId }, '[slack-integration] Failed to re-dispatch job for extended search'); }
 
         res.status(200).json({
           replace_original: true,

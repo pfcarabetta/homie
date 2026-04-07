@@ -458,7 +458,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
           await db.update(providers).set({ email }).where(eq(providers.id, p.id));
           logger.info(`[orchestration] Found email ${email} for ${p.name}`);
         }
-      } catch { /* skip */ }
+      } catch (err) { logger.warn({ err, providerId: p.id, website: p.website }, '[orchestration] Failed to scrape email from provider website'); }
     }
   }
 
@@ -483,7 +483,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
         zipCode: job.zipCode,
         providerCount: eligible.length,
       });
-    } catch { /* Slack failure must not break dispatch */ }
+    } catch (err) { logger.warn({ err, jobId }, '[orchestration] Slack notification failed during dispatch'); }
   }
 
   const adapters = createAdapters();
@@ -639,7 +639,7 @@ export async function sendBookingNotifications(
       .where(and(eq(providerResponses.jobId, jobId), eq(providerResponses.providerId, providerId)))
       .limit(1);
     availability = response?.availability ?? undefined;
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.warn({ err, jobId, providerId }, '[orchestration] Failed to fetch provider availability for tracking event'); }
   void emitTrackingEvent(jobId, 'provider_booked', 'Appointment Confirmed',
     `${displayName} is booked.${availability ? ` Available: ${availability}` : ''}`, {
     provider_name: displayName,
@@ -659,7 +659,7 @@ export async function sendBookingNotifications(
         availability,
         category: bookingDiagnosis?.category ?? 'maintenance',
       });
-    } catch { /* Slack failure must not break booking */ }
+    } catch (err) { logger.warn({ err, jobId }, '[orchestration] Slack notification failed during booking'); }
   }
 
   const category = ((job.diagnosis as DiagnosisPayload | null)?.category ?? 'home maintenance').replace(/_/g, ' ');

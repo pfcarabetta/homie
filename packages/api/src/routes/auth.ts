@@ -93,7 +93,7 @@ router.post('/register', async (req: Request, res: Response) => {
           homeowner.phone,
           'homie: SMS notifications active! You\'ll get booking confirmations, maintenance updates, and quote alerts. Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out.',
         );
-      } catch { /* non-fatal */ }
+      } catch (err) { logger.warn({ err, phone: homeowner.phone }, '[auth] Failed to send SMS opt-in confirmation'); }
     }
 
     const token = signToken(homeowner.id);

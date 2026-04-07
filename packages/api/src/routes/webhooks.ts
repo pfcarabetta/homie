@@ -247,7 +247,7 @@ async function createProviderResponse(
       `${firstName} ${initial} has responded.`.trim(),
       { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
     );
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.warn({ err, jobId }, '[webhooks] Failed to emit tracking event for provider response'); }
 
   // Slack notification — fire-and-forget
   try {
@@ -264,7 +264,7 @@ async function createProviderResponse(
         category: diagnosis?.category ?? 'maintenance',
       });
     }
-  } catch { /* Slack failure must not break response handling */ }
+  } catch (err) { logger.warn({ err, jobId }, '[webhooks] Slack notification failed during response handling'); }
 
   // Record quote in repair_cost_data for cost estimation — fire-and-forget
   try {
@@ -286,7 +286,7 @@ async function createProviderResponse(
         region: undefined,
       }).catch((err) => logger.error({ err }, '[webhooks] Failed to record quote in repair_cost_data'));
     }
-  } catch { /* cost data recording must not break response handling */ }
+  } catch (err) { logger.warn({ err, jobId }, '[webhooks] Failed to record cost data during response handling'); }
 }
 
 // ── POST /twilio/voice/conversation ──────────────────────────────────────────
@@ -390,7 +390,7 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
               `${firstName} ${initial} has responded.`.trim(),
               { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
             );
-          } catch { /* non-fatal */ }
+          } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[webhooks] Failed to emit tracking event for voice conversation response'); }
         }
 
         const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
@@ -607,8 +607,9 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
         reason: 'sms_stop',
       });
       logger.info(`[sms] Provider ${provider.name} opted out via STOP keyword`);
-    } catch {
+    } catch (err) {
       // Already suppressed — ignore duplicate
+      logger.warn({ err, providerId: provider.id }, '[sms] Failed to insert suppression list entry (likely duplicate)');
     }
     twiml.message("You've been unsubscribed from Homie messages. You will no longer receive job requests from us. Reply START to re-subscribe.");
     res.type('text/xml').send(twiml.toString());
@@ -620,7 +621,7 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
     try {
       await db.delete(suppressionList).where(eq(suppressionList.providerId, provider.id));
       logger.info(`[sms] Provider ${provider.name} re-subscribed via START keyword`);
-    } catch { /* ignore */ }
+    } catch (err) { logger.warn({ err, providerId: provider.id }, '[sms] Failed to remove suppression list entry during re-subscribe'); }
     twiml.message("Welcome back! You've been re-subscribed to Homie job notifications. We'll reach out when there's a job in your area.");
     res.type('text/xml').send(twiml.toString());
     return;
@@ -705,7 +706,7 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
             `${firstName} ${initial} has responded.`.trim(),
             { provider_name: `${firstName} ${initial}`.trim(), ...(provDetail?.googleRating ? { rating: `${provDetail.googleRating} ★` } : {}) },
           );
-        } catch { /* non-fatal */ }
+        } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[webhooks] Failed to emit tracking event for SMS conversation response'); }
       }
 
       const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
@@ -933,7 +934,7 @@ router.post('/web/submit-quote', async (req: Request, res: Response) => {
       `${firstName} ${initial} has responded.`.trim(),
       { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
     );
-  } catch { /* non-fatal */ }
+  } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[webhooks] Failed to emit tracking event for web portal response'); }
 
   const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
   void recordProviderResponse(attempt.providerId, responseTimeSec);

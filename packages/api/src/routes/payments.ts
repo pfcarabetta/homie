@@ -6,6 +6,7 @@ import { jobs } from '../db/schema/jobs';
 import { homeowners } from '../db/schema/homeowners';
 import { ApiResponse } from '../types/api';
 import { getOrCreateCustomer, createCheckoutSession } from '../services/stripe';
+import { dispatchJob } from '../services/orchestration';
 
 const router = Router();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -141,7 +142,6 @@ router.post('/dispatch/:jobId', async (req: Request, res: Response) => {
     // Only dispatch if not already dispatching/collecting
     if (job.status === 'open') {
       await db.update(jobs).set({ status: 'dispatching' }).where(eq(jobs.id, jobId));
-      const { dispatchJob } = require('../services/orchestration');
       dispatchJob(jobId).catch((err: unknown) => logger.error({ err }, `[payments] dispatchJob failed for ${jobId}`));
       logger.info(`[payments] Dispatching job ${jobId} after payment confirmation`);
     }

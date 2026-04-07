@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import logger from '../logger';
 
 interface EstimatePDFOptions {
   workspace: {
@@ -87,7 +88,7 @@ async function resolveLogoBuffer(url: string): Promise<Buffer | null> {
       return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
     }
     return null;
-  } catch { return null; }
+  } catch (err) { logger.warn({ err, url }, '[estimate-pdf] Failed to resolve logo buffer'); return null; }
 }
 
 function drawFooter(doc: PDFKit.PDFDocument, pageNum: number) {
@@ -139,7 +140,7 @@ export async function generateEstimatePDF(options: EstimatePDFOptions): Promise<
   // Left side
   let ly = y;
   if (logoBuffer) {
-    try { doc.image(logoBuffer, M, ly, { height: 48 }); ly += 54; } catch { /* skip */ }
+    try { doc.image(logoBuffer, M, ly, { height: 48 }); ly += 54; } catch (err) { logger.warn({ err }, '[estimate-pdf] Failed to embed logo image in PDF'); }
   }
   doc.font('Helvetica-Bold').fontSize(13).fillColor(D);
   doc.text(workspace.name, M, ly, { width: CW * 0.55 });

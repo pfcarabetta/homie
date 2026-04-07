@@ -60,8 +60,9 @@ export async function scrapeEmailFromWebsite(websiteUrl: string): Promise<string
 
       // If we found emails, no need to check more pages
       if (foundEmails.size > 0) break;
-    } catch {
+    } catch (err) {
       // Timeout or fetch error — skip this page
+      logger.warn({ err, baseUrl }, '[email-scraper] Failed to fetch page during email scrape');
       continue;
     }
   }

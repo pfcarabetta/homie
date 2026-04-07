@@ -158,7 +158,7 @@ router.post('/jobs/:attemptId/respond', async (req: Request, res: Response) => {
           `${firstName} ${initial} has responded.`.trim(),
           { provider_name: `${firstName} ${initial}`.trim(), rating: provider?.googleRating ? `${provider.googleRating} ★` : undefined },
         );
-      } catch { /* non-fatal */ }
+      } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[provider-portal] Failed to emit tracking event for provider response'); }
     }
 
     const responseTimeSec = (Date.now() - attempt.attemptedAt.getTime()) / 1000;
@@ -401,7 +401,7 @@ router.get('/google-search', async (req: Request, res: Response) => {
 
   try {
     const { geocodeZip } = await import('../services/providers/google-maps');
-    const location = zip ? await geocodeZip(zip).catch(() => null) : null;
+    const location = zip ? await geocodeZip(zip).catch((err) => { logger.warn({ err, zip }, '[provider-portal] Failed to geocode zip'); return null; }) : null;
     const locationParam = location ? `&location=${location.lat},${location.lng}&radius=32000` : '';
 
     const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}${locationParam}&key=${apiKey}`;
