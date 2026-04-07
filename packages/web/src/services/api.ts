@@ -996,7 +996,7 @@ export const businessService = {
     fetchAPI<ProviderSearchResult[]>(`/api/v1/business/${workspaceId}/vendors/search?q=${encodeURIComponent(q)}`),
   addVendor: (workspaceId: string, data: {
     provider_id: string; property_id?: string | null; categories?: string[];
-    priority?: number; notes?: string; availability_schedule?: VendorSchedule | null;
+    priority?: number; notes?: string; skip_quote?: boolean; availability_schedule?: VendorSchedule | null;
   }) => fetchAPI<PreferredVendor>(`/api/v1/business/${workspaceId}/vendors`, {
     method: 'POST', body: JSON.stringify(data),
   }),

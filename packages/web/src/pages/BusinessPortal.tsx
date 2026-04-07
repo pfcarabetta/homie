@@ -2473,6 +2473,7 @@ function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved 
   const [selectedCats, setSelectedCats] = useState<string[]>(vendor.categories ?? []);
   const [priority, setPriority] = useState(vendor.priority);
   const [notes, setNotes] = useState(vendor.notes ?? '');
+  const [skipQuote, setSkipQuote] = useState(vendor.skipQuote);
   const [schedule, setSchedule] = useState<VendorSched>(vendor.availabilitySchedule ?? {});
   const [assignMode, setAssignMode] = useState<'all' | 'specific'>(vendor.propertyIds.includes(null) ? 'all' : 'specific');
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>(vendor.propertyIds.filter(Boolean) as string[]);
@@ -2516,6 +2517,7 @@ function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved 
           categories: cats,
           priority,
           notes: notes || undefined,
+          skip_quote: skipQuote,
           availability_schedule: Object.keys(schedule).length > 0 ? schedule : undefined,
         }).catch(() => {});
       }
@@ -2660,6 +2662,20 @@ function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved 
               </div>
             </>
           )}
+        </div>
+
+        {/* Skip Quotes */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, padding: '12px 14px', background: skipQuote ? '#EFF6FF' : W, borderRadius: 10, border: `1px solid ${skipQuote ? 'rgba(37,99,235,0.15)' : 'rgba(0,0,0,0.04)'}` }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: D }}>Skip Quotes</div>
+            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
+              {skipQuote ? 'This provider will be auto-dispatched without requesting a quote or budget info.' : 'This provider will be asked for a price estimate during outreach.'}
+            </div>
+          </div>
+          <button onClick={() => setSkipQuote(!skipQuote)}
+            style={{ width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer', background: skipQuote ? '#2563EB' : '#D1D5DB', position: 'relative', transition: 'background 0.2s', padding: 0, flexShrink: 0, marginLeft: 12 }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: skipQuote ? 20 : 2, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+          </button>
         </div>
 
         {error && <div style={{ color: '#DC2626', fontSize: 14, marginTop: 16 }}>{error}</div>}

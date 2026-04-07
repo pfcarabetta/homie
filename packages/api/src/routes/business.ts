@@ -551,6 +551,7 @@ router.post('/:workspaceId/vendors', requireWorkspace, requireWorkspaceRole('adm
     categories?: string[];
     priority?: number;
     notes?: string;
+    skip_quote?: boolean;
     availability_schedule?: Record<string, { start: string; end: string } | null>;
   };
 
@@ -615,6 +616,7 @@ router.post('/:workspaceId/vendors', requireWorkspace, requireWorkspaceRole('adm
         categories: body.categories ?? null,
         priority: body.priority ?? 0,
         notes: body.notes ?? null,
+        skipQuote: body.skip_quote ?? false,
         availabilitySchedule: body.availability_schedule ?? null,
       })
       .returning();
@@ -671,6 +673,7 @@ router.post('/:workspaceId/vendors/create', requireWorkspace, requireWorkspaceRo
         categories: body.categories ?? null,
         priority: body.priority ?? 0,
         notes: body.notes ?? null,
+        skipQuote: body.skip_quote ?? false,
         availabilitySchedule: body.availability_schedule ?? null,
       })
       .returning();
