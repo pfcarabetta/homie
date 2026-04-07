@@ -1892,7 +1892,8 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
       const pageCount = (metaData.page_count as number) || 1;
       logger.info({ pageCount, totalItems: metaData.total_items }, '[Track reservations] starting backward pagination');
 
-      // Start from last page and work backward
+      // Track page_count=235 but page 235 returns 422 — pages are likely 1-indexed through page_count-1,
+      // or the last partial page has a different index. Start from page_count and skip 422s.
       let currentPage = pageCount;
 
       while (currentPage >= 1 && !stopPaginating) {
@@ -1903,6 +1904,7 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           const gRes = await fetch(nextUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
           if (!gRes.ok) {
             logger.warn({ status: gRes.status, page: currentPage + 1 }, '[Track reservations] page fetch failed');
+            if (gRes.status === 422 || gRes.status === 404) continue; // skip invalid page, try next
             break;
           }
           const ct = gRes.headers.get('content-type') || '';
