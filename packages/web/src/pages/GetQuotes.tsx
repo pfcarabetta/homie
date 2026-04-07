@@ -812,8 +812,8 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
         }
         setLog(newLog);
 
-        if (status.providers_responded > 0 && status.providers_responded > fetchedResponses.current) {
-          fetchedResponses.current = status.providers_responded;
+        // Fetch provider responses whenever count changes or on first detection
+        if (status.providers_responded > 0) {
           void jobService.getResponses(jobId).then(res => {
             if (res.data?.responses) {
               setProviders(res.data.responses.map((r: ProviderResponseItem) => ({
