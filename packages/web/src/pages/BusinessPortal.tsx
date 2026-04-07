@@ -17,6 +17,8 @@ function cleanPrice(price: string): string {
   if (rm) return `$${rm[1]}-$${rm[2]}`;
   const nm = p.match(/^(\d+(?:\.\d+)?)$/);
   if (nm) return `$${nm[1]}`;
+  const em = p.match(/(?:is|are|be|charge|cost|runs?|pay)\s+(?:about|around)?\s*\$?(\d+(?:\.\d+)?)/i);
+  if (em) return `$${em[1]}`;
   return p;
 }
 

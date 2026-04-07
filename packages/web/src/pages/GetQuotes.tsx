@@ -250,6 +250,10 @@ function cleanPrice(price: string): string {
   const approxMatch = p.match(/(?:about|around|charge|estimate)\s+\$?(\d+(?:\.\d+)?)/i);
   if (approxMatch && !/\$/.test(p)) return `~$${approxMatch[1]}`;
 
+  // "service call is 99", "cost runs 150" → "$X"
+  const em = p.match(/(?:is|are|be|charge|cost|runs?|pay)\s+(?:about|around)?\s*\$?(\d+(?:\.\d+)?)/i);
+  if (em) return `$${em[1]}`;
+
   return p;
 }
 

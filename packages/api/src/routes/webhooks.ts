@@ -199,7 +199,7 @@ function formatQuotedPrice(raw: string | null): string | null {
   }
 
   // Extract bare number from phrase: "charge 220", "it would be 350 dollars"
-  const embeddedNum = cleaned.match(/(?:charge|cost|price|estimate|quote|be|pay)\s+(?:about|around|roughly)?\s*(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?)?/i);
+  const embeddedNum = cleaned.match(/(?:charge|cost|price|estimate|quote|be|pay|is|are|run|runs)\s+(?:about|around|roughly)?\s*(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?)?/i);
   if (embeddedNum) {
     const n = parseFloat(embeddedNum[1]);
     const hasApprox = /about|around|roughly/i.test(cleaned);
