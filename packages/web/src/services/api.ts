@@ -574,6 +574,11 @@ export interface AccountProfile {
   phone: string | null;
   zip_code: string;
   membership_tier: string;
+  title: string | null;
+  notify_email_quotes: boolean;
+  notify_sms_quotes: boolean;
+  notify_email_bookings: boolean;
+  notify_sms_bookings: boolean;
   created_at: string;
 }
 
@@ -654,7 +659,7 @@ export interface HomeData {
 
 export const accountService = {
   getProfile: () => fetchAPI<AccountProfile>('/api/v1/account'),
-  updateProfile: (data: Partial<{ email: string; phone: string; zip_code: string; current_password: string; new_password: string }>) =>
+  updateProfile: (data: Partial<{ first_name: string; last_name: string; email: string; phone: string; zip_code: string; current_password: string; new_password: string; title: string; notify_email_quotes: boolean; notify_sms_quotes: boolean; notify_email_bookings: boolean; notify_sms_bookings: boolean }>) =>
     fetchAPI<AccountProfile>('/api/v1/account', { method: 'PATCH', body: JSON.stringify(data) }),
   getJobs: () => fetchAPI<{ jobs: AccountJob[] }>('/api/v1/account/jobs'),
   getBookings: () => fetchAPI<{ bookings: AccountBooking[] }>('/api/v1/account/bookings'),

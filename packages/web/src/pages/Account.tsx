@@ -54,6 +54,11 @@ function ProfileTab() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [zip, setZip] = useState('');
+  const [title, setTitle] = useState('');
+  const [notifyEmailQuotes, setNotifyEmailQuotes] = useState(true);
+  const [notifySmsQuotes, setNotifySmsQuotes] = useState(true);
+  const [notifyEmailBookings, setNotifyEmailBookings] = useState(true);
+  const [notifySmsBookings, setNotifySmsBookings] = useState(true);
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -68,6 +73,11 @@ function ProfileTab() {
         setEmail(res.data.email);
         setPhone(res.data.phone || '');
         setZip(res.data.zip_code);
+        setTitle(res.data.title || '');
+        setNotifyEmailQuotes(res.data.notify_email_quotes);
+        setNotifySmsQuotes(res.data.notify_sms_quotes);
+        setNotifyEmailBookings(res.data.notify_email_bookings);
+        setNotifySmsBookings(res.data.notify_sms_bookings);
       }
     });
   }, []);
@@ -76,12 +86,17 @@ function ProfileTab() {
     setMsg(null);
     setSaving(true);
     try {
-      const updates: Record<string, string> = {};
+      const updates: Record<string, unknown> = {};
       if (firstName !== (profile?.first_name || '')) updates.first_name = firstName;
       if (lastName !== (profile?.last_name || '')) updates.last_name = lastName;
       if (email !== profile?.email) updates.email = email;
       if (phone !== (profile?.phone || '')) updates.phone = phone;
       if (zip !== profile?.zip_code) updates.zip_code = zip;
+      if (title !== (profile?.title || '')) updates.title = title;
+      if (notifyEmailQuotes !== profile?.notify_email_quotes) updates.notify_email_quotes = notifyEmailQuotes;
+      if (notifySmsQuotes !== profile?.notify_sms_quotes) updates.notify_sms_quotes = notifySmsQuotes;
+      if (notifyEmailBookings !== profile?.notify_email_bookings) updates.notify_email_bookings = notifyEmailBookings;
+      if (notifySmsBookings !== profile?.notify_sms_bookings) updates.notify_sms_bookings = notifySmsBookings;
       if (newPw) { updates.current_password = currentPw; updates.new_password = newPw; }
 
       if (Object.keys(updates).length === 0) { setMsg({ type: 'error', text: 'No changes to save' }); setSaving(false); return; }
@@ -142,6 +157,37 @@ function ProfileTab() {
         <div>
           <label style={{ fontSize: 13, fontWeight: 600, color: D, marginBottom: 6, display: 'block' }}>Zip Code</label>
           <input value={zip} onChange={e => setZip(e.target.value.replace(/\D/g, ''))} maxLength={5} style={inputStyle} />
+        </div>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: D, marginBottom: 6, display: 'block' }}>Title</label>
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Property Manager" style={inputStyle} />
+        </div>
+
+        <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16, marginTop: 8 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 12 }}>Notification Preferences</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {([
+              { label: 'Email notifications for quotes', value: notifyEmailQuotes, set: setNotifyEmailQuotes },
+              { label: 'SMS notifications for quotes', value: notifySmsQuotes, set: setNotifySmsQuotes },
+              { label: 'Email notifications for bookings', value: notifyEmailBookings, set: setNotifyEmailBookings },
+              { label: 'SMS notifications for bookings', value: notifySmsBookings, set: setNotifySmsBookings },
+            ] as const).map((item, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 14, color: D }}>{item.label}</span>
+                <button onClick={() => item.set(!item.value)} style={{
+                  width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
+                  background: item.value ? G : '#ccc', position: 'relative', transition: 'background 0.2s',
+                  flexShrink: 0,
+                }}>
+                  <div style={{
+                    width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                    position: 'absolute', top: 2, left: item.value ? 18 : 2,
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16, marginTop: 8 }}>

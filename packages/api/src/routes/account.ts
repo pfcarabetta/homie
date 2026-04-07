@@ -26,6 +26,11 @@ router.get('/', async (req: Request, res: Response) => {
         phone: homeowners.phone,
         zipCode: homeowners.zipCode,
         membershipTier: homeowners.membershipTier,
+        title: homeowners.title,
+        notifyEmailQuotes: homeowners.notifyEmailQuotes,
+        notifySmsQuotes: homeowners.notifySmsQuotes,
+        notifyEmailBookings: homeowners.notifyEmailBookings,
+        notifySmsBookings: homeowners.notifySmsBookings,
         createdAt: homeowners.createdAt,
       })
       .from(homeowners)
@@ -46,6 +51,11 @@ router.get('/', async (req: Request, res: Response) => {
         phone: homeowner.phone,
         zip_code: homeowner.zipCode,
         membership_tier: homeowner.membershipTier,
+        title: homeowner.title,
+        notify_email_quotes: homeowner.notifyEmailQuotes,
+        notify_sms_quotes: homeowner.notifySmsQuotes,
+        notify_email_bookings: homeowner.notifyEmailBookings,
+        notify_sms_bookings: homeowner.notifySmsBookings,
         created_at: homeowner.createdAt.toISOString(),
       },
       error: null,
@@ -67,6 +77,11 @@ router.patch('/', async (req: Request, res: Response) => {
     zip_code?: string;
     current_password?: string;
     new_password?: string;
+    title?: string;
+    notify_email_quotes?: boolean;
+    notify_sms_quotes?: boolean;
+    notify_email_bookings?: boolean;
+    notify_sms_bookings?: boolean;
   };
 
   const updates: Record<string, unknown> = {};
@@ -89,6 +104,26 @@ router.patch('/', async (req: Request, res: Response) => {
 
   if (body.phone !== undefined) {
     updates.phone = body.phone || null;
+  }
+
+  if (body.title !== undefined) {
+    updates.title = body.title.trim() || null;
+  }
+
+  if (body.notify_email_quotes !== undefined) {
+    updates.notifyEmailQuotes = body.notify_email_quotes;
+  }
+
+  if (body.notify_sms_quotes !== undefined) {
+    updates.notifySmsQuotes = body.notify_sms_quotes;
+  }
+
+  if (body.notify_email_bookings !== undefined) {
+    updates.notifyEmailBookings = body.notify_email_bookings;
+  }
+
+  if (body.notify_sms_bookings !== undefined) {
+    updates.notifySmsBookings = body.notify_sms_bookings;
   }
 
   if (body.zip_code !== undefined) {
@@ -144,6 +179,11 @@ router.patch('/', async (req: Request, res: Response) => {
         phone: updated.phone,
         zip_code: updated.zipCode,
         membership_tier: updated.membershipTier,
+        title: updated.title,
+        notify_email_quotes: updated.notifyEmailQuotes,
+        notify_sms_quotes: updated.notifySmsQuotes,
+        notify_email_bookings: updated.notifyEmailBookings,
+        notify_sms_bookings: updated.notifySmsBookings,
         created_at: updated.createdAt.toISOString(),
       },
       error: null,

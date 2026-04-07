@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { businessService, jobService, slackService, templateService, estimateService, trackingService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate } from '@/services/api';
+import { businessService, jobService, slackService, templateService, estimateService, trackingService, accountService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate, type AccountProfile } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -4974,6 +4974,62 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
   const [savingDetails, setSavingDetails] = useState(false);
   const [detailsMsg, setDetailsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // My Profile state
+  const profileSectionRef = useRef<HTMLDivElement>(null);
+  const [myProfile, setMyProfile] = useState<AccountProfile | null>(null);
+  const [myFirstName, setMyFirstName] = useState('');
+  const [myLastName, setMyLastName] = useState('');
+  const [myTitle, setMyTitle] = useState('');
+  const [myPhone, setMyPhone] = useState('');
+  const [myNotifyEmailQuotes, setMyNotifyEmailQuotes] = useState(true);
+  const [myNotifySmsQuotes, setMyNotifySmsQuotes] = useState(true);
+  const [myNotifyEmailBookings, setMyNotifyEmailBookings] = useState(true);
+  const [myNotifySmsBookings, setMyNotifySmsBookings] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    accountService.getProfile().then(res => {
+      if (res.data) {
+        setMyProfile(res.data);
+        setMyFirstName(res.data.first_name || '');
+        setMyLastName(res.data.last_name || '');
+        setMyTitle(res.data.title || '');
+        setMyPhone(res.data.phone || '');
+        setMyNotifyEmailQuotes(res.data.notify_email_quotes);
+        setMyNotifySmsQuotes(res.data.notify_sms_quotes);
+        setMyNotifyEmailBookings(res.data.notify_email_bookings);
+        setMyNotifySmsBookings(res.data.notify_sms_bookings);
+      }
+    });
+  }, []);
+
+  async function handleSaveMyProfile() {
+    setSavingProfile(true);
+    setProfileMsg(null);
+    try {
+      const updates: Record<string, unknown> = {};
+      if (myFirstName !== (myProfile?.first_name || '')) updates.first_name = myFirstName;
+      if (myLastName !== (myProfile?.last_name || '')) updates.last_name = myLastName;
+      if (myTitle !== (myProfile?.title || '')) updates.title = myTitle;
+      if (myPhone !== (myProfile?.phone || '')) updates.phone = myPhone;
+      if (myNotifyEmailQuotes !== myProfile?.notify_email_quotes) updates.notify_email_quotes = myNotifyEmailQuotes;
+      if (myNotifySmsQuotes !== myProfile?.notify_sms_quotes) updates.notify_sms_quotes = myNotifySmsQuotes;
+      if (myNotifyEmailBookings !== myProfile?.notify_email_bookings) updates.notify_email_bookings = myNotifyEmailBookings;
+      if (myNotifySmsBookings !== myProfile?.notify_sms_bookings) updates.notify_sms_bookings = myNotifySmsBookings;
+      if (Object.keys(updates).length === 0) { setProfileMsg({ type: 'error', text: 'No changes to save' }); setSavingProfile(false); return; }
+      const res = await accountService.updateProfile(updates as Record<string, string>);
+      if (res.data) {
+        setMyProfile(res.data);
+        setProfileMsg({ type: 'success', text: 'Profile updated' });
+      }
+    } catch (err: unknown) {
+      setProfileMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save' });
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   async function handleSaveCompanyDetails() {
     setSavingDetails(true);
     setDetailsMsg(null);
@@ -5019,6 +5075,67 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
 
   return (
     <div style={{ maxWidth: 480 }}>
+      {/* My Profile */}
+      <div ref={profileSectionRef} id="my-profile-section">
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: 'var(--bp-text)', margin: '0 0 20px' }}>My Profile</h3>
+        <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24, marginBottom: 32 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>First Name</label>
+              <input value={myFirstName} onChange={e => setMyFirstName(e.target.value)} placeholder="First" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Last Name</label>
+              <input value={myLastName} onChange={e => setMyLastName(e.target.value)} placeholder="Last" style={inputStyle} />
+            </div>
+          </div>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Title</label>
+          <input value={myTitle} onChange={e => setMyTitle(e.target.value)} placeholder="e.g. Property Manager" style={inputStyle} />
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Phone</label>
+          <input value={myPhone} onChange={e => setMyPhone(e.target.value)} placeholder="(555) 123-4567" style={inputStyle} />
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Email</label>
+          <div style={{ padding: '10px 14px', fontSize: 15, color: 'var(--bp-muted)', background: 'var(--bp-bg)', border: '1px solid var(--bp-border)', borderRadius: 8, marginBottom: 16 }}>
+            {myProfile?.email ?? '...'}
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--bp-border)', paddingTop: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 12 }}>Notification Preferences</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {([
+                { label: 'Email notifications for quotes', value: myNotifyEmailQuotes, set: setMyNotifyEmailQuotes },
+                { label: 'SMS notifications for quotes', value: myNotifySmsQuotes, set: setMyNotifySmsQuotes },
+                { label: 'Email notifications for bookings', value: myNotifyEmailBookings, set: setMyNotifyEmailBookings },
+                { label: 'SMS notifications for bookings', value: myNotifySmsBookings, set: setMyNotifySmsBookings },
+              ] as const).map((item, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, color: 'var(--bp-text)' }}>{item.label}</span>
+                  <button onClick={() => item.set(!item.value)} style={{
+                    width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
+                    background: item.value ? G : '#ccc', position: 'relative', transition: 'background 0.2s',
+                    flexShrink: 0,
+                  }}>
+                    <div style={{
+                      width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                      position: 'absolute', top: 2, left: item.value ? 18 : 2,
+                      transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    }} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {profileMsg && (
+            <div style={{ fontSize: 14, marginBottom: 16, color: profileMsg.type === 'success' ? G : '#DC2626' }}>{profileMsg.text}</div>
+          )}
+
+          <button onClick={handleSaveMyProfile} disabled={savingProfile}
+            style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: savingProfile ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: savingProfile ? 0.7 : 1 }}>
+            {savingProfile ? 'Saving...' : 'Save Profile'}
+          </button>
+        </div>
+      </div>
+
       <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: 'var(--bp-text)', margin: '0 0 20px' }}>Workspace Settings</h3>
 
       <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24 }}>
@@ -5268,6 +5385,21 @@ export default function BusinessPortal() {
       if (res.data) setWorkspace(res.data);
     });
   }, [selectedId]);
+
+  // Handle URL params for tab navigation and profile focus
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlTab = params.get('tab');
+    if (urlTab && (TABS as readonly string[]).includes(urlTab)) {
+      setTab(urlTab as Tab);
+    }
+    if (params.get('focus') === 'profile' && urlTab === 'settings') {
+      setTimeout(() => {
+        const el = document.getElementById('my-profile-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 300);
+    }
+  }, []);
 
   if (!homeowner) return null;
 

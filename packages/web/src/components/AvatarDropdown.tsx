@@ -80,6 +80,14 @@ export default function AvatarDropdown() {
                   padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.08em', textTransform: 'uppercase',
                 }}>Business</span>
               </button>
+              <button onClick={() => { setOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={{
+                width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = '#F0FDF4'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >My Profile</button>
             </div>
           )}
           <button onClick={() => { setOpen(false); navigate('/account'); }} style={{

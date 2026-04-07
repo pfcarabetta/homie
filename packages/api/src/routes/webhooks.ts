@@ -25,7 +25,7 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
     const [job] = await db.select({ homeownerId: jobs.homeownerId, diagnosis: jobs.diagnosis, workspaceId: jobs.workspaceId }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
     if (!job) return;
 
-    const [homeowner] = await db.select({ email: homeowners.email, phone: homeowners.phone, firstName: homeowners.firstName }).from(homeowners).where(eq(homeowners.id, job.homeownerId)).limit(1);
+    const [homeowner] = await db.select({ email: homeowners.email, phone: homeowners.phone, firstName: homeowners.firstName, notifyEmailQuotes: homeowners.notifyEmailQuotes, notifySmsQuotes: homeowners.notifySmsQuotes }).from(homeowners).where(eq(homeowners.id, job.homeownerId)).limit(1);
     if (!homeowner) return;
 
     // Normalize the price for display
@@ -65,11 +65,13 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
       </div>
     </div>`;
 
-    await sendEmail(homeowner.email, subject, html);
-    logger.info(`[notification] Quote email sent to ${homeowner.email} for job ${jobId}`);
+    if (homeowner.notifyEmailQuotes !== false) {
+      await sendEmail(homeowner.email, subject, html);
+      logger.info(`[notification] Quote email sent to ${homeowner.email} for job ${jobId}`);
+    }
 
-    // Also send SMS if homeowner has a phone number
-    if (homeowner.phone) {
+    // Also send SMS if homeowner has a phone number and preference allows it
+    if (homeowner.phone && homeowner.notifySmsQuotes !== false) {
       const smsText = `Homie: ${providerName} responded to your ${category.toLowerCase()} request!${displayPrice ? ` Quote: ${displayPrice}.` : ''}${availability ? ` Available: ${availability}.` : ''} ${job.workspaceId ? 'View dispatches' : 'View quotes'}: ${quotesUrl}`;
       await sendSms(homeowner.phone, smsText);
       logger.info(`[notification] Quote SMS sent to ${homeowner.phone} for job ${jobId}`);

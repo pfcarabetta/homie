@@ -26,6 +26,11 @@ export const homeowners = pgTable('homeowners', {
   homeBathrooms: text('home_bathrooms'),
   homeSqft: integer('home_sqft'),
   homeDetails: jsonb('home_details').$type<PropertyDetails>(),
+  title: text('title'),
+  notifyEmailQuotes: boolean('notify_email_quotes').notNull().default(true),
+  notifySmsQuotes: boolean('notify_sms_quotes').notNull().default(true),
+  notifyEmailBookings: boolean('notify_email_bookings').notNull().default(true),
+  notifySmsBookings: boolean('notify_sms_bookings').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
