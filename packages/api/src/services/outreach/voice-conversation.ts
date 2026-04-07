@@ -170,10 +170,16 @@ export async function processProviderSpeech(
   const isGarbled = garbledIndicators.some(g => lower.includes(g)) ||
     (providerSpeech.length < 4 && !/\b(yes|no|ok|yep|nah|nope)\b/i.test(providerSpeech));
 
+  // Detect "hold on" / "one moment" — don't advance phase, let Claude respond naturally
+  const isHoldOn = /\b(moment|hold on|one sec|hang on|let me check|give me a|just a sec|one second|hold please)\b/i.test(providerSpeech);
+
   // Price detection: $ prefix or standalone number that looks like a price
   const hasPrice = /\$\d/.test(providerSpeech) || /(?:^|\s)(\d{2,5})(?:\s*(?:dollars?|bucks?|per|flat|total|each)|\s*[.,]?\s*$)/i.test(providerSpeech);
+  const hasFreeEstimate = /free estimate|no (?:service )?(?:fee|charge|cost)|on[- ]?site (?:assessment|evaluation)/i.test(providerSpeech);
 
-  if (conv.phase === 'interest') {
+  if (isHoldOn) {
+    // Don't advance phase — just let Claude respond with "take your time"
+  } else if (conv.phase === 'interest') {
     if (isAccept && !isQuestion) {
       conv.accepted = true;
       conv.phase = 'quote';
@@ -181,6 +187,9 @@ export async function processProviderSpeech(
   } else if (conv.phase === 'quote') {
     if (hasPrice && !isQuestion) {
       conv.quotedPrice = providerSpeech;
+      conv.phase = 'availability';
+    } else if (hasFreeEstimate) {
+      conv.quotedPrice = 'Free estimate';
       conv.phase = 'availability';
     }
   } else if (conv.phase === 'availability') {
