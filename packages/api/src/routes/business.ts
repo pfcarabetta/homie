@@ -2083,10 +2083,8 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
             const firstName = String(contact.firstName ?? contact.first_name ?? contact.givenName ?? '');
             const lastName = String(contact.lastName ?? contact.last_name ?? contact.familyName ?? '');
             const name = [firstName, lastName].filter(Boolean).join(' ');
-            const emails = contact.emails as string[] | undefined;
-            const phones = contact.phones as string[] | undefined;
-            const email = (contact.email ?? contact.emailAddress ?? (emails ? emails[0] : null)) as string | null ?? null;
-            const phone = (contact.phone ?? contact.phoneNumber ?? contact.mobile ?? (phones ? phones[0] : null)) as string | null ?? null;
+            const email = (contact.primaryEmail ?? contact.email ?? contact.emailAddress ?? contact.secondaryEmail ?? null) as string | null ?? null;
+            const phone = (contact.cellPhone ?? contact.homePhone ?? contact.phone ?? contact.phoneNumber ?? contact.mobile ?? contact.workPhone ?? contact.otherPhone ?? null) as string | null ?? null;
             if (cid) contactCache.set(cid, { name, email, phone });
           }
         }
@@ -2155,8 +2153,8 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           const lastName = String(contactData.lastName ?? contactData.last_name ?? '').trim();
           const fullName = [firstName, lastName].filter(Boolean).join(' ');
 
-          const email = (contactData.email ?? contactData.emailAddress ?? contactData.email_address ?? null) as string | null;
-          const phone = (contactData.phone ?? contactData.phoneNumber ?? contactData.phone_number ?? contactData.mobile ?? null) as string | null;
+          const email = (contactData.primaryEmail ?? contactData.email ?? contactData.emailAddress ?? contactData.secondaryEmail ?? null) as string | null;
+          const phone = (contactData.cellPhone ?? contactData.homePhone ?? contactData.phone ?? contactData.phoneNumber ?? contactData.mobile ?? contactData.workPhone ?? null) as string | null;
 
           contactCache.set(contactId, {
             name: fullName || '',
