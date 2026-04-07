@@ -32,7 +32,7 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
     const displayPrice = formatQuotedPrice(quotedPrice);
 
     const diagnosis = job.diagnosis as { category?: string; summary?: string } | null;
-    const category = diagnosis?.category ? diagnosis.category.charAt(0).toUpperCase() + diagnosis.category.slice(1) : 'Home Service';
+    const category = diagnosis?.category ? diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Home Service';
     const name = homeowner.firstName ?? 'there';
     const quotesUrl = `${APP_URL}/account?tab=quotes`;
 
