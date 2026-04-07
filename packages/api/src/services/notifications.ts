@@ -46,7 +46,7 @@ export async function sendEmail(to: string, subject: string, htmlOrText: string)
   const isHtml = htmlOrText.trim().startsWith('<');
   await sgMail.send({
     to,
-    from: fromEmail,
+    from: { email: fromEmail, name: 'Homie' },
     subject,
     ...(isHtml ? { html: htmlOrText } : { text: htmlOrText }),
   });
