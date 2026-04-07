@@ -229,9 +229,28 @@ const TIERS = [
   { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', detail: '15 pros, all channels blitz' },
 ];
 
-/** Strip duplicate dollar signs: "$$140" → "$140" */
+/** Normalize price for display: "$$140" → "$140", "Between 100 and 200" → "$100-$200" */
 function cleanPrice(price: string): string {
-  return price.replace(/^\$+/, '$');
+  // Strip duplicate dollar signs
+  let p = price.replace(/^\$+/, '$');
+
+  // "Between X and Y" → "$X-$Y"
+  const betweenMatch = p.match(/between\s+\$?(\d+(?:\.\d+)?)\s*(?:and|to)\s*\$?(\d+(?:\.\d+)?)/i);
+  if (betweenMatch) return `$${betweenMatch[1]}-$${betweenMatch[2]}`;
+
+  // "X to Y" or "X-Y" without $ → "$X-$Y"
+  const rangeMatch = p.match(/^(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*(\d+(?:\.\d+)?)$/);
+  if (rangeMatch) return `$${rangeMatch[1]}-$${rangeMatch[2]}`;
+
+  // Plain number → "$X"
+  const numMatch = p.match(/^(\d+(?:\.\d+)?)$/);
+  if (numMatch) return `$${numMatch[1]}`;
+
+  // "about/around/charge X" → "~$X"
+  const approxMatch = p.match(/(?:about|around|charge|estimate)\s+\$?(\d+(?:\.\d+)?)/i);
+  if (approxMatch && !/\$/.test(p)) return `~$${approxMatch[1]}`;
+
+  return p;
 }
 
 const MOCK_PROVIDERS = [
