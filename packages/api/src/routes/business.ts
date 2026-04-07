@@ -1880,15 +1880,26 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
     const allReservationsByUnit = new Map<string, TrackReservation[]>();
 
     if (reservationEndpointStyle === 'global') {
-      // Fetch reservations sorted by arrival descending so newest come first
-      // Stop paginating once we hit old reservations to avoid fetching entire history
-      let nextUrl: string | null = `${base}/pms/reservations?size=50&sort=-arrivalDate`;
+      // First, get total page count, then fetch pages backward from the last page
+      // (Track doesn't support sort or date filters, and newest reservations are at the end)
+      let nextUrl: string | null = `${base}/pms/reservations?size=50`;
       let stopPaginating = false;
-      while (nextUrl) {
+
+      // Get page count from first request
+      const metaRes = await fetch(`${base}/pms/reservations?size=50&page=1`, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+      if (!metaRes.ok) { res.json({ data: { imported: 0, updated: 0, total: 0 }, error: null, meta: { message: 'Failed to fetch reservations' } }); return; }
+      const metaData = await metaRes.json() as Record<string, unknown>;
+      const pageCount = (metaData.page_count as number) || 1;
+      logger.info({ pageCount, totalItems: metaData.total_items }, '[Track reservations] starting backward pagination');
+
+      // Start from last page and work backward
+      let currentPage = pageCount;
+
+      while (currentPage >= 1 && !stopPaginating) {
+        nextUrl = `${base}/pms/reservations?size=50&page=${currentPage}`;
+        currentPage--;
         try {
-          logger.info({ url: nextUrl }, '[Track reservations] fetching global reservations page');
           const gRes = await fetch(nextUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-          logger.info({ status: gRes.status }, '[Track reservations] global page response');
           if (!gRes.ok) break;
           const ct = gRes.headers.get('content-type') || '';
           if (!ct.includes('json')) break;
@@ -1934,16 +1945,7 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
             stopPaginating = true;
           }
 
-          // Pagination
-          const links = gData._links as Record<string, { href?: string }> | undefined;
-          const rawNext = links?.next?.href ?? (gData as Record<string, unknown>).next;
-          if (stopPaginating) {
-            nextUrl = null;
-          } else if (rawNext && typeof rawNext === 'string' && rawNext !== nextUrl) {
-            nextUrl = rawNext.startsWith('http') ? rawNext : `https://${domain}${rawNext}`;
-          } else {
-            nextUrl = null;
-          }
+          // We control pagination via currentPage decrement — no need for _links
         } catch { break; }
       }
     }
