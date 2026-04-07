@@ -1,4 +1,5 @@
-import { eq, and, inArray, sql, asc } from 'drizzle-orm';
+import { eq, and, inArray, sql, asc, lte, gte, ne } from 'drizzle-orm';
+import crypto from 'crypto';
 import logger from '../logger';
 import { db } from '../db';
 import { jobs } from '../db/schema/jobs';
@@ -9,6 +10,8 @@ import { providerScores } from '../db/schema/provider-scores';
 import { preferredVendors } from '../db/schema/preferred-vendors';
 import { providerResponses } from '../db/schema/provider-responses';
 import { jobTrackingEvents, jobTrackingLinks, type TrackingEventType } from '../db/schema/job-tracking';
+import { reservations } from '../db/schema/reservations';
+import { properties } from '../db/schema/properties';
 import { discoverProviders } from './providers/discovery';
 import { generateScripts } from './scripts/generation';
 import { VoiceAdapter } from './outreach/voice';
@@ -468,6 +471,52 @@ export async function dispatchJob(jobId: string): Promise<void> {
   // Emit tracking events
   void emitTrackingEvent(jobId, 'reported', 'Issue Reported', diagnosis.summary?.slice(0, 200));
   void emitTrackingEvent(jobId, 'dispatched', 'Dispatching Pros', `Contacting ${eligible.length} providers in the area via phone, SMS, and web.`);
+
+  // Auto-share tracking with current guest if property is occupied
+  if (job.propertyId) {
+    try {
+      const now = new Date();
+      const [currentReservation] = await db
+        .select()
+        .from(reservations)
+        .where(and(
+          eq(reservations.propertyId, job.propertyId),
+          lte(reservations.checkIn, now),
+          gte(reservations.checkOut, now),
+          ne(reservations.status, 'cancelled'),
+          ne(reservations.status, 'Cancelled'),
+          ne(reservations.status, 'canceled'),
+        ))
+        .limit(1);
+
+      if (currentReservation && (currentReservation.guestEmail || currentReservation.guestPhone)) {
+        // Look up property name for the tracking link
+        const [prop] = await db
+          .select({ name: properties.name })
+          .from(properties)
+          .where(eq(properties.id, job.propertyId))
+          .limit(1);
+
+        const propertyName = prop?.name ?? 'Your property';
+        const trackingToken = crypto.randomBytes(24).toString('base64url').slice(0, 32);
+
+        await db.insert(jobTrackingLinks).values({
+          jobId,
+          trackingToken,
+          notifyPhone: currentReservation.guestPhone ?? undefined,
+          notifyEmail: currentReservation.guestEmail ?? undefined,
+          propertyName,
+        });
+
+        logger.info(
+          { jobId, guestName: currentReservation.guestName, guestEmail: currentReservation.guestEmail, guestPhone: currentReservation.guestPhone },
+          '[dispatch] Auto-sharing status with current guest',
+        );
+      }
+    } catch (err) {
+      logger.warn({ err, jobId }, '[dispatch] Failed to auto-share tracking with guest');
+    }
+  }
 
   // Slack notification — fire-and-forget
   if (job.workspaceId) {

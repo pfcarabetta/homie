@@ -589,6 +589,13 @@ export default function BusinessChat() {
   const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
 
+  // Occupancy check state
+  const [occupancyCheck, setOccupancyCheck] = useState<{
+    occupied: boolean;
+    reservation: { guestName: string | null; checkIn: string; checkOut: string } | null;
+  } | null>(null);
+  const [entryPermission, setEntryPermission] = useState<string | null>(null);
+
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -1068,15 +1075,52 @@ export default function BusinessChat() {
 
   // Handle dispatch (no tier selection — B2B subscription covers it)
   async function handleDispatch() {
+    // Check occupancy before dispatching
+    if (!occupancyCheck && selectedWorkspace && selectedProperty?.id) {
+      setDispatching(true);
+      try {
+        const occRes = await businessService.getCurrentReservation(selectedWorkspace, selectedProperty.id);
+        if (occRes.data?.occupied && occRes.data.reservation) {
+          setOccupancyCheck({
+            occupied: true,
+            reservation: {
+              guestName: occRes.data.reservation.guestName,
+              checkIn: occRes.data.reservation.checkIn,
+              checkOut: occRes.data.reservation.checkOut,
+            },
+          });
+          setDispatching(false);
+          return; // Show occupancy card, wait for user to choose entry permission
+        }
+        // Not occupied — proceed directly
+        setOccupancyCheck({ occupied: false, reservation: null });
+      } catch {
+        // If the check fails, proceed without occupancy info
+        setOccupancyCheck({ occupied: false, reservation: null });
+      }
+      setDispatching(false);
+    }
+
+    // Proceed with dispatch (either not occupied, or entry permission already chosen)
+    await executeDispatch();
+  }
+
+  async function executeDispatch(permissionNote?: string) {
     setDispatching(true);
     setStep('outreach');
 
     try {
+      let summaryText = aiDiagnosis || `${category?.label}: ${q1Answer}`;
+      const noteToAppend = permissionNote ?? entryPermission;
+      if (noteToAppend) {
+        summaryText = `${summaryText}\n\n${noteToAppend}`;
+      }
+
       const diagnosis = {
         category: category?.id || 'general',
         subcategory: q1Answer || category?.id || 'general',
         severity: 'medium' as const,
-        summary: aiDiagnosis || `${category?.label}: ${q1Answer}`,
+        summary: summaryText,
         recommendedActions: ['Dispatch professional'],
       };
 
@@ -1110,7 +1154,7 @@ export default function BusinessChat() {
 
         setMessages(prev => [...prev, { role: 'assistant', content: `Dispatching now. Contacting providers in the ${zipCode} area...` }]);
       }
-    } catch (err) {
+    } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Failed to create job. Please try again.' }]);
       setStep('extra');
     } finally {
@@ -1484,7 +1528,7 @@ export default function BusinessChat() {
           )}
 
           {/* Diagnosis summary card */}
-          {step === 'summary' && !streaming && category && selectedProperty && (
+          {step === 'summary' && !streaming && category && selectedProperty && !occupancyCheck?.occupied && (
             <DiagnosisSummaryCard
               category={category}
               property={selectedProperty}
@@ -1494,6 +1538,83 @@ export default function BusinessChat() {
               dispatching={dispatching}
               estimate={costEstimate ?? undefined}
             />
+          )}
+
+          {/* Occupancy check card — shown when property is occupied */}
+          {step === 'summary' && occupancyCheck?.occupied && occupancyCheck.reservation && category && (
+            <div style={{
+              marginLeft: 42, marginBottom: 16, background: '#fff', borderRadius: 16,
+              border: `2px solid ${O}22`, overflow: 'hidden', animation: 'fadeSlide 0.3s ease',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+            }}>
+              <div style={{
+                background: `${O}10`, padding: '12px 16px', borderBottom: `1px solid ${O}22`,
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{ fontSize: 16 }}>{'\u{1F3E0}'}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: D }}>This property is currently occupied</span>
+              </div>
+              <div style={{ padding: 16 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+                  <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
+                    <span style={{ color: '#9B9490' }}>Guest:</span>{' '}
+                    <span style={{ fontWeight: 600, color: D }}>{occupancyCheck.reservation.guestName || 'Unknown guest'}</span>
+                  </div>
+                  <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
+                    <span style={{ color: '#9B9490' }}>Check-in:</span>{' '}
+                    <span style={{ fontWeight: 600, color: D }}>{new Date(occupancyCheck.reservation.checkIn).toLocaleDateString()}</span>
+                  </div>
+                  <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
+                    <span style={{ color: '#9B9490' }}>Check-out:</span>{' '}
+                    <span style={{ fontWeight: 600, color: D }}>{new Date(occupancyCheck.reservation.checkOut).toLocaleDateString()}</span>
+                  </div>
+                </div>
+
+                <p style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 12 }}>
+                  Does the provider have permission to enter?
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  <button
+                    disabled={dispatching}
+                    onClick={() => {
+                      const note = 'Note: Property is occupied. Provider has permission to enter.';
+                      setEntryPermission(note);
+                      setOccupancyCheck(null);
+                      void executeDispatch(note);
+                    }}
+                    style={{
+                      padding: '12px 20px', borderRadius: 10, border: 'none', background: G, color: '#fff',
+                      fontSize: 14, fontWeight: 600, cursor: dispatching ? 'default' : 'pointer',
+                      opacity: dispatching ? 0.7 : 1, fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    Yes, provider can enter
+                  </button>
+                  <button
+                    disabled={dispatching}
+                    onClick={() => {
+                      const note = 'Note: Property is occupied. Someone needs to be present for the provider.';
+                      setEntryPermission(note);
+                      setOccupancyCheck(null);
+                      void executeDispatch(note);
+                    }}
+                    style={{
+                      padding: '12px 20px', borderRadius: 10, border: `1.5px solid ${O}`,
+                      background: '#fff', color: O, fontSize: 14, fontWeight: 600,
+                      cursor: dispatching ? 'default' : 'pointer', opacity: dispatching ? 0.7 : 1,
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    Someone needs to be present
+                  </button>
+                </div>
+
+                <p style={{ fontSize: 12, color: '#9B9490', lineHeight: 1.5 }}>
+                  Guest will automatically be notified of dispatch status.
+                </p>
+              </div>
+            </div>
           )}
 
           {/* Outreach live view */}

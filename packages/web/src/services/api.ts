@@ -998,6 +998,10 @@ export const businessService = {
       body: JSON.stringify(data),
     }),
 
+  // Current Reservation (occupancy check)
+  getCurrentReservation: (workspaceId: string, propertyId: string) =>
+    fetchAPI<{ occupied: boolean; reservation: Reservation | null }>(`/api/v1/business/${workspaceId}/properties/${propertyId}/current-reservation`),
+
   // Property Reservations
   getPropertyReservations: (workspaceId: string, propertyId: string, from?: string, to?: string) => {
     const params = new URLSearchParams();

@@ -2395,6 +2395,54 @@ router.get('/:workspaceId/properties/:propertyId/reservations', requireWorkspace
   }
 });
 
+// ── Current Reservation Check ────────────────────────────────────────────────
+
+// GET /:workspaceId/properties/:propertyId/current-reservation
+router.get('/:workspaceId/properties/:propertyId/current-reservation', requireWorkspace, async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+
+  try {
+    // Verify property belongs to workspace
+    const [prop] = await db
+      .select({ id: properties.id })
+      .from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!prop) {
+      res.status(404).json({ data: null, error: 'Property not found', meta: {} });
+      return;
+    }
+
+    const now = new Date();
+
+    const [current] = await db
+      .select()
+      .from(reservations)
+      .where(and(
+        eq(reservations.propertyId, propertyId),
+        lte(reservations.checkIn, now),
+        gte(reservations.checkOut, now),
+        ne(reservations.status, 'cancelled'),
+        ne(reservations.status, 'Cancelled'),
+        ne(reservations.status, 'canceled'),
+      ))
+      .limit(1);
+
+    res.json({
+      data: {
+        occupied: !!current,
+        reservation: current ?? null,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/:propertyId/current-reservation]');
+    res.status(500).json({ data: null, error: 'Failed to check current reservation', meta: {} });
+  }
+});
+
 // ── Estimate Summary PDF ────────────────────────────────────────────────────
 
 // GET /:workspaceId/jobs/:jobId/estimate-pdf
