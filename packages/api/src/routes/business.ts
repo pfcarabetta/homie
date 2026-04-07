@@ -1780,6 +1780,10 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
 
 interface TrackReservation {
   id?: number | string;
+  unitId?: number | string;
+  unit_id?: number | string;
+  propertyId?: number | string;
+  property_id?: number | string;
   guestName?: string;
   guest?: string;
   name?: string;
@@ -1834,61 +1838,127 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
     let totalUpdated = 0;
     let totalCount = 0;
 
+    // Try to discover the correct reservations endpoint
+    // Track API may use /pms/reservations (global) or /pms/units/{id}/reservations
+    let reservationEndpointStyle: 'per-unit' | 'global' | null = null;
+
+    // Test with first unit to find the right endpoint
+    const testUnitId = linkedProps[0].pmsExternalId!;
+    const perUnitUrl = `${base}/pms/units/${testUnitId}/reservations?size=1`;
+    const globalUrl = `${base}/pms/reservations?size=1`;
+
+    try {
+      const testPerUnit = await fetch(perUnitUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+      if (testPerUnit.ok) reservationEndpointStyle = 'per-unit';
+    } catch { /* ignore */ }
+
+    if (!reservationEndpointStyle) {
+      try {
+        const testGlobal = await fetch(globalUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+        if (testGlobal.ok) reservationEndpointStyle = 'global';
+      } catch { /* ignore */ }
+    }
+
+    if (!reservationEndpointStyle) {
+      res.json({ data: { imported: 0, updated: 0, total: 0 }, error: null, meta: { message: 'Track API does not support reservations endpoint' } });
+      return;
+    }
+
+    // If global endpoint, fetch all reservations at once
+    const allReservationsByUnit = new Map<string, TrackReservation[]>();
+
+    if (reservationEndpointStyle === 'global') {
+      let nextUrl: string | null = `${base}/pms/reservations?size=200`;
+      while (nextUrl) {
+        try {
+          const gRes = await fetch(nextUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+          if (!gRes.ok) break;
+          const ct = gRes.headers.get('content-type') || '';
+          if (!ct.includes('json')) break;
+          const gData = await gRes.json() as Record<string, unknown>;
+
+          let items: TrackReservation[] = [];
+          if (Array.isArray(gData)) {
+            items = gData as TrackReservation[];
+          } else {
+            const embedded = gData._embedded as Record<string, unknown> | undefined;
+            items = (
+              embedded?.reservations ?? embedded?.unitReservations ??
+              gData.reservations ?? gData.contents ?? gData.results ??
+              gData.data ?? gData.items ?? gData.records ?? []
+            ) as TrackReservation[];
+          }
+
+          for (const r of items) {
+            const uid = String(r.unitId ?? r.unit_id ?? r.propertyId ?? r.property_id ?? '');
+            if (!uid) continue;
+            if (!allReservationsByUnit.has(uid)) allReservationsByUnit.set(uid, []);
+            allReservationsByUnit.get(uid)!.push(r);
+          }
+
+          // Pagination
+          const links = gData._links as Record<string, { href?: string }> | undefined;
+          const rawNext = links?.next?.href ?? (gData as Record<string, unknown>).next;
+          if (rawNext && typeof rawNext === 'string' && rawNext !== nextUrl) {
+            nextUrl = rawNext.startsWith('http') ? rawNext : `https://${domain}${rawNext}`;
+          } else {
+            nextUrl = null;
+          }
+        } catch { break; }
+      }
+    }
+
     for (const prop of linkedProps) {
       const unitId = prop.pmsExternalId!;
-      const url = `${base}/pms/units/${unitId}/reservations?size=50`;
 
-      let trackRes: globalThis.Response;
-      try {
-        trackRes = await fetch(url, {
-          headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
-        });
-      } catch (err) {
-        logger.warn({ err, unitId }, '[Track reservations import] Failed to fetch reservations for unit');
-        continue;
-      }
-
-      if (!trackRes.ok) {
-        const errText = await trackRes.text().catch(() => '');
-        if (trackRes.status === 401) {
-          res.status(401).json({ data: null, error: 'Invalid Track API credentials', meta: {} });
-          return;
-        }
-        logger.warn({ status: trackRes.status, body: errText, unitId }, '[Track reservations import] API call failed for unit');
-        continue;
-      }
-
-      const contentType = trackRes.headers.get('content-type') || '';
-      if (!contentType.includes('json')) {
-        logger.warn({ contentType, unitId }, '[Track reservations import] Non-JSON response for unit, skipping');
-        continue;
-      }
-
-      let trackData: Record<string, unknown>;
-      try {
-        trackData = await trackRes.json() as Record<string, unknown>;
-      } catch {
-        logger.warn({ unitId }, '[Track reservations import] Failed to parse JSON response for unit');
-        continue;
-      }
-
-      // Log raw response structure for debugging
-      logger.info({ unitId, keys: Object.keys(trackData), embeddedKeys: trackData._embedded ? Object.keys(trackData._embedded as Record<string, unknown>) : null }, '[Track reservations import] Response structure');
-
-      // Parse HAL+JSON response — check _embedded.reservations, _embedded.unitReservations, then top-level arrays
       let trackReservations: TrackReservation[] = [];
-      if (Array.isArray(trackData)) {
-        trackReservations = trackData as TrackReservation[];
-      } else {
-        const embedded = trackData._embedded as Record<string, unknown> | undefined;
-        trackReservations = (
-          embedded?.reservations ?? embedded?.unitReservations ??
-          trackData.reservations ?? trackData.contents ?? trackData.results ??
-          trackData.data ?? trackData.items ?? trackData.records ?? []
-        ) as TrackReservation[];
-      }
 
-      logger.info({ unitId, count: trackReservations.length, sample: trackReservations[0] ? JSON.stringify(trackReservations[0]).slice(0, 500) : null }, '[Track reservations import] Parsed reservations');
+      if (reservationEndpointStyle === 'global') {
+        // Use pre-fetched global data
+        trackReservations = allReservationsByUnit.get(unitId) ?? [];
+      } else {
+        // Fetch per-unit
+        const url = `${base}/pms/units/${unitId}/reservations?size=50`;
+
+        let trackRes: globalThis.Response;
+        try {
+          trackRes = await fetch(url, {
+            headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+          });
+        } catch (err) {
+          logger.warn({ err, unitId }, '[Track reservations import] Failed to fetch reservations for unit');
+          continue;
+        }
+
+        if (!trackRes.ok) {
+          const errText = await trackRes.text().catch(() => '');
+          if (trackRes.status === 401) {
+            res.status(401).json({ data: null, error: 'Invalid Track API credentials', meta: {} });
+            return;
+          }
+          logger.warn({ status: trackRes.status, body: errText, unitId }, '[Track reservations import] API call failed for unit');
+          continue;
+        }
+
+        const contentType = trackRes.headers.get('content-type') || '';
+        if (!contentType.includes('json')) continue;
+
+        let trackData: Record<string, unknown>;
+        try {
+          trackData = await trackRes.json() as Record<string, unknown>;
+        } catch { continue; }
+
+        if (Array.isArray(trackData)) {
+          trackReservations = trackData as TrackReservation[];
+        } else {
+          const embedded = trackData._embedded as Record<string, unknown> | undefined;
+          trackReservations = (
+            embedded?.reservations ?? embedded?.unitReservations ??
+            trackData.reservations ?? trackData.contents ?? trackData.results ??
+            trackData.data ?? trackData.items ?? trackData.records ?? []
+          ) as TrackReservation[];
+        }
+      }
 
       for (const tr of trackReservations) {
         const externalId = tr.id != null ? String(tr.id) : null;
