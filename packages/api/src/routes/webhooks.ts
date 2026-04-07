@@ -532,17 +532,15 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
     return;
   }
 
-  // Find the provider by phone number (normalize: strip all non-digits for comparison)
+  // Find the provider by phone number
   const fromDigits = From.replace(/\D/g, '').slice(-10);
-  let [provider] = await db
-    .select({ id: providers.id, name: providers.name })
-    .from(providers)
-    .where(sql`REGEXP_REPLACE(${providers.phone}, '[^0-9]', '', 'g') LIKE ${'%' + fromDigits}`)
-    .limit(1);
+  let provider: { id: string; name: string } | undefined;
 
-  // Test mode: if the reply is from the test phone, find the most recent pending SMS attempt
-  if (!provider && process.env.OUTREACH_TEST_MODE?.toLowerCase() === 'true' && process.env.OUTREACH_TEST_PHONE) {
-    const testDigits = process.env.OUTREACH_TEST_PHONE.replace(/\D/g, '').slice(-10);
+  // Test mode: if reply is from the test phone, match to most recent pending outreach attempt
+  const isTestMode = process.env.OUTREACH_TEST_MODE?.toLowerCase() === 'true';
+  const testPhone = process.env.OUTREACH_TEST_PHONE;
+  if (isTestMode && testPhone) {
+    const testDigits = testPhone.replace(/\D/g, '').slice(-10);
     if (fromDigits === testDigits) {
       const [testAttempt] = await db
         .select({ providerId: outreachAttempts.providerId })
@@ -558,6 +556,16 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
         }
       }
     }
+  }
+
+  // Normal provider lookup (skip if test mode already matched)
+  if (!provider) {
+    const [found] = await db
+      .select({ id: providers.id, name: providers.name })
+      .from(providers)
+      .where(sql`REGEXP_REPLACE(${providers.phone}, '[^0-9]', '', 'g') LIKE ${'%' + fromDigits}`)
+      .limit(1);
+    provider = found;
   }
 
   if (!provider) {
