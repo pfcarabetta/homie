@@ -152,6 +152,24 @@ function formatQuotedPrice(raw: string | null): string | null {
     return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
   }
 
+  // Range with "between": "between 100 and 200", "between $100-$200"
+  const betweenMatch = cleaned.match(/between\s+\$?(\d+(?:\.\d+)?)\s*(?:and|to|-|–)\s*\$?(\d+(?:\.\d+)?)/i);
+  if (betweenMatch) {
+    const low = parseFloat(betweenMatch[1]);
+    const high = parseFloat(betweenMatch[2]);
+    return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
+  }
+
+  // Range anywhere in text: "it would be 100 to 200", "charge 150-250"
+  const embeddedRange = cleaned.match(/(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*\$?(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?)?/i);
+  if (embeddedRange) {
+    const low = parseFloat(embeddedRange[1]);
+    const high = parseFloat(embeddedRange[2]);
+    if (high > low && low >= 10 && high <= 100000) {
+      return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
+    }
+  }
+
   // Extract $XXX from anywhere in text: "Charge about $220", "it would be $350"
   const embeddedDollar = cleaned.match(/\$(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*\$?(\d+(?:\.\d+)?)/);
   if (embeddedDollar) {
