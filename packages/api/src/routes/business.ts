@@ -2067,6 +2067,7 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
     }
 
     // Try to extract contacts from _embedded if available
+    let loggedContactSample = false;
     if (contactsEmbedded) {
       for (const resList of allReservationsByUnit.values()) {
         for (const r of resList) {
@@ -2074,6 +2075,10 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           const embedded = rr._embedded as Record<string, unknown> | undefined;
           const contact = (embedded?.contact ?? embedded?.guest) as Record<string, unknown> | undefined;
           if (contact) {
+            if (!loggedContactSample) {
+              logger.info({ contactKeys: Object.keys(contact), sample: JSON.stringify(contact).slice(0, 800) }, '[Track reservations] sample embedded contact');
+              loggedContactSample = true;
+            }
             const cid = String(rr.contactId ?? rr.contact_id ?? '');
             const firstName = String(contact.firstName ?? contact.first_name ?? contact.givenName ?? '');
             const lastName = String(contact.lastName ?? contact.last_name ?? contact.familyName ?? '');
