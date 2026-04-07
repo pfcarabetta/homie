@@ -738,7 +738,7 @@ function buildHomeContext(home: HomeData): string {
 /* -- Quote Outreach Modal -- */
 interface QuoteOutreachModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (hasJob: boolean) => void;
   diagnosis: string;
   category: string;
   subcategory: string;
@@ -964,7 +964,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100,
       background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }} onClick={onClose}>
+    }} onClick={() => onClose(!!jobId)}>
       <div style={{
         background: 'white', borderRadius: 20, width: '100%', maxWidth: 520, maxHeight: '90vh',
         overflow: 'auto', padding: '28px 24px 24px', position: 'relative',
@@ -976,7 +976,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
           <h3 style={{ fontSize: 20, fontWeight: 800, color: D, fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
             {step === 'tier' ? 'Find a Pro' : step === 'preferences' ? 'Your Details' : step === 'auth_gate' ? 'Sign In to Continue' : 'Homie is on it'}
           </h3>
-          <button onClick={onClose} style={{
+          <button onClick={() => onClose(!!jobId)} style={{
             width: 32, height: 32, borderRadius: '50%', background: W, border: 'none',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, cursor: 'pointer', color: D,
           }}>{'\u2715'}</button>
@@ -1741,7 +1741,19 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
       {/* Quote Outreach Modal */}
       <QuoteOutreachModal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={(hasJob) => {
+          setModalOpen(false);
+          if (hasJob) {
+            navigate('/account?tab=quotes');
+          } else {
+            // Restart the chat
+            setPhase('greeting');
+            setData({ category: null, a1: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
+            setMessages([{ role: 'assistant', text: "Hey! I'm Homie. Let's get you some quotes. What kind of help do you need?" }]);
+            setCostEstimate(null);
+            setJobId(null);
+          }
+        }}
         diagnosis={data.aiDiagnosis || ''}
         category={data.category || ''}
         subcategory={data.a1 || ''}
