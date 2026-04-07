@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SEO from '@/components/SEO';
+import { usePricing, centsToDisplay } from '@/hooks/usePricing';
 import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, accountService, estimateService, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem, type HomeData, type CostEstimate } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
@@ -224,9 +225,9 @@ const CATEGORY_FLOWS: Record<string, {
 };
 
 const TIERS = [
-  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', detail: '5 pros via SMS + web' },
-  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', detail: '10 pros via voice + SMS + web', popular: true },
-  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', detail: '15 pros, all channels blitz' },
+  { id: 'standard',  name: 'Standard',  time: '~2 hours', detail: '5 pros via SMS + web' },
+  { id: 'priority',  name: 'Priority',  time: '~30 min',  detail: '10 pros via voice + SMS + web', popular: true },
+  { id: 'emergency', name: 'Emergency', time: '~15 min',  detail: '15 pros, all channels blitz' },
 ];
 
 /** Normalize price for display: "$$140" → "$140", "Between 100 and 200" → "$100-$200" */
@@ -448,9 +449,14 @@ function DiagnosisSummary({ data }: { data: QuoteData }) {
 
 /* -- Tier selection as chat bubbles -- */
 function TierCards({ onSelect }: { onSelect: (t: typeof TIERS[number]) => void }) {
+  const { pricing } = usePricing();
   return (
     <div style={{ marginLeft: 42, display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
-      {TIERS.map(t => (
+      {TIERS.map(t => {
+        const tp = pricing.homeowner[t.id];
+        const regularPrice = tp ? centsToDisplay(tp.priceCents) : '';
+        const promoPrice = tp?.promoPriceCents != null ? centsToDisplay(tp.promoPriceCents) : null;
+        return (
         <button key={t.id} onClick={() => onSelect(t)} style={{
           display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: 'pointer',
           border: t.popular ? `2px solid ${O}` : '2px solid rgba(0,0,0,0.06)',
@@ -465,9 +471,13 @@ function TierCards({ onSelect }: { onSelect: (t: typeof TIERS[number]) => void }
             <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>· {t.time}</span></div>
             <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
           </div>
-          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : D }}>{t.price}</div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : D }}>{promoPrice ?? regularPrice}</div>
+            {promoPrice && <div style={{ fontSize: 12, color: '#9B9490', textDecoration: 'line-through' }}>{regularPrice}</div>}
+          </div>
         </button>
-      ))}
+        );
+      })}
       <div style={{ textAlign: 'center', marginTop: 4 }}>
         <div style={{ fontSize: 13, color: G, fontWeight: 600 }}>{'\u2705'} Only charged if you receive quotes</div>
         <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>100% satisfaction guarantee — no quotes, no charge</div>
@@ -791,6 +801,7 @@ interface QuoteOutreachModalProps {
 
 function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory, costEstimate: initialEstimate, isDemo, onBooked, initialJobId }: QuoteOutreachModalProps) {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
   const [step, setStep] = useState<'tier' | 'preferences' | 'auth_gate' | 'outreach'>(initialJobId ? 'outreach' : 'tier');
   const [tier, setTier] = useState<string | null>(null);
   const [zip, setZip] = useState('');
@@ -1102,7 +1113,11 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                   Homie's AI agent will call, text, and search the web to find available pros in your area. Choose your speed:
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {TIERS.map(t => (
+                  {TIERS.map(t => {
+                    const tp = pricing.homeowner[t.id];
+                    const regularPrice = tp ? centsToDisplay(tp.priceCents) : '';
+                    const promoPrice = tp?.promoPriceCents != null ? centsToDisplay(tp.promoPriceCents) : null;
+                    return (
                     <button key={t.id} onClick={() => handleTierSelect(t)} style={{
                       display: 'flex', alignItems: 'center', padding: '16px 18px', borderRadius: 14, cursor: 'pointer',
                       border: t.popular ? `2px solid ${O}` : '2px solid rgba(0,0,0,0.06)',
@@ -1122,9 +1137,13 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                         </div>
                         <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
                       </div>
-                      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : D }}>{t.price}</div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : D }}>{promoPrice ?? regularPrice}</div>
+                        {promoPrice && <div style={{ fontSize: 12, color: '#9B9490', textDecoration: 'line-through' }}>{regularPrice}</div>}
+                      </div>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div style={{ textAlign: 'center', marginTop: 14 }}>
                   <div style={{ fontSize: 13, color: G, fontWeight: 600 }}>{'\u2705'} Only charged if you receive quotes</div>
@@ -1201,7 +1220,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                   fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s',
                   boxShadow: isPrefsValid && !loading ? `0 4px 16px ${O}40` : 'none',
                 }}>
-                  {loading ? 'Creating job...' : `\uD83D\uDE80 Launch Homie Agent \u2014 ${tier === 'emergency' ? '$29.99' : tier === 'priority' ? '$19.99' : '$9.99'}`}
+                  {loading ? 'Creating job...' : (() => { const tp = tier ? pricing.homeowner[tier] : null; const p = tp ? (tp.promoPriceCents != null ? centsToDisplay(tp.promoPriceCents) : centsToDisplay(tp.priceCents)) : ''; return `\uD83D\uDE80 Launch Homie Agent \u2014 ${p}`; })()}
                 </button>
                 <button onClick={() => setStep('tier')} style={{
                   width: '100%', marginTop: 8, padding: '10px 0', border: 'none', background: 'none',
@@ -1341,6 +1360,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
 /* -- MAIN COMPONENT -- */
 export default function GetQuotes() {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
   const isDemo = new URLSearchParams(window.location.search).has('demo');
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [phase, setPhase] = useState('greeting');
