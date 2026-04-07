@@ -1,6 +1,7 @@
 import { useReducer, useRef, useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AvatarDropdown from '@/components/AvatarDropdown';
+import { usePricing, centsToDisplay } from '@/hooks/usePricing';
 import DiagnosisCard, { type DiagnosisData } from '@/components/DiagnosisCard';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 import ErrorState from '@/components/ErrorState';
@@ -1273,9 +1274,9 @@ function EarlyMatchCard({ summary, onRequestPro }: { summary: JobSummaryV2; onRe
 // ── Diagnostic Outreach Modal (matches QuoteOutreachModal pattern) ───────
 
 const DIAG_TIERS = [
-  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', detail: '5 pros via SMS + web' },
-  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', detail: '10 pros via voice + SMS + web', popular: true },
-  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', detail: '15 pros, all channels blitz' },
+  { id: 'standard',  name: 'Standard',  time: '~2 hours', detail: '5 pros via SMS + web' },
+  { id: 'priority',  name: 'Priority',  time: '~30 min',  detail: '10 pros via voice + SMS + web', popular: true },
+  { id: 'emergency', name: 'Emergency', time: '~15 min',  detail: '15 pros, all channels blitz' },
 ];
 
 const DIAG_OUTREACH_LOG = [
@@ -1344,6 +1345,7 @@ interface DiagnosticOutreachModalProps {
 
 function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDemo, initialCostEstimate, initialJobId }: DiagnosticOutreachModalProps) {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
   const [step, setStep] = useState<'tier' | 'preferences' | 'auth_gate' | 'outreach'>(initialJobId ? 'outreach' : 'tier');
   const [tier, setTier] = useState<string | null>(null);
   const [zip, setZip] = useState('');
@@ -1653,7 +1655,11 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
                   Homie's AI agent will call, text, and search the web to find available pros in your area. Choose your speed:
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {DIAG_TIERS.map(t => (
+                  {DIAG_TIERS.map(t => {
+                    const tp = pricing.homeowner[t.id];
+                    const regularPrice = tp ? centsToDisplay(tp.priceCents) : '';
+                    const promoPrice = tp?.promoPriceCents != null ? centsToDisplay(tp.promoPriceCents) : null;
+                    return (
                     <button key={t.id} onClick={() => handleTierSelect(t)} style={{
                       display: 'flex', alignItems: 'center', padding: '16px 18px', borderRadius: 14, cursor: 'pointer',
                       border: t.popular ? `2px solid ${O}` : '2px solid rgba(0,0,0,0.06)',
@@ -1673,9 +1679,13 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
                         </div>
                         <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
                       </div>
-                      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : Dk }}>{t.price}</div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : Dk }}>{promoPrice ?? regularPrice}</div>
+                        {promoPrice && <div style={{ fontSize: 12, color: '#9B9490', textDecoration: 'line-through' }}>{regularPrice}</div>}
+                      </div>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div style={{ textAlign: 'center', marginTop: 14 }}>
                   <div style={{ fontSize: 13, color: Gr, fontWeight: 600 }}>{'\u2705'} Only charged if you receive quotes</div>
@@ -1752,7 +1762,7 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
                   fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s',
                   boxShadow: isPrefsValid && !loading ? `0 4px 16px ${O}40` : 'none',
                 }}>
-                  {loading ? 'Creating job...' : `\uD83D\uDE80 Launch Homie Agent \u2014 ${tier === 'emergency' ? '$29.99' : tier === 'priority' ? '$19.99' : '$9.99'}`}
+                  {loading ? 'Creating job...' : (() => { const tp = tier ? pricing.homeowner[tier] : null; const p = tp ? (tp.promoPriceCents != null ? centsToDisplay(tp.promoPriceCents) : centsToDisplay(tp.priceCents)) : ''; return `\uD83D\uDE80 Launch Homie Agent \u2014 ${p}`; })()}
                 </button>
                 <button onClick={() => setStep('tier')} style={{
                   width: '100%', marginTop: 8, padding: '10px 0', border: 'none', background: 'none',
