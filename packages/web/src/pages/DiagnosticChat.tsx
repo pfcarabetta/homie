@@ -324,7 +324,7 @@ function reducer(state: State, action: Action): State {
       return { ...state, diagnosis: action.diagnosis };
 
     case 'SET_JOB_SUMMARY':
-      return { ...state, jobSummary: action.summary, showBanner: true, matchFlowActive: true, matchStep: 'tier' };
+      return { ...state, jobSummary: action.summary, showBanner: true };
 
     case 'DISMISS_BANNER':
       return { ...state, showBanner: false };
