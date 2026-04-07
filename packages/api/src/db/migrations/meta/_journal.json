@@ -113,6 +113,13 @@
       "when": 1775544833753,
       "tag": "0015_stiff_hellion",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1775549349086,
+      "tag": "0016_hot_pandemic",
+      "breakpoints": true
     }
   ]
 }

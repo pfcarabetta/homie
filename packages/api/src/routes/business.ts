@@ -13,6 +13,7 @@ import { homeowners } from '../db/schema/homeowners';
 import { providers } from '../db/schema/providers';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { preferredVendors } from '../db/schema/preferred-vendors';
+import { reservations } from '../db/schema/reservations';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 import { generateEstimatePDF } from '../services/estimate-pdf';
 
@@ -1772,6 +1773,221 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
   } catch (err) {
     logger.error({ err }, '[POST /business/:id/import/track]');
     res.status(500).json({ data: null, error: 'Failed to import from Track PMS', meta: {} });
+  }
+});
+
+// ── Track PMS Reservations Import ───────────────────────────────────────────
+
+interface TrackReservation {
+  id?: number | string;
+  guestName?: string;
+  guest?: string;
+  name?: string;
+  arrivalDate?: string;
+  checkIn?: string;
+  startDate?: string;
+  departureDate?: string;
+  checkOut?: string;
+  endDate?: string;
+  status?: string;
+  numGuests?: number;
+  guests?: number;
+  numberOfGuests?: number;
+}
+
+// POST /:workspaceId/import/track/reservations — Import reservations from Track PMS
+router.post('/:workspaceId/import/track/reservations', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  const body = req.body as {
+    track_domain?: string;
+    api_key?: string;
+    api_secret?: string;
+  };
+
+  if (!body.track_domain || !body.api_key || !body.api_secret) {
+    res.status(400).json({ data: null, error: 'track_domain, api_key, and api_secret are required', meta: {} });
+    return;
+  }
+
+  const domain = body.track_domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const authHeader = 'Basic ' + Buffer.from(`${body.api_key}:${body.api_secret}`).toString('base64');
+  const base = domain.includes('/api') ? `https://${domain}` : `https://${domain}/api`;
+
+  try {
+    // Find all Track-linked properties in this workspace
+    const trackProperties = await db
+      .select({ id: properties.id, pmsExternalId: properties.pmsExternalId })
+      .from(properties)
+      .where(and(
+        eq(properties.workspaceId, req.workspaceId),
+        eq(properties.pmsSource, 'track'),
+      ));
+
+    const linkedProps = trackProperties.filter(p => p.pmsExternalId != null && p.pmsExternalId !== '');
+
+    if (linkedProps.length === 0) {
+      res.json({ data: { imported: 0, updated: 0, total: 0 }, error: null, meta: { message: 'No Track-linked properties found in this workspace' } });
+      return;
+    }
+
+    const now = new Date();
+    let totalImported = 0;
+    let totalUpdated = 0;
+    let totalCount = 0;
+
+    for (const prop of linkedProps) {
+      const unitId = prop.pmsExternalId!;
+      const url = `${base}/pms/units/${unitId}/reservations?size=50`;
+
+      let trackRes: globalThis.Response;
+      try {
+        trackRes = await fetch(url, {
+          headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+        });
+      } catch (err) {
+        logger.warn({ err, unitId }, '[Track reservations import] Failed to fetch reservations for unit');
+        continue;
+      }
+
+      if (!trackRes.ok) {
+        const errText = await trackRes.text().catch(() => '');
+        if (trackRes.status === 401) {
+          res.status(401).json({ data: null, error: 'Invalid Track API credentials', meta: {} });
+          return;
+        }
+        logger.warn({ status: trackRes.status, body: errText, unitId }, '[Track reservations import] API call failed for unit');
+        continue;
+      }
+
+      const trackData = await trackRes.json() as Record<string, unknown>;
+
+      // Parse HAL+JSON response — check _embedded.reservations, _embedded.unitReservations, then top-level arrays
+      let trackReservations: TrackReservation[] = [];
+      if (Array.isArray(trackData)) {
+        trackReservations = trackData as TrackReservation[];
+      } else {
+        const embedded = trackData._embedded as Record<string, unknown> | undefined;
+        trackReservations = (
+          embedded?.reservations ?? embedded?.unitReservations ??
+          trackData.reservations ?? trackData.contents ?? trackData.results ??
+          trackData.data ?? trackData.items ?? trackData.records ?? []
+        ) as TrackReservation[];
+      }
+
+      for (const tr of trackReservations) {
+        const externalId = tr.id != null ? String(tr.id) : null;
+        if (!externalId) continue;
+
+        const guestName = tr.guestName ?? tr.guest ?? tr.name ?? null;
+        const checkInStr = tr.arrivalDate ?? tr.checkIn ?? tr.startDate;
+        const checkOutStr = tr.departureDate ?? tr.checkOut ?? tr.endDate;
+
+        if (!checkInStr || !checkOutStr) continue;
+
+        const checkIn = new Date(checkInStr);
+        const checkOut = new Date(checkOutStr);
+
+        // Skip past reservations (checkOut in the past)
+        if (checkOut < now) continue;
+
+        const guestCount = tr.numGuests ?? tr.guests ?? tr.numberOfGuests ?? null;
+        const status = tr.status ?? 'confirmed';
+
+        totalCount++;
+
+        // Upsert: check if reservation with this pmsReservationId already exists for this property
+        const [existing] = await db
+          .select({ id: reservations.id })
+          .from(reservations)
+          .where(and(
+            eq(reservations.propertyId, prop.id),
+            eq(reservations.pmsReservationId, externalId),
+          ))
+          .limit(1);
+
+        if (existing) {
+          // Update existing reservation
+          await db.update(reservations)
+            .set({
+              guestName,
+              checkIn,
+              checkOut,
+              status,
+              guests: guestCount,
+              updatedAt: new Date(),
+            })
+            .where(eq(reservations.id, existing.id));
+          totalUpdated++;
+        } else {
+          // Insert new reservation
+          await db.insert(reservations).values({
+            propertyId: prop.id,
+            workspaceId: req.workspaceId,
+            guestName,
+            checkIn,
+            checkOut,
+            status,
+            guests: guestCount,
+            source: 'track',
+            pmsReservationId: externalId,
+          });
+          totalImported++;
+        }
+      }
+    }
+
+    res.json({
+      data: { imported: totalImported, updated: totalUpdated, total: totalCount },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/import/track/reservations]');
+    res.status(500).json({ data: null, error: 'Failed to import reservations from Track PMS', meta: {} });
+  }
+});
+
+// ── Property Reservations ──────────────────────────────────────────────────
+
+// GET /:workspaceId/properties/:propertyId/reservations
+router.get('/:workspaceId/properties/:propertyId/reservations', requireWorkspace, async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  const { from, to } = req.query as { from?: string; to?: string };
+
+  try {
+    // Verify property belongs to workspace
+    const [prop] = await db
+      .select({ id: properties.id })
+      .from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!prop) {
+      res.status(404).json({ data: null, error: 'Property not found', meta: {} });
+      return;
+    }
+
+    // Default date range: today to 90 days from now
+    const now = new Date();
+    const defaultFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const defaultTo = new Date(defaultFrom.getTime() + 90 * 24 * 60 * 60 * 1000);
+
+    const fromDate = from ? new Date(from) : defaultFrom;
+    const toDate = to ? new Date(to) : defaultTo;
+
+    const rows = await db
+      .select()
+      .from(reservations)
+      .where(and(
+        eq(reservations.propertyId, propertyId),
+        gte(reservations.checkIn, fromDate),
+        lte(reservations.checkIn, toDate),
+      ))
+      .orderBy(reservations.checkIn);
+
+    res.json({ data: { reservations: rows }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/:propertyId/reservations]');
+    res.status(500).json({ data: null, error: 'Failed to fetch reservations', meta: {} });
   }
 });
 

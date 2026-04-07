@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { businessService, jobService, slackService, templateService, estimateService, trackingService, accountService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate, type AccountProfile } from '@/services/api';
+import { businessService, jobService, slackService, templateService, estimateService, trackingService, accountService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate, type AccountProfile, type Reservation } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -697,6 +697,195 @@ const PLAN_TIERS_ORDERED = [
   { plan: 'enterprise', limit: 9999, label: 'Enterprise', price: 'Custom' },
 ];
 
+/* ── Mini Calendar for Reservations ─────────────────────────────────── */
+
+function MiniCalendar({ reservations }: { reservations: Reservation[] }) {
+  const today = new Date();
+  const months = [
+    { year: today.getFullYear(), month: today.getMonth() },
+    { year: today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear(), month: (today.getMonth() + 1) % 12 },
+  ];
+
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  // Color palette for reservation bars
+  const BAR_COLORS = ['#E8632B', '#1B9E77', '#2563EB', '#9333EA', '#DC2626', '#D97706'];
+
+  function dateKey(y: number, m: number, d: number): string {
+    return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  function parseDate(s: string): Date {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  // Build lookup: dateKey -> list of reservation indices
+  const dateReservations: Record<string, Array<{ resIdx: number; isCheckIn: boolean; isCheckOut: boolean }>> = {};
+  reservations.forEach((r, idx) => {
+    const ci = parseDate(r.checkIn);
+    const co = parseDate(r.checkOut);
+    const cursor = new Date(ci);
+    while (cursor <= co) {
+      const key = dateKey(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+      if (!dateReservations[key]) dateReservations[key] = [];
+      dateReservations[key].push({
+        resIdx: idx,
+        isCheckIn: cursor.getTime() === ci.getTime(),
+        isCheckOut: cursor.getTime() === co.getTime(),
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  });
+
+  const [hoveredRes, setHoveredRes] = useState<number | null>(null);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        {months.map(({ year, month }) => {
+          const firstDay = new Date(year, month, 1).getDay();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          const cells: Array<{ day: number | null }> = [];
+          for (let i = 0; i < firstDay; i++) cells.push({ day: null });
+          for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d });
+
+          return (
+            <div key={`${year}-${month}`} style={{ flex: '1 1 220px', minWidth: 220 }}>
+              <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600, color: D, marginBottom: 6, textAlign: 'center' }}>
+                {MONTH_NAMES[month]} {year}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
+                {DAY_LABELS.map(dl => (
+                  <div key={dl} style={{ fontSize: 9, color: '#9B9490', textAlign: 'center', padding: '2px 0', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>{dl}</div>
+                ))}
+                {cells.map((cell, i) => {
+                  if (cell.day === null) return <div key={`e-${i}`} />;
+                  const key = dateKey(year, month, cell.day);
+                  const isToday = year === today.getFullYear() && month === today.getMonth() && cell.day === today.getDate();
+                  const dayRes = dateReservations[key] || [];
+                  const hasCheckIn = dayRes.some(r => r.isCheckIn);
+                  const hasCheckOut = dayRes.some(r => r.isCheckOut);
+                  const hasRes = dayRes.length > 0;
+
+                  return (
+                    <div key={key} style={{
+                      position: 'relative', textAlign: 'center', padding: '3px 0', fontSize: 11,
+                      fontFamily: 'DM Sans, sans-serif', fontWeight: isToday ? 700 : 400,
+                      color: isToday ? '#fff' : hasRes ? D : '#9B9490',
+                      background: isToday ? D : 'transparent',
+                      borderRadius: isToday ? 4 : 0, cursor: hasRes ? 'pointer' : 'default',
+                    }}
+                      onMouseEnter={() => { if (dayRes.length > 0) setHoveredRes(dayRes[0].resIdx); }}
+                      onMouseLeave={() => setHoveredRes(null)}
+                    >
+                      {cell.day}
+                      {/* Reservation bar indicators */}
+                      {dayRes.length > 0 && (
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          {dayRes.slice(0, 2).map((dr, bi) => (
+                            <div key={bi} style={{
+                              height: 3,
+                              background: BAR_COLORS[dr.resIdx % BAR_COLORS.length],
+                              borderRadius: `${dr.isCheckIn ? 2 : 0}px ${dr.isCheckOut ? 2 : 0}px ${dr.isCheckOut ? 2 : 0}px ${dr.isCheckIn ? 2 : 0}px`,
+                              opacity: hoveredRes === dr.resIdx ? 1 : 0.7,
+                            }} />
+                          ))}
+                        </div>
+                      )}
+                      {/* Check-in / check-out dot indicators */}
+                      {(hasCheckIn || hasCheckOut) && !isToday && (
+                        <div style={{
+                          position: 'absolute', top: 0, right: 1, width: 5, height: 5, borderRadius: '50%',
+                          background: hasCheckIn ? G : O,
+                        }} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 10, color: '#9B9490', fontFamily: 'DM Sans, sans-serif', alignItems: 'center' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: G, display: 'inline-block' }} /> Check-in
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: O, display: 'inline-block' }} /> Check-out
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ width: 12, height: 3, borderRadius: 2, background: '#E8632B', display: 'inline-block', opacity: 0.7 }} /> Reserved
+        </span>
+      </div>
+
+      {/* Hovered reservation detail or reservation list */}
+      {hoveredRes !== null && reservations[hoveredRes] && (
+        <div style={{
+          marginTop: 8, padding: '8px 12px', background: W, borderRadius: 8,
+          fontSize: 12, fontFamily: 'DM Sans, sans-serif', color: D, transition: 'all 0.15s',
+          border: `1px solid ${BAR_COLORS[hoveredRes % BAR_COLORS.length]}20`,
+        }}>
+          <span style={{ fontWeight: 600 }}>{reservations[hoveredRes].guestName || 'Guest'}</span>
+          <span style={{ color: '#9B9490', marginLeft: 8 }}>
+            {new Date(reservations[hoveredRes].checkIn + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {' - '}
+            {new Date(reservations[hoveredRes].checkOut + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </span>
+          {reservations[hoveredRes].guests && (
+            <span style={{ color: '#9B9490', marginLeft: 8 }}>{reservations[hoveredRes].guests} guest{reservations[hoveredRes].guests! > 1 ? 's' : ''}</span>
+          )}
+          {reservations[hoveredRes].source && (
+            <span style={{ color: '#9B9490', marginLeft: 8 }}>via {reservations[hoveredRes].source}</span>
+          )}
+        </div>
+      )}
+
+      {/* Upcoming reservations list below calendar */}
+      {reservations.length > 0 && hoveredRes === null && (
+        <div style={{ marginTop: 8 }}>
+          {reservations.slice(0, 5).map((r, i) => (
+            <div key={r.id} style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0',
+              borderBottom: i < Math.min(reservations.length, 5) - 1 ? '1px solid #F0EBE6' : 'none',
+              fontSize: 12, fontFamily: 'DM Sans, sans-serif', color: D,
+            }}
+              onMouseEnter={() => setHoveredRes(i)}
+              onMouseLeave={() => setHoveredRes(null)}
+            >
+              <span style={{ width: 4, height: 16, borderRadius: 2, background: BAR_COLORS[i % BAR_COLORS.length], flexShrink: 0 }} />
+              <span style={{ fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.guestName || 'Guest'}
+              </span>
+              <span style={{ color: '#9B9490', flexShrink: 0, fontSize: 11 }}>
+                {new Date(r.checkIn + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {' - '}
+                {new Date(r.checkOut + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+              <span style={{
+                fontSize: 10, padding: '2px 6px', borderRadius: 10, fontWeight: 500,
+                background: r.status === 'confirmed' ? '#F0FDF4' : r.status === 'cancelled' ? '#FEF2F2' : '#F5F5F5',
+                color: r.status === 'confirmed' ? '#16A34A' : r.status === 'cancelled' ? '#DC2626' : '#9B9490',
+              }}>
+                {r.status}
+              </span>
+            </div>
+          ))}
+          {reservations.length > 5 && (
+            <div style={{ fontSize: 11, color: '#9B9490', textAlign: 'center', paddingTop: 6 }}>
+              +{reservations.length - 5} more
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role: string; plan: string }) {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
@@ -711,6 +900,34 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
   const [trackResult, setTrackResult] = useState<{ imported: number; updated: number; skipped: number; total: number } | null>(null);
   const [trackError, setTrackError] = useState('');
   const [trackUpdateExisting, setTrackUpdateExisting] = useState(false);
+  const [expandedPropertyId, setExpandedPropertyId] = useState<string | null>(null);
+  const [reservations, setReservations] = useState<Record<string, Reservation[]>>({});
+  const [reservationsLoading, setReservationsLoading] = useState<Record<string, boolean>>({});
+  const [syncingReservations, setSyncingReservations] = useState(false);
+  const [syncReservationResult, setSyncReservationResult] = useState<{ imported: number; updated: number; total: number } | null>(null);
+  const [syncReservationError, setSyncReservationError] = useState('');
+
+  function togglePropertyExpand(propertyId: string) {
+    if (expandedPropertyId === propertyId) {
+      setExpandedPropertyId(null);
+      return;
+    }
+    setExpandedPropertyId(propertyId);
+    if (!reservations[propertyId] && !reservationsLoading[propertyId]) {
+      setReservationsLoading(prev => ({ ...prev, [propertyId]: true }));
+      const now = new Date();
+      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const nextNext = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+      const to = `${nextNext.getFullYear()}-${String(nextNext.getMonth() + 1).padStart(2, '0')}-${String(nextNext.getDate()).padStart(2, '0')}`;
+      businessService.getPropertyReservations(workspaceId, propertyId, from, to)
+        .then(res => {
+          if (res.data) setReservations(prev => ({ ...prev, [propertyId]: res.data!.reservations }));
+          else setReservations(prev => ({ ...prev, [propertyId]: [] }));
+        })
+        .catch(() => setReservations(prev => ({ ...prev, [propertyId]: [] })))
+        .finally(() => setReservationsLoading(prev => ({ ...prev, [propertyId]: false })));
+    }
+  }
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
@@ -761,10 +978,18 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
           ) : (
             <div style={{ display: 'flex', gap: 8 }}>
               {['professional', 'business', 'enterprise'].includes(plan) ? (
-                <button onClick={() => setShowTrackImport(true)}
-                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                  Import from Track
-                </button>
+                <>
+                  <button onClick={() => setShowTrackImport(true)}
+                    style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                    Import from Track
+                  </button>
+                  {properties.length > 0 && (
+                    <button onClick={() => setShowTrackImport(true)}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${G}40`, background: `${G}08`, color: G, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                      Sync Reservations
+                    </button>
+                  )}
+                </>
               ) : (
                 <button disabled title="Upgrade to Professional to import from PMS"
                   style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: '#ccc', cursor: 'default', fontSize: 13, fontWeight: 600 }}>
@@ -791,11 +1016,17 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
         </div>
       ) : (
         <div className="bp-prop-grid" style={{ display: 'grid', gap: 12 }}>
-          {properties.map(p => (
+          {properties.map(p => {
+            const isExpanded = expandedPropertyId === p.id;
+            const propReservations = reservations[p.id] ?? [];
+            const propLoading = reservationsLoading[p.id] ?? false;
+            return (
             <div key={p.id} className="bp-prop-card" style={{
-              background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', overflow: 'hidden',
-              opacity: p.active ? 1 : 0.5, display: 'flex',
-            }}>
+              background: '#fff', borderRadius: 12, border: isExpanded ? `2px solid ${O}` : '1px solid #E0DAD4', overflow: 'hidden',
+              opacity: p.active ? 1 : 0.5, cursor: 'pointer', transition: 'all 0.2s',
+              boxShadow: isExpanded ? `0 4px 20px ${O}10` : 'none',
+            }} onClick={() => togglePropertyExpand(p.id)}>
+              <div style={{ display: 'flex' }}>
               {p.photoUrls && p.photoUrls.length > 0 && (
                 <div className="bp-prop-img" style={{ width: 120, minHeight: 100, flexShrink: 0 }}>
                   <img src={p.photoUrls[0]} alt={p.name}
@@ -814,7 +1045,7 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
                 </div>
                 <div className="bp-prop-actions" style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
                   {canEdit && (
-                    <button onClick={() => setEditingProperty(p)} style={{
+                    <button onClick={(e) => { e.stopPropagation(); setEditingProperty(p); }} style={{
                       padding: '4px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff',
                       fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 500,
                     }}>Edit</button>
@@ -847,8 +1078,24 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
 
               {p.notes && <div className="bp-prop-notes" style={{ fontSize: 13, color: '#6B6560', marginTop: 8, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.notes}</div>}
               </div>
+              </div>
+
+              {/* Expanded: Reservation Calendar */}
+              {isExpanded && (
+                <div style={{ borderTop: '1px solid #E0DAD4', padding: '16px 20px' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ fontFamily: 'Fraunces, serif', fontSize: 14, fontWeight: 600, color: D, marginBottom: 12 }}>Reservations</div>
+                  {propLoading ? (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#9B9490', fontSize: 13 }}>Loading reservations...</div>
+                  ) : propReservations.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#9B9490', fontSize: 13, background: '#FAFAF8', borderRadius: 8 }}>No upcoming reservations</div>
+                  ) : (
+                    <MiniCalendar reservations={propReservations} />
+                  )}
+                </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -960,8 +1207,20 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
                   </div>
                 )}
 
+                {syncReservationResult && (
+                  <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#16A34A', marginBottom: 12 }}>
+                    Reservations synced: {syncReservationResult.imported} imported, {syncReservationResult.updated} updated ({syncReservationResult.total} total)
+                  </div>
+                )}
+
+                {syncReservationError && (
+                  <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#B91C1C', marginBottom: 12 }}>
+                    {syncReservationError}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={() => { setShowTrackImport(false); setTrackError(''); }}
+                  <button onClick={() => { setShowTrackImport(false); setTrackError(''); setSyncReservationResult(null); setSyncReservationError(''); }}
                     style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: '1px solid #E0DAD4', background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                     Cancel
                   </button>
@@ -1008,6 +1267,38 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
                     {trackImporting ? 'Importing...' : 'Import Properties'}
                   </button>
                 </div>
+
+                {/* Sync Reservations button - only shown when properties already exist */}
+                {properties.length > 0 && (
+                  <button
+                    disabled={syncingReservations || !trackDomain.trim() || !trackKey.trim() || !trackSecret.trim()}
+                    onClick={async () => {
+                      setSyncingReservations(true); setSyncReservationError(''); setSyncReservationResult(null);
+                      try {
+                        const res = await businessService.importTrackReservations(workspaceId, {
+                          track_domain: trackDomain.trim(),
+                          api_key: trackKey.trim(),
+                          api_secret: trackSecret.trim(),
+                        });
+                        if (res.error) { setSyncReservationError(res.error); }
+                        else if (res.data) {
+                          setSyncReservationResult(res.data);
+                          // Clear cached reservations so they refresh on next expand
+                          setReservations({});
+                        }
+                      } catch (err) {
+                        setSyncReservationError(err instanceof Error ? err.message : 'Reservation sync failed');
+                      }
+                      setSyncingReservations(false);
+                    }}
+                    style={{
+                      width: '100%', marginTop: 10, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      border: `1px solid ${G}40`, background: `${G}08`, color: G,
+                      opacity: (syncingReservations || !trackDomain.trim() || !trackKey.trim() || !trackSecret.trim()) ? 0.5 : 1,
+                    }}>
+                    {syncingReservations ? 'Syncing Reservations...' : 'Sync Reservations'}
+                  </button>
+                )}
 
                 <div style={{ marginTop: 16, padding: '12px 14px', background: '#F9F5F2', borderRadius: 8, fontSize: 12, color: '#9B9490', lineHeight: 1.5 }}>
                   <strong style={{ color: '#6B6560' }}>Where to find your API credentials:</strong><br />

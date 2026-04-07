@@ -772,6 +772,17 @@ export interface Property {
   updatedAt: string;
 }
 
+export interface Reservation {
+  id: string;
+  propertyId: string;
+  guestName: string | null;
+  checkIn: string;
+  checkOut: string;
+  status: string;
+  guests: number | null;
+  source: string | null;
+}
+
 export interface WorkspaceMember {
   id: string;
   role: string;
@@ -977,6 +988,22 @@ export const businessService = {
     fetchAPI<{ imported: number; updated: number; skipped: number; total: number }>(`/api/v1/business/${workspaceId}/import/track`, {
       method: 'POST', body: JSON.stringify(data),
     }),
+
+  // Track PMS Reservation Import
+  importTrackReservations: (workspaceId: string, data: { track_domain: string; api_key: string; api_secret: string }) =>
+    fetchAPI<{ imported: number; updated: number; total: number }>(`/api/v1/business/${workspaceId}/import/track/reservations`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Property Reservations
+  getPropertyReservations: (workspaceId: string, propertyId: string, from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const qs = params.toString();
+    return fetchAPI<{ reservations: Reservation[] }>(`/api/v1/business/${workspaceId}/properties/${propertyId}/reservations${qs ? `?${qs}` : ''}`);
+  },
 
   // Members
   listMembers: (workspaceId: string) =>
