@@ -2064,10 +2064,16 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
 
       const fetchContact = async (contactId: string): Promise<void> => {
         try {
-          const contactRes = await fetch(`${base}/pms/contacts/${contactId}`, {
+          const contactUrl = `${base}/pms/contacts/${contactId}`;
+          const contactRes = await fetch(contactUrl, {
             headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
           });
-          if (!contactRes.ok) return;
+          if (!contactRes.ok) {
+            if (!loggedSample) {
+              logger.warn({ status: contactRes.status, contactId, url: contactUrl }, '[Track reservations] contact fetch failed');
+            }
+            return;
+          }
           const ct = contactRes.headers.get('content-type') || '';
           if (!ct.includes('json')) return;
           const contactData = await contactRes.json() as Record<string, unknown>;
