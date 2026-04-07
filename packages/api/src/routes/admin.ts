@@ -3,6 +3,8 @@ import { count, desc, eq, sql, or, ilike, and } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList, workspaces, workspaceMembers, properties } from '../db/schema';
+import { pricingConfig } from '../db/schema/pricing-config';
+import { getPricingConfig, invalidatePricingCache, PricingConfig } from '../services/pricing';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -905,6 +907,49 @@ router.get('/google-place/:placeId', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /admin/google-place]');
     res.json({ data: { phone: null, website: null }, error: null, meta: {} });
+  }
+});
+
+// GET /api/v1/admin/pricing
+router.get('/pricing', async (_req: Request, res: Response) => {
+  try {
+    const config = await getPricingConfig();
+    res.json({ data: config, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/pricing]');
+    res.status(500).json({ data: null, error: 'Failed to fetch pricing', meta: {} });
+  }
+});
+
+// PATCH /api/v1/admin/pricing
+router.patch('/pricing', async (req: Request, res: Response) => {
+  try {
+    const updates = req.body as Partial<PricingConfig>;
+    const current = await getPricingConfig();
+    const merged: PricingConfig = {
+      homeowner: updates.homeowner
+        ? { ...current.homeowner, ...updates.homeowner }
+        : current.homeowner,
+      business: updates.business
+        ? { ...current.business, ...updates.business }
+        : current.business,
+    };
+
+    await db
+      .insert(pricingConfig)
+      .values({ id: 'singleton', config: merged as unknown as Record<string, unknown>, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: pricingConfig.id,
+        set: { config: merged as unknown as Record<string, unknown>, updatedAt: new Date() },
+      });
+
+    invalidatePricingCache();
+
+    logger.info({ action: 'admin:update_pricing' }, 'Admin updated pricing config');
+    res.json({ data: merged, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /admin/pricing]');
+    res.status(500).json({ data: null, error: 'Failed to update pricing', meta: {} });
   }
 });
 

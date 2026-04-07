@@ -1,30 +1,44 @@
+import { HomeownerTierConfig, centsToDisplay } from '@/hooks/usePricing';
+
 type Tier = 'standard' | 'priority' | 'emergency';
 
 interface TierSelectorProps {
   selected: Tier;
   onSelect: (tier: Tier) => void;
+  pricing?: Record<string, HomeownerTierConfig>;
 }
 
 interface TierOption {
   id: Tier;
   name: string;
-  price: string;
   time: string;
   providers: string;
   popular?: boolean;
 }
 
 const TIERS: TierOption[] = [
-  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', providers: '5 providers' },
-  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', providers: '10 providers', popular: true },
-  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', providers: '15 providers' },
+  { id: 'standard', name: 'Standard', time: '~2 hours', providers: '5 providers' },
+  { id: 'priority', name: 'Priority', time: '~30 min', providers: '10 providers', popular: true },
+  { id: 'emergency', name: 'Emergency', time: '~15 min', providers: '15 providers' },
 ];
 
-export default function TierSelector({ selected, onSelect }: TierSelectorProps) {
+const FALLBACK_PRICES: Record<string, { priceCents: number; promoPriceCents: null; promoLabel: null }> = {
+  standard:  { priceCents: 999,  promoPriceCents: null, promoLabel: null },
+  priority:  { priceCents: 1999, promoPriceCents: null, promoLabel: null },
+  emergency: { priceCents: 2999, promoPriceCents: null, promoLabel: null },
+};
+
+export default function TierSelector({ selected, onSelect, pricing }: TierSelectorProps) {
+  const prices = pricing ?? FALLBACK_PRICES;
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       {TIERS.map((tier) => {
         const isSelected = selected === tier.id;
+        const tierPricing = prices[tier.id];
+        const regularPrice = tierPricing ? centsToDisplay(tierPricing.priceCents) : '';
+        const promoPrice = tierPricing?.promoPriceCents != null ? centsToDisplay(tierPricing.promoPriceCents) : null;
+
         return (
           <button
             key={tier.id}
@@ -41,7 +55,15 @@ export default function TierSelector({ selected, onSelect }: TierSelectorProps) 
               </span>
             )}
             <p className="text-sm font-semibold text-dark mb-1">{tier.name}</p>
-            <p className="text-2xl font-bold text-dark">{tier.price}</p>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl font-bold text-dark">{promoPrice ?? regularPrice}</p>
+              {promoPrice && (
+                <p className="text-sm text-dark/40 line-through">{regularPrice}</p>
+              )}
+            </div>
+            {tierPricing?.promoLabel && (
+              <p className="text-xs font-semibold text-orange-500 mt-0.5">{tierPricing.promoLabel}</p>
+            )}
             <div className="mt-3 space-y-1">
               <p className="text-xs text-dark/60 flex items-center gap-1.5">
                 <ClockIcon />

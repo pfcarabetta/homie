@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { authService } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import SEO from '@/components/SEO';
+import { usePricing, centsToDisplay } from '@/hooks/usePricing';
 
 const ORANGE = '#E8632B';
 const GREEN = '#1B9E77';
@@ -278,6 +279,7 @@ function BackgroundMosaic() {
 export default function HomePage() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { pricing } = usePricing();
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: 'white', overflowX: 'hidden' }}>
@@ -601,14 +603,18 @@ export default function HomePage() {
         </div>
 
         <div className="hp-pricing-grid">
-          {[
-            { tier: 'Standard', price: '$9.99', time: '~2 hours', providers: '5 pros contacted', channels: 'SMS + Web', popular: false,
+          {([
+            { tierId: 'standard', tier: 'Standard', time: '~2 hours', popular: false,
               features: ['Results in ~2 hours', '5 pros contacted via SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
-            { tier: 'Priority', price: '$19.99', time: '~30 minutes', providers: '10 pros contacted', channels: 'Voice + SMS + Web', popular: true,
+            { tierId: 'priority', tier: 'Priority', time: '~30 minutes', popular: true,
               features: ['Results in ~30 minutes', '10 pros contacted simultaneously', 'AI voice calls + SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
-            { tier: 'Emergency', price: '$29.99', time: '~15 minutes', providers: '15 pros contacted', channels: 'All channels (blitz)', popular: false,
+            { tierId: 'emergency', tier: 'Emergency', time: '~15 minutes', popular: false,
               features: ['Results in ~15 minutes', '15 pros blitzed across all channels', 'Contacts closed businesses too', 'Human Outreach Manager gathers additional quotes', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
-          ].map((t, i) => (
+          ] as const).map((t, i) => {
+            const tierPricing = pricing.homeowner[t.tierId];
+            const regularPrice = tierPricing ? centsToDisplay(tierPricing.priceCents) : '';
+            const promoPrice = tierPricing?.promoPriceCents != null ? centsToDisplay(tierPricing.promoPriceCents) : null;
+            return (
             <div key={i} style={{
               background: t.popular ? DARK : 'white', borderRadius: 20, padding: '32px 24px',
               border: t.popular ? 'none' : '1px solid rgba(0,0,0,0.08)', position: 'relative',
@@ -624,7 +630,11 @@ export default function HomePage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 600, color: t.popular ? 'rgba(255,255,255,0.6)' : '#9B9490' }}>{t.tier}</div>
-                  <div className="hp-pricing-price" style={{ color: t.popular ? 'white' : DARK, margin: 0 }}>{t.price}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <div className="hp-pricing-price" style={{ color: t.popular ? 'white' : DARK, margin: 0 }}>{promoPrice ?? regularPrice}</div>
+                    {promoPrice && <div style={{ fontSize: 16, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490', textDecoration: 'line-through' }}>{regularPrice}</div>}
+                  </div>
+                  {tierPricing?.promoLabel && <div style={{ fontSize: 11, fontWeight: 600, color: ORANGE, marginTop: 2 }}>{tierPricing.promoLabel}</div>}
                   <div style={{ fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490' }}>per search</div>
                 </div>
                 <div style={{
@@ -653,7 +663,8 @@ export default function HomePage() {
                 {t.popular ? 'Get priority quotes' : `Choose ${t.tier.toLowerCase()}`}
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
         <p style={{ textAlign: 'center', fontSize: 12, color: '#9B9490', marginTop: 20, maxWidth: 480, margin: '20px auto 0', lineHeight: 1.5 }}>
           Quote response times may be longer outside of normal business hours, on weekends, and during holidays.

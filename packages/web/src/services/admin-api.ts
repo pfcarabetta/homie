@@ -1,3 +1,5 @@
+import type { PricingConfig } from '@/hooks/usePricing';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const ADMIN_KEY_STORAGE = 'homie_admin_key';
 
@@ -256,6 +258,17 @@ export const adminService = {
     return fetchAdmin<Record<string, unknown>>(`/api/v1/admin/business-accounts/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    });
+  },
+
+  async getPricing() {
+    return fetchAdmin<PricingConfig>('/api/v1/admin/pricing');
+  },
+
+  async updatePricing(config: PricingConfig) {
+    return fetchAdmin<PricingConfig>('/api/v1/admin/pricing', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
     });
   },
 
