@@ -45,10 +45,11 @@ router.get('/homeowners', async (req: Request, res: Response) => {
   const q = (req.query.q as string || '').trim();
 
   try {
+    const escaped = q.replace(/[%_\\]/g, '\\$&');
     const searchFilter = q ? or(
-      ilike(homeowners.email, `%${q}%`),
-      sql`${homeowners.phone} ILIKE ${'%' + q + '%'}`,
-      ilike(homeowners.zipCode, `%${q}%`),
+      ilike(homeowners.email, `%${escaped}%`),
+      sql`${homeowners.phone} ILIKE ${'%' + escaped + '%'}`,
+      ilike(homeowners.zipCode, `%${escaped}%`),
     ) : undefined;
 
     const [[{ value: total }], rows] = await Promise.all([
@@ -133,11 +134,12 @@ router.get('/jobs', async (req: Request, res: Response) => {
   try {
     const conditions = [];
     if (statusFilter) conditions.push(eq(jobs.status, statusFilter));
+    const escaped = q.replace(/[%_\\]/g, '\\$&');
     if (q) conditions.push(or(
-      sql`${jobs.id}::text ILIKE ${'%' + q + '%'}`,
-      sql`${homeowners.email} ILIKE ${'%' + q + '%'}`,
-      ilike(jobs.zipCode, `%${q}%`),
-      sql`${jobs.diagnosis}->>'category' ILIKE ${'%' + q + '%'}`,
+      sql`${jobs.id}::text ILIKE ${'%' + escaped + '%'}`,
+      sql`${homeowners.email} ILIKE ${'%' + escaped + '%'}`,
+      ilike(jobs.zipCode, `%${escaped}%`),
+      sql`${jobs.diagnosis}->>'category' ILIKE ${'%' + escaped + '%'}`,
     ));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -272,11 +274,12 @@ router.get('/providers', async (req: Request, res: Response) => {
   const q = (req.query.q as string || '').trim();
 
   try {
+    const escaped = q.replace(/[%_\\]/g, '\\$&');
     const searchFilter = q ? or(
-      ilike(providers.name, `%${q}%`),
-      sql`${providers.phone} ILIKE ${'%' + q + '%'}`,
-      sql`${providers.email} ILIKE ${'%' + q + '%'}`,
-      sql`array_to_string(${providers.categories}, ',') ILIKE ${'%' + q + '%'}`,
+      ilike(providers.name, `%${escaped}%`),
+      sql`${providers.phone} ILIKE ${'%' + escaped + '%'}`,
+      sql`${providers.email} ILIKE ${'%' + escaped + '%'}`,
+      sql`array_to_string(${providers.categories}, ',') ILIKE ${'%' + escaped + '%'}`,
     ) : undefined;
 
     const [[{ value: total }], rows] = await Promise.all([
@@ -413,11 +416,12 @@ router.get('/bookings', async (req: Request, res: Response) => {
   const q = (req.query.q as string || '').trim();
 
   try {
+    const escaped = q.replace(/[%_\\]/g, '\\$&');
     const searchFilter = q ? or(
-      sql`${bookings.id}::text ILIKE ${'%' + q + '%'}`,
-      sql`${bookings.jobId}::text ILIKE ${'%' + q + '%'}`,
-      ilike(providers.name, `%${q}%`),
-      sql`${homeowners.email} ILIKE ${'%' + q + '%'}`,
+      sql`${bookings.id}::text ILIKE ${'%' + escaped + '%'}`,
+      sql`${bookings.jobId}::text ILIKE ${'%' + escaped + '%'}`,
+      ilike(providers.name, `%${escaped}%`),
+      sql`${homeowners.email} ILIKE ${'%' + escaped + '%'}`,
     ) : undefined;
 
     const [[{ value: total }], rows] = await Promise.all([
