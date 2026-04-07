@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: '/admin/providers', label: 'Providers' },
   { to: '/admin/bookings', label: 'Bookings' },
   { to: '/admin/business', label: 'Business' },
+  { to: '/admin/pricing', label: 'Pricing' },
 ];
 
 export default function AdminLayout() {

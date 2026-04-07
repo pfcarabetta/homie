@@ -30,6 +30,7 @@ import AdminJobs from '@/pages/admin/AdminJobs';
 import AdminProviders from '@/pages/admin/AdminProviders';
 import AdminBookings from '@/pages/admin/AdminBookings';
 import AdminBusiness from '@/pages/admin/AdminBusiness';
+import AdminPricing from '@/pages/admin/AdminPricing';
 import TrackingStatus from '@/pages/TrackingStatus';
 import LoadingDemo from '@/pages/LoadingDemo';
 import OutreachDemo from '@/pages/OutreachDemo';
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="/admin/providers" element={<AdminProviders />} />
             <Route path="/admin/bookings" element={<AdminBookings />} />
             <Route path="/admin/business" element={<AdminBusiness />} />
+            <Route path="/admin/pricing" element={<AdminPricing />} />
           </Route>
         </Routes>
       </BrowserRouter>

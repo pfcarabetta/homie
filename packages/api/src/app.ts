@@ -14,6 +14,7 @@ import { stripeWebhookHandler } from './routes/stripe-webhook';
 import providerAuthRouter from './routes/provider-auth';
 import providerPortalRouter from './routes/provider-portal';
 import businessRouter from './routes/business';
+import configRouter from './routes/config';
 import demoEstimateRouter from './routes/demo-estimate';
 import businessChatRouter from './routes/business-chat';
 import { trackingPublicRouter, trackingAuthRouter } from './routes/tracking';
@@ -61,6 +62,7 @@ app.use((_req, res, next) => {
   next();
 });
 
+app.use('/api/v1/config', configRouter);
 app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/auth', authLimiter, authRouter);
 app.use('/api/v1/diagnostic', diagnosticLimiter, diagnosticRouter);

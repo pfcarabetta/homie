@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
+import { getPricingConfig } from './pricing';
 
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe {
@@ -12,12 +13,6 @@ function getStripe(): Stripe {
   }
   return _stripe;
 }
-
-const TIER_PRICES: Record<string, number> = {
-  standard: 999,
-  priority: 1999,
-  emergency: 2999,
-};
 
 const TIER_NAMES: Record<string, string> = {
   standard: 'Standard Quote Package',
@@ -53,7 +48,10 @@ export async function createCheckoutSession(params: {
   successUrl: string;
   cancelUrl: string;
 }): Promise<Stripe.Checkout.Session> {
-  const amount = TIER_PRICES[params.tier];
+  const pricing = await getPricingConfig();
+  const tierConfig = pricing.homeowner[params.tier];
+  // Charge promo price if active, otherwise regular price
+  const amount = tierConfig?.promoPriceCents ?? tierConfig?.priceCents;
   if (!amount) throw new Error(`Invalid tier: ${params.tier}`);
 
   return getStripe().checkout.sessions.create({

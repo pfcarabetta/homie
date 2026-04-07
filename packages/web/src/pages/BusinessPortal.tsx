@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { usePricing, PricingConfig } from '@/hooks/usePricing';
 import { businessService, jobService, slackService, templateService, estimateService, trackingService, accountService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate, type AccountProfile, type Reservation } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
@@ -686,16 +687,19 @@ function EditPropertyModal({ workspaceId, property, onClose, onUpdated, onDelete
 
 /* ── Properties Tab ─────────────────────────────────────────────────────── */
 
-const PLAN_PROPERTY_LIMITS: Record<string, number> = {
-  trial: 5, starter: 10, professional: 50, business: 150, enterprise: 9999,
-};
+function getPlanPropertyLimit(plan: string, pricing: PricingConfig): number {
+  return pricing.business[plan]?.maxProperties ?? 10;
+}
 
-const PLAN_TIERS_ORDERED = [
-  { plan: 'starter', limit: 10, label: 'Starter', price: '$0/mo + $10/property' },
-  { plan: 'professional', limit: 50, label: 'Professional', price: '$99/mo + $10/property' },
-  { plan: 'business', limit: 150, label: 'Business', price: '$249/mo + $10/property' },
-  { plan: 'enterprise', limit: 9999, label: 'Enterprise', price: 'Custom' },
-];
+function getPlanTiersOrdered(pricing: PricingConfig) {
+  const bp = pricing.business;
+  return [
+    { plan: 'starter',      limit: bp.starter?.maxProperties      ?? 10,   label: 'Starter',      price: bp.starter?.base      === 0 ? `$0/mo + $${bp.starter?.perProperty ?? 10}/property`      : `$${bp.starter?.base}/mo + $${bp.starter?.perProperty}/property` },
+    { plan: 'professional', limit: bp.professional?.maxProperties  ?? 50,   label: 'Professional', price: `$${bp.professional?.base ?? 99}/mo + $${bp.professional?.perProperty ?? 10}/property` },
+    { plan: 'business',     limit: bp.business?.maxProperties      ?? 150,  label: 'Business',     price: `$${bp.business?.base ?? 249}/mo + $${bp.business?.perProperty ?? 10}/property` },
+    { plan: 'enterprise',   limit: bp.enterprise?.maxProperties    ?? 9999, label: 'Enterprise',   price: 'Custom' },
+  ];
+}
 
 /* ── Mini Calendar for Reservations ─────────────────────────────────── */
 
@@ -902,6 +906,8 @@ function MiniCalendar({ reservations }: { reservations: Reservation[] }) {
 }
 
 function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role: string; plan: string }) {
+  const { pricing } = usePricing();
+  const PLAN_TIERS_ORDERED = getPlanTiersOrdered(pricing);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -952,7 +958,7 @@ function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role:
   }, [workspaceId]);
 
   const canEdit = role === 'admin' || role === 'coordinator';
-  const propertyLimit = PLAN_PROPERTY_LIMITS[plan] ?? 10;
+  const propertyLimit = getPlanPropertyLimit(plan, pricing);
   const activeCount = properties.filter(p => p.active).length;
   const atLimit = activeCount >= propertyLimit;
 
@@ -1640,13 +1646,18 @@ function DashboardTab({ workspace, onNavigate }: { workspace: WorkspaceDetail; o
 
 /* ── Billing Tab ───────────────────────────────────────────────────────── */
 
-const BILLING_PLANS = [
-  { plan: 'starter', label: 'Starter', price: 0, perProperty: 10, maxProperties: 10, maxMembers: 1, features: ['Up to 10 properties', '1 user', 'Unlimited searches', 'Preferred providers (up to 5)', 'Basic cost tracking'] },
-  { plan: 'professional', label: 'Professional', price: 99, perProperty: 10, maxProperties: 50, maxMembers: 5, features: ['Up to 50 properties', '5 team members', 'PMS import with sync', 'Full cost reporting', 'Provider scorecards', 'Slack integration', 'Estimate summary PDF'] },
-  { plan: 'business', label: 'Business', price: 249, perProperty: 10, maxProperties: 150, maxMembers: 15, features: ['Up to 150 properties', '15 team members with roles', 'Multi-PMS import', 'Priority outreach', 'Advanced analytics', 'API access'] },
-];
+function getBillingPlans(pricing: PricingConfig) {
+  const bp = pricing.business;
+  return [
+    { plan: 'starter',      label: 'Starter',       price: bp.starter?.base      ?? 0,   promoPrice: bp.starter?.promoBase      ?? null, promoLabel: bp.starter?.promoLabel      ?? null, perProperty: bp.starter?.perProperty      ?? 10, maxProperties: bp.starter?.maxProperties      ?? 10,  maxMembers: bp.starter?.maxTeamMembers      ?? 1,  features: [`Up to ${bp.starter?.maxProperties ?? 10} properties`, '1 user', 'Unlimited searches', 'Preferred providers (up to 5)', 'Basic cost tracking'] },
+    { plan: 'professional', label: 'Professional',   price: bp.professional?.base ?? 99,  promoPrice: bp.professional?.promoBase ?? null, promoLabel: bp.professional?.promoLabel ?? null, perProperty: bp.professional?.perProperty ?? 10, maxProperties: bp.professional?.maxProperties ?? 50,  maxMembers: bp.professional?.maxTeamMembers ?? 5,  features: [`Up to ${bp.professional?.maxProperties ?? 50} properties`, `${bp.professional?.maxTeamMembers ?? 5} team members`, 'PMS import with sync', 'Full cost reporting', 'Provider scorecards', 'Slack integration', 'Estimate summary PDF'] },
+    { plan: 'business',     label: 'Business',       price: bp.business?.base     ?? 249, promoPrice: bp.business?.promoBase     ?? null, promoLabel: bp.business?.promoLabel     ?? null, perProperty: bp.business?.perProperty     ?? 10, maxProperties: bp.business?.maxProperties     ?? 150, maxMembers: bp.business?.maxTeamMembers     ?? 15, features: [`Up to ${bp.business?.maxProperties ?? 150} properties`, `${bp.business?.maxTeamMembers ?? 15} team members with roles`, 'Multi-PMS import', 'Priority outreach', 'Advanced analytics', 'API access'] },
+  ];
+}
 
 function BillingTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUpdated: (w: WorkspaceDetail) => void }) {
+  const { pricing } = usePricing();
+  const BILLING_PLANS = getBillingPlans(pricing);
   const [usage, setUsage] = useState<{
     plan: string; searches_used: number; searches_limit: number;
     searches_remaining: number;
@@ -1733,11 +1744,15 @@ function BillingTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUp
                   <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50)', background: O, color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 12px', borderRadius: 100 }}>CURRENT</div>
                 )}
                 <div style={{ fontSize: 18, fontWeight: 700, color: D, marginBottom: 2 }}>{p.label}</div>
-                <div style={{ marginBottom: 12 }}>
-                  <span style={{ fontSize: 28, fontWeight: 700, color: D }}>${p.price}</span>
+                <div style={{ marginBottom: 4 }}>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: D }}>${p.promoPrice ?? p.price}</span>
                   <span style={{ fontSize: 13, color: '#9B9490' }}>/mo</span>
-                  <span style={{ fontSize: 12, color: '#6B6560', marginLeft: 4 }}>+ $10/property</span>
+                  {p.promoPrice != null && (
+                    <span style={{ fontSize: 14, color: '#9B9490', textDecoration: 'line-through', marginLeft: 6 }}>${p.price}</span>
+                  )}
+                  <span style={{ fontSize: 12, color: '#6B6560', marginLeft: 4 }}>+ ${p.perProperty}/property</span>
                 </div>
+                {p.promoLabel && <div style={{ fontSize: 11, fontWeight: 600, color: O, marginBottom: 8 }}>{p.promoLabel}</div>}
                 <div style={{ borderTop: '1px solid #E0DAD4', paddingTop: 12, marginBottom: 14 }}>
                   {p.features.map((f, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 13, color: '#6B6560' }}>
@@ -1891,11 +1906,12 @@ const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
   viewer: { bg: '#F3F4F6', text: '#6B7280' },
 };
 
-const PLAN_MEMBER_LIMITS: Record<string, number> = {
-  trial: 1, starter: 1, professional: 5, business: 15, enterprise: 9999,
-};
+function getPlanMemberLimit(plan: string, pricing: PricingConfig): number {
+  return pricing.business[plan]?.maxTeamMembers ?? 1;
+}
 
 function TeamTab({ workspaceId, role, ownerId, plan }: { workspaceId: string; role: string; ownerId: string; plan: string }) {
+  const { pricing } = usePricing();
   const { homeowner } = useAuth();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1904,7 +1920,7 @@ function TeamTab({ workspaceId, role, ownerId, plan }: { workspaceId: string; ro
   const [editRole, setEditRole] = useState('');
 
   const isAdmin = role === 'admin';
-  const memberLimit = PLAN_MEMBER_LIMITS[plan] ?? 1;
+  const memberLimit = getPlanMemberLimit(plan, pricing);
   const atLimit = members.length >= memberLimit;
 
   function loadMembers() {

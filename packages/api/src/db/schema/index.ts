@@ -15,3 +15,4 @@ export * from './slack-settings';
 export * from './cost-estimates';
 export * from './schedules';
 export * from './reservations';
+export * from './pricing-config';

@@ -3,6 +3,7 @@ import { eq, and, or, desc, ne, sql, gte, lte, count } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import logger from '../logger';
 import { db } from '../db';
+import { getPricingConfig } from '../services/pricing';
 import { workspaces } from '../db/schema/workspaces';
 import { jobs } from '../db/schema/jobs';
 import { providerResponses } from '../db/schema/provider-responses';
@@ -808,15 +809,6 @@ router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRol
 
 // ── Billing & Usage ─────────────────────────────────────────────────────────
 
-// New per-property model: $10/property/mo across all plans, tiers unlock features
-const PLAN_LIMITS: Record<string, { base: number; perProperty: number; searchesPerProperty: number; maxProperties: number }> = {
-  trial: { base: 0, perProperty: 0, searchesPerProperty: 5, maxProperties: 5 },
-  starter: { base: 0, perProperty: 10, searchesPerProperty: 5, maxProperties: 10 },
-  professional: { base: 99, perProperty: 10, searchesPerProperty: 5, maxProperties: 50 },
-  business: { base: 249, perProperty: 10, searchesPerProperty: 5, maxProperties: 150 },
-  enterprise: { base: 0, perProperty: 10, searchesPerProperty: 5, maxProperties: 9999 },
-};
-
 // GET /:workspaceId/usage
 router.get('/:workspaceId/usage', requireWorkspace, async (req: Request, res: Response) => {
   try {
@@ -836,7 +828,8 @@ router.get('/:workspaceId/usage', requireWorkspace, async (req: Request, res: Re
       return;
     }
 
-    const planInfo = PLAN_LIMITS[ws.plan] || PLAN_LIMITS.starter;
+    const pricing = await getPricingConfig();
+    const planInfo = pricing.business[ws.plan] ?? pricing.business.starter;
     const billingCycleEnd = new Date(ws.billingCycleStart);
     billingCycleEnd.setMonth(billingCycleEnd.getMonth() + 1);
 
