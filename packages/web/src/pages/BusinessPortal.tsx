@@ -9,6 +9,17 @@ import EstimateBadge from '@/components/EstimateBadge';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
+function cleanPrice(price: string): string {
+  let p = price.replace(/^\$+/, '$');
+  const bm = p.match(/between\s+\$?(\d+(?:\.\d+)?)\s*(?:and|to)\s*\$?(\d+(?:\.\d+)?)/i);
+  if (bm) return `$${bm[1]}-$${bm[2]}`;
+  const rm = p.match(/^(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*(\d+(?:\.\d+)?)$/);
+  if (rm) return `$${rm[1]}-$${rm[2]}`;
+  const nm = p.match(/^(\d+(?:\.\d+)?)$/);
+  if (nm) return `$${nm[1]}`;
+  return p;
+}
+
 function HomieBizLogo({ size = 'default' }: { size?: 'default' | 'large' }) {
   const isLarge = size === 'large';
   return (
@@ -3138,9 +3149,9 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                               </div>
                               {r.quoted_price && (
                                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: O }}>{cleanPrice(r.quoted_price)}</span>
                                   {estimates[j.id] ? (
-                                    <EstimateBadge quotedPrice={r.quoted_price} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
+                                    <EstimateBadge quotedPrice={cleanPrice(r.quoted_price)} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
                                   ) : (
                                     <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
                                   )}

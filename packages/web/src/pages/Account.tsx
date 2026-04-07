@@ -23,6 +23,18 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   confirmed: { bg: '#F0FDF4', text: '#16A34A' },
 };
 
+/** Normalize price for display */
+function cleanPrice(price: string): string {
+  let p = price.replace(/^\$+/, '$');
+  const bm = p.match(/between\s+\$?(\d+(?:\.\d+)?)\s*(?:and|to)\s*\$?(\d+(?:\.\d+)?)/i);
+  if (bm) return `$${bm[1]}-$${bm[2]}`;
+  const rm = p.match(/^(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*(\d+(?:\.\d+)?)$/);
+  if (rm) return `$${rm[1]}-$${rm[2]}`;
+  const nm = p.match(/^(\d+(?:\.\d+)?)$/);
+  if (nm) return `$${nm[1]}`;
+  return p;
+}
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -426,9 +438,9 @@ function QuotesTab() {
                               </div>
                               {r.quoted_price && (
                                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{r.quoted_price}</span>
+                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: O }}>{cleanPrice(r.quoted_price)}</span>
                                   {estimates[j.id] ? (
-                                    <EstimateBadge quotedPrice={r.quoted_price} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
+                                    <EstimateBadge quotedPrice={cleanPrice(r.quoted_price)} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
                                   ) : (
                                     <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
                                   )}
@@ -523,7 +535,7 @@ function BookingsTab() {
               <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{b.status}</span>
             </div>
             <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#6B6560', flexWrap: 'wrap' }}>
-              {b.quoted_price && <span style={{ fontWeight: 600, color: O }}>{b.quoted_price}</span>}
+              {b.quoted_price && <span style={{ fontWeight: 600, color: O }}>{cleanPrice(b.quoted_price)}</span>}
               {b.scheduled && <span>&#128197; {b.scheduled}</span>}
               {b.provider.phone && <a href={`tel:${b.provider.phone}`} style={{ color: G, textDecoration: 'none' }}>&#128222; {b.provider.phone}</a>}
             </div>
