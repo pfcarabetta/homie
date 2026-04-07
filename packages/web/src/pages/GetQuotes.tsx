@@ -1543,14 +1543,16 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     setTimeout(() => {
       abortRef.current = diagnosticService.sendMessage(
         sessionIdRef.current,
-        'Based on this conversation, write a 2-3 sentence summary of what the homeowner needs, suitable for briefing a service provider. Be specific and factual. Do not ask questions. Start with what the issue is.',
+        'TASK: Write a provider-ready dispatch summary in exactly 2-3 sentences. Describe what the homeowner needs fixed, include any relevant details they mentioned (brand, model, age, location in home, symptoms). Be specific and factual. Do NOT ask follow-up questions. Do NOT use conversational language like "Gotcha" or "great question". Start directly with what the issue is. This summary will be sent to service providers.',
         {
           onToken: (token: string) => { diagText += token; },
           onDiagnosis: () => {},
           onJobSummary: () => {},
           onDone: () => {
             setStreaming(false);
-            setData(d => ({ ...d, aiDiagnosis: diagText }));
+            // Strip any follow-up questions the AI might have added
+            const cleaned = diagText.replace(/\n\n.*\?$/s, '').replace(/Do you.*\?/g, '').trim();
+            setData(d => ({ ...d, aiDiagnosis: cleaned || diagText.trim() }));
             setTimeout(() => {
               addAssistant("Got it \u2014 I've prepared your diagnosis. Let's find you a pro!");
               setPhase('diagnosis');
