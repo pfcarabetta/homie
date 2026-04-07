@@ -1149,7 +1149,7 @@ function DashboardTab({ workspace, onNavigate }: { workspace: WorkspaceDetail; o
 
         {/* Top vendors */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20 }}>
-          <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Top Vendors</h4>
+          <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Top Providers</h4>
           {data.top_vendors.length === 0 ? (
             <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No bookings yet</div>
           ) : (
@@ -1334,8 +1334,8 @@ function DashboardTab({ workspace, onNavigate }: { workspace: WorkspaceDetail; o
 /* ── Billing Tab ───────────────────────────────────────────────────────── */
 
 const BILLING_PLANS = [
-  { plan: 'starter', label: 'Starter', price: 0, perProperty: 10, maxProperties: 10, maxMembers: 1, features: ['Up to 10 properties', '1 user', 'Unlimited searches', 'Preferred vendors (up to 5)', 'Basic cost tracking'] },
-  { plan: 'professional', label: 'Professional', price: 99, perProperty: 10, maxProperties: 50, maxMembers: 5, features: ['Up to 50 properties', '5 team members', 'PMS import with sync', 'Full cost reporting', 'Vendor scorecards', 'Slack integration', 'Estimate summary PDF'] },
+  { plan: 'starter', label: 'Starter', price: 0, perProperty: 10, maxProperties: 10, maxMembers: 1, features: ['Up to 10 properties', '1 user', 'Unlimited searches', 'Preferred providers (up to 5)', 'Basic cost tracking'] },
+  { plan: 'professional', label: 'Professional', price: 99, perProperty: 10, maxProperties: 50, maxMembers: 5, features: ['Up to 50 properties', '5 team members', 'PMS import with sync', 'Full cost reporting', 'Provider scorecards', 'Slack integration', 'Estimate summary PDF'] },
   { plan: 'business', label: 'Business', price: 249, perProperty: 10, maxProperties: 150, maxMembers: 15, features: ['Up to 150 properties', '15 team members with roles', 'Multi-PMS import', 'Priority outreach', 'Advanced analytics', 'API access'] },
 ];
 
@@ -1486,7 +1486,7 @@ function BillingTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUp
           <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#DC2626', marginBottom: 6 }}>Are you sure?</div>
             <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.6 }}>
-              Your workspace and all associated data (properties, dispatches, bookings, vendor settings) will be deactivated at the end of your billing cycle.
+              Your workspace and all associated data (properties, dispatches, bookings, provider settings) will be deactivated at the end of your billing cycle.
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShowCancel(false)}
@@ -1509,7 +1509,7 @@ function BillingTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUp
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', desc: 'Full access including billing and team management' },
-  { value: 'coordinator', label: 'Coordinator', desc: 'Create jobs, manage vendors, view reports' },
+  { value: 'coordinator', label: 'Coordinator', desc: 'Create jobs, manage providers, view reports' },
   { value: 'field_tech', label: 'Field Tech', desc: 'View assigned jobs, update status' },
   { value: 'viewer', label: 'Viewer', desc: 'Read-only access to dashboard' },
 ];
@@ -1776,7 +1776,7 @@ function SchedulePicker({ schedule, onChange }: { schedule: VendorSched; onChang
         </div>
       ))}
       {DAYS.every(d => !schedule[d.key]) && (
-        <div style={{ fontSize: 12, color: '#9B9490', fontStyle: 'italic' }}>No days selected — vendor available anytime</div>
+        <div style={{ fontSize: 12, color: '#9B9490', fontStyle: 'italic' }}>No days selected — provider available anytime</div>
       )}
     </div>
   );
@@ -1915,7 +1915,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
       }
       onAdded();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to add vendor');
+      setError(err instanceof Error ? err.message : 'Failed to add provider');
     } finally {
       setSaving(false);
     }
@@ -1929,7 +1929,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
       <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 20px' }}>Add Preferred Vendor</h3>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 20px' }}>Add Preferred Provider</h3>
 
         {/* Mode toggle */}
         <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 8, overflow: 'hidden', border: '1px solid #E0DAD4' }}>
@@ -1979,7 +1979,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
                 <div style={{ textAlign: 'center', padding: 20, color: '#9B9490', fontSize: 14 }}>
                   No providers found. <button onClick={() => { setMode('create'); setNewName(query); }}
                     style={{ background: 'none', border: 'none', color: O, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
-                    Create new vendor
+                    Create new provider
                   </button>
                 </div>
               )}
@@ -2006,7 +2006,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
 
         {mode === 'create' && (
           <>
-            <label style={labelStyle}>Vendor Name *</label>
+            <label style={labelStyle}>Provider Name *</label>
             <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="ABC Plumbing" style={inputStyle} />
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -2016,7 +2016,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
               </div>
               <div>
                 <label style={labelStyle}>Email</label>
-                <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="info@vendor.com" type="email" style={inputStyle} />
+                <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="info@provider.com" type="email" style={inputStyle} />
               </div>
             </div>
           </>
@@ -2082,7 +2082,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
 
               {assignMode === 'all' && (
                 <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>
-                  This vendor will be available for dispatch to any property in your workspace.
+                  This provider will be available for dispatch to any property in your workspace.
                 </div>
               )}
 
@@ -2162,7 +2162,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
           {showDetails && (
             <button onClick={handleAdd} disabled={saving}
               style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
-              {saving ? 'Adding...' : mode === 'create' ? 'Create & Add' : 'Add Vendor'}
+              {saving ? 'Adding...' : mode === 'create' ? 'Create & Add' : 'Add Provider'}
             </button>
           )}
         </div>
@@ -2250,20 +2250,20 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
   useEffect(() => { loadVendors(); }, [workspaceId]);
 
   async function handleRemove(vendorId: string, name: string) {
-    if (!confirm(`Remove ${name} from preferred vendors?`)) return;
+    if (!confirm(`Remove ${name} from preferred providers?`)) return;
     try {
       await businessService.removeVendor(workspaceId, vendorId);
       setVendors(prev => prev.filter(v => v.id !== vendorId));
     } catch { /* ignore */ }
   }
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading vendors...</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading providers...</div>;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Preferred Vendors</h3>
+          <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Preferred Providers</h3>
           <div style={{ fontSize: 12, color: '#9B9490', marginTop: 3 }}>
             {uniqueVendorCount} of {vendorLimit === 9999 ? '∞' : vendorLimit} · {plan.charAt(0).toUpperCase() + plan.slice(1)}
           </div>
@@ -2274,7 +2274,7 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
           ) : (
             <button onClick={() => setShowAdd(true)}
               style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-              + Add Vendor
+              + Add Provider
             </button>
           )
         )}
@@ -2283,8 +2283,8 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
       {vendors.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🤝</div>
-          <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No preferred vendors yet</div>
-          <div style={{ fontSize: 14, color: '#9B9490' }}>Add vendors you trust to get priority dispatch on your jobs.</div>
+          <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No preferred providers yet</div>
+          <div style={{ fontSize: 14, color: '#9B9490' }}>Add providers you trust to get priority dispatch on your jobs.</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2411,7 +2411,7 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
                           Edit
                         </button>
                         <button onClick={() => {
-                          if (!confirm(`Remove ${g.providerName} from preferred vendors?`)) return;
+                          if (!confirm(`Remove ${g.providerName} from preferred providers?`)) return;
                           Promise.all(g.entries.map(e => businessService.removeVendor(workspaceId, e.id).catch(() => {}))).then(() => loadVendors());
                         }}
                           style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #FCA5A5', background: '#FEF2F2', fontSize: 12, cursor: 'pointer', color: '#DC2626', fontWeight: 600 }}>
@@ -2498,7 +2498,7 @@ function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved 
 
       onSaved();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to update vendor');
+      setError(err instanceof Error ? err.message : 'Failed to update provider');
     } finally {
       setSaving(false);
     }
@@ -2510,7 +2510,7 @@ function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
       <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 4px' }}>Edit Preferred Vendor</h3>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 4px' }}>Edit Preferred Provider</h3>
         <p style={{ fontSize: 15, fontWeight: 600, color: O, marginBottom: 20 }}>{vendor.providerName}</p>
 
         <label style={labelStyle}>Categories</label>
@@ -2570,7 +2570,7 @@ function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved 
 
           {assignMode === 'all' && (
             <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>
-              This vendor will be available for dispatch to any property in your workspace.
+              This provider will be available for dispatch to any property in your workspace.
             </div>
           )}
 
@@ -3823,9 +3823,9 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
               </div>
             )}
 
-            {/* Vendor multi-select */}
+            {/* Provider multi-select */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>
-              Preferred vendors <span style={{ fontWeight: 400, color: '#9B9490' }}>(optional — select one or more)</span>
+              Preferred providers <span style={{ fontWeight: 400, color: '#9B9490' }}>(optional — select one or more)</span>
             </label>
             <div style={{ border: '1px solid #E0DAD4', borderRadius: 8, maxHeight: 120, overflowY: 'auto', marginBottom: 16 }}>
               {[...new Map(vendors.map(v => [v.providerId, v])).values()].map(v => {
@@ -3839,11 +3839,11 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                   </label>
                 );
               })}
-              {vendors.length === 0 && <div style={{ padding: '12px', fontSize: 12, color: '#9B9490', textAlign: 'center' }}>No preferred vendors set up</div>}
+              {vendors.length === 0 && <div style={{ padding: '12px', fontSize: 12, color: '#9B9490', textAlign: 'center' }}>No preferred providers set up</div>}
             </div>
             {selectedVendorIds.length > 0 && (
               <div style={{ fontSize: 12, color: G, fontWeight: 600, marginTop: -12, marginBottom: 12 }}>
-                {selectedVendorIds.length} vendor{selectedVendorIds.length > 1 ? 's' : ''} selected
+                {selectedVendorIds.length} provider{selectedVendorIds.length > 1 ? 's' : ''} selected
               </div>
             )}
 
@@ -3871,8 +3871,8 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                   }} />
                 </button>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book preferred vendors</div>
-                  <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm when a preferred vendor accepts</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book preferred providers</div>
+                  <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm when a preferred provider accepts</div>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -3888,8 +3888,8 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                   }} />
                 </button>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book marketplace vendors</div>
-                  <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm marketplace responses (if no preferred vendor available)</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book marketplace providers</div>
+                  <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm marketplace responses (if no preferred provider available)</div>
                 </div>
               </div>
             </div>
@@ -3954,7 +3954,7 @@ function ReportsTab({ workspaceId, plan }: { workspaceId: string; plan: string }
     <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>Cost reporting available on Professional+</div>
-      <div style={{ fontSize: 14, color: '#9B9490' }}>Upgrade your plan to access cost breakdowns by property, category, vendor, and time period.</div>
+      <div style={{ fontSize: 14, color: '#9B9490' }}>Upgrade your plan to access cost breakdowns by property, category, provider, and time period.</div>
     </div>
   );
 
@@ -3964,8 +3964,8 @@ function ReportsTab({ workspaceId, plan }: { workspaceId: string; plan: string }
   const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   const views: { id: ReportView; label: string }[] = [
     { id: 'summary', label: 'Summary' }, { id: 'property', label: 'By Property' },
-    { id: 'category', label: 'By Category' }, { id: 'vendor', label: 'By Vendor' },
-    { id: 'monthly', label: 'Monthly' }, { id: 'scorecards', label: 'Vendor Scorecards' },
+    { id: 'category', label: 'By Category' }, { id: 'vendor', label: 'By Provider' },
+    { id: 'monthly', label: 'Monthly' }, { id: 'scorecards', label: 'Provider Scorecards' },
   ];
 
   const maxCost = (arr: Array<{ cost: number }>) => Math.max(...arr.map(a => a.cost), 1);
@@ -4092,7 +4092,7 @@ function ReportsTab({ workspaceId, plan }: { workspaceId: string; plan: string }
       {view === 'scorecards' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {scorecards.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 30, color: '#9B9490', fontSize: 14 }}>No vendor data yet — scorecards appear after outreach.</div>
+            <div style={{ textAlign: 'center', padding: 30, color: '#9B9490', fontSize: 14 }}>No provider data yet — scorecards appear after outreach.</div>
           ) : scorecards.map(v => {
             const isExpanded = expandedVendor === v.id;
             const gradeColors: Record<string, { bg: string; text: string }> = {
@@ -4411,13 +4411,13 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
                     )}
                   </div>
 
-                  {/* Add to preferred vendors */}
+                  {/* Add to preferred providers */}
                   {addedToPreferred.has(b.providerId) ? (
                     <div style={{
                       padding: '10px 0', borderRadius: 100, textAlign: 'center',
                       background: `${G}10`, border: `1px solid ${G}30`,
                       fontSize: 13, fontWeight: 600, color: G,
-                    }}>✅ Added to preferred vendors</div>
+                    }}>✅ Added to preferred providers</div>
                   ) : (
                     <button onClick={async () => {
                       setAddingProvider(b.providerId);
@@ -4440,7 +4440,7 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
                       fontSize: 13, fontWeight: 600, cursor: addingProvider === b.providerId ? 'default' : 'pointer',
                       opacity: addingProvider === b.providerId ? 0.6 : 1,
                       transition: 'all 0.2s',
-                    }}>{addingProvider === b.providerId ? 'Adding...' : `⭐ Add ${b.providerName.split(' ')[0]} to Preferred Vendors`}</button>
+                    }}>{addingProvider === b.providerId ? 'Adding...' : `⭐ Add ${b.providerName.split(' ')[0]} to Preferred Providers`}</button>
                   )}
 
                   {/* Cancel booking */}
@@ -5170,7 +5170,7 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
 
 const TABS = ['dashboard', 'dispatches', 'bookings', 'schedules', 'reports', 'properties', 'vendors', 'team', 'settings', 'billing'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings', schedules: 'Auto-Dispatch', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Vendors', team: 'Team', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings', schedules: 'Auto-Dispatch', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Providers', team: 'Team', settings: 'Settings' };
 
 function useThemeMode() {
   const [mode, setMode] = useState<'light' | 'dark' | 'auto'>(() => {
@@ -5409,11 +5409,11 @@ export default function BusinessPortal() {
             <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
             <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 8px' }}>Upgrade to unlock Reports</h3>
             <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 24 }}>
-              Full cost reporting, vendor scorecards, and advanced analytics are available on the <strong style={{ color: O }}>Professional</strong> plan and above.
+              Full cost reporting, provider scorecards, and advanced analytics are available on the <strong style={{ color: O }}>Professional</strong> plan and above.
             </p>
             <div style={{ background: W, borderRadius: 12, padding: 16, marginBottom: 24, textAlign: 'left' }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 10 }}>Professional plan includes:</div>
-              {['Full cost reporting by property & category', 'Vendor scorecards with response rates', 'Booking & dispatch analytics', 'Team activity log'].map((f, i) => (
+              {['Full cost reporting by property & category', 'Provider scorecards with response rates', 'Booking & dispatch analytics', 'Team activity log'].map((f, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 13, color: '#6B6560' }}>
                   <span style={{ color: G, fontSize: 12 }}>✓</span> {f}
                 </div>
