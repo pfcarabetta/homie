@@ -1899,8 +1899,12 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
         nextUrl = `${base}/pms/reservations?size=50&page=${currentPage}`;
         currentPage--;
         try {
+          logger.info({ page: currentPage + 1, url: nextUrl }, '[Track reservations] fetching page');
           const gRes = await fetch(nextUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-          if (!gRes.ok) break;
+          if (!gRes.ok) {
+            logger.warn({ status: gRes.status, page: currentPage + 1 }, '[Track reservations] page fetch failed');
+            break;
+          }
           const ct = gRes.headers.get('content-type') || '';
           if (!ct.includes('json')) break;
           const gData = await gRes.json() as Record<string, unknown>;
@@ -1946,7 +1950,10 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           }
 
           // We control pagination via currentPage decrement — no need for _links
-        } catch { break; }
+        } catch (pageErr) {
+          logger.warn({ err: pageErr, page: currentPage + 1 }, '[Track reservations] page fetch error');
+          break;
+        }
       }
     }
 
