@@ -480,7 +480,7 @@ function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId
   const [stats, setStats] = useState({ contacted: 0, responded: 0 });
   const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
   const logRef = useRef<HTMLDivElement>(null);
-  const fetchedResponses = useRef(false);
+  const fetchedResponses = useRef(0);
 
   useEffect(() => {
     // Real outreach via WebSocket
@@ -508,8 +508,8 @@ function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId
         setLog(newLog);
 
         // Fetch real provider responses
-        if (status.providers_responded > 0 && !fetchedResponses.current) {
-          fetchedResponses.current = true;
+        if (status.providers_responded > 0 && status.providers_responded > fetchedResponses.current) {
+          fetchedResponses.current = status.providers_responded;
           void jobService.getResponses(jobId).then(res => {
             if (res.data?.responses) {
               setProviders(res.data.responses.map((r: ProviderResponseItem) => ({
@@ -769,11 +769,14 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
   const [stats, setStats] = useState({ contacted: 0, responded: 0 });
   const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
   const logRef = useRef<HTMLDivElement>(null);
-  const fetchedResponses = useRef(false);
+  const fetchedResponses = useRef(0);
 
   useEffect(() => {
     if (initialEstimate) setCostEstimate(initialEstimate);
   }, [initialEstimate]);
+
+  // Reset fetch counter when jobId changes
+  useEffect(() => { fetchedResponses.current = 0; }, [jobId]);
 
   useEffect(() => {
     if (initialJobId) {
@@ -809,8 +812,8 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
         }
         setLog(newLog);
 
-        if (status.providers_responded > 0 && !fetchedResponses.current) {
-          fetchedResponses.current = true;
+        if (status.providers_responded > 0 && status.providers_responded > fetchedResponses.current) {
+          fetchedResponses.current = status.providers_responded;
           void jobService.getResponses(jobId).then(res => {
             if (res.data?.responses) {
               setProviders(res.data.responses.map((r: ProviderResponseItem) => ({
