@@ -1213,11 +1213,12 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                       </div>
                       {p.note && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic', marginTop: 6 }}>"{p.note}"</div>}
                       {selected === i && !booked && (
-                        <div style={{ marginTop: 14 }}>
+                        <div style={{ marginTop: 14 }} onClick={e => e.stopPropagation()}>
                           {!isDemo && (
                             <input
                               id={`modal-addr-${i}`}
                               placeholder="Enter your service address"
+                              onClick={e => e.stopPropagation()}
                               style={{
                                 width: '100%', padding: '10px 14px', borderRadius: 10, fontSize: 14,
                                 border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: D,

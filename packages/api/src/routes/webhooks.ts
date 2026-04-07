@@ -152,7 +152,7 @@ function formatQuotedPrice(raw: string | null): string | null {
     return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
   }
 
-  // Range with "between": "between 100 and 200", "between $100-$200"
+  // Range with "between": "between 100 and 200", "Estimate between 400 and 550"
   const betweenMatch = cleaned.match(/between\s+\$?(\d+(?:\.\d+)?)\s*(?:and|to|-|–)\s*\$?(\d+(?:\.\d+)?)/i);
   if (betweenMatch) {
     const low = parseFloat(betweenMatch[1]);
