@@ -1749,14 +1749,41 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
     // Update existing properties if requested
     let updated = 0;
     if (body.update_existing) {
-      const existingUnits = activeUnits.filter(u => existingMap.has(String(u.id)));
-      for (const u of existingUnits) {
-        const propId = existingMap.get(String(u.id))!;
+      // First: fix any mismatched pmsExternalId by matching on property name
+      const allWorkspaceProps = await db
+        .select({ id: properties.id, name: properties.name, pmsExternalId: properties.pmsExternalId })
+        .from(properties)
+        .where(and(eq(properties.workspaceId, req.workspaceId), eq(properties.pmsSource, 'track')));
+
+      for (const u of activeUnits) {
         const mapped = mapUnit(u);
-        await db.update(properties)
-          .set({ ...mapped, updatedAt: new Date() } as Record<string, unknown>)
-          .where(eq(properties.id, propId));
-        updated++;
+        const trackId = String(u.id);
+
+        // Check if this unit's ID is already correctly mapped
+        const correctlyMapped = allWorkspaceProps.find(p => p.pmsExternalId === trackId);
+        if (correctlyMapped) {
+          // Update the property data
+          await db.update(properties)
+            .set({ ...mapped, pmsExternalId: trackId, updatedAt: new Date() } as Record<string, unknown>)
+            .where(eq(properties.id, correctlyMapped.id));
+          updated++;
+          continue;
+        }
+
+        // Try to match by name (property name contains the Track unit name or vice versa)
+        const nameMatch = allWorkspaceProps.find(p =>
+          p.name && mapped.name && (
+            p.name.toLowerCase().includes(mapped.name.toLowerCase().split(' - ')[0].trim()) ||
+            mapped.name.toLowerCase().includes(p.name.toLowerCase().split(' - ')[0].trim())
+          )
+        );
+        if (nameMatch) {
+          logger.info({ propId: nameMatch.id, oldExternalId: nameMatch.pmsExternalId, newExternalId: trackId, name: mapped.name }, '[Track import] Fixing pmsExternalId by name match');
+          await db.update(properties)
+            .set({ ...mapped, pmsExternalId: trackId, updatedAt: new Date() } as Record<string, unknown>)
+            .where(eq(properties.id, nameMatch.id));
+          updated++;
+        }
       }
     }
 
