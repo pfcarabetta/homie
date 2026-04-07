@@ -2,10 +2,8 @@ import { useReducer, useRef, useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import DiagnosisCard, { type DiagnosisData } from '@/components/DiagnosisCard';
-import ProviderCard from '@/components/ProviderCard';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 import ErrorState from '@/components/ErrorState';
-import { Spinner } from '@/components/Skeleton';
 import { HomieAvatar, HomieLogo } from '@/components/HomieAvatar';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,8 +19,10 @@ import {
   type JobStatusResponse,
   type HomeData,
   type CostEstimate,
+  type ProviderResponseItem,
 } from '@/services/api';
 import EstimateCard from '@/components/EstimateCard';
+import EstimateBadge from '@/components/EstimateBadge';
 import {
   mockStreamResponse,
   simulateOutreach,
@@ -1188,14 +1188,16 @@ export default function DiagnosticChat() {
 
       {/* Provider modal */}
       {state.matchFlowActive && (
-        <ProviderModal
-          state={state}
-          dispatch={dispatch}
-          startOutreach={startOutreach}
-          handleBook={handleBook}
-          onClose={() => dispatch({ type: 'CLOSE_MATCH_FLOW' })}
+        <DiagnosticOutreachModal
+          isOpen={true}
+          onClose={(hasJob) => {
+            dispatch({ type: 'CLOSE_MATCH_FLOW' });
+            if (hasJob) navigate('/account?tab=quotes');
+          }}
+          diagnosis={state.diagnosis}
+          jobSummary={state.jobSummary}
           isDemo={isDemo}
-          costEstimate={costEstimate}
+          initialCostEstimate={costEstimate}
         />
       )}
 
@@ -1309,258 +1311,598 @@ function EarlyMatchCard({ summary, onRequestPro }: { summary: JobSummaryV2; onRe
   );
 }
 
-// ── Provider modal ──────────────────────────────────────────────────────────
+// ── Diagnostic Outreach Modal (matches QuoteOutreachModal pattern) ───────
 
-function ProviderModal({
-  state,
-  dispatch,
-  startOutreach,
-  handleBook,
-  onClose,
-  isDemo,
-  costEstimate,
-}: {
-  state: State;
-  dispatch: React.Dispatch<Action>;
-  startOutreach: () => void;
-  handleBook: (p: MatchedProvider) => void;
-  onClose: () => void;
-  isDemo?: boolean;
-  costEstimate?: CostEstimate | null;
-}) {
+const DIAG_TIERS = [
+  { id: 'standard', name: 'Standard', price: '$9.99', time: '~2 hours', detail: '5 pros via SMS + web' },
+  { id: 'priority', name: 'Priority', price: '$19.99', time: '~30 min', detail: '10 pros via voice + SMS + web', popular: true },
+  { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', detail: '15 pros, all channels blitz' },
+];
+
+const DIAG_OUTREACH_LOG = [
+  { t: 0, msg: 'Analyzing your issue...', type: 'system' },
+  { t: 800, msg: 'Diagnosis complete \u2014 generating provider briefing', type: 'system' },
+  { t: 1600, msg: 'Found 14 providers near you', type: 'system' },
+  { t: 2400, msg: 'Calling Rodriguez Plumbing...', type: 'voice' },
+  { t: 3000, msg: 'Texting Atlas Home Services...', type: 'sms' },
+  { t: 3600, msg: 'Calling SD Premier Plumbing...', type: 'voice' },
+  { t: 4200, msg: 'Rodriguez Plumbing \u2014 quote received!', type: 'success' },
+  { t: 5000, msg: "Texting Mike's Plumbing Co...", type: 'sms' },
+  { t: 5800, msg: 'Submitting form on quickfixpros.com', type: 'web' },
+  { t: 6600, msg: 'SD Premier \u2014 voicemail, sending SMS fallback', type: 'fallback' },
+  { t: 7400, msg: 'Atlas Home Services \u2014 quote received!', type: 'success' },
+  { t: 8400, msg: "Mike's Plumbing \u2014 declined (booked)", type: 'decline' },
+  { t: 9400, msg: 'Texting Reliable Plumbing & Drain...', type: 'sms' },
+  { t: 10200, msg: 'Calling ABC Plumbing...', type: 'voice' },
+  { t: 11200, msg: 'Quick Fix Pros \u2014 quote received!', type: 'success' },
+  { t: 12200, msg: '3 quotes ready!', type: 'done' },
+];
+
+const DIAG_MOCK_PROVIDERS = [
+  { name: 'Rodriguez Plumbing', rating: 4.9, reviews: 214, quote: '$175', availability: 'Tomorrow 9\u201311 AM', channel: 'voice', note: 'Done hundreds of Moen cartridge swaps. Will bring the part.', distance: '4.2 mi', delay: 4500 },
+  { name: 'Atlas Home Services', rating: 4.7, reviews: 89, quote: '$150\u2013200', availability: 'Wednesday afternoon', channel: 'sms', note: 'Can bring the part with me, 12 years experience', distance: '6.1 mi', delay: 8000 },
+  { name: 'Quick Fix Pros', rating: 4.6, reviews: 156, quote: '$195', availability: 'Thursday 8\u201310 AM', channel: 'web', note: 'Licensed & insured, 15 years with Moen fixtures', distance: '3.8 mi', delay: 11500 },
+];
+
+interface DiagRealProvider {
+  id: string;
+  responseId: string;
+  name: string;
+  rating: number;
+  reviews: number;
+  quote: string;
+  availability: string;
+  channel: string;
+  note: string;
+  distance: string;
+}
+
+function diagCleanPrice(price: string): string {
+  let p = price.replace(/^\$+/, '$');
+  const betweenMatch = p.match(/between\s+\$?(\d+(?:\.\d+)?)\s*(?:and|to)\s*\$?(\d+(?:\.\d+)?)/i);
+  if (betweenMatch) return `$${betweenMatch[1]}-$${betweenMatch[2]}`;
+  const rangeMatch = p.match(/^(\d+(?:\.\d+)?)\s*(?:to|-|\u2013)\s*(\d+(?:\.\d+)?)$/);
+  if (rangeMatch) return `$${rangeMatch[1]}-$${rangeMatch[2]}`;
+  const numMatch = p.match(/^(\d+(?:\.\d+)?)$/);
+  if (numMatch) return `$${numMatch[1]}`;
+  const approxMatch = p.match(/(?:about|around|charge|estimate)\s+\$?(\d+(?:\.\d+)?)/i);
+  if (approxMatch && !/\$/.test(p)) return `~$${approxMatch[1]}`;
+  return p;
+}
+
+interface DiagnosticOutreachModalProps {
+  isOpen: boolean;
+  onClose: (hasJob: boolean) => void;
+  diagnosis: DiagnosisData | null;
+  jobSummary: JobSummaryV2 | null;
+  isDemo: boolean;
+  initialCostEstimate: CostEstimate | null;
+}
+
+function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDemo, initialCostEstimate }: DiagnosticOutreachModalProps) {
+  const navigate = useNavigate();
+  const [step, setStep] = useState<'tier' | 'preferences' | 'auth_gate' | 'outreach'>('tier');
+  const [tier, setTier] = useState<string | null>(null);
+  const [zip, setZip] = useState('');
+  const [timing, setTiming] = useState<string | null>(null);
+  const [budget, setBudget] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(initialCostEstimate);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Outreach state
+  const [log, setLog] = useState<typeof DIAG_OUTREACH_LOG>([]);
+  const [providers, setProviders] = useState<(typeof DIAG_MOCK_PROVIDERS[number] | DiagRealProvider)[]>([]);
+  const [outreachDone, setOutreachDone] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [booked, setBooked] = useState<(typeof DIAG_MOCK_PROVIDERS[number]) | null>(null);
+  const [stats, setStats] = useState({ contacted: 0, responded: 0 });
+  const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
+  const logRef = useRef<HTMLDivElement>(null);
+  const fetchedResponses = useRef(0);
+
+  const O = '#E8632B';
+  const Gr = '#1B9E77';
+  const Dk = '#2D2926';
+  const Wm = '#F9F5F2';
+
+  const category = diagnosis?.category ?? jobSummary?.category ?? 'general';
+  const summaryText = diagnosis?.issue ?? jobSummary?.description ?? jobSummary?.title ?? 'Home repair';
+
+  useEffect(() => {
+    if (initialCostEstimate) setCostEstimate(initialCostEstimate);
+  }, [initialCostEstimate]);
+
+  useEffect(() => { fetchedResponses.current = 0; }, [jobId]);
+
+  // Fetch cost estimate when entering outreach step if we don't have one
+  useEffect(() => {
+    if (step === 'outreach' && !costEstimate && category && zip) {
+      const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
+      estimateService.generate({
+        category,
+        subcategory: category,
+        zip_code: zip,
+        urgency: urgencyMap[timing ?? ''] || 'flexible',
+      }).then(res => { if (res.data) setCostEstimate(res.data); }).catch(() => {});
+    }
+  }, [step]);
+
+  // Outreach WebSocket / demo effect
+  useEffect(() => {
+    if (step !== 'outreach') return;
+
+    // Real outreach via WebSocket
+    if (jobId && !isDemo) {
+      setLog([{ t: 0, msg: 'Launching AI agent...', type: 'system' }]);
+
+      const socket = connectJobSocket(jobId, (status: JobStatusResponse) => {
+        setStats({ contacted: status.providers_contacted, responded: status.providers_responded });
+        setChannels({
+          voice: status.outreach_channels.voice.attempted,
+          sms: status.outreach_channels.sms.attempted,
+          web: status.outreach_channels.web.attempted,
+        });
+
+        const newLog: typeof DIAG_OUTREACH_LOG = [{ t: 0, msg: `Contacting ${status.providers_contacted} providers...`, type: 'system' }];
+        if (status.outreach_channels.voice.attempted > 0) newLog.push({ t: 1, msg: `${status.outreach_channels.voice.attempted} voice calls`, type: 'voice' });
+        if (status.outreach_channels.sms.attempted > 0) newLog.push({ t: 2, msg: `${status.outreach_channels.sms.attempted} SMS messages`, type: 'sms' });
+        if (status.outreach_channels.web.attempted > 0) newLog.push({ t: 3, msg: `${status.outreach_channels.web.attempted} web contacts`, type: 'web' });
+        if (status.providers_responded > 0) newLog.push({ t: 4, msg: `${status.providers_responded} quote(s) received!`, type: 'success' });
+        if (['completed', 'expired'].includes(status.status)) {
+          newLog.push({ t: 5, msg: status.providers_responded > 0 ? `${status.providers_responded} quotes ready!` : 'Outreach complete', type: 'done' });
+          setOutreachDone(true);
+        }
+        setLog(newLog);
+
+        if (status.providers_responded > 0) {
+          void jobService.getResponses(jobId).then(res => {
+            if (res.data?.responses) {
+              setProviders(res.data.responses.map((r: ProviderResponseItem) => ({
+                id: r.provider.id,
+                responseId: r.id,
+                name: r.provider.name,
+                rating: parseFloat(r.provider.google_rating ?? '0'),
+                reviews: r.provider.review_count,
+                quote: diagCleanPrice(r.quoted_price ?? 'TBD'),
+                availability: r.availability ?? 'To be confirmed',
+                channel: r.channel,
+                note: r.message ?? '',
+                distance: '',
+              })));
+            }
+          });
+        }
+      });
+
+      return () => socket.close();
+    }
+
+    // If authenticated but no jobId yet, wait
+    if (!isDemo && authService.isAuthenticated()) {
+      setLog([{ t: 0, msg: 'Setting up your search...', type: 'system' }]);
+      return;
+    }
+
+    // Mock outreach for demo
+    const timers = DIAG_OUTREACH_LOG.map((e) => setTimeout(() => {
+      setLog(p => [...p, e]);
+      if (['voice', 'sms', 'web'].includes(e.type)) setStats(s => ({ ...s, contacted: s.contacted + 1 }));
+      if (e.type === 'success') setStats(s => ({ ...s, responded: s.responded + 1 }));
+      if (e.type === 'done') setOutreachDone(true);
+    }, e.t));
+    const pt = DIAG_MOCK_PROVIDERS.map(p => setTimeout(() => setProviders(prev => [...prev, p]), p.delay));
+    return () => { timers.forEach(clearTimeout); pt.forEach(clearTimeout); };
+  }, [step, jobId, isDemo]);
+
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
+
+  const handleTierSelect = (t: typeof DIAG_TIERS[number]) => {
+    setTier(t.id);
+    setStep('preferences');
+  };
+
+  const handleLaunchAgent = async () => {
+    if (!tier || !zip || !timing) return;
+    setError(null);
+
+    if (isDemo) {
+      setStep('outreach');
+      return;
+    }
+
+    if (!authService.isAuthenticated()) {
+      setStep('auth_gate');
+      return;
+    }
+
+    setLoading(true);
+
+    // Generate cost estimate if we don't have one
+    if (!costEstimate && category && zip) {
+      const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
+      try {
+        const estRes = await estimateService.generate({
+          category,
+          subcategory: category,
+          zip_code: zip,
+          urgency: urgencyMap[timing] || 'flexible',
+        });
+        if (estRes.data) setCostEstimate(estRes.data);
+      } catch { /* ignore */ }
+    }
+
+    try {
+      const severity = diagnosis?.severity ?? jobSummary?.severity_estimate ?? 'medium';
+      const diagPayload: DiagnosisPayload = {
+        category,
+        severity: severity as DiagnosisPayload['severity'],
+        summary: summaryText,
+        recommendedActions: diagnosis?.steps ?? [],
+      };
+
+      const res = await jobService.createJob({
+        diagnosis: diagPayload,
+        timing: ({ 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' }[timing] ?? 'flexible') as 'asap' | 'this_week' | 'this_month' | 'flexible',
+        budget: budget === 'Under $100' ? 'under_100' : budget === '$100-250' ? '100_250' : budget === '$250-500' ? '250_500' : budget === '$500+' ? '500_plus' : 'flexible',
+        tier: tier as 'standard' | 'priority' | 'emergency',
+        zipCode: zip,
+      });
+
+      if (!res.data) {
+        setError('Something went wrong creating your job. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Try Stripe payment
+      try {
+        const payRes = await paymentService.createCheckout(res.data.id, '', '', '/chat');
+        if (payRes.data?.checkout_url) {
+          sessionStorage.setItem('homie_paid_chat', JSON.stringify({ jobId: res.data.id, tier }));
+          window.location.href = payRes.data.checkout_url;
+          return;
+        }
+      } catch { /* payment not configured — continue */ }
+
+      // No checkout URL or payment not configured — launch outreach directly
+      setJobId(res.data.id);
+      setLoading(false);
+      setStep('outreach');
+    } catch (err) {
+      setError(`Something went wrong: ${(err as Error).message || 'Unknown error'}. Please try again.`);
+      setLoading(false);
+    }
+  };
+
+  const handleSaveAndAuth = (path: string) => {
+    sessionStorage.setItem('homie_pending_chat', JSON.stringify({
+      category,
+      summaryText,
+      diagnosis,
+      jobSummary,
+      zip,
+      timing,
+      tier,
+    }));
+    navigate(path);
+  };
+
+  if (!isOpen) return null;
+
+  const outreachStatusObj: OutreachStatus = {
+    providers_contacted: stats.contacted,
+    providers_responded: stats.responded,
+    outreach_channels: {
+      voice: { attempted: channels.voice, connected: 0 },
+      sms: { attempted: channels.sms, connected: 0 },
+      web: { attempted: channels.web, connected: 0 },
+    },
+    status: outreachDone ? 'completed' : 'dispatching',
+  };
+  const logEntries: LogEntry[] = log.map(e => ({ msg: e.msg, type: e.type as LogEntry['type'] }));
+  const isPrefsValid = /^\d{5}$/.test(zip) && timing !== null && budget !== null;
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-white rounded-t-3xl w-full max-w-[480px] max-h-[90vh] overflow-auto px-6 pt-7 pb-6 animate-fade-in"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100,
+      background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }} onClick={() => onClose(!!jobId)}>
+      <div style={{
+        background: 'white', borderRadius: 20, width: '100%', maxWidth: 520, maxHeight: '90vh',
+        overflow: 'auto', padding: '28px 24px 24px', position: 'relative',
+        animation: 'dcFadeSlide 0.3s ease', fontFamily: "'DM Sans', sans-serif",
+      }} onClick={e => e.stopPropagation()}>
+
         {/* Header */}
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-extrabold text-dark">
-            {state.matchStep === 'tier' ? 'Find a Pro' : state.matchStep === 'preferences' ? 'Your Details' : state.matchStep === 'outreach' ? 'Homie is on it' : 'Pros Who Responded'}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h3 style={{ fontSize: 20, fontWeight: 800, color: Dk, fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
+            {step === 'tier' ? 'Find a Pro' : step === 'preferences' ? 'Your Details' : step === 'auth_gate' ? 'Sign In to Continue' : 'Homie is on it'}
           </h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-warm flex items-center justify-center text-base">✕</button>
+          <button onClick={() => onClose(!!jobId)} style={{
+            width: 32, height: 32, borderRadius: '50%', background: Wm, border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, cursor: 'pointer', color: Dk,
+          }}>{'\u2715'}</button>
         </div>
 
-        {/* Job summary mini card */}
-        {state.jobSummary && (
-          <div className="bg-warm rounded-xl px-4 py-3 mb-5 border border-dark/5 text-[13px] text-dark/60">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-base">{CAT_ICONS[state.jobSummary.category] ?? '🛠️'}</span>
-              <strong className="text-dark">{state.jobSummary.title}</strong>
+        {/* Diagnosis mini card */}
+        {summaryText && step !== 'outreach' && (
+          <div style={{
+            background: Wm, borderRadius: 12, padding: '12px 16px', marginBottom: 20,
+            border: `1px solid ${Dk}0D`, fontSize: 13, color: `${Dk}99`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 16 }}>{CAT_ICONS[category] ?? '\uD83D\uDEE0\uFE0F'}</span>
+              <strong style={{ color: Dk }}>{jobSummary?.title ?? diagnosis?.issue ?? category}</strong>
             </div>
-            {state.jobSummary.description && <p className="text-xs text-dark/40">{state.jobSummary.description}</p>}
+            <p style={{ fontSize: 12, color: `${Dk}66`, margin: 0, lineHeight: 1.5 }}>{summaryText.slice(0, 150)}{summaryText.length > 150 ? '...' : ''}</p>
           </div>
         )}
 
-        {state.matchFlowError && (
-          <div className="mb-5">
-            <ErrorState title="Something went wrong" message={state.matchFlowError} onRetry={() => dispatch({ type: 'SET_MATCH_STEP', step: 'preferences' })} />
-          </div>
+        {error && (
+          <div style={{
+            background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10,
+            padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#DC2626',
+          }}>{error}</div>
         )}
 
-        {state.bookedProvider ? (
-          <BookingConfirmation provider={state.bookedProvider} isDemo={isDemo} />
+        {booked ? (
+          /* Booking confirmation */
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%', background: `${Gr}15`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={Gr} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 12.75l6 6 9-13.5" /></svg>
+            </div>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: Dk, marginBottom: 6 }}>You're all set!</div>
+            <div style={{ fontSize: 14, color: '#6B6560', marginBottom: 16 }}>
+              <strong style={{ color: Dk }}>{booked.name}</strong> has been booked. They'll be in touch to confirm details.
+            </div>
+            <div style={{ background: Wm, borderRadius: 12, padding: '12px 16px', textAlign: 'left', fontSize: 14, color: '#6B6560' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><span>Quote</span><span style={{ fontWeight: 600, color: Dk }}>{booked.quote}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><span>When</span><span style={{ fontWeight: 600, color: Dk }}>{booked.availability}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Rating</span><span style={{ fontWeight: 600, color: Dk }}>{'\u2B50'} {booked.rating}</span></div>
+            </div>
+            {isDemo && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 12 }}>This is a demo — no actual booking was made</div>}
+          </div>
         ) : (
           <>
-            {state.matchStep === 'tier' && <TierStep state={state} dispatch={dispatch} />}
-            {state.matchStep === 'preferences' && <PreferencesStep state={state} dispatch={dispatch} startOutreach={startOutreach} />}
-            {state.matchStep === 'outreach' && (() => {
-              const outreachStatusObj: OutreachStatus = {
-                providers_contacted: state.outreach.providersContacted,
-                providers_responded: Object.values(state.outreach.channels).reduce((sum, ch) => sum + ch.responded, 0),
-                outreach_channels: {
-                  voice: { attempted: state.outreach.channels.voice.attempted, connected: state.outreach.channels.voice.responded },
-                  sms: { attempted: state.outreach.channels.sms.attempted, connected: state.outreach.channels.sms.responded },
-                  web: { attempted: state.outreach.channels.web.attempted, connected: state.outreach.channels.web.responded },
-                },
-                status: state.outreach.active ? 'dispatching' : 'completed',
-              };
-              const logEntries: LogEntry[] = [];
-              if (state.outreach.providersContacted > 0) logEntries.push({ msg: `Contacting ${state.outreach.providersContacted} providers...`, type: 'system' });
-              if (state.outreach.channels.voice.attempted > 0) logEntries.push({ msg: `${state.outreach.channels.voice.attempted} voice calls`, type: 'voice' });
-              if (state.outreach.channels.sms.attempted > 0) logEntries.push({ msg: `${state.outreach.channels.sms.attempted} SMS messages`, type: 'sms' });
-              if (state.outreach.channels.web.attempted > 0) logEntries.push({ msg: `${state.outreach.channels.web.attempted} web contacts`, type: 'web' });
-              const responded = Object.values(state.outreach.channels).reduce((sum, ch) => sum + ch.responded, 0);
-              if (responded > 0) logEntries.push({ msg: `${responded} quote(s) received!`, type: 'success' });
-              if (!state.outreach.active) logEntries.push({ msg: responded > 0 ? `${responded} quotes ready!` : 'Outreach complete', type: 'done' });
-              return (
-                <>
+            {/* TIER step */}
+            {step === 'tier' && (
+              <div>
+                <p style={{ fontSize: 14, color: `${Dk}99`, marginBottom: 16, lineHeight: 1.6 }}>
+                  Homie's AI agent will call, text, and search the web to find available pros in your area. Choose your speed:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {DIAG_TIERS.map(t => (
+                    <button key={t.id} onClick={() => handleTierSelect(t)} style={{
+                      display: 'flex', alignItems: 'center', padding: '16px 18px', borderRadius: 14, cursor: 'pointer',
+                      border: t.popular ? `2px solid ${O}` : '2px solid rgba(0,0,0,0.06)',
+                      background: t.popular ? 'rgba(232,99,43,0.03)' : 'white',
+                      textAlign: 'left', position: 'relative', transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={e => { if (!t.popular) e.currentTarget.style.borderColor = 'rgba(0,0,0,0.15)'; }}
+                      onMouseLeave={e => { if (!t.popular) e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)'; }}
+                    >
+                      {t.popular && <div style={{
+                        position: 'absolute', top: -9, right: 14, background: O, color: 'white',
+                        fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 100,
+                      }}>RECOMMENDED</div>}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: Dk }}>
+                          {t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>{'\u00B7'} {t.time}</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
+                      </div>
+                      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : Dk }}>{t.price}</div>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ textAlign: 'center', marginTop: 14 }}>
+                  <div style={{ fontSize: 13, color: Gr, fontWeight: 600 }}>{'\u2705'} Only charged if you receive quotes</div>
+                  <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>100% satisfaction guarantee — no quotes, no charge</div>
+                  <div style={{ fontSize: 11, color: '#bbb', marginTop: 8, lineHeight: 1.5, maxWidth: 400, marginLeft: 'auto', marginRight: 'auto' }}>
+                    By selecting a tier, you authorize Homie to contact service providers on your behalf via phone call, text message, and email to obtain quotes for your request.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PREFERENCES step */}
+            {step === 'preferences' && (
+              <div>
+                <p style={{ fontSize: 14, color: `${Dk}99`, marginBottom: 16, lineHeight: 1.6 }}>
+                  A few quick details so Homie can find the right pros:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {/* Zip code */}
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: Dk, display: 'block', marginBottom: 6 }}>Zip Code</label>
+                    <input
+                      value={zip}
+                      onChange={e => setZip(e.target.value.replace(/\D/g, ''))}
+                      placeholder="e.g. 92103"
+                      maxLength={5}
+                      inputMode="numeric"
+                      style={{
+                        width: '100%', padding: '12px 14px', borderRadius: 10, fontSize: 15,
+                        border: '1.5px solid rgba(0,0,0,0.08)', outline: 'none', color: Dk,
+                        fontFamily: "'DM Sans', sans-serif", background: Wm, boxSizing: 'border-box',
+                      }}
+                      onFocus={e => e.target.style.borderColor = `${O}50`}
+                      onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
+                    />
+                  </div>
+                  {/* Timing */}
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: Dk, display: 'block', marginBottom: 6 }}>When do you need this done?</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                      {['ASAP', 'This week', 'This month', 'Flexible'].map(t => (
+                        <button key={t} onClick={() => setTiming(t)} style={{
+                          padding: '10px 12px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                          border: timing === t ? `1.5px solid ${O}` : '1.5px solid rgba(0,0,0,0.08)',
+                          background: timing === t ? `${O}0A` : 'white',
+                          color: timing === t ? O : `${Dk}99`,
+                          fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
+                        }}>{t}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Budget */}
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: Dk, display: 'block', marginBottom: 6 }}>Budget range</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                      {['Under $100', '$100-250', '$250-500', '$500+', 'Flexible'].map(b => (
+                        <button key={b} onClick={() => setBudget(b)} style={{
+                          padding: '10px 8px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                          border: budget === b ? `1.5px solid ${O}` : '1.5px solid rgba(0,0,0,0.08)',
+                          background: budget === b ? `${O}0A` : 'white',
+                          color: budget === b ? O : `${Dk}99`,
+                          fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
+                        }}>{b}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                {/* Launch button */}
+                <button onClick={() => { void handleLaunchAgent(); }} disabled={!isPrefsValid || loading} style={{
+                  width: '100%', marginTop: 20, padding: '14px 0', borderRadius: 14, border: 'none',
+                  fontSize: 15, fontWeight: 700, cursor: isPrefsValid && !loading ? 'pointer' : 'default',
+                  background: isPrefsValid && !loading ? O : 'rgba(0,0,0,0.08)',
+                  color: isPrefsValid && !loading ? 'white' : 'rgba(0,0,0,0.25)',
+                  fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s',
+                  boxShadow: isPrefsValid && !loading ? `0 4px 16px ${O}40` : 'none',
+                }}>
+                  {loading ? 'Creating job...' : `\uD83D\uDE80 Launch Homie Agent \u2014 ${tier === 'emergency' ? '$29.99' : tier === 'priority' ? '$19.99' : '$9.99'}`}
+                </button>
+                <button onClick={() => setStep('tier')} style={{
+                  width: '100%', marginTop: 8, padding: '10px 0', border: 'none', background: 'none',
+                  fontSize: 13, color: '#9B9490', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                }}>{'\u2190'} Back to pricing</button>
+              </div>
+            )}
+
+            {/* AUTH GATE step */}
+            {step === 'auth_gate' && (
+              <div>
+                <p style={{ fontSize: 14, color: `${Dk}99`, marginBottom: 16, lineHeight: 1.6 }}>
+                  Almost there! You'll need to sign in so we can save your quotes and send you results.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button onClick={() => handleSaveAndAuth('/login?redirect=/chat')} style={{
+                    padding: '14px 0', borderRadius: 100, border: 'none', fontSize: 16, fontWeight: 600,
+                    background: O, color: 'white', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                  }}>Sign in</button>
+                  <button onClick={() => handleSaveAndAuth('/register?redirect=/chat')} style={{
+                    padding: '14px 0', borderRadius: 100, border: `2px solid ${O}`, fontSize: 16, fontWeight: 600,
+                    background: 'white', color: O, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                  }}>Create account</button>
+                </div>
+                <button onClick={() => setStep('preferences')} style={{
+                  width: '100%', marginTop: 12, padding: '10px 0', border: 'none', background: 'none',
+                  fontSize: 13, color: '#9B9490', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                }}>{'\u2190'} Back</button>
+              </div>
+            )}
+
+            {/* OUTREACH step */}
+            {step === 'outreach' && (
+              <>
+                <div style={{ marginBottom: 16 }}>
                   <HomieOutreachLive
                     status={outreachStatusObj}
                     log={logEntries}
-                    done={!state.outreach.active}
-                    showSafeNotice={state.outreach.active}
+                    done={outreachDone}
+                    showSafeNotice={!outreachDone}
                     accountLink="/account?tab=quotes"
                   />
-                  {costEstimate && (
-                    <div style={{ marginTop: 12 }}>
-                      <EstimateCard estimate={costEstimate} />
+                </div>
+
+                {costEstimate && (
+                  <div style={{ marginBottom: 12 }}>
+                    <EstimateCard estimate={costEstimate} />
+                  </div>
+                )}
+
+                {providers.map((p, i) => (
+                  <div key={i} style={{ marginBottom: 10 }}>
+                    <div onClick={() => setSelected(selected === i ? null : i)} style={{
+                      background: 'white', borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
+                      border: selected === i ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
+                      boxShadow: selected === i ? `0 4px 20px ${O}18` : '0 1px 4px rgba(0,0,0,0.03)',
+                      transition: 'all 0.2s',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div>
+                          <span style={{ fontWeight: 700, fontSize: 16, color: Dk }}>{p.name}</span>
+                          <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'\u2605'} {p.rating} ({p.reviews}){p.distance ? ` \u00B7 ${p.distance}` : ''}</span>
+                        </div>
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{p.quote}</span>
+                          {costEstimate ? (
+                            <EstimateBadge quotedPrice={p.quote} estimateLow={costEstimate.estimateLowCents} estimateHigh={costEstimate.estimateHighCents} />
+                          ) : (
+                            <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 14, color: Dk }}>{'\uD83D\uDCC5'} {p.availability}</span>
+                        <span style={{ background: Wm, padding: '2px 10px', borderRadius: 100, fontSize: 11, color: '#9B9490' }}>via {p.channel}</span>
+                      </div>
+                      {p.note && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic', marginTop: 6 }}>"{p.note}"</div>}
+                      {selected === i && !booked && (
+                        <div style={{ marginTop: 14 }} onClick={e => e.stopPropagation()}>
+                          {!isDemo && (
+                            <input
+                              id={`diag-modal-addr-${i}`}
+                              placeholder="Enter your service address"
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                width: '100%', padding: '10px 14px', borderRadius: 10, fontSize: 14,
+                                border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: Dk,
+                                fontFamily: "'DM Sans', sans-serif", marginBottom: 8, boxSizing: 'border-box',
+                              }}
+                            />
+                          )}
+                          <button onClick={async () => {
+                            if (isDemo) {
+                              setBooked(p as unknown as typeof DIAG_MOCK_PROVIDERS[number]);
+                              return;
+                            }
+                            const addrInput = document.getElementById(`diag-modal-addr-${i}`) as HTMLInputElement;
+                            const address = addrInput?.value?.trim();
+                            if (!address) { alert('Please enter your service address'); return; }
+                            if (jobId && 'responseId' in p) {
+                              try {
+                                await jobService.bookProvider(jobId, (p as DiagRealProvider).responseId, (p as DiagRealProvider).id, address);
+                                setBooked(p as unknown as typeof DIAG_MOCK_PROVIDERS[number]);
+                              } catch (err) {
+                                console.error('[DiagModal] Booking failed:', err);
+                              }
+                            }
+                          }} style={{
+                            width: '100%', padding: '13px 0', borderRadius: 100, border: 'none',
+                            background: O, color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                            fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40`,
+                          }}>Book {p.name.split(' ')[0]}</button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </>
-              );
-            })()}
-            {state.matchStep === 'results' && <ResultsStep providers={state.respondedProviders} onBook={handleBook} costEstimate={costEstimate} />}
+                  </div>
+                ))}
+
+                {outreachDone && providers.length > 0 && selected === null && !booked && (
+                  <div style={{ textAlign: 'center', color: '#9B9490', fontSize: 14, marginTop: 8 }}>{'\u2191'} Tap a provider to book</div>
+                )}
+              </>
+            )}
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Match flow sub-components ───────────────────────────────────────────────
-
-function TierStep({ state, dispatch }: { state: State; dispatch: React.Dispatch<Action> }) {
-  const tiers = [
-    { id: 'standard' as JobTier, name: 'Standard', price: '$9.99', icon: '📱', desc: 'Homie contacts 5 local pros via text & web', time: 'Results in ~2 hours', providers: '5 pros contacted' },
-    { id: 'priority' as JobTier, name: 'Priority', price: '$19.99', icon: '⚡', desc: 'Homie calls & texts 10 pros simultaneously', time: 'Results in ~30 min', providers: '10 pros contacted', popular: true },
-    { id: 'emergency' as JobTier, name: 'Emergency', price: '$29.99', icon: '🚨', desc: 'Homie blitzes every available pro for same-day service', time: 'Results in ~15 min', providers: '15 pros contacted' },
-  ];
-
-  return (
-    <div>
-      <p className="text-sm text-dark/60 mb-4 leading-relaxed">
-        Homie's AI agent will call, text, and search the web to find available pros in your area. Choose your speed:
-      </p>
-      <div className="flex flex-col gap-2.5">
-        {tiers.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => { dispatch({ type: 'SET_TIER', tier: t.id }); dispatch({ type: 'SET_MATCH_STEP', step: 'preferences' }); }}
-            className={`relative text-left border-2 rounded-xl px-[18px] py-4 transition-all hover:border-orange-500 ${state.tier === t.id ? 'border-orange-500' : 'border-dark/10'}`}
-          >
-            {t.popular && <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-bl-lg rounded-tr-[10px] uppercase tracking-wide">Most Popular</div>}
-            <div className="flex items-center gap-3">
-              <span className="text-[28px]">{t.icon}</span>
-              <div className="flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-base font-extrabold text-dark">{t.name}</span>
-                  <span className="text-lg font-extrabold text-orange-500">{t.price}</span>
-                </div>
-                <p className="text-[13px] text-dark/60 mt-0.5">{t.desc}</p>
-                <p className="text-xs text-dark/40 mt-0.5">{t.time} · {t.providers}</p>
-              </div>
-              <span className="text-xl text-dark/15">→</span>
-            </div>
-          </button>
-        ))}
-      </div>
-      <div className="text-center mt-3.5">
-        <p className="text-[13px] text-green-600 font-semibold">&#10003; Only charged if you receive quotes</p>
-        <p className="text-xs text-dark/40 mt-1">100% satisfaction guarantee — no quotes, no charge</p>
-        <p className="text-[10px] text-dark/20 mt-2 max-w-[360px] mx-auto leading-relaxed">
-          By selecting a tier, you authorize Homie to contact service providers on your behalf via phone call, text message, and email to obtain quotes for your request.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-const TIMINGS: { value: JobTiming; label: string }[] = [
-  { value: 'asap', label: 'ASAP' },
-  { value: 'this_week', label: 'This week' },
-  { value: 'this_month', label: 'This month' },
-  { value: 'flexible', label: 'Flexible' },
-];
-
-const BUDGETS = ['Under $200', '$200-500', '$500-1000', 'No limit'];
-
-function PreferencesStep({ state, dispatch, startOutreach }: { state: State; dispatch: React.Dispatch<Action>; startOutreach: () => void }) {
-  const [budget, setBudget] = useState('');
-  const isValid = /^\d{5}$/.test(state.zipCode) && state.timing && budget;
-
-  return (
-    <div>
-      <p className="text-sm text-dark/60 mb-4 leading-relaxed">A few quick details so Homie can find the right pros:</p>
-      <div className="space-y-3">
-        <div>
-          <label className="text-[13px] font-bold text-dark mb-1.5 block">Zip Code</label>
-          <input
-            value={state.zipCode} onChange={(e) => dispatch({ type: 'SET_ZIP', zip: e.target.value.replace(/\D/g, '') })}
-            placeholder="e.g. 92103" maxLength={5} inputMode="numeric"
-            className="w-full px-3.5 py-3 rounded-lg border border-dark/10 bg-warm text-[15px] text-dark outline-none focus:border-orange-500/30"
-          />
-        </div>
-        <div>
-          <label className="text-[13px] font-bold text-dark mb-1.5 block">When do you need this done?</label>
-          <div className="grid grid-cols-2 gap-2">
-            {TIMINGS.map((t) => (
-              <button key={t.value} onClick={() => dispatch({ type: 'SET_TIMING', timing: t.value })}
-                className={`py-2.5 px-3 rounded-lg border-[1.5px] text-[13px] font-semibold transition-all ${state.timing === t.value ? 'border-orange-500 bg-orange-500/[0.06] text-orange-600' : 'border-dark/10 text-dark/60'}`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className="text-[13px] font-bold text-dark mb-1.5 block">Budget range</label>
-          <div className="grid grid-cols-2 gap-2">
-            {BUDGETS.map((b) => (
-              <button key={b} onClick={() => setBudget(b)}
-                className={`py-2.5 px-3 rounded-lg border-[1.5px] text-[13px] font-semibold transition-all ${budget === b ? 'border-orange-500 bg-orange-500/[0.06] text-orange-600' : 'border-dark/10 text-dark/60'}`}>
-                {b}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      <button onClick={startOutreach} disabled={!isValid || state.matchFlowLoading}
-        className={`w-full mt-5 py-3.5 rounded-xl text-[15px] font-bold transition-all flex items-center justify-center gap-2 ${isValid && !state.matchFlowLoading ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white' : 'bg-dark/10 text-dark/30'}`}>
-        {state.matchFlowLoading && <Spinner size="sm" />}
-        {state.matchFlowLoading ? 'Creating job...' : `🚀 Launch Homie Agent — ${state.tier === 'emergency' ? '$29.99' : state.tier === 'priority' ? '$19.99' : '$9.99'}`}
-      </button>
-      <button onClick={() => dispatch({ type: 'SET_MATCH_STEP', step: 'tier' })} className="w-full mt-2 py-2.5 text-[13px] text-dark/40 hover:text-dark/60">
-        ← Back to pricing
-      </button>
-    </div>
-  );
-}
-
-function ResultsStep({ providers, onBook, costEstimate }: { providers: MatchedProvider[]; onBook: (p: MatchedProvider) => void; costEstimate?: CostEstimate | null }) {
-  if (providers.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-5xl mb-4">😔</p>
-        <h2 className="text-2xl font-bold mb-2">No responses yet</h2>
-        <p className="text-dark/50 text-sm mb-6 max-w-sm mx-auto">We weren't able to reach providers in time.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="bg-green-500/10 rounded-lg px-3.5 py-2.5 mb-4 flex items-center gap-2">
-        <span className="text-lg">✅</span>
-        <span className="text-[13px] font-bold text-green-600">{providers.length} pro{providers.length !== 1 ? 's' : ''} responded</span>
-      </div>
-      <div className="space-y-3">
-        {providers.map((p) => (
-          <ProviderCard key={p.id} name={p.name} googleRating={p.googleRating} reviewCount={p.reviewCount} quotedPrice={p.quotedPrice} availability={p.availability} message={p.message} channel={p.channel} onBook={() => onBook(p)} estimateLow={costEstimate?.estimateLowCents} estimateHigh={costEstimate?.estimateHighCents} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BookingConfirmation({ provider, isDemo }: { provider: MatchedProvider; isDemo?: boolean }) {
-  return (
-    <div className="text-center py-8 animate-fade-in">
-      <div className="w-16 h-16 bg-green-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
-        <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-        </svg>
-      </div>
-      <h2 className="text-2xl font-bold mb-2">You're all set!</h2>
-      <p className="text-dark/50 text-sm mb-6 max-w-sm mx-auto">
-        <strong className="text-dark">{provider.name}</strong> has been booked. They'll be in touch to confirm the details.
-      </p>
-      <div className="bg-warm rounded-xl p-4 max-w-sm mx-auto text-left space-y-2">
-        <div className="flex justify-between text-sm"><span className="text-dark/50">Quote</span><span className="font-semibold">${provider.quotedPrice}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-dark/50">When</span><span className="font-semibold">{provider.availability}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-dark/50">Rating</span><span className="font-semibold">⭐ {provider.googleRating}</span></div>
-      </div>
-      {isDemo && <p className="text-dark/30 text-xs mt-4">This is a demo — no actual booking was made</p>}
     </div>
   );
 }
