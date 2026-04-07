@@ -1824,6 +1824,7 @@ interface TrackReservation {
   numGuests?: number;
   guests?: number;
   numberOfGuests?: number;
+  contactId?: number | string;
 }
 
 // POST /:workspaceId/import/track/reservations — Import reservations from Track PMS
@@ -2042,6 +2043,67 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
       logger.warn({ err }, '[Track reservations] Failed to fetch units for ID mapping');
     }
 
+    // ── Batch-fetch contact details for all reservations ──────────────
+    const contactCache = new Map<string, { name: string; email: string | null; phone: string | null }>();
+
+    // Collect unique contactIds from all reservations
+    const allContactIds = new Set<string>();
+    for (const resList of allReservationsByUnit.values()) {
+      for (const r of resList) {
+        const cid = (r as Record<string, unknown>).contactId ?? (r as Record<string, unknown>).contact_id;
+        if (cid != null && String(cid) !== '') {
+          allContactIds.add(String(cid));
+        }
+      }
+    }
+
+    // Fetch contacts in parallel with concurrency limit of 5
+    if (allContactIds.size > 0) {
+      const contactIdArr = Array.from(allContactIds);
+      let loggedSample = false;
+
+      const fetchContact = async (contactId: string): Promise<void> => {
+        try {
+          const contactRes = await fetch(`${base}/pms/contacts/${contactId}`, {
+            headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+          });
+          if (!contactRes.ok) return;
+          const ct = contactRes.headers.get('content-type') || '';
+          if (!ct.includes('json')) return;
+          const contactData = await contactRes.json() as Record<string, unknown>;
+
+          // Log sample contact keys on first successful fetch
+          if (!loggedSample) {
+            logger.info({ contactKeys: Object.keys(contactData) }, '[Track reservations] sample contact fields');
+            loggedSample = true;
+          }
+
+          const firstName = String(contactData.firstName ?? contactData.first_name ?? contactData.name ?? '').trim();
+          const lastName = String(contactData.lastName ?? contactData.last_name ?? '').trim();
+          const fullName = [firstName, lastName].filter(Boolean).join(' ');
+
+          const email = (contactData.email ?? contactData.emailAddress ?? contactData.email_address ?? null) as string | null;
+          const phone = (contactData.phone ?? contactData.phoneNumber ?? contactData.phone_number ?? contactData.mobile ?? null) as string | null;
+
+          contactCache.set(contactId, {
+            name: fullName || '',
+            email: email || null,
+            phone: phone || null,
+          });
+        } catch (err) {
+          logger.warn({ err, contactId }, '[Track reservations] failed to fetch contact');
+        }
+      };
+
+      // Process in chunks of 5 for concurrency control
+      for (let i = 0; i < contactIdArr.length; i += 5) {
+        const chunk = contactIdArr.slice(i, i + 5);
+        await Promise.all(chunk.map(fetchContact));
+      }
+
+      logger.info({ total: allContactIds.size, fetched: contactCache.size }, '[Track reservations] contact fetch complete');
+    }
+
     for (const prop of linkedProps) {
       const unitId = prop.pmsExternalId!;
 
@@ -2094,11 +2156,56 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
         }
       }
 
+      // For per-unit fetches, batch-fetch any contacts not already cached
+      if (reservationEndpointStyle === 'per-unit' && trackReservations.length > 0) {
+        const missingContactIds: string[] = [];
+        for (const r of trackReservations) {
+          const cid = String((r as Record<string, unknown>).contactId ?? (r as Record<string, unknown>).contact_id ?? '');
+          if (cid && !contactCache.has(cid)) missingContactIds.push(cid);
+        }
+        const uniqueMissing = [...new Set(missingContactIds)];
+        let loggedSample = contactCache.size > 0;
+        const fetchContact = async (cId: string): Promise<void> => {
+          try {
+            const cRes = await fetch(`${base}/pms/contacts/${cId}`, {
+              headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+            });
+            if (!cRes.ok) return;
+            const ct = cRes.headers.get('content-type') || '';
+            if (!ct.includes('json')) return;
+            const cData = await cRes.json() as Record<string, unknown>;
+            if (!loggedSample) {
+              logger.info({ contactKeys: Object.keys(cData) }, '[Track reservations] sample contact fields');
+              loggedSample = true;
+            }
+            const firstName = String(cData.firstName ?? cData.first_name ?? cData.name ?? '').trim();
+            const lastName = String(cData.lastName ?? cData.last_name ?? '').trim();
+            const fullName = [firstName, lastName].filter(Boolean).join(' ');
+            const email = (cData.email ?? cData.emailAddress ?? cData.email_address ?? null) as string | null;
+            const phone = (cData.phone ?? cData.phoneNumber ?? cData.phone_number ?? cData.mobile ?? null) as string | null;
+            contactCache.set(cId, { name: fullName || '', email: email || null, phone: phone || null });
+          } catch (err) {
+            logger.warn({ err, contactId: cId }, '[Track reservations] failed to fetch contact');
+          }
+        };
+        for (let i = 0; i < uniqueMissing.length; i += 5) {
+          await Promise.all(uniqueMissing.slice(i, i + 5).map(fetchContact));
+        }
+      }
+
       for (const tr of trackReservations) {
         const externalId = tr.id != null ? String(tr.id) : null;
         if (!externalId) continue;
 
-        const guestName = tr.guestName ?? tr.guest ?? tr.name ?? null;
+        // Resolve contact info if available
+        const contactId = String((tr as Record<string, unknown>).contactId ?? (tr as Record<string, unknown>).contact_id ?? '');
+        const contact = contactId ? contactCache.get(contactId) : undefined;
+
+        const rawGuestName = tr.guestName ?? tr.guest ?? tr.name ?? null;
+        const guestName = (contact?.name && contact.name.length > 0) ? contact.name : rawGuestName;
+        const guestEmail = contact?.email ?? null;
+        const guestPhone = contact?.phone ?? null;
+
         const checkInStr = tr.arrivalDate ?? tr.checkIn ?? tr.startDate;
         const checkOutStr = tr.departureDate ?? tr.checkOut ?? tr.endDate;
 
@@ -2133,6 +2240,8 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           await db.update(reservations)
             .set({
               guestName,
+              guestEmail,
+              guestPhone,
               checkIn,
               checkOut,
               status,
@@ -2147,6 +2256,8 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
             propertyId: prop.id,
             workspaceId: req.workspaceId,
             guestName,
+            guestEmail,
+            guestPhone,
             checkIn,
             checkOut,
             status,

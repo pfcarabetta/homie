@@ -776,6 +776,8 @@ export interface Reservation {
   id: string;
   propertyId: string;
   guestName: string | null;
+  guestEmail: string | null;
+  guestPhone: string | null;
   checkIn: string;
   checkOut: string;
   status: string;

@@ -120,6 +120,13 @@
       "when": 1775549349086,
       "tag": "0016_hot_pandemic",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1775583678917,
+      "tag": "0017_wealthy_black_knight",
+      "breakpoints": true
     }
   ]
 }

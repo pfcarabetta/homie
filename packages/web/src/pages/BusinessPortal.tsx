@@ -843,6 +843,13 @@ function MiniCalendar({ reservations }: { reservations: Reservation[] }) {
           {reservations[hoveredRes].source && (
             <span style={{ color: '#9B9490', marginLeft: 8 }}>via {reservations[hoveredRes].source}</span>
           )}
+          {(reservations[hoveredRes].guestEmail || reservations[hoveredRes].guestPhone) && (
+            <div style={{ marginTop: 4, fontSize: 11, color: '#9B9490' }}>
+              {reservations[hoveredRes].guestEmail && <span>{reservations[hoveredRes].guestEmail}</span>}
+              {reservations[hoveredRes].guestEmail && reservations[hoveredRes].guestPhone && <span style={{ margin: '0 4px' }}>|</span>}
+              {reservations[hoveredRes].guestPhone && <span>{reservations[hoveredRes].guestPhone}</span>}
+            </div>
+          )}
         </div>
       )}
 
@@ -858,9 +865,16 @@ function MiniCalendar({ reservations }: { reservations: Reservation[] }) {
               onMouseEnter={() => setHoveredRes(i)}
               onMouseLeave={() => setHoveredRes(null)}
             >
-              <span style={{ width: 4, height: 16, borderRadius: 2, background: BAR_COLORS[i % BAR_COLORS.length], flexShrink: 0 }} />
-              <span style={{ fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {r.guestName || 'Guest'}
+              <span style={{ width: 4, height: 16, borderRadius: 2, background: BAR_COLORS[i % BAR_COLORS.length], flexShrink: 0, alignSelf: 'flex-start', marginTop: 4 }} />
+              <span style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                <span style={{ fontWeight: 500, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.guestName || 'Guest'}
+                </span>
+                {(r.guestEmail || r.guestPhone) && (
+                  <span style={{ display: 'block', fontSize: 10, color: '#9B9490', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {[r.guestEmail, r.guestPhone].filter(Boolean).join(' | ')}
+                  </span>
+                )}
               </span>
               <span style={{ color: '#9B9490', flexShrink: 0, fontSize: 11 }}>
                 {new Date(r.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}

@@ -6,6 +6,8 @@ export const reservations = pgTable('reservations', {
   propertyId: uuid('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
   workspaceId: uuid('workspace_id').notNull(),
   guestName: text('guest_name'),
+  guestEmail: text('guest_email'),
+  guestPhone: text('guest_phone'),
   checkIn: timestamp('check_in', { withTimezone: true }).notNull(),
   checkOut: timestamp('check_out', { withTimezone: true }).notNull(),
   status: text('status').notNull().default('confirmed'), // confirmed, checked_in, checked_out, cancelled
