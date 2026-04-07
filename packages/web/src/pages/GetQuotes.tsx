@@ -399,12 +399,16 @@ function DiagnosisSummary({ data }: { data: QuoteData }) {
           <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
             <span style={{ color: '#9B9490' }}>Category:</span> <span style={{ fontWeight: 600, color: D }}>{cat?.label}</span>
           </div>
-          <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
-            <span style={{ color: '#9B9490' }}>Zip:</span> <span style={{ fontWeight: 600, color: D }}>{data.zip}</span>
-          </div>
-          <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
-            <span style={{ color: '#9B9490' }}>Timing:</span> <span style={{ fontWeight: 600, color: D }}>{data.timing}</span>
-          </div>
+          {data.zip && (
+            <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
+              <span style={{ color: '#9B9490' }}>Zip:</span> <span style={{ fontWeight: 600, color: D }}>{data.zip}</span>
+            </div>
+          )}
+          {data.timing && (
+            <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
+              <span style={{ color: '#9B9490' }}>Timing:</span> <span style={{ fontWeight: 600, color: D }}>{data.timing}</span>
+            </div>
+          )}
         </div>
         <p style={{ fontSize: 12, color: '#9B9490', marginTop: 12, lineHeight: 1.5 }}>
           This diagnosis will be shared with providers so they can give you an accurate quote — no need to explain twice.
@@ -726,6 +730,534 @@ function buildHomeContext(home: HomeData): string {
   return parts.join(' ');
 }
 
+/* -- Quote Outreach Modal -- */
+interface QuoteOutreachModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  diagnosis: string;
+  category: string;
+  subcategory: string;
+  costEstimate: CostEstimate | null;
+  isDemo: boolean;
+  onBooked: (providerName: string) => void;
+  initialJobId?: string | null;
+}
+
+function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory, costEstimate: initialEstimate, isDemo, onBooked, initialJobId }: QuoteOutreachModalProps) {
+  const navigate = useNavigate();
+  const [step, setStep] = useState<'tier' | 'preferences' | 'auth_gate' | 'outreach'>(initialJobId ? 'outreach' : 'tier');
+  const [tier, setTier] = useState<string | null>(null);
+  const [zip, setZip] = useState('');
+  const [timing, setTiming] = useState<string | null>(null);
+  const [budget, setBudget] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(initialJobId ?? null);
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(initialEstimate);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Outreach state
+  const [log, setLog] = useState<typeof OUTREACH_LOG>([]);
+  const [providers, setProviders] = useState<(typeof MOCK_PROVIDERS[number] | RealProvider)[]>([]);
+  const [outreachDone, setOutreachDone] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [booked, setBooked] = useState<(typeof MOCK_PROVIDERS[number]) | null>(null);
+  const [stats, setStats] = useState({ contacted: 0, responded: 0 });
+  const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
+  const logRef = useRef<HTMLDivElement>(null);
+  const fetchedResponses = useRef(false);
+
+  useEffect(() => {
+    if (initialEstimate) setCostEstimate(initialEstimate);
+  }, [initialEstimate]);
+
+  useEffect(() => {
+    if (initialJobId) {
+      setJobId(initialJobId);
+      setStep('outreach');
+    }
+  }, [initialJobId]);
+
+  // Outreach WebSocket / demo effect
+  useEffect(() => {
+    if (step !== 'outreach') return;
+
+    // Real outreach via WebSocket
+    if (jobId && !isDemo) {
+      setLog([{ t: 0, msg: 'Launching AI agent...', type: 'system' }]);
+
+      const socket = connectJobSocket(jobId, (status: JobStatusResponse) => {
+        setStats({ contacted: status.providers_contacted, responded: status.providers_responded });
+        setChannels({
+          voice: status.outreach_channels.voice.attempted,
+          sms: status.outreach_channels.sms.attempted,
+          web: status.outreach_channels.web.attempted,
+        });
+
+        const newLog: typeof OUTREACH_LOG = [{ t: 0, msg: `Contacting ${status.providers_contacted} providers...`, type: 'system' }];
+        if (status.outreach_channels.voice.attempted > 0) newLog.push({ t: 1, msg: `${status.outreach_channels.voice.attempted} voice calls`, type: 'voice' });
+        if (status.outreach_channels.sms.attempted > 0) newLog.push({ t: 2, msg: `${status.outreach_channels.sms.attempted} SMS messages`, type: 'sms' });
+        if (status.outreach_channels.web.attempted > 0) newLog.push({ t: 3, msg: `${status.outreach_channels.web.attempted} web contacts`, type: 'web' });
+        if (status.providers_responded > 0) newLog.push({ t: 4, msg: `${status.providers_responded} quote(s) received!`, type: 'success' });
+        if (['completed', 'expired'].includes(status.status)) {
+          newLog.push({ t: 5, msg: status.providers_responded > 0 ? `${status.providers_responded} quotes ready!` : 'Outreach complete', type: 'done' });
+          setOutreachDone(true);
+        }
+        setLog(newLog);
+
+        if (status.providers_responded > 0 && !fetchedResponses.current) {
+          fetchedResponses.current = true;
+          void jobService.getResponses(jobId).then(res => {
+            if (res.data?.responses) {
+              setProviders(res.data.responses.map((r: ProviderResponseItem) => ({
+                id: r.provider.id,
+                responseId: r.id,
+                name: r.provider.name,
+                rating: parseFloat(r.provider.google_rating ?? '0'),
+                reviews: r.provider.review_count,
+                quote: r.quoted_price ?? 'TBD',
+                availability: r.availability ?? 'To be confirmed',
+                channel: r.channel,
+                note: r.message ?? '',
+                distance: '',
+              })));
+            }
+          });
+        }
+      });
+
+      return () => socket.close();
+    }
+
+    // If authenticated but no jobId yet, wait
+    if (!isDemo && authService.isAuthenticated()) {
+      setLog([{ t: 0, msg: 'Setting up your search...', type: 'system' }]);
+      return;
+    }
+
+    // Mock outreach for demo
+    const timers = OUTREACH_LOG.map((e) => setTimeout(() => {
+      setLog(p => [...p, e]);
+      if (['voice', 'sms', 'web'].includes(e.type)) setStats(s => ({ ...s, contacted: s.contacted + 1 }));
+      if (e.type === 'success') setStats(s => ({ ...s, responded: s.responded + 1 }));
+      if (e.type === 'done') setOutreachDone(true);
+    }, e.t));
+    const pt = MOCK_PROVIDERS.map(p => setTimeout(() => setProviders(prev => [...prev, p]), p.delay));
+    return () => { timers.forEach(clearTimeout); pt.forEach(clearTimeout); };
+  }, [step, jobId, isDemo]);
+
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
+
+  const handleTierSelect = (t: typeof TIERS[number]) => {
+    setTier(t.id);
+    setStep('preferences');
+  };
+
+  const handleLaunchAgent = async () => {
+    if (!tier || !zip || !timing) return;
+    setError(null);
+
+    if (isDemo) {
+      setStep('outreach');
+      return;
+    }
+
+    if (!authService.isAuthenticated()) {
+      setStep('auth_gate');
+      return;
+    }
+
+    setLoading(true);
+
+    // Generate cost estimate if we don't have one
+    if (!costEstimate && category && zip) {
+      const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
+      try {
+        const estRes = await estimateService.generate({
+          category,
+          subcategory: subcategory || category,
+          zip_code: zip,
+          urgency: urgencyMap[timing] || 'flexible',
+        });
+        if (estRes.data) setCostEstimate(estRes.data);
+      } catch { /* ignore */ }
+    }
+
+    try {
+      const cat = CATEGORY_FLOWS[category];
+      const diagPayload: DiagnosisPayload = {
+        category,
+        severity: 'medium',
+        summary: diagnosis || `${cat?.label}: ${subcategory}`,
+        recommendedActions: [],
+      };
+
+      const res = await jobService.createJob({
+        diagnosis: diagPayload,
+        timing: ({ 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' }[timing] ?? 'flexible') as 'asap' | 'this_week' | 'this_month' | 'flexible',
+        budget: budget === 'Under $100' ? 'under_100' : budget === '$100-250' ? '100_250' : budget === '$250-500' ? '250_500' : budget === '$500+' ? '500_plus' : 'flexible',
+        tier: tier as 'standard' | 'priority' | 'emergency',
+        zipCode: zip,
+      });
+
+      if (!res.data) {
+        setError('Something went wrong creating your job. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Try Stripe payment
+      try {
+        const payRes = await paymentService.createCheckout(res.data.id, '', '', '/quote');
+        if (payRes.data?.checkout_url) {
+          sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data.id, tier }));
+          window.location.href = payRes.data.checkout_url;
+          return;
+        }
+      } catch { /* payment not configured — continue */ }
+
+      // No checkout URL or payment not configured — launch outreach directly
+      setJobId(res.data.id);
+      setLoading(false);
+      setStep('outreach');
+    } catch (err) {
+      setError(`Something went wrong: ${(err as Error).message || 'Unknown error'}. Please try again.`);
+      setLoading(false);
+    }
+  };
+
+  const handleSaveAndAuth = (path: string) => {
+    sessionStorage.setItem('homie_pending_quote', JSON.stringify({
+      category,
+      a1: subcategory,
+      aiDiagnosis: diagnosis,
+      extra: null,
+      photo: null,
+      zip,
+      timing,
+      tier,
+    }));
+    navigate(path);
+  };
+
+  if (!isOpen) return null;
+
+  const outreachStatusObj: OutreachStatus = {
+    providers_contacted: stats.contacted,
+    providers_responded: stats.responded,
+    outreach_channels: {
+      voice: { attempted: channels.voice, connected: 0 },
+      sms: { attempted: channels.sms, connected: 0 },
+      web: { attempted: channels.web, connected: 0 },
+    },
+    status: outreachDone ? 'completed' : 'dispatching',
+  };
+  const logEntries: LogEntry[] = log.map(e => ({ msg: e.msg, type: e.type as LogEntry['type'] }));
+  const isPrefsValid = /^\d{5}$/.test(zip) && timing !== null && budget !== null;
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100,
+      background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }} onClick={onClose}>
+      <div style={{
+        background: 'white', borderRadius: 20, width: '100%', maxWidth: 520, maxHeight: '90vh',
+        overflow: 'auto', padding: '28px 24px 24px', position: 'relative',
+        animation: 'fadeSlide 0.3s ease', fontFamily: "'DM Sans', sans-serif",
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h3 style={{ fontSize: 20, fontWeight: 800, color: D, fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
+            {step === 'tier' ? 'Find a Pro' : step === 'preferences' ? 'Your Details' : step === 'auth_gate' ? 'Sign In to Continue' : 'Homie is on it'}
+          </h3>
+          <button onClick={onClose} style={{
+            width: 32, height: 32, borderRadius: '50%', background: W, border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, cursor: 'pointer', color: D,
+          }}>{'\u2715'}</button>
+        </div>
+
+        {/* Diagnosis mini card */}
+        {diagnosis && step !== 'outreach' && (
+          <div style={{
+            background: W, borderRadius: 12, padding: '12px 16px', marginBottom: 20,
+            border: `1px solid ${D}0D`, fontSize: 13, color: `${D}99`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 16 }}>{CATEGORY_FLOWS[category]?.icon ?? '\uD83D\uDEE0\uFE0F'}</span>
+              <strong style={{ color: D }}>{CATEGORY_FLOWS[category]?.label} — {subcategory}</strong>
+            </div>
+            <p style={{ fontSize: 12, color: `${D}66`, margin: 0, lineHeight: 1.5 }}>{diagnosis.slice(0, 150)}{diagnosis.length > 150 ? '...' : ''}</p>
+          </div>
+        )}
+
+        {error && (
+          <div style={{
+            background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10,
+            padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#DC2626',
+          }}>{error}</div>
+        )}
+
+        {booked ? (
+          /* Booking confirmation */
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%', background: `${G}15`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 12.75l6 6 9-13.5" /></svg>
+            </div>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, marginBottom: 6 }}>You're all set!</div>
+            <div style={{ fontSize: 14, color: '#6B6560', marginBottom: 16 }}>
+              <strong style={{ color: D }}>{booked.name}</strong> has been booked. They'll be in touch to confirm details.
+            </div>
+            <div style={{ background: W, borderRadius: 12, padding: '12px 16px', textAlign: 'left', fontSize: 14, color: '#6B6560' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><span>Quote</span><span style={{ fontWeight: 600, color: D }}>{booked.quote}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><span>When</span><span style={{ fontWeight: 600, color: D }}>{booked.availability}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Rating</span><span style={{ fontWeight: 600, color: D }}>{'\u2B50'} {booked.rating}</span></div>
+            </div>
+            {isDemo && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 12 }}>This is a demo — no actual booking was made</div>}
+          </div>
+        ) : (
+          <>
+            {/* TIER step */}
+            {step === 'tier' && (
+              <div>
+                <p style={{ fontSize: 14, color: `${D}99`, marginBottom: 16, lineHeight: 1.6 }}>
+                  Homie's AI agent will call, text, and search the web to find available pros in your area. Choose your speed:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {TIERS.map(t => (
+                    <button key={t.id} onClick={() => handleTierSelect(t)} style={{
+                      display: 'flex', alignItems: 'center', padding: '16px 18px', borderRadius: 14, cursor: 'pointer',
+                      border: t.popular ? `2px solid ${O}` : '2px solid rgba(0,0,0,0.06)',
+                      background: t.popular ? 'rgba(232,99,43,0.03)' : 'white',
+                      textAlign: 'left', position: 'relative', transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={e => { if (!t.popular) e.currentTarget.style.borderColor = 'rgba(0,0,0,0.15)'; }}
+                      onMouseLeave={e => { if (!t.popular) e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)'; }}
+                    >
+                      {t.popular && <div style={{
+                        position: 'absolute', top: -9, right: 14, background: O, color: 'white',
+                        fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 100,
+                      }}>RECOMMENDED</div>}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: D }}>
+                          {t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>{'\u00B7'} {t.time}</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
+                      </div>
+                      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: t.popular ? O : D }}>{t.price}</div>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ textAlign: 'center', marginTop: 14 }}>
+                  <div style={{ fontSize: 13, color: G, fontWeight: 600 }}>{'\u2705'} Only charged if you receive quotes</div>
+                  <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>100% satisfaction guarantee — no quotes, no charge</div>
+                  <div style={{ fontSize: 11, color: '#bbb', marginTop: 8, lineHeight: 1.5, maxWidth: 400, marginLeft: 'auto', marginRight: 'auto' }}>
+                    By selecting a tier, you authorize Homie to contact service providers on your behalf via phone call, text message, and email to obtain quotes for your request.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PREFERENCES step */}
+            {step === 'preferences' && (
+              <div>
+                <p style={{ fontSize: 14, color: `${D}99`, marginBottom: 16, lineHeight: 1.6 }}>
+                  A few quick details so Homie can find the right pros:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {/* Zip code */}
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: D, display: 'block', marginBottom: 6 }}>Zip Code</label>
+                    <input
+                      value={zip}
+                      onChange={e => setZip(e.target.value.replace(/\D/g, ''))}
+                      placeholder="e.g. 92103"
+                      maxLength={5}
+                      inputMode="numeric"
+                      style={{
+                        width: '100%', padding: '12px 14px', borderRadius: 10, fontSize: 15,
+                        border: '1.5px solid rgba(0,0,0,0.08)', outline: 'none', color: D,
+                        fontFamily: "'DM Sans', sans-serif", background: W, boxSizing: 'border-box',
+                      }}
+                      onFocus={e => e.target.style.borderColor = `${O}50`}
+                      onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
+                    />
+                  </div>
+                  {/* Timing */}
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: D, display: 'block', marginBottom: 6 }}>When do you need this done?</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                      {['ASAP', 'This week', 'This month', 'Flexible'].map(t => (
+                        <button key={t} onClick={() => setTiming(t)} style={{
+                          padding: '10px 12px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                          border: timing === t ? `1.5px solid ${O}` : '1.5px solid rgba(0,0,0,0.08)',
+                          background: timing === t ? `${O}0A` : 'white',
+                          color: timing === t ? O : `${D}99`,
+                          fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
+                        }}>{t}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Budget */}
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: D, display: 'block', marginBottom: 6 }}>Budget range</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                      {['Under $100', '$100-250', '$250-500', '$500+', 'Flexible'].map(b => (
+                        <button key={b} onClick={() => setBudget(b)} style={{
+                          padding: '10px 8px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                          border: budget === b ? `1.5px solid ${O}` : '1.5px solid rgba(0,0,0,0.08)',
+                          background: budget === b ? `${O}0A` : 'white',
+                          color: budget === b ? O : `${D}99`,
+                          fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
+                        }}>{b}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                {/* Launch button */}
+                <button onClick={() => { void handleLaunchAgent(); }} disabled={!isPrefsValid || loading} style={{
+                  width: '100%', marginTop: 20, padding: '14px 0', borderRadius: 14, border: 'none',
+                  fontSize: 15, fontWeight: 700, cursor: isPrefsValid && !loading ? 'pointer' : 'default',
+                  background: isPrefsValid && !loading ? O : 'rgba(0,0,0,0.08)',
+                  color: isPrefsValid && !loading ? 'white' : 'rgba(0,0,0,0.25)',
+                  fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s',
+                  boxShadow: isPrefsValid && !loading ? `0 4px 16px ${O}40` : 'none',
+                }}>
+                  {loading ? 'Creating job...' : `\uD83D\uDE80 Launch Homie Agent \u2014 ${tier === 'emergency' ? '$29.99' : tier === 'priority' ? '$19.99' : '$9.99'}`}
+                </button>
+                <button onClick={() => setStep('tier')} style={{
+                  width: '100%', marginTop: 8, padding: '10px 0', border: 'none', background: 'none',
+                  fontSize: 13, color: '#9B9490', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                }}>{'\u2190'} Back to pricing</button>
+              </div>
+            )}
+
+            {/* AUTH GATE step */}
+            {step === 'auth_gate' && (
+              <div>
+                <p style={{ fontSize: 14, color: `${D}99`, marginBottom: 16, lineHeight: 1.6 }}>
+                  Almost there! You'll need to sign in so we can save your quotes and send you results.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button onClick={() => handleSaveAndAuth('/login?redirect=/quote')} style={{
+                    padding: '14px 0', borderRadius: 100, border: 'none', fontSize: 16, fontWeight: 600,
+                    background: O, color: 'white', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                  }}>Sign in</button>
+                  <button onClick={() => handleSaveAndAuth('/register?redirect=/quote')} style={{
+                    padding: '14px 0', borderRadius: 100, border: `2px solid ${O}`, fontSize: 16, fontWeight: 600,
+                    background: 'white', color: O, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                  }}>Create account</button>
+                </div>
+                <button onClick={() => setStep('preferences')} style={{
+                  width: '100%', marginTop: 12, padding: '10px 0', border: 'none', background: 'none',
+                  fontSize: 13, color: '#9B9490', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                }}>{'\u2190'} Back</button>
+              </div>
+            )}
+
+            {/* OUTREACH step */}
+            {step === 'outreach' && (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <HomieOutreachLive
+                    status={outreachStatusObj}
+                    log={logEntries}
+                    done={outreachDone}
+                    showSafeNotice={!outreachDone}
+                    accountLink="/account?tab=quotes"
+                  />
+                </div>
+
+                {costEstimate && (
+                  <div style={{ marginBottom: 12 }}>
+                    <EstimateCard estimate={costEstimate} />
+                  </div>
+                )}
+
+                {providers.map((p, i) => (
+                  <div key={i} style={{ marginBottom: 10 }}>
+                    <div onClick={() => setSelected(selected === i ? null : i)} style={{
+                      background: 'white', borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
+                      border: selected === i ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
+                      boxShadow: selected === i ? `0 4px 20px ${O}18` : '0 1px 4px rgba(0,0,0,0.03)',
+                      transition: 'all 0.2s',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div>
+                          <span style={{ fontWeight: 700, fontSize: 16, color: D }}>{p.name}</span>
+                          <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'\u2605'} {p.rating} ({p.reviews}){p.distance ? ` \u00B7 ${p.distance}` : ''}</span>
+                        </div>
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{p.quote}</span>
+                          {costEstimate ? (
+                            <EstimateBadge quotedPrice={p.quote} estimateLow={costEstimate.estimateLowCents} estimateHigh={costEstimate.estimateHighCents} />
+                          ) : (
+                            <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 14, color: D }}>{'\uD83D\uDCC5'} {p.availability}</span>
+                        <span style={{ background: W, padding: '2px 10px', borderRadius: 100, fontSize: 11, color: '#9B9490' }}>via {p.channel}</span>
+                      </div>
+                      {p.note && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic', marginTop: 6 }}>"{p.note}"</div>}
+                      {selected === i && !booked && (
+                        <div style={{ marginTop: 14 }}>
+                          {!isDemo && (
+                            <input
+                              id={`modal-addr-${i}`}
+                              placeholder="Enter your service address"
+                              style={{
+                                width: '100%', padding: '10px 14px', borderRadius: 10, fontSize: 14,
+                                border: '2px solid rgba(0,0,0,0.08)', outline: 'none', color: D,
+                                fontFamily: "'DM Sans', sans-serif", marginBottom: 8, boxSizing: 'border-box',
+                              }}
+                            />
+                          )}
+                          <button onClick={async () => {
+                            if (isDemo) {
+                              setBooked(p as unknown as typeof MOCK_PROVIDERS[number]);
+                              onBooked(p.name);
+                              return;
+                            }
+                            const addrInput = document.getElementById(`modal-addr-${i}`) as HTMLInputElement;
+                            const address = addrInput?.value?.trim();
+                            if (!address) { alert('Please enter your service address'); return; }
+                            if (jobId && 'responseId' in p) {
+                              try {
+                                await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id, address);
+                                setBooked(p as unknown as typeof MOCK_PROVIDERS[number]);
+                                onBooked(p.name);
+                              } catch (err) {
+                                console.error('[QuoteModal] Booking failed:', err);
+                              }
+                            }
+                          }} style={{
+                            width: '100%', padding: '13px 0', borderRadius: 100, border: 'none',
+                            background: O, color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                            fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40`,
+                          }}>Book {p.name.split(' ')[0]}</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {outreachDone && providers.length > 0 && selected === null && !booked && (
+                  <div style={{ textAlign: 'center', color: '#9B9490', fontSize: 14, marginTop: 8 }}>{'\u2191'} Tap a provider to book</div>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* -- MAIN COMPONENT -- */
 export default function GetQuotes() {
   useDocumentTitle('Get Home Repair Quotes in Minutes');
@@ -738,6 +1270,7 @@ export default function GetQuotes() {
   const [streaming, setStreaming] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -813,15 +1346,18 @@ export default function GetQuotes() {
             void fetchAPI('/api/v1/payments/dispatch/' + paidJobId, { method: 'POST' }).catch(() => {});
             setJobId(paidJobId);
             addAssistant("Payment confirmed! Launching your AI agent now \uD83D\uDE80");
-            setPhase('outreach');
+            setPhase('diagnosis');
+            setModalOpen(true);
             scrollDown();
           } else {
             addAssistant("Payment was not completed. Please try again.");
-            setPhase('tier');
+            setPhase('diagnosis');
+            setModalOpen(true);
           }
         }).catch(() => {
           addAssistant("Could not verify payment. Please try again.");
-          setPhase('tier');
+          setPhase('diagnosis');
+          setModalOpen(true);
         });
         return;
       } catch { /* ignore */ }
@@ -832,15 +1368,16 @@ export default function GetQuotes() {
       return;
     }
 
-    // Check if returning from login with pending quote — resume at tier selection
+    // Check if returning from login with pending quote — resume with modal open
     const pending = sessionStorage.getItem('homie_pending_quote');
     if (pending && authService.isAuthenticated()) {
       sessionStorage.removeItem('homie_pending_quote');
       try {
         const saved = JSON.parse(pending) as QuoteData;
         setData(saved);
-        addAssistant("Welcome back! Now let's set up payment to launch your search.");
-        setPhase('tier');
+        addAssistant("Welcome back! Let's finish setting up your search.");
+        setPhase('diagnosis');
+        setModalOpen(true);
         scrollDown();
         return;
       } catch { /* ignore bad data */ }
@@ -894,15 +1431,6 @@ export default function GetQuotes() {
     setPhase('waiting');
     // If we skipped drill-down (single sub), show parent label
     addUser(parentLabel && sub.label.startsWith('General') ? parentLabel : sub.label);
-    setTimeout(() => { addAssistant(c.q1.text); setPhase('q1'); }, 500);
-  };
-
-  const handleCategory = (cat: string | CatOption) => {
-    const id = typeof cat === 'string' ? cat : cat.id;
-    const c = CATEGORY_FLOWS[id];
-    setData(d => ({ ...d, category: id }));
-    setPhase('waiting');
-    addUser(c.label);
     setTimeout(() => { addAssistant(c.q1.text); setPhase('q1'); }, 500);
   };
 
@@ -1019,8 +1547,9 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             setStreaming(false);
             setData(d => ({ ...d, aiDiagnosis: diagText }));
             setTimeout(() => {
-              addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
-              setPhase('zip');
+              addAssistant("Got it \u2014 I've prepared your diagnosis. Let's find you a pro!");
+              setPhase('diagnosis');
+              setModalOpen(true);
               scrollDown();
             }, 300);
           },
@@ -1028,8 +1557,9 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             setStreaming(false);
             setData(d => ({ ...d, aiDiagnosis: `${cat?.label}: ${data.a1}. ${extraDetails || d.extra || ''}` }));
             setTimeout(() => {
-              addAssistant("Got it \u2014 what's your zip code so I can find pros near you?");
-              setPhase('zip');
+              addAssistant("Got it \u2014 I've prepared your diagnosis. Let's find you a pro!");
+              setPhase('diagnosis');
+              setModalOpen(true);
               scrollDown();
             }, 300);
           },
@@ -1044,167 +1574,6 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     setData(d => ({ ...d, photo: url }));
     setMessages(m => [...m, { role: 'user', text: '\uD83D\uDCF8 Photo added' }]);
     scrollDown();
-  };
-
-  const handleSkipAI = handleSkipFollowUp;
-
-  const handleZip = (zip: string) => {
-    setData(d => ({ ...d, zip }));
-    setPhase('waiting');
-    addUser(zip);
-    setTimeout(() => { addAssistant('When do you need this done?'); setPhase('timing'); }, 500);
-  };
-
-  // Keep a ref to latest data so async handlers can access it
-  const dataRef = useRef(data);
-  dataRef.current = data;
-
-  const handleTiming = (t: string) => {
-    setData(d => ({ ...d, timing: t }));
-    setPhase('waiting');
-    addUser(t);
-
-    // Use ref to get the latest data (zip is set from previous step)
-    const latest = dataRef.current;
-    if (latest.category && latest.zip) {
-      const urgencyMap: Record<string, string> = { 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' };
-      estimateService.generate({
-        category: latest.category,
-        subcategory: latest.a1 || latest.category,
-        zip_code: latest.zip,
-        urgency: urgencyMap[t] || 'flexible',
-      }).then(res => {
-        if (res.data) setCostEstimate(res.data);
-      }).catch(() => {});
-    }
-
-    setTimeout(() => {
-      addAssistant("Here's what I'll brief the providers on:");
-      setTimeout(() => {
-        setPhase('diagnosis');
-        scrollDown();
-        setTimeout(() => {
-          setMessages(m => [...m, { role: 'assistant', text: 'How fast do you want quotes? Pick a speed:' }]);
-          setPhase('tier');
-          scrollDown();
-        }, 1500);
-      }, 400);
-    }, 500);
-  };
-
-  const launchOutreach = async (tier: string, quoteData?: QuoteData) => {
-    const d = quoteData ?? data;
-    let createdJobId: string | null = null;
-
-    if (d.category && authService.isAuthenticated()) {
-      try {
-        const cat = CATEGORY_FLOWS[d.category];
-        const diagPayload: DiagnosisPayload = {
-          category: d.category,
-          severity: 'medium',
-          summary: d.aiDiagnosis || `${cat?.label}: ${d.a1}. ${d.extra || ''}`,
-          recommendedActions: [],
-        };
-
-        const res = await jobService.createJob({
-          diagnosis: diagPayload,
-          timing: (d.timing as 'asap' | 'this_week' | 'this_month' | 'flexible') ?? 'flexible',
-          budget: 'flexible',
-          tier: tier as 'standard' | 'priority' | 'emergency',
-          zipCode: d.zip,
-        });
-
-        if (res.data) {
-          createdJobId = res.data.id;
-          setJobId(createdJobId);
-        }
-      } catch {
-        // Job creation failed — continue with mock
-      }
-    }
-
-    addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-    setJobId(createdJobId); // ensure state is set before phase change
-    setPhase('outreach');
-    scrollDown();
-  };
-
-  const handleTier = (t: typeof TIERS[number]) => {
-    setData(d => ({ ...d, tier: t.id }));
-    setPhase('waiting');
-    addUser(`${t.name} \u2014 ${t.price}`);
-
-    if (isDemo) {
-      setTimeout(() => {
-        addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-        setPhase('outreach');
-        scrollDown();
-      }, 500);
-      return;
-    }
-
-    if (!authService.isAuthenticated()) {
-      setTimeout(() => {
-        addAssistant("Almost there! You'll need to sign in so we can save your quotes and send you results.");
-        setPhase('auth_gate');
-        scrollDown();
-      }, 500);
-      return;
-    }
-
-    const currentData = { ...data, tier: t.id };
-
-    setTimeout(() => {
-      addAssistant("Great choice! Let me set up your search...");
-      scrollDown();
-
-      const cat = currentData.category ? CATEGORY_FLOWS[currentData.category] : null;
-      const diagPayload: DiagnosisPayload = {
-        category: currentData.category ?? 'general',
-        severity: 'medium',
-        summary: currentData.aiDiagnosis || `${cat?.label}: ${currentData.a1}. ${currentData.extra || ''}`,
-        recommendedActions: [],
-      };
-
-      jobService.createJob({
-        diagnosis: diagPayload,
-        timing: ({ 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' }[currentData.timing ?? ''] ?? 'flexible') as 'asap' | 'this_week' | 'this_month' | 'flexible',
-        budget: 'flexible',
-        tier: t.id as 'standard' | 'priority' | 'emergency',
-        zipCode: currentData.zip,
-      }).then(res => {
-        if (!res.data) {
-          addAssistant('Something went wrong creating your job. Please try again.');
-          setPhase('tier');
-          return;
-        }
-
-        // Try Stripe payment
-        paymentService.createCheckout(res.data.id, '', '', '/quote').then(payRes => {
-          if (payRes.data?.checkout_url) {
-            sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data!.id, tier: t.id }));
-            window.location.href = payRes.data.checkout_url;
-          } else {
-            // No checkout URL — launch outreach directly
-            setJobId(res.data!.id);
-            addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-            setPhase('outreach');
-            scrollDown();
-          }
-        }).catch(() => {
-          // Payment not configured — launch outreach without payment
-          setJobId(res.data!.id);
-          addAssistant('Launching your AI agent now. Watch this \uD83D\uDC47');
-          setPhase('outreach');
-          scrollDown();
-        });
-      }).catch(err => {
-        console.error('[GetQuotes] Job creation failed:', err);
-        addAssistant(`Something went wrong: ${(err as Error).message || 'Unknown error'}. Please try again.`);
-        setPhase('tier');
-        scrollDown();
-      });
-    }, 500);
   };
 
   const repairGroups = CATEGORY_TREE.filter(g => g.type === 'repair').map(g => ({ id: g.label, icon: g.icon, label: g.label }));
@@ -1292,7 +1661,7 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             : <UserMsg key={i} text={m.text} />
         ))}
 
-        {(phase === 'diagnosis' || phase === 'tier' || phase === 'outreach') && data.a1 && (
+        {phase === 'diagnosis' && data.a1 && (
           <>
             <DiagnosisSummary data={data} />
             {costEstimate && (
@@ -1351,33 +1720,33 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             </div>
           </>
         )}
-        {phase === 'zip' && !streaming && <TextInput placeholder="Enter zip code..." onSubmit={handleZip} />}
-        {phase === 'timing' && !streaming && <QuickReplies options={['ASAP', 'This week', 'This month', 'Flexible']} onSelect={(opt) => handleTiming(opt as string)} />}
-        {phase === 'tier' && !streaming && <TierCards onSelect={handleTier} />}
-        {phase === 'auth_gate' && (
-          <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={() => {
-                sessionStorage.setItem('homie_pending_quote', JSON.stringify(data));
-                navigate('/login?redirect=/quote');
-              }} style={{
-                padding: '14px 0', borderRadius: 100, border: 'none', fontSize: 16, fontWeight: 600,
-                background: O, color: 'white', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-              }}>Sign in</button>
-              <button onClick={() => {
-                sessionStorage.setItem('homie_pending_quote', JSON.stringify(data));
-                navigate('/register?redirect=/quote');
-              }} style={{
-                padding: '14px 0', borderRadius: 100, border: `2px solid ${O}`, fontSize: 16, fontWeight: 600,
-                background: 'white', color: O, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-              }}>Create account</button>
-            </div>
+        {phase === 'diagnosis' && !modalOpen && data.a1 && (
+          <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+            <button onClick={() => setModalOpen(true)} style={{
+              padding: '14px 28px', borderRadius: 100, border: 'none', fontSize: 16, fontWeight: 600,
+              background: O, color: 'white', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              boxShadow: `0 4px 16px ${O}40`,
+            }}>Find a Pro</button>
           </div>
         )}
-        {phase === 'outreach' && <OutreachView isDemo={isDemo} jobId={jobId} costEstimate={costEstimate} />}
 
         <div ref={bottomRef} />
       </div>
+
+      {/* Quote Outreach Modal */}
+      <QuoteOutreachModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        diagnosis={data.aiDiagnosis || ''}
+        category={data.category || ''}
+        subcategory={data.a1 || ''}
+        costEstimate={costEstimate}
+        isDemo={isDemo}
+        initialJobId={jobId}
+        onBooked={(providerName: string) => {
+          addAssistant(`Great news! ${providerName} has been booked. They'll be in touch to confirm details.`);
+        }}
+      />
     </div>
   );
 }
