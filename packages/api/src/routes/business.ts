@@ -2116,6 +2116,9 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
         const guestCount = tr.numGuests ?? tr.guests ?? tr.numberOfGuests ?? null;
         const status = tr.status ?? 'confirmed';
 
+        // Skip cancelled reservations
+        if (status.toLowerCase() === 'cancelled' || status.toLowerCase() === 'canceled') continue;
+
         totalCount++;
 
         // Upsert: check if reservation with this pmsReservationId already exists for this property
@@ -2205,6 +2208,9 @@ router.get('/:workspaceId/properties/:propertyId/reservations', requireWorkspace
         eq(reservations.propertyId, propertyId),
         gte(reservations.checkIn, fromDate),
         lte(reservations.checkIn, toDate),
+        ne(reservations.status, 'Cancelled'),
+        ne(reservations.status, 'cancelled'),
+        ne(reservations.status, 'canceled'),
       ))
       .orderBy(reservations.checkIn);
 
