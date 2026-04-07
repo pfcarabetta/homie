@@ -2078,8 +2078,10 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
             const firstName = String(contact.firstName ?? contact.first_name ?? contact.givenName ?? '');
             const lastName = String(contact.lastName ?? contact.last_name ?? contact.familyName ?? '');
             const name = [firstName, lastName].filter(Boolean).join(' ');
-            const email = (contact.email ?? contact.emailAddress ?? contact.emails?.[0]) as string | null ?? null;
-            const phone = (contact.phone ?? contact.phoneNumber ?? contact.mobile ?? contact.phones?.[0]) as string | null ?? null;
+            const emails = contact.emails as string[] | undefined;
+            const phones = contact.phones as string[] | undefined;
+            const email = (contact.email ?? contact.emailAddress ?? (emails ? emails[0] : null)) as string | null ?? null;
+            const phone = (contact.phone ?? contact.phoneNumber ?? contact.mobile ?? (phones ? phones[0] : null)) as string | null ?? null;
             if (cid) contactCache.set(cid, { name, email, phone });
           }
         }
