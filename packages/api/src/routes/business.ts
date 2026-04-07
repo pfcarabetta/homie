@@ -1880,7 +1880,9 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
     const allReservationsByUnit = new Map<string, TrackReservation[]>();
 
     if (reservationEndpointStyle === 'global') {
-      let nextUrl: string | null = `${base}/pms/reservations?size=50`;
+      // Only fetch reservations with arrival in the last 30 days or future
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      let nextUrl: string | null = `${base}/pms/reservations?size=50&arrivalDate_gte=${thirtyDaysAgo}`;
       while (nextUrl) {
         try {
           logger.info({ url: nextUrl }, '[Track reservations] fetching global reservations page');
