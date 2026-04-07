@@ -1996,18 +1996,15 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
         const embedded = uData._embedded as Record<string, unknown> | undefined;
         const trackUnits = (embedded?.units ?? embedded?.unit ?? embedded?.properties ?? []) as Array<Record<string, unknown>>;
 
-        if (trackUnits.length > 0 && !unitIdMapping.size) {
-          // Log first unit to see all available ID fields
-          const sample = trackUnits[0];
-          logger.info({ sampleUnitKeys: Object.keys(sample), id: sample.id, unitId: sample.unitId, unitCode: sample.unitCode, externalId: sample.externalId, code: sample.code, name: sample.name }, '[Track reservations] sample unit fields');
-        }
-
+        // Log all units with their id and name to identify the mapping
         for (const tu of trackUnits) {
           const internalId = String(tu.id ?? '');
-          // The reservation unitId might correspond to a different field on the unit
-          // Try unitId, unitCode, code, externalId — whatever matches
-          unitIdMapping.set(internalId, internalId); // default: same
+          unitIdMapping.set(internalId, internalId);
         }
+
+        // Log unit id-to-name mapping for all units on this page
+        const unitSummary = trackUnits.map(tu => ({ id: tu.id, name: tu.name }));
+        logger.info({ units: JSON.stringify(unitSummary) }, '[Track reservations] unit id-name mapping');
 
         const links = uData._links as Record<string, { href?: string }> | undefined;
         const rawNext = links?.next?.href;
