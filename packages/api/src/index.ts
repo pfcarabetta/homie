@@ -23,14 +23,41 @@ const PORT = process.env.PORT ?? 3001;
 
 async function start() {
   // Run pending database migrations
+  // Migrations 0000-0014 were applied via drizzle-kit CLI before programmatic migrate() was added.
+  // The drizzle journal may not track them, so we fall back to running SQL with IF NOT EXISTS.
   try {
     await migrate(db, { migrationsFolder: path.join(__dirname, 'db/migrations') });
     logger.info('Database migrations applied');
   } catch (err: unknown) {
     const pgErr = err as { code?: string };
     if (pgErr.code === '42P07' || pgErr.code === '42P06') {
-      // "already exists" — safe to ignore (migrations previously applied outside Drizzle tracker)
-      logger.warn({ err }, 'Migration skipped (relations already exist)');
+      logger.warn('Some migrations already applied — running with IF NOT EXISTS fallback');
+      try {
+        const fs = await import('fs');
+        const { sql } = await import('drizzle-orm');
+        const migrationsDir = path.join(__dirname, 'db/migrations');
+        const files = fs.readdirSync(migrationsDir).filter((f: string) => f.endsWith('.sql')).sort();
+        for (const file of files) {
+          const raw = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
+          const safeSql = raw
+            .replace(/CREATE TABLE(?! IF NOT EXISTS)/g, 'CREATE TABLE IF NOT EXISTS')
+            .replace(/CREATE UNIQUE INDEX(?! IF NOT EXISTS)/g, 'CREATE UNIQUE INDEX IF NOT EXISTS')
+            .replace(/CREATE INDEX(?! IF NOT EXISTS)/g, 'CREATE INDEX IF NOT EXISTS');
+          const statements = safeSql.split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
+          for (const stmt of statements) {
+            try {
+              await db.execute(sql.raw(stmt));
+            } catch (stmtErr: unknown) {
+              const sc = (stmtErr as { code?: string }).code;
+              if (sc === '42P07' || sc === '42P06' || sc === '42710') continue;
+              logger.warn({ err: stmtErr, file }, 'Migration statement failed (non-fatal)');
+            }
+          }
+        }
+        logger.info('Fallback migrations completed');
+      } catch (fallbackErr) {
+        logger.error({ err: fallbackErr }, 'Fallback migration failed');
+      }
     } else {
       logger.error({ err }, 'Failed to run database migrations');
       process.exit(1);

@@ -1,4 +1,4 @@
-CREATE TABLE "reservations" (
+CREATE TABLE IF NOT EXISTS "reservations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"property_id" uuid NOT NULL,
 	"workspace_id" uuid NOT NULL,
