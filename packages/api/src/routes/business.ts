@@ -1872,6 +1872,9 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
         continue;
       }
 
+      // Log raw response structure for debugging
+      logger.info({ unitId, keys: Object.keys(trackData), embeddedKeys: trackData._embedded ? Object.keys(trackData._embedded as Record<string, unknown>) : null }, '[Track reservations import] Response structure');
+
       // Parse HAL+JSON response — check _embedded.reservations, _embedded.unitReservations, then top-level arrays
       let trackReservations: TrackReservation[] = [];
       if (Array.isArray(trackData)) {
@@ -1884,6 +1887,8 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           trackData.data ?? trackData.items ?? trackData.records ?? []
         ) as TrackReservation[];
       }
+
+      logger.info({ unitId, count: trackReservations.length, sample: trackReservations[0] ? JSON.stringify(trackReservations[0]).slice(0, 500) : null }, '[Track reservations import] Parsed reservations');
 
       for (const tr of trackReservations) {
         const externalId = tr.id != null ? String(tr.id) : null;
