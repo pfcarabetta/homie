@@ -13,6 +13,7 @@ interface ProviderCardProps {
   onBook: () => void;
   estimateLow?: number;
   estimateHigh?: number;
+  googlePlaceId?: string | null;
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -70,6 +71,7 @@ export default function ProviderCard({
   onBook,
   estimateLow,
   estimateHigh,
+  googlePlaceId,
 }: ProviderCardProps) {
   const ch = CHANNEL_ICONS[channel];
   const displayPrice = cleanQuote(quotedPrice);
@@ -82,6 +84,9 @@ export default function ProviderCard({
           <div className="flex items-center gap-2 mt-1">
             <StarRating rating={googleRating} />
             <span className="text-xs text-dark/40">({reviewCount})</span>
+            {googlePlaceId && (
+              <a href={`https://www.google.com/maps/place/?q=place_id:${googlePlaceId}`} target="_blank" rel="noopener" className="text-[11px] text-blue-600 font-semibold no-underline hover:underline">Reviews</a>
+            )}
           </div>
         </div>
         <span className="bg-dark/5 text-dark/60 text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0">

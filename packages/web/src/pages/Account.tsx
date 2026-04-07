@@ -435,6 +435,9 @@ function QuotesTab() {
                               <div>
                                 <span style={{ fontWeight: 600, fontSize: 14, color: D }}>{r.provider.name}</span>
                                 <span style={{ color: '#9B9490', fontSize: 11, marginLeft: 6 }}>★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})</span>
+                                {r.provider.google_place_id && (
+                                  <a href={`https://www.google.com/maps/place/?q=place_id:${r.provider.google_place_id}`} target="_blank" rel="noopener" onClick={e => e.stopPropagation()} style={{ fontSize: 10, color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginLeft: 6 }}>Reviews</a>
+                                )}
                               </div>
                               {r.quoted_price && (
                                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>

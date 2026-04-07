@@ -308,6 +308,7 @@ router.get('/:id/responses', async (req: Request, res: Response) => {
             google_rating: p.googleRating,
             review_count: p.reviewCount,
             categories: p.categories,
+            google_place_id: p.googlePlaceId,
           },
           channel: r.channel,
           quoted_price: r.quotedPrice,

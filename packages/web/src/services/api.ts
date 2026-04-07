@@ -140,6 +140,7 @@ export interface ProviderSummary {
   google_rating: string | null;
   review_count: number;
   categories: string[] | null;
+  google_place_id: string | null;
 }
 
 export interface ProviderResponseItem {

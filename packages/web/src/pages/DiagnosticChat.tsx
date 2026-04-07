@@ -1302,6 +1302,7 @@ interface DiagRealProvider {
   channel: string;
   note: string;
   distance: string;
+  googlePlaceId?: string | null;
 }
 
 function diagCleanPrice(price: string): string {
@@ -1418,6 +1419,7 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
                 channel: r.channel,
                 note: r.message ?? '',
                 distance: '',
+                googlePlaceId: r.provider.google_place_id,
               })));
             }
           });
@@ -1786,7 +1788,10 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                         <div>
                           <span style={{ fontWeight: 700, fontSize: 16, color: Dk }}>{p.name}</span>
-                          <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'\u2605'} {p.rating} ({p.reviews}){p.distance ? ` \u00B7 ${p.distance}` : ''}</span>
+                          <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'\u2605'} {p.rating} ({p.reviews}){p.distance ? ` · ${p.distance}` : ''}</span>
+                          {'googlePlaceId' in p && (p as DiagRealProvider).googlePlaceId && (
+                            <a href={`https://www.google.com/maps/place/?q=place_id:${(p as DiagRealProvider).googlePlaceId}`} target="_blank" rel="noopener" onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginLeft: 6 }}>Reviews</a>
+                          )}
                         </div>
                         <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                           <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{p.quote}</span>
