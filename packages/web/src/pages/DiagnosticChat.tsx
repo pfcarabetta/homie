@@ -1364,6 +1364,18 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
   const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
   const logRef = useRef<HTMLDivElement>(null);
   const fetchedResponses = useRef(0);
+  const [homeAddress, setHomeAddress] = useState('');
+
+  useEffect(() => {
+    if (!isDemo) {
+      accountService.getHome().then(res => {
+        if (res.data?.address) {
+          const parts = [res.data.address, res.data.city, res.data.state].filter(Boolean);
+          setHomeAddress(parts.join(', '));
+        }
+      }).catch(() => {});
+    }
+  }, [isDemo]);
 
   const O = '#E8632B';
   const Gr = '#1B9E77';
@@ -1826,6 +1838,7 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
                           {!isDemo && (
                             <input
                               id={`diag-modal-addr-${i}`}
+                              defaultValue={homeAddress}
                               placeholder="Enter your service address"
                               onClick={e => e.stopPropagation()}
                               style={{

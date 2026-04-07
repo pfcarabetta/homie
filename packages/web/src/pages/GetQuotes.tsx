@@ -505,6 +505,18 @@ function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId
   const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
   const logRef = useRef<HTMLDivElement>(null);
   const fetchedResponses = useRef(0);
+  const [homeAddress, setHomeAddress] = useState('');
+
+  useEffect(() => {
+    if (!isDemo) {
+      accountService.getHome().then(res => {
+        if (res.data?.address) {
+          const parts = [res.data.address, res.data.city, res.data.state].filter(Boolean);
+          setHomeAddress(parts.join(', '));
+        }
+      }).catch(() => {});
+    }
+  }, [isDemo]);
 
   useEffect(() => {
     // Real outreach via WebSocket
@@ -645,6 +657,7 @@ function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId
                 {!isDemo && (
                   <input
                     id={`addr-${i}`}
+                    defaultValue={homeAddress}
                     placeholder="Enter your service address"
                     style={{
                       width: '100%', padding: '10px 14px', borderRadius: 10, fontSize: 14,
@@ -798,6 +811,18 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
   const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
   const logRef = useRef<HTMLDivElement>(null);
   const fetchedResponses = useRef(0);
+  const [homeAddress, setHomeAddress] = useState('');
+
+  useEffect(() => {
+    if (!isDemo) {
+      accountService.getHome().then(res => {
+        if (res.data?.address) {
+          const parts = [res.data.address, res.data.city, res.data.state].filter(Boolean);
+          setHomeAddress(parts.join(', '));
+        }
+      }).catch(() => {});
+    }
+  }, [isDemo]);
 
   useEffect(() => {
     if (initialEstimate) setCostEstimate(initialEstimate);
@@ -1262,6 +1287,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                           {!isDemo && (
                             <input
                               id={`modal-addr-${i}`}
+                              defaultValue={homeAddress}
                               placeholder="Enter your service address"
                               onClick={e => e.stopPropagation()}
                               style={{

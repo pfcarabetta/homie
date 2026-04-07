@@ -266,12 +266,19 @@ function QuotesTab() {
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
   const [estimates, setEstimates] = useState<Record<string, CostEstimate>>({});
+  const [homeAddress, setHomeAddress] = useState('');
 
   useEffect(() => {
     accountService.getJobs().then(res => {
       setJobs(res.data?.jobs || []);
       setLoading(false);
     }).catch(() => setLoading(false));
+    accountService.getHome().then(res => {
+      if (res.data?.address) {
+        const parts = [res.data.address, res.data.city, res.data.state].filter(Boolean);
+        setHomeAddress(parts.join(', '));
+      }
+    }).catch(() => {});
   }, []);
 
   async function fetchEstimate(job: AccountJob) {
@@ -510,6 +517,7 @@ function QuotesTab() {
                               <div style={{ marginTop: 10 }}>
                                 <input
                                   id={`address-${r.id}`}
+                                  defaultValue={homeAddress}
                                   placeholder="Enter your service address"
                                   onClick={e => e.stopPropagation()}
                                   style={{
