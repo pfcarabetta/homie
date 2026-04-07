@@ -1858,7 +1858,19 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
         continue;
       }
 
-      const trackData = await trackRes.json() as Record<string, unknown>;
+      const contentType = trackRes.headers.get('content-type') || '';
+      if (!contentType.includes('json')) {
+        logger.warn({ contentType, unitId }, '[Track reservations import] Non-JSON response for unit, skipping');
+        continue;
+      }
+
+      let trackData: Record<string, unknown>;
+      try {
+        trackData = await trackRes.json() as Record<string, unknown>;
+      } catch {
+        logger.warn({ unitId }, '[Track reservations import] Failed to parse JSON response for unit');
+        continue;
+      }
 
       // Parse HAL+JSON response — check _embedded.reservations, _embedded.unitReservations, then top-level arrays
       let trackReservations: TrackReservation[] = [];
