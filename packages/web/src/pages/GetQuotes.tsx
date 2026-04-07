@@ -1564,22 +1564,29 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
 
   const generateDiagnosis = (extraDetails: string) => {
     const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
-    // Build history from the full AI conversation plus any extra details
-    const history: { role: 'user' | 'assistant'; content: string }[] = [...aiConvoRef.current];
-    if (extraDetails) {
-      history.push({ role: 'user', content: extraDetails });
-    }
-    // Fallback if no AI conversation happened
-    if (history.length === 0) {
-      history.push({ role: 'user', content: `I need ${cat?.label} help: ${data.a1}. ${extraDetails}` });
-    }
+    const catLabel = cat?.label ?? data.category ?? 'home service';
 
+    // Build a factual summary from collected data instead of using the chat AI
+    const parts: string[] = [];
+    if (data.a1) parts.push(data.a1);
+    // Gather all AI conversation user answers (skip the AI questions)
+    const userAnswers = aiConvoRef.current
+      .filter(m => m.role === 'user')
+      .map(m => m.content)
+      .filter(c => c.length > 3);
+    if (userAnswers.length > 0) parts.push(...userAnswers);
+    if (extraDetails) parts.push(extraDetails);
+
+    const context = parts.join('. ').replace(/\.\./g, '.').trim();
+
+    // Use a fresh session to generate the summary (not the chat session)
+    const summarySessionId = crypto.randomUUID();
     setStreaming(true);
     let diagText = '';
     setTimeout(() => {
       abortRef.current = diagnosticService.sendMessage(
-        sessionIdRef.current,
-        'TASK: Write a provider-ready dispatch summary in exactly 2-3 sentences. Describe what the homeowner needs fixed, include any relevant details they mentioned (brand, model, age, location in home, symptoms). Be specific and factual. Do NOT ask follow-up questions. Do NOT use conversational language like "Gotcha" or "great question". Start directly with what the issue is. This summary will be sent to service providers.',
+        summarySessionId,
+        `Write a 2-3 sentence provider-ready dispatch summary for a ${catLabel} job. Here are the details the homeowner provided: ${context}. Write ONLY the summary — no questions, no conversational language, no greetings. Start with what the issue is. This will be sent directly to service providers.`,
         {
           onToken: (token: string) => { diagText += token; },
           onDiagnosis: () => {},
@@ -1587,7 +1594,7 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
           onDone: () => {
             setStreaming(false);
             // Strip any follow-up questions the AI might have added
-            const cleaned = diagText.replace(/\n\n.*\?$/s, '').replace(/Do you.*\?/g, '').trim();
+            const cleaned = diagText.replace(/\n\n.*\?$/s, '').replace(/Do you.*\?/g, '').replace(/Is there.*\?/g, '').trim();
             setData(d => ({ ...d, aiDiagnosis: cleaned || diagText.trim() }));
             setTimeout(() => {
               addAssistant("Got it \u2014 I've prepared your diagnosis. Let's find you a pro!");
@@ -1598,7 +1605,7 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
           },
           onError: () => {
             setStreaming(false);
-            setData(d => ({ ...d, aiDiagnosis: `${cat?.label}: ${data.a1}. ${extraDetails || d.extra || ''}` }));
+            setData(d => ({ ...d, aiDiagnosis: `${catLabel} issue: ${context}` }));
             setTimeout(() => {
               addAssistant("Got it \u2014 I've prepared your diagnosis. Let's find you a pro!");
               setPhase('diagnosis');
@@ -1607,8 +1614,6 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             }, 300);
           },
         },
-        undefined,
-        history,
       );
     }, 300);
   };
