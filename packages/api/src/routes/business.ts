@@ -1984,12 +1984,42 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
       }
     }
 
-    // Log property ID mapping for debugging
-    const propIdMap = new Map(linkedProps.map(p => [p.pmsExternalId!, p.id]));
-    const allUnitIds = [...allReservationsByUnit.keys()];
-    const matchedUnits = allUnitIds.filter(uid => propIdMap.has(uid));
-    const unmatchedUnits = allUnitIds.filter(uid => !propIdMap.has(uid));
-    logger.info({ propertyExternalIds: linkedProps.map(p => p.pmsExternalId), reservationUnitIds: allUnitIds.slice(0, 20), matchedCount: matchedUnits.length, unmatchedCount: unmatchedUnits.length, unmatchedSample: unmatchedUnits.slice(0, 10) }, '[Track reservations] unit ID matching');
+    // Fetch Track units to build a mapping from Track internal id → unitId used in reservations
+    // Track units have an `id` field (internal DB id) but reservations may reference a different `unitId`
+    const unitIdMapping = new Map<string, string>(); // Track unit.id → the id used in reservations
+    try {
+      let unitsUrl: string | null = `${base}/pms/units?size=50`;
+      while (unitsUrl) {
+        const uRes = await fetch(unitsUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+        if (!uRes.ok) break;
+        const uData = await uRes.json() as Record<string, unknown>;
+        const embedded = uData._embedded as Record<string, unknown> | undefined;
+        const trackUnits = (embedded?.units ?? embedded?.unit ?? embedded?.properties ?? []) as Array<Record<string, unknown>>;
+
+        if (trackUnits.length > 0 && !unitIdMapping.size) {
+          // Log first unit to see all available ID fields
+          const sample = trackUnits[0];
+          logger.info({ sampleUnitKeys: Object.keys(sample), id: sample.id, unitId: sample.unitId, unitCode: sample.unitCode, externalId: sample.externalId, code: sample.code, name: sample.name }, '[Track reservations] sample unit fields');
+        }
+
+        for (const tu of trackUnits) {
+          const internalId = String(tu.id ?? '');
+          // The reservation unitId might correspond to a different field on the unit
+          // Try unitId, unitCode, code, externalId — whatever matches
+          unitIdMapping.set(internalId, internalId); // default: same
+        }
+
+        const links = uData._links as Record<string, { href?: string }> | undefined;
+        const rawNext = links?.next?.href;
+        if (rawNext && typeof rawNext === 'string' && rawNext !== unitsUrl) {
+          unitsUrl = rawNext.startsWith('http') ? rawNext : `https://${domain}${rawNext}`;
+        } else {
+          unitsUrl = null;
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, '[Track reservations] Failed to fetch units for ID mapping');
+    }
 
     for (const prop of linkedProps) {
       const unitId = prop.pmsExternalId!;
