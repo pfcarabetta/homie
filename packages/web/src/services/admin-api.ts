@@ -195,11 +195,32 @@ export const adminService = {
     return fetchAdmin<Array<{
       id: string;
       jobId: string;
+      providerId: string;
       providerName: string | null;
+      providerPhone: string | null;
+      providerEmail: string | null;
+      providerRating: string | null;
+      providerReviewCount: number;
+      googlePlaceId: string | null;
       homeownerEmail: string | null;
+      homeownerPhone: string | null;
+      homeownerName: string | null;
+      serviceAddress: string | null;
       status: string;
       confirmedAt: string;
+      quotedPrice: string | null;
+      availability: string | null;
+      message: string | null;
+      channel: string | null;
+      jobCategory: string | null;
+      jobSummary: string | null;
+      jobZipCode: string | null;
+      workspaceId: string | null;
     }>>(`/api/v1/admin/bookings?${q}`);
+  },
+
+  async cancelBooking(bookingId: string) {
+    return fetchAdmin<{ id: string; status: string }>(`/api/v1/admin/bookings/${bookingId}/cancel`, { method: 'POST' });
   },
 
   // Business accounts

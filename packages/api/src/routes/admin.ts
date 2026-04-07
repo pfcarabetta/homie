@@ -429,14 +429,33 @@ router.get('/bookings', async (req: Request, res: Response) => {
         .select({
           id: bookings.id,
           jobId: bookings.jobId,
+          providerId: bookings.providerId,
           providerName: providers.name,
+          providerPhone: providers.phone,
+          providerEmail: providers.email,
+          providerRating: providers.googleRating,
+          providerReviewCount: providers.reviewCount,
+          googlePlaceId: providers.googlePlaceId,
           homeownerEmail: homeowners.email,
+          homeownerPhone: homeowners.phone,
+          homeownerName: sql<string>`COALESCE(${homeowners.firstName} || ' ' || ${homeowners.lastName}, ${homeowners.firstName}, ${homeowners.email})`,
+          serviceAddress: bookings.serviceAddress,
           status: bookings.status,
           confirmedAt: bookings.confirmedAt,
+          quotedPrice: providerResponses.quotedPrice,
+          availability: providerResponses.availability,
+          message: providerResponses.message,
+          channel: providerResponses.channel,
+          jobCategory: sql<string>`${jobs.diagnosis}->>'category'`,
+          jobSummary: sql<string>`${jobs.diagnosis}->>'summary'`,
+          jobZipCode: jobs.zipCode,
+          workspaceId: jobs.workspaceId,
         })
         .from(bookings)
         .leftJoin(providers, eq(bookings.providerId, providers.id))
         .leftJoin(homeowners, eq(bookings.homeownerId, homeowners.id))
+        .leftJoin(providerResponses, eq(bookings.responseId, providerResponses.id))
+        .leftJoin(jobs, eq(bookings.jobId, jobs.id))
         .where(searchFilter)
         .orderBy(desc(bookings.confirmedAt))
         .limit(limit)
@@ -447,6 +466,21 @@ router.get('/bookings', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /admin/bookings]');
     res.status(500).json({ data: null, error: 'Failed to fetch bookings', meta: {} });
+  }
+});
+
+// POST /api/v1/admin/bookings/:id/cancel
+router.post('/bookings/:id/cancel', async (req: Request, res: Response) => {
+  try {
+    const [updated] = await db.update(bookings).set({ status: 'cancelled' }).where(eq(bookings.id, req.params.id)).returning();
+    if (!updated) {
+      res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
+      return;
+    }
+    res.json({ data: { id: updated.id, status: 'cancelled' }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/bookings/:id/cancel]');
+    res.status(500).json({ data: null, error: 'Failed to cancel booking', meta: {} });
   }
 });
 
