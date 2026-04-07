@@ -797,10 +797,10 @@ function MiniCalendar({ reservations }: { reservations: Reservation[] }) {
                       )}
                       {/* Check-in / check-out dot indicators */}
                       {(hasCheckIn || hasCheckOut) && !isToday && (
-                        <div style={{
-                          position: 'absolute', top: 0, right: 1, width: 5, height: 5, borderRadius: '50%',
-                          background: hasCheckIn ? G : O,
-                        }} />
+                        <div style={{ position: 'absolute', top: 0, right: 1, display: 'flex', gap: 1 }}>
+                          {hasCheckOut && <div style={{ width: 5, height: 5, borderRadius: '50%', background: O }} />}
+                          {hasCheckIn && <div style={{ width: 5, height: 5, borderRadius: '50%', background: G }} />}
+                        </div>
                       )}
                     </div>
                   );
