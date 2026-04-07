@@ -1883,7 +1883,9 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
       let nextUrl: string | null = `${base}/pms/reservations?size=200`;
       while (nextUrl) {
         try {
+          logger.info({ url: nextUrl }, '[Track reservations] fetching global reservations page');
           const gRes = await fetch(nextUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+          logger.info({ status: gRes.status }, '[Track reservations] global page response');
           if (!gRes.ok) break;
           const ct = gRes.headers.get('content-type') || '';
           if (!ct.includes('json')) break;
