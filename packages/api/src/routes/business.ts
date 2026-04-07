@@ -1880,7 +1880,7 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
     const allReservationsByUnit = new Map<string, TrackReservation[]>();
 
     if (reservationEndpointStyle === 'global') {
-      let nextUrl: string | null = `${base}/pms/reservations?size=200`;
+      let nextUrl: string | null = `${base}/pms/reservations?size=50`;
       while (nextUrl) {
         try {
           logger.info({ url: nextUrl }, '[Track reservations] fetching global reservations page');
