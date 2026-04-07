@@ -1880,9 +1880,10 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
     const allReservationsByUnit = new Map<string, TrackReservation[]>();
 
     if (reservationEndpointStyle === 'global') {
-      // Only fetch reservations with arrival in the last 30 days or future
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      let nextUrl: string | null = `${base}/pms/reservations?size=50&arrivalDate_gte=${thirtyDaysAgo}`;
+      // Fetch reservations sorted by arrival descending so newest come first
+      // Stop paginating once we hit old reservations to avoid fetching entire history
+      let nextUrl: string | null = `${base}/pms/reservations?size=50&sort=-arrivalDate`;
+      let stopPaginating = false;
       while (nextUrl) {
         try {
           logger.info({ url: nextUrl }, '[Track reservations] fetching global reservations page');
@@ -1913,21 +1914,32 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
             logger.info({ totalItems: (gData as Record<string, unknown>).total_items }, '[Track reservations] global fetch returned 0 items');
           }
 
+          // Stop if all reservations on this page have old departure dates (>90 days ago)
+          const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          let allOld = items.length > 0;
           for (const r of items) {
             const rr = r as Record<string, unknown>;
-            const uid = String(rr.unitId ?? rr.unit_id ?? rr.propertyId ?? rr.property_id ?? rr.unit ?? '');
-            if (!uid) {
-              logger.warn({ reservationId: rr.id, keys: Object.keys(rr) }, '[Track reservations] reservation has no unit ID field');
-              continue;
+            const depStr = (rr.departureDate ?? rr.checkOut ?? rr.endDate) as string | undefined;
+            if (depStr && new Date(depStr) > ninetyDaysAgo) {
+              allOld = false;
             }
+            const uid = String(rr.unitId ?? rr.unit_id ?? rr.propertyId ?? rr.property_id ?? rr.unit ?? '');
+            if (!uid) continue;
             if (!allReservationsByUnit.has(uid)) allReservationsByUnit.set(uid, []);
             allReservationsByUnit.get(uid)!.push(r);
+          }
+
+          if (allOld) {
+            logger.info('[Track reservations] all reservations on page are old, stopping pagination');
+            stopPaginating = true;
           }
 
           // Pagination
           const links = gData._links as Record<string, { href?: string }> | undefined;
           const rawNext = links?.next?.href ?? (gData as Record<string, unknown>).next;
-          if (rawNext && typeof rawNext === 'string' && rawNext !== nextUrl) {
+          if (stopPaginating) {
+            nextUrl = null;
+          } else if (rawNext && typeof rawNext === 'string' && rawNext !== nextUrl) {
             nextUrl = rawNext.startsWith('http') ? rawNext : `https://${domain}${rawNext}`;
           } else {
             nextUrl = null;
