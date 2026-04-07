@@ -15,6 +15,7 @@ export interface CreateJobBody {
   consent: boolean;
   workspace_id?: string;
   property_id?: string;
+  notify_guest?: boolean;
 }
 
 export interface CreateJobResponse {

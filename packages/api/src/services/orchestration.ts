@@ -472,8 +472,9 @@ export async function dispatchJob(jobId: string): Promise<void> {
   void emitTrackingEvent(jobId, 'reported', 'Issue Reported', diagnosis.summary?.slice(0, 200));
   void emitTrackingEvent(jobId, 'dispatched', 'Dispatching Pros', `Contacting ${eligible.length} providers in the area via phone, SMS, and web.`);
 
-  // Auto-share tracking with current guest if property is occupied
-  if (job.propertyId) {
+  // Auto-share tracking with current guest if property is occupied AND user opted in
+  const notifyGuest = (diagnosis as unknown as Record<string, unknown>).notifyGuest === true;
+  if (job.propertyId && notifyGuest) {
     try {
       const now = new Date();
       const [currentReservation] = await db

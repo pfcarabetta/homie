@@ -162,11 +162,16 @@ router.post('/', async (req: Request, res: Response) => {
     const consentText = 'By proceeding, you authorize Homie to contact service providers on your behalf via phone call, text message, and email to obtain quotes for your request.';
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // Include notify_guest flag in diagnosis metadata if provided
+    const diagnosisData = body.notify_guest
+      ? { ...body.diagnosis, notifyGuest: true }
+      : body.diagnosis;
+
     const [job] = await db
       .insert(jobs)
       .values({
         homeownerId: req.homeownerId,
-        diagnosis: body.diagnosis,
+        diagnosis: diagnosisData,
         photoUrls: body.photo_urls,
         preferredTiming: body.timing,
         budget: body.budget,

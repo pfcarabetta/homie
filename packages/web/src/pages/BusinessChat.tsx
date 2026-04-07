@@ -592,9 +592,10 @@ export default function BusinessChat() {
   // Occupancy check state
   const [occupancyCheck, setOccupancyCheck] = useState<{
     occupied: boolean;
-    reservation: { guestName: string | null; checkIn: string; checkOut: string } | null;
+    reservation: { guestName: string | null; guestEmail: string | null; guestPhone: string | null; checkIn: string; checkOut: string } | null;
   } | null>(null);
   const [entryPermission, setEntryPermission] = useState<string | null>(null);
+  const [notifyGuest, setNotifyGuest] = useState(false);
 
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1085,6 +1086,8 @@ export default function BusinessChat() {
             occupied: true,
             reservation: {
               guestName: occRes.data.reservation.guestName,
+              guestEmail: occRes.data.reservation.guestEmail ?? null,
+              guestPhone: occRes.data.reservation.guestPhone ?? null,
               checkIn: occRes.data.reservation.checkIn,
               checkOut: occRes.data.reservation.checkOut,
             },
@@ -1134,6 +1137,7 @@ export default function BusinessChat() {
         zipCode,
         workspaceId: selectedWorkspace || undefined,
         propertyId: selectedProperty?.id || undefined,
+        notifyGuest: notifyGuest || undefined,
       });
 
       if (res.data) {
@@ -1610,9 +1614,20 @@ export default function BusinessChat() {
                   </button>
                 </div>
 
-                <p style={{ fontSize: 12, color: '#9B9490', lineHeight: 1.5 }}>
-                  Guest will automatically be notified of dispatch status.
-                </p>
+                {(occupancyCheck.reservation.guestEmail || occupancyCheck.reservation.guestPhone) && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: D }}>
+                    <div onClick={() => setNotifyGuest(!notifyGuest)} style={{
+                      width: 40, height: 22, borderRadius: 11, background: notifyGuest ? G : '#E0DAD4',
+                      position: 'relative', transition: 'background 0.2s', flexShrink: 0, cursor: 'pointer',
+                    }}>
+                      <div style={{
+                        width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute',
+                        top: 2, left: notifyGuest ? 20 : 2, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      }} />
+                    </div>
+                    <span>Notify guest of dispatch status{occupancyCheck.reservation.guestEmail ? ` (${occupancyCheck.reservation.guestEmail})` : ''}</span>
+                  </label>
+                )}
               </div>
             </div>
           )}

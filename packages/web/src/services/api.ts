@@ -430,6 +430,7 @@ export const jobService = {
     zipCode: string;
     workspaceId?: string;
     propertyId?: string;
+    notifyGuest?: boolean;
   }): Promise<ApiResponse<CreateJobResponse>> {
     return fetchAPI<CreateJobResponse>('/api/v1/jobs', {
       method: 'POST',
@@ -443,6 +444,7 @@ export const jobService = {
         consent: true,
         ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
         ...(params.propertyId ? { property_id: params.propertyId } : {}),
+        ...(params.notifyGuest ? { notify_guest: true } : {}),
       }),
     });
   },
