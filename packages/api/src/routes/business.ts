@@ -1901,9 +1901,21 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
             ) as TrackReservation[];
           }
 
+          // Log first reservation's keys to understand the data shape
+          if (items.length > 0) {
+            const sample = items[0] as Record<string, unknown>;
+            logger.info({ totalItems: (gData as Record<string, unknown>).total_items, fetchedCount: items.length, sampleKeys: Object.keys(sample), sample: JSON.stringify(sample).slice(0, 800) }, '[Track reservations] global fetch sample');
+          } else {
+            logger.info({ totalItems: (gData as Record<string, unknown>).total_items }, '[Track reservations] global fetch returned 0 items');
+          }
+
           for (const r of items) {
-            const uid = String(r.unitId ?? r.unit_id ?? r.propertyId ?? r.property_id ?? '');
-            if (!uid) continue;
+            const rr = r as Record<string, unknown>;
+            const uid = String(rr.unitId ?? rr.unit_id ?? rr.propertyId ?? rr.property_id ?? rr.unit ?? '');
+            if (!uid) {
+              logger.warn({ reservationId: rr.id, keys: Object.keys(rr) }, '[Track reservations] reservation has no unit ID field');
+              continue;
+            }
             if (!allReservationsByUnit.has(uid)) allReservationsByUnit.set(uid, []);
             allReservationsByUnit.get(uid)!.push(r);
           }
