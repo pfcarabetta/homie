@@ -195,7 +195,8 @@ export default function AdminBusiness() {
 
       {/* Accounts table */}
       <div className="bg-white rounded-xl border border-dark/10 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]">
           <thead>
             <tr className="border-b border-dark/10 bg-warm">
               <th className="text-left px-4 py-3 font-semibold text-dark/60">Business Name</th>
@@ -220,22 +221,22 @@ export default function AdminBusiness() {
                 <>
                   <tr key={a.id} onClick={() => selectAccount(a.id)}
                     className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === a.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
-                    <td className="px-4 py-3 font-medium text-dark">{a.name}</td>
+                    <td className="px-4 py-3 font-medium text-dark max-w-[160px] truncate whitespace-nowrap">{a.name}</td>
                     <td className="px-4 py-3">
-                      <div className="text-dark">{a.ownerName}</div>
-                      <div className="text-dark/40 text-xs">{a.ownerEmail}</div>
+                      <div className="text-dark whitespace-nowrap">{a.ownerName}</div>
+                      <div className="text-dark/40 text-xs max-w-[180px] truncate">{a.ownerEmail}</div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${PLAN_COLORS[a.plan] ?? 'bg-dark/5 text-dark/50'}`}>
                         {a.plan}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-dark/60">
+                    <td className="px-4 py-3 text-dark/60 whitespace-nowrap">
                       <span className={a.searchesUsed >= a.searchesLimit ? 'text-red-600 font-semibold' : ''}>
                         {a.searchesUsed}/{a.searchesLimit}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-dark/50">{new Date(a.createdAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-dark/50 whitespace-nowrap">{new Date(a.createdAt).toLocaleDateString()}</td>
                   </tr>
                   {selectedId === a.id && (
                     <tr key={`${a.id}-detail`}>
@@ -255,6 +256,7 @@ export default function AdminBusiness() {
             ); })()}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
@@ -280,7 +282,7 @@ function DetailView({ detail, onChangePlan, onResetCredits, onAddCredits, action
   const usagePct = dynamicLimit > 0 ? Math.round((ws.searchesUsed / dynamicLimit) * 100) : 0;
 
   return (
-    <div className="px-6 py-5 space-y-5">
+    <div className="px-4 sm:px-6 py-5 space-y-5 min-w-0">
       {actionMsg && (
         <div className="bg-emerald-50 text-emerald-700 text-sm px-3 py-2 rounded-lg font-medium">{actionMsg}</div>
       )}
@@ -371,8 +373,8 @@ function DetailView({ detail, onChangePlan, onResetCredits, onAddCredits, action
         {members.length === 0 ? (
           <div className="text-sm text-dark/40">No team members</div>
         ) : (
-          <div className="bg-white rounded-lg border border-dark/5 overflow-hidden">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto rounded-lg border border-dark/5">
+            <table className="w-full text-xs min-w-[360px]">
               <thead>
                 <tr className="bg-dark/3 border-b border-dark/5">
                   <th className="text-left px-3 py-2 font-semibold text-dark/50">Name</th>
@@ -383,9 +385,9 @@ function DetailView({ detail, onChangePlan, onResetCredits, onAddCredits, action
               <tbody>
                 {members.map(m => (
                   <tr key={m.id} className="border-b border-dark/3">
-                    <td className="px-3 py-2 text-dark font-medium">{m.name}</td>
-                    <td className="px-3 py-2 text-dark/60">{m.email}</td>
-                    <td className="px-3 py-2 capitalize text-dark/60">{m.role}</td>
+                    <td className="px-3 py-2 text-dark font-medium whitespace-nowrap">{m.name}</td>
+                    <td className="px-3 py-2 text-dark/60 max-w-[200px] truncate">{m.email}</td>
+                    <td className="px-3 py-2 capitalize text-dark/60 whitespace-nowrap">{m.role}</td>
                   </tr>
                 ))}
               </tbody>
@@ -415,9 +417,9 @@ function DetailView({ detail, onChangePlan, onResetCredits, onAddCredits, action
 
 function InfoCard({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="bg-white rounded-lg border border-dark/5 px-3 py-2">
+    <div className="bg-white rounded-lg border border-dark/5 px-3 py-2 min-w-0">
       <div className="text-[10px] font-semibold text-dark/40 uppercase tracking-wide">{label}</div>
-      <div className={`text-sm font-medium text-dark mt-0.5 ${mono ? 'font-mono' : ''}`}>{value}</div>
+      <div className={`text-sm font-medium text-dark mt-0.5 truncate ${mono ? 'font-mono text-xs' : ''}`}>{value}</div>
     </div>
   );
 }

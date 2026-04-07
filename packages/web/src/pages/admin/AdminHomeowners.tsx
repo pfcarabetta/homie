@@ -81,50 +81,53 @@ export default function AdminHomeowners() {
         className="w-full px-4 py-2.5 mb-4 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 bg-white" />
 
       <div className="bg-white rounded-xl border border-dark/10 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-dark/10 bg-warm">
-              <th className="text-left px-4 py-3 font-semibold text-dark/60">Email</th>
-              <th className="text-left px-4 py-3 font-semibold text-dark/60">Phone</th>
-              <th className="text-left px-4 py-3 font-semibold text-dark/60">Zip</th>
-              <th className="text-left px-4 py-3 font-semibold text-dark/60">Tier</th>
-              <th className="text-left px-4 py-3 font-semibold text-dark/60">Joined</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">Loading...</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No homeowners yet'}</td></tr>
-            ) : (
-              rows.map((h) => (
-                <>
-                  <tr key={h.id} onClick={() => selectHomeowner(h.id)}
-                    className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === h.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
-                    <td className="px-4 py-3 text-dark">{h.email}</td>
-                    <td className="px-4 py-3 text-dark/60">{h.phone ?? '-'}</td>
-                    <td className="px-4 py-3 text-dark/60">{h.zipCode}</td>
-                    <td className="px-4 py-3"><span className="bg-dark/5 px-2 py-0.5 rounded text-xs font-semibold capitalize">{h.membershipTier}</span></td>
-                    <td className="px-4 py-3 text-dark/60">{new Date(h.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                  {selectedId === h.id && (
-                    <tr key={`${h.id}-detail`}>
-                      <td colSpan={5} className="px-0 py-0 bg-warm/30">
-                        {detailLoading ? (
-                          <div className="px-6 py-8 text-center text-dark/40">Loading details...</div>
-                        ) : detail ? (
-                          <HomeownerDetailView detail={detail} />
-                        ) : (
-                          <div className="px-6 py-8 text-center text-dark/40">Failed to load details</div>
-                        )}
-                      </td>
+        {/* overflow-x-auto allows table to scroll horizontally on mobile */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
+            <thead>
+              <tr className="border-b border-dark/10 bg-warm">
+                <th className="text-left px-4 py-3 font-semibold text-dark/60">Email</th>
+                <th className="text-left px-4 py-3 font-semibold text-dark/60">Phone</th>
+                <th className="text-left px-4 py-3 font-semibold text-dark/60">Zip</th>
+                <th className="text-left px-4 py-3 font-semibold text-dark/60">Tier</th>
+                <th className="text-left px-4 py-3 font-semibold text-dark/60">Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">Loading...</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No homeowners yet'}</td></tr>
+              ) : (
+                rows.map((h) => (
+                  <>
+                    <tr key={h.id} onClick={() => selectHomeowner(h.id)}
+                      className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === h.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
+                      <td className="px-4 py-3 text-dark max-w-[200px] truncate">{h.email}</td>
+                      <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{h.phone ?? '-'}</td>
+                      <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{h.zipCode}</td>
+                      <td className="px-4 py-3 whitespace-nowrap"><span className="bg-dark/5 px-2 py-0.5 rounded text-xs font-semibold capitalize">{h.membershipTier}</span></td>
+                      <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{new Date(h.createdAt).toLocaleDateString()}</td>
                     </tr>
-                  )}
-                </>
-              ))
-            )}
-          </tbody>
-        </table>
+                    {selectedId === h.id && (
+                      <tr key={`${h.id}-detail`}>
+                        <td colSpan={5} className="px-0 py-0 bg-warm/30">
+                          {detailLoading ? (
+                            <div className="px-6 py-8 text-center text-dark/40">Loading details...</div>
+                          ) : detail ? (
+                            <HomeownerDetailView detail={detail} />
+                          ) : (
+                            <div className="px-6 py-8 text-center text-dark/40">Failed to load details</div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {total > PAGE_SIZE && (
@@ -143,7 +146,7 @@ function HomeownerDetailView({ detail }: { detail: HomeownerDetail }) {
   const fullName = [ho.firstName, ho.lastName].filter(Boolean).join(' ') || null;
 
   return (
-    <div className="px-6 py-5 space-y-5">
+    <div className="px-4 sm:px-6 py-5 space-y-5 min-w-0">
       {/* Profile */}
       <div>
         <h3 className="text-sm font-bold text-dark mb-3">Account Details</h3>
@@ -197,8 +200,8 @@ function HomeownerDetailView({ detail }: { detail: HomeownerDetail }) {
         {jobRows.length === 0 ? (
           <div className="text-sm text-dark/40">No jobs</div>
         ) : (
-          <div className="bg-white rounded-lg border border-dark/5 overflow-hidden">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto rounded-lg border border-dark/5">
+            <table className="w-full text-xs min-w-[480px]">
               <thead>
                 <tr className="bg-dark/3 border-b border-dark/5">
                   <th className="text-left px-3 py-2 font-semibold text-dark/50">ID</th>
@@ -213,17 +216,17 @@ function HomeownerDetailView({ detail }: { detail: HomeownerDetail }) {
               <tbody>
                 {jobRows.map(j => (
                   <tr key={j.id} className="border-b border-dark/3">
-                    <td className="px-3 py-2 font-mono"><Link to={`/admin/jobs?q=${j.id.slice(0, 8)}`} className="text-orange-500 hover:underline">{j.id.slice(0, 8)}</Link></td>
-                    <td className="px-3 py-2 text-dark capitalize">{j.diagnosis?.category?.replace(/_/g, ' ') ?? '-'}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 font-mono whitespace-nowrap"><Link to={`/admin/jobs?q=${j.id.slice(0, 8)}`} className="text-orange-500 hover:underline">{j.id.slice(0, 8)}</Link></td>
+                    <td className="px-3 py-2 text-dark capitalize whitespace-nowrap">{j.diagnosis?.category?.replace(/_/g, ' ') ?? '-'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${STATUS_COLORS[j.status] ?? 'bg-dark/5 text-dark/50'}`}>{j.status}</span>
                     </td>
-                    <td className="px-3 py-2 text-dark/60 capitalize">{j.tier}</td>
-                    <td className="px-3 py-2 text-dark/60">{j.zipCode}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-dark/60 capitalize whitespace-nowrap">{j.tier}</td>
+                    <td className="px-3 py-2 text-dark/60 whitespace-nowrap">{j.zipCode}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {j.workspaceId ? <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase">Business</span> : <span className="text-dark/40">Consumer</span>}
                     </td>
-                    <td className="px-3 py-2 text-dark/50">{new Date(j.createdAt).toLocaleDateString()}</td>
+                    <td className="px-3 py-2 text-dark/50 whitespace-nowrap">{new Date(j.createdAt).toLocaleDateString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -238,14 +241,14 @@ function HomeownerDetailView({ detail }: { detail: HomeownerDetail }) {
           <h3 className="text-sm font-bold text-dark mb-3">Bookings ({bookingRows.length})</h3>
           <div className="space-y-2">
             {bookingRows.map(b => (
-              <div key={b.id} className="bg-white rounded-lg border border-dark/5 p-3 flex justify-between items-center">
-                <div>
+              <div key={b.id} className="bg-white rounded-lg border border-dark/5 p-3 flex justify-between items-center gap-2 min-w-0">
+                <div className="min-w-0">
                   <span className="text-sm font-semibold text-dark">{b.providerName ?? 'Unknown'}</span>
                   <Link to={`/admin/jobs?q=${b.jobId.slice(0, 8)}`} className="text-xs text-orange-500 hover:underline ml-2">Job {b.jobId.slice(0, 8)}</Link>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${STATUS_COLORS[b.status] ?? 'bg-dark/5 text-dark/50'}`}>{b.status}</span>
-                  <span className="text-xs text-dark/40">{new Date(b.confirmedAt).toLocaleDateString()}</span>
+                  <span className="text-xs text-dark/40 whitespace-nowrap">{new Date(b.confirmedAt).toLocaleDateString()}</span>
                 </div>
               </div>
             ))}
@@ -258,9 +261,9 @@ function HomeownerDetailView({ detail }: { detail: HomeownerDetail }) {
 
 function InfoCard({ label, value, mono, capitalize }: { label: string; value: string; mono?: boolean; capitalize?: boolean }) {
   return (
-    <div className="bg-white rounded-lg border border-dark/5 px-3 py-2">
+    <div className="bg-white rounded-lg border border-dark/5 px-3 py-2 min-w-0">
       <div className="text-[10px] font-semibold text-dark/40 uppercase tracking-wide">{label}</div>
-      <div className={`text-sm font-medium text-dark mt-0.5 truncate ${mono ? 'font-mono' : ''} ${capitalize ? 'capitalize' : ''}`}>{value}</div>
+      <div className={`text-sm font-medium text-dark mt-0.5 truncate ${mono ? 'font-mono text-xs' : ''} ${capitalize ? 'capitalize' : ''}`}>{value}</div>
     </div>
   );
 }

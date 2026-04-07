@@ -142,7 +142,8 @@ export default function AdminJobs() {
         className="w-full px-4 py-2.5 mb-4 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 bg-white" />
 
       <div className="bg-white rounded-xl border border-dark/10 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[620px]">
           <thead>
             <tr className="border-b border-dark/10 bg-warm">
               <th className="text-left px-4 py-3 font-semibold text-dark/60">ID</th>
@@ -163,16 +164,16 @@ export default function AdminJobs() {
               rows.map((j) => (
                 <>
                   <tr key={j.id} onClick={() => selectJob(j.id)} className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === j.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
-                    <td className="px-4 py-3 text-dark/60 font-mono text-xs">{j.id.slice(0, 8)}</td>
-                    <td className="px-4 py-3 text-dark">{j.homeownerEmail ?? '-'}</td>
+                    <td className="px-4 py-3 text-dark/60 font-mono text-xs whitespace-nowrap">{j.id.slice(0, 8)}</td>
+                    <td className="px-4 py-3 text-dark max-w-[180px] truncate">{j.homeownerEmail ?? '-'}</td>
                     <td className="px-4 py-3 text-dark/60">
                       {j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-'}
                       {j.workspaceId && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase tracking-wide">Business</span>}
                     </td>
-                    <td className="px-4 py-3"><StatusBadge status={j.status} /></td>
-                    <td className="px-4 py-3 capitalize text-dark/60">{j.tier}</td>
-                    <td className="px-4 py-3 text-dark/60">{j.zipCode}</td>
-                    <td className="px-4 py-3 text-dark/60">{new Date(j.createdAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={j.status} /></td>
+                    <td className="px-4 py-3 capitalize text-dark/60 whitespace-nowrap">{j.tier}</td>
+                    <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{j.zipCode}</td>
+                    <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{new Date(j.createdAt).toLocaleDateString()}</td>
                   </tr>
                   {selectedId === j.id && (
                     <tr key={`${j.id}-detail`}>
@@ -194,6 +195,7 @@ export default function AdminJobs() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {total > PAGE_SIZE && (
@@ -305,7 +307,7 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
   }
 
   return (
-    <div className="px-6 py-5 space-y-5 overflow-hidden">
+    <div className="px-4 sm:px-6 py-5 space-y-5 min-w-0">
       {/* Job Info */}
       <div>
         <h3 className="text-sm font-bold text-dark mb-3">Job Details</h3>

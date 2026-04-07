@@ -64,7 +64,8 @@ export default function AdminProviders() {
         className="w-full px-4 py-2.5 mb-4 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 bg-white" />
 
       <div className="bg-white rounded-xl border border-dark/10 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="border-b border-dark/10 bg-warm">
               <th className="text-left px-4 py-3 font-semibold text-dark/60">Name</th>
@@ -85,13 +86,13 @@ export default function AdminProviders() {
               rows.map((p) => (
                 <>
                   <tr key={p.id} onClick={() => selectProvider(p.id)} className={`border-b border-dark/5 cursor-pointer transition-colors ${selectedId === p.id ? 'bg-orange-500/5' : 'hover:bg-warm/50'}`}>
-                    <td className="px-4 py-3 text-dark font-medium">{p.name}</td>
-                    <td className="px-4 py-3 text-dark/60">{p.phone ?? '-'}</td>
-                    <td className="px-4 py-3 text-dark/60">{p.googleRating ? `${p.googleRating} (${p.reviewCount})` : '-'}</td>
-                    <td className="px-4 py-3 text-dark/60 text-xs">{p.categories?.join(', ') ?? '-'}</td>
-                    <td className="px-4 py-3 text-dark/60">{p.acceptanceRate ? `${(Number(p.acceptanceRate) * 100).toFixed(0)}%` : '-'}</td>
-                    <td className="px-4 py-3 text-dark/60">{p.totalOutreach ?? 0}</td>
-                    <td className="px-4 py-3 text-dark/60">{new Date(p.discoveredAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-dark font-medium max-w-[160px] truncate whitespace-nowrap">{p.name}</td>
+                    <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{p.phone ?? '-'}</td>
+                    <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{p.googleRating ? `${p.googleRating} (${p.reviewCount})` : '-'}</td>
+                    <td className="px-4 py-3 text-dark/60 text-xs max-w-[140px] truncate">{p.categories?.join(', ') ?? '-'}</td>
+                    <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{p.acceptanceRate ? `${(Number(p.acceptanceRate) * 100).toFixed(0)}%` : '-'}</td>
+                    <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{p.totalOutreach ?? 0}</td>
+                    <td className="px-4 py-3 text-dark/60 whitespace-nowrap">{new Date(p.discoveredAt).toLocaleDateString()}</td>
                   </tr>
                   {selectedId === p.id && (
                     <tr key={`${p.id}-detail`}>
@@ -111,6 +112,7 @@ export default function AdminProviders() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {total > PAGE_SIZE && (
@@ -138,7 +140,7 @@ function ProviderDetailView({ detail }: { detail: NonNullable<Awaited<ReturnType
   };
 
   return (
-    <div className="px-6 py-5 space-y-5">
+    <div className="px-4 sm:px-6 py-5 space-y-5 min-w-0">
       {/* Provider Info */}
       <div>
         <h3 className="text-sm font-bold text-dark mb-3">Provider Details</h3>
@@ -182,8 +184,8 @@ function ProviderDetailView({ detail }: { detail: NonNullable<Awaited<ReturnType
         {outreach_attempts.length === 0 ? (
           <div className="text-sm text-dark/40">No outreach attempts</div>
         ) : (
-          <div className="bg-white rounded-lg border border-dark/5 overflow-hidden">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto rounded-lg border border-dark/5">
+            <table className="w-full text-xs min-w-[480px]">
               <thead>
                 <tr className="bg-dark/3 border-b border-dark/5">
                   <th className="text-left px-3 py-2 font-semibold text-dark/50">Category</th>
@@ -197,14 +199,14 @@ function ProviderDetailView({ detail }: { detail: NonNullable<Awaited<ReturnType
               <tbody>
                 {outreach_attempts.map(a => (
                   <tr key={a.id} className="border-b border-dark/3">
-                    <td className="px-3 py-2 text-dark capitalize">{a.jobCategory ?? '-'}</td>
-                    <td className="px-3 py-2 text-dark/60">{a.jobZip ?? '-'}</td>
-                    <td className="px-3 py-2 text-dark/60 capitalize">{a.channel}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-dark capitalize whitespace-nowrap">{a.jobCategory ?? '-'}</td>
+                    <td className="px-3 py-2 text-dark/60 whitespace-nowrap">{a.jobZip ?? '-'}</td>
+                    <td className="px-3 py-2 text-dark/60 capitalize whitespace-nowrap">{a.channel}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${statusColors[a.status] ?? 'bg-dark/5 text-dark/50'}`}>{a.status}</span>
                     </td>
-                    <td className="px-3 py-2 text-dark/50">{new Date(a.attemptedAt).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-dark/50">{a.respondedAt ? new Date(a.respondedAt).toLocaleString() : '-'}</td>
+                    <td className="px-3 py-2 text-dark/50 whitespace-nowrap">{new Date(a.attemptedAt).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-dark/50 whitespace-nowrap">{a.respondedAt ? new Date(a.respondedAt).toLocaleString() : '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -257,7 +259,7 @@ function ProviderDetailView({ detail }: { detail: NonNullable<Awaited<ReturnType
 
 function InfoCard({ label, value, link }: { label: string; value: string; link?: string | null }) {
   return (
-    <div className="bg-white rounded-lg border border-dark/5 px-3 py-2">
+    <div className="bg-white rounded-lg border border-dark/5 px-3 py-2 min-w-0">
       <div className="text-[10px] font-semibold text-dark/40 uppercase tracking-wide">{label}</div>
       {link ? (
         <a href={link} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-orange-500 mt-0.5 block truncate">{value}</a>
