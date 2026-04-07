@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import SEO from "@/components/SEO";
 
 const COLORS = {
   orange: "#E8632B",
@@ -815,11 +815,15 @@ function OutreachEngine() {
 }
 
 export default function BusinessLanding() {
-  useDocumentTitle('Homie for Business — Property Management Maintenance Platform');
   const navigate = useNavigate();
   const handleSignup = () => navigate("/register?redirect=/business");
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: COLORS.white, minHeight: "100vh" }}>
+      <SEO
+        title="Homie for Business — Property Management Maintenance Platform"
+        description="Dispatch local pros across your entire property portfolio in 3 taps. AI-powered vendor coordination for property managers and vacation rental hosts. $10/property/month."
+        canonical="/business/landing"
+      />
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <Nav />
       <Hero />

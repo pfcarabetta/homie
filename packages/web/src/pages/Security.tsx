@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import SEO from '@/components/SEO';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -33,9 +33,14 @@ function SectionCard({ icon, title, items }: { icon: string; title: string; item
 }
 
 export default function Security() {
-  useDocumentTitle('Security');
   return (
     <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
+      <SEO
+        title="Security"
+        description="Learn how Homie protects your data with industry-standard security practices."
+        canonical="/security"
+        noindex
+      />
       <header style={{ padding: '24px 0', textAlign: 'center' }}>
         <Link to="/" style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: O, textDecoration: 'none' }}>homie</Link>
       </header>

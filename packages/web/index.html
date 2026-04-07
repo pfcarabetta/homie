@@ -80,10 +80,96 @@
       }
     }
     </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "Homie",
+      "url": "https://homiepro.ai",
+      "email": "yo@homiepro.ai",
+      "description": "AI-powered home maintenance diagnostic and service provider matching platform",
+      "areaServed": {
+        "@type": "Country",
+        "name": "United States"
+      },
+      "serviceType": ["Plumbing", "Electrical", "HVAC", "Appliance Repair", "Roofing", "Landscaping", "Pest Control", "General Handyman", "Cleaning", "Home Inspection"]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How does Homie work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Describe your home issue and Homie's AI agent simultaneously calls, texts, and contacts local service providers on your behalf. Responses stream back with quotes and availability so you can compare and book — all without making a single phone call yourself."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How much does Homie cost?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Homie offers three tiers: Standard ($9.99) contacts 5 pros via SMS and web with results in about 2 hours, Priority ($19.99) contacts 10 pros via voice, SMS, and web with results in about 30 minutes, and Emergency ($29.99) blitzes 15 pros across all channels with results in about 15 minutes. You are only charged if you receive quotes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is the diagnostic really free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, the AI diagnostic chat is 100% free. You can describe your issue, upload a photo, and receive an expert-level diagnosis with DIY steps, cost estimates, and a severity assessment — all in under 2 minutes with no payment required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How fast do I get quotes?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Depending on the tier you choose, you can receive quotes in as little as 15 minutes (Emergency), about 30 minutes (Priority), or around 2 hours (Standard). Homie contacts multiple providers simultaneously so quotes come back fast."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I have to talk to contractors myself?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Homie's AI agent handles all the outreach for you — making phone calls, sending texts, and submitting web forms to local pros. You just review the quotes and availability that come back and pick the provider you want."
+          }
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://homiepro.ai/"},
+        {"@type": "ListItem", "position": 2, "name": "Free Diagnostic", "item": "https://homiepro.ai/chat"},
+        {"@type": "ListItem", "position": 3, "name": "Get Quotes", "item": "https://homiepro.ai/quote"},
+        {"@type": "ListItem", "position": 4, "name": "For Business", "item": "https://homiepro.ai/business/landing"}
+      ]
+    }
+    </script>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- API preconnect -->
+    <link rel="preconnect" href="https://api.homiepro.ai" crossorigin />
+    <link rel="dns-prefetch" href="https://api.homiepro.ai" />
+
+    <!-- Stripe -->
+    <link rel="dns-prefetch" href="https://js.stripe.com" />
+
+    <!-- Google Maps -->
+    <link rel="dns-prefetch" href="https://maps.googleapis.com" />
+
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&display=swap"
       rel="stylesheet"

@@ -1,10 +1,15 @@
 import { Link } from 'react-router-dom';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import SEO from '@/components/SEO';
 
 export default function Terms() {
-  useDocumentTitle('Terms of Service');
   return (
     <div style={{ minHeight: '100vh', background: '#F9F5F2', fontFamily: "'DM Sans', sans-serif" }}>
+      <SEO
+        title="Terms of Service"
+        description="Homie Terms of Service — read about the terms governing your use of the Homie platform."
+        canonical="/terms"
+        noindex
+      />
       <header style={{ padding: '24px 0', textAlign: 'center' }}>
         <Link to="/" style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: '#E8632B', textDecoration: 'none' }}>homie</Link>
       </header>

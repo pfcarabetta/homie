@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Spinner } from '@/components/Skeleton';
+import SEO from '@/components/SEO';
 
 export default function Login() {
-  useDocumentTitle('Sign In');
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -31,6 +30,12 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-warm flex flex-col">
+      <SEO
+        title="Log In"
+        description="Log in to your Homie account to manage quotes, bookings, and home maintenance."
+        canonical="/login"
+        noindex
+      />
       {/* Simple header */}
       <header className="py-8 text-center">
         <Link to="/" className="font-display font-bold text-3xl text-orange-500">

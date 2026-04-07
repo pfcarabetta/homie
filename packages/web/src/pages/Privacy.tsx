@@ -1,10 +1,15 @@
 import { Link } from 'react-router-dom';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import SEO from '@/components/SEO';
 
 export default function Privacy() {
-  useDocumentTitle('Privacy Policy');
   return (
     <div style={{ minHeight: '100vh', background: '#F9F5F2', fontFamily: "'DM Sans', sans-serif" }}>
+      <SEO
+        title="Privacy Policy"
+        description="Homie Privacy Policy — learn how we collect, use, and protect your personal information."
+        canonical="/privacy"
+        noindex
+      />
       <header style={{ padding: '24px 0', textAlign: 'center' }}>
         <Link to="/" style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: '#E8632B', textDecoration: 'none' }}>homie</Link>
       </header>

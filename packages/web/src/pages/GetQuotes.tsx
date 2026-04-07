@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import SEO from '@/components/SEO';
 import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, accountService, estimateService, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem, type HomeData, type CostEstimate } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
@@ -1314,7 +1314,6 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
 
 /* -- MAIN COMPONENT -- */
 export default function GetQuotes() {
-  useDocumentTitle('Get Home Repair Quotes in Minutes');
   const navigate = useNavigate();
   const isDemo = new URLSearchParams(window.location.search).has('demo');
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
@@ -1642,6 +1641,11 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
 
   return (
     <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+      <SEO
+        title="Get Home Repair Quotes"
+        description="Get multiple quotes from local service providers in minutes. Homie contacts pros for you via phone, text, and email — no more calling around."
+        canonical="/quote"
+      />
       <style>{`
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }

@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { fetchAPI } from '@/services/api';
 import { Spinner } from '@/components/Skeleton';
+import SEO from '@/components/SEO';
 
 export default function Register() {
-  useDocumentTitle('Create Account');
   const { register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -100,6 +99,12 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-warm flex flex-col">
+      <SEO
+        title="Create Account"
+        description="Create a free Homie account to get AI-powered home repair quotes and diagnostics."
+        canonical="/register"
+        noindex
+      />
       <header className="py-8 text-center">
         <Link to="/" className="font-display font-bold text-3xl text-orange-500">
           homie

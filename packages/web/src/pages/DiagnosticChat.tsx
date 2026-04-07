@@ -5,7 +5,7 @@ import DiagnosisCard, { type DiagnosisData } from '@/components/DiagnosisCard';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 import ErrorState from '@/components/ErrorState';
 import { HomieAvatar, HomieLogo } from '@/components/HomieAvatar';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import SEO from '@/components/SEO';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   diagnosticService,
@@ -539,8 +539,6 @@ export default function DiagnosticChat() {
   const fileRef = useRef<HTMLInputElement>(null);
   const homeContextRef = useRef<string>('');
 
-  useDocumentTitle('Free DIY Home Repair Diagnostic');
-
   // Load home details for context
   useEffect(() => {
     if (authService.isAuthenticated()) {
@@ -946,6 +944,11 @@ export default function DiagnosticChat() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+      <SEO
+        title="Free DIY Home Repair Diagnostic"
+        description="Get a free AI-powered diagnosis for any home maintenance issue. Upload photos, describe the problem, and get expert guidance on whether to DIY or hire a pro."
+        canonical="/chat"
+      />
       <style>{`
         @keyframes dcFadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes dcFadeIn { from { opacity:0; } to { opacity:1; } }

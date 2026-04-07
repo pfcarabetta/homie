@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import SEO from '@/components/SEO';
 
 const ORANGE = '#E8632B';
 const GREEN = '#1B9E77';
@@ -276,12 +276,16 @@ function BackgroundMosaic() {
 
 /* -- Main page -- */
 export default function HomePage() {
-  useDocumentTitle('AI-Powered Home Maintenance & Repair Quotes');
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: 'white', overflowX: 'hidden' }}>
+      <SEO
+        title="AI-Powered Home Maintenance & Repair Quotes"
+        description="Stop calling around for home repair quotes. Homie's AI agent calls, texts, and emails local pros for you — and brings back quotes in minutes. Free DIY diagnostics included."
+        canonical="/"
+      />
       <style>{`
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
         @keyframes slideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }

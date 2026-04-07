@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { fetchAPI } from "@/services/api";
+import SEO from "@/components/SEO";
 
 const C = {
   orange: "#E8632B", orangeDark: "#C8531E", orangeLight: "#F0997B",
@@ -226,9 +226,13 @@ function SignupForm() {
 }
 
 export default function ProSignup() {
-  useDocumentTitle('Join Homie Pro — Free Provider Network');
   return (
     <div style={{ ...dm, background: C.white, minHeight: "100vh" }}>
+      <SEO
+        title="Join Homie Pro — Free Provider Network"
+        description="Join Homie's provider network for free. Receive qualified leads from homeowners and property managers in your area."
+        canonical="/portal/signup"
+      />
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
       {/* ── NAV ── */}
