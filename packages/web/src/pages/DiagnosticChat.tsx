@@ -599,70 +599,16 @@ export default function DiagnosticChat() {
       window.history.replaceState({}, '', '/chat');
       try {
         const saved = JSON.parse(paidChat);
-
-        // Verify payment with API
         if (saved.jobId) {
+          // Verify payment then open the modal at outreach step
           paymentService.getPaymentStatus(saved.jobId).then(res => {
-            if (!res.data || (res.data.payment_status !== 'authorized' && res.data.payment_status !== 'paid')) {
-              return;
-            }
-
+            if (!res.data || (res.data.payment_status !== 'authorized' && res.data.payment_status !== 'paid')) return;
             // Trigger dispatch in case webhook hasn't fired yet
             void fetchAPI('/api/v1/payments/dispatch/' + saved.jobId, { method: 'POST' }).catch(() => {});
-
-            const restoredMessages = (saved.messages ?? []).map((m: { id: string; role: string; content: string }) => ({
-              ...m, timestamp: new Date(),
-            })) as ChatMessage[];
-
-        dispatch({
-          type: 'RESTORE_STATE',
-          payload: {
-            messages: restoredMessages,
-            diagnosis: saved.diagnosis ?? null,
-            jobSummary: saved.jobSummary ?? null,
-            screeningAnswered: saved.screeningAnswered ?? true,
-            jobId: saved.jobId,
-            matchFlowActive: true,
-            matchStep: 'outreach',
-            outreach: { providersContacted: 0, channels: { voice: { attempted: 0, responded: 0 }, sms: { attempted: 0, responded: 0 }, web: { attempted: 0, responded: 0 } }, active: true },
-          },
-        });
-
-        if (saved.jobId) {
-          dispatch({ type: 'JOB_CREATED', jobId: saved.jobId, expiresAt: saved.expiresAt ?? '' });
-
-          const jobSocket = connectJobSocket(saved.jobId, (status: JobStatusResponse) => {
-            dispatch({
-              type: 'UPDATE_OUTREACH',
-              outreach: {
-                providersContacted: status.providers_contacted,
-                channels: {
-                  voice: { attempted: status.outreach_channels.voice.attempted, responded: status.outreach_channels.voice.connected },
-                  sms: { attempted: status.outreach_channels.sms.attempted, responded: status.outreach_channels.sms.connected },
-                  web: { attempted: status.outreach_channels.web.attempted, responded: status.outreach_channels.web.connected },
-                },
-                active: !['completed', 'expired', 'refunded'].includes(status.status),
-              },
-            });
-            if (['completed', 'expired'].includes(status.status) || status.providers_responded > 0) {
-              void jobService.getResponses(saved.jobId).then(respRes => {
-                if (respRes.data && respRes.data.responses.length > 0) {
-                  dispatch({
-                    type: 'SET_RESULTS',
-                    providers: respRes.data.responses.map(r => ({
-                      id: r.provider.id, responseId: r.id, name: r.provider.name,
-                      googleRating: parseFloat(r.provider.google_rating ?? '0'), reviewCount: r.provider.review_count,
-                      quotedPrice: r.quoted_price ?? 'TBD', availability: r.availability ?? 'To be confirmed',
-                      message: r.message ?? '', channel: r.channel as 'voice' | 'sms' | 'web',
-                    })),
-                  });
-                }
-              });
-            }
-          });
-          cleanupOutreachRef.current = () => jobSocket.close();
-            }
-          }).catch(() => { /* payment verification failed */ });
+            // Restore minimal state and open modal — the modal handles its own WebSocket
+            dispatch({ type: 'JOB_CREATED', jobId: saved.jobId, expiresAt: '' });
+            dispatch({ type: 'OPEN_MATCH_FLOW' });
+          }).catch(() => {});
         }
       } catch { /* ignore */ }
       return;
@@ -1198,6 +1144,7 @@ export default function DiagnosticChat() {
           jobSummary={state.jobSummary}
           isDemo={isDemo}
           initialCostEstimate={costEstimate}
+          initialJobId={state.jobId}
         />
       )}
 
@@ -1377,16 +1324,17 @@ interface DiagnosticOutreachModalProps {
   jobSummary: JobSummaryV2 | null;
   isDemo: boolean;
   initialCostEstimate: CostEstimate | null;
+  initialJobId?: string | null;
 }
 
-function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDemo, initialCostEstimate }: DiagnosticOutreachModalProps) {
+function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDemo, initialCostEstimate, initialJobId }: DiagnosticOutreachModalProps) {
   const navigate = useNavigate();
-  const [step, setStep] = useState<'tier' | 'preferences' | 'auth_gate' | 'outreach'>('tier');
+  const [step, setStep] = useState<'tier' | 'preferences' | 'auth_gate' | 'outreach'>(initialJobId ? 'outreach' : 'tier');
   const [tier, setTier] = useState<string | null>(null);
   const [zip, setZip] = useState('');
   const [timing, setTiming] = useState<string | null>(null);
   const [budget, setBudget] = useState<string | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(initialJobId ?? null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(initialCostEstimate);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
