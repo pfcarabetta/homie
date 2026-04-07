@@ -637,6 +637,7 @@ router.post('/:workspaceId/vendors/create', requireWorkspace, requireWorkspaceRo
     categories?: string[];
     priority?: number;
     notes?: string;
+    skip_quote?: boolean;
     property_id?: string | null;
     availability_schedule?: Record<string, { start: string; end: string } | null>;
   };
