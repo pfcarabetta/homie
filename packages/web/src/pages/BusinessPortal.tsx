@@ -717,7 +717,8 @@ function MiniCalendar({ reservations }: { reservations: Reservation[] }) {
   }
 
   function parseDate(s: string): Date {
-    const [y, m, d] = s.split('-').map(Number);
+    const dateOnly = s.includes('T') ? s.split('T')[0] : s;
+    const [y, m, d] = dateOnly.split('-').map(Number);
     return new Date(y, m - 1, d);
   }
 
@@ -832,9 +833,9 @@ function MiniCalendar({ reservations }: { reservations: Reservation[] }) {
         }}>
           <span style={{ fontWeight: 600 }}>{reservations[hoveredRes].guestName || 'Guest'}</span>
           <span style={{ color: '#9B9490', marginLeft: 8 }}>
-            {new Date(reservations[hoveredRes].checkIn + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {new Date(reservations[hoveredRes].checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             {' - '}
-            {new Date(reservations[hoveredRes].checkOut + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {new Date(reservations[hoveredRes].checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
           {reservations[hoveredRes].guests && (
             <span style={{ color: '#9B9490', marginLeft: 8 }}>{reservations[hoveredRes].guests} guest{reservations[hoveredRes].guests! > 1 ? 's' : ''}</span>
@@ -862,9 +863,9 @@ function MiniCalendar({ reservations }: { reservations: Reservation[] }) {
                 {r.guestName || 'Guest'}
               </span>
               <span style={{ color: '#9B9490', flexShrink: 0, fontSize: 11 }}>
-                {new Date(r.checkIn + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {new Date(r.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 {' - '}
-                {new Date(r.checkOut + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {new Date(r.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </span>
               <span style={{
                 fontSize: 10, padding: '2px 6px', borderRadius: 10, fontWeight: 500,
