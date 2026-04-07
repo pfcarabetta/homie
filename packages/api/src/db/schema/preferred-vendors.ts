@@ -18,6 +18,7 @@ export const preferredVendors = pgTable('preferred_vendors', {
   priority: integer('priority').notNull().default(0),
   notes: text('notes'),
   availabilitySchedule: jsonb('availability_schedule').$type<VendorSchedule>(),
+  skipQuote: boolean('skip_quote').notNull().default(false),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -99,8 +99,12 @@ async function sendOutreachToProvider(
   diagnosis: DiagnosisPayload,
   provider: DiscoveredProvider,
   adapters: Record<OutreachChannel, ChannelAdapter>,
+  skipQuote = false,
 ): Promise<void> {
-  logger.info(`[orchestration] Sending outreach to ${provider.name} (channels: ${provider.channels_available.join(',')})`);
+  logger.info(`[orchestration] Sending outreach to ${provider.name} (channels: ${provider.channels_available.join(',')}${skipQuote ? ', skip-quote' : ''})`);
+
+  // For skip-quote providers, omit budget from the outreach
+  const budgetText = skipQuote ? undefined : (job.budget ?? 'flexible');
 
   // Generate scripts for this provider (templates are cached per category:severity)
   let bundle;
@@ -113,14 +117,14 @@ async function sendOutreachToProvider(
       severity: diagnosis.severity,
       summary: diagnosis.summary,
       recommendedActions: diagnosis.recommendedActions,
-      budget: job.budget ?? 'flexible',
+      budget: budgetText ?? 'flexible',
       zipCode: job.zipCode,
       timing: job.preferredTiming ?? 'flexible',
     });
   } catch (err) {
     logger.error({ err }, `[orchestration] Script generation failed for ${provider.name}`);
-    // Fall back to simple templates
-    const fallbackScript = `Hi ${provider.name}, this is Homie. We have a ${diagnosis.category} job near ${job.zipCode}. ${diagnosis.summary}. Budget: ${job.budget ?? 'flexible'}. Are you interested?`;
+    const budgetStr = skipQuote ? '' : ` Budget: ${job.budget ?? 'flexible'}.`;
+    const fallbackScript = `Hi ${provider.name}, this is Homie. We have a ${diagnosis.category} job near ${job.zipCode}. ${diagnosis.summary}.${budgetStr} Are you interested?`;
     bundle = { job_id: job.id, provider_id: provider.id, voice: fallbackScript, sms: `${diagnosis.category} job near ${job.zipCode}. ${diagnosis.summary}. Interested? Reply YES`, web: fallbackScript, generated_at: new Date().toISOString() };
   }
 
@@ -290,11 +294,12 @@ export async function dispatchJob(jobId: string): Promise<void> {
 
   // ── Preferred vendor cascade (B2B jobs only) ──────────────────────────
   const preferredProviderIds: string[] = [];
+  const skipQuoteProviderIds = new Set<string>();
   if (job.workspaceId) {
     try {
       const jobCategory = diagnosis.category.toLowerCase();
       const pvRows = await db
-        .select({ providerId: preferredVendors.providerId, categories: preferredVendors.categories, availabilitySchedule: preferredVendors.availabilitySchedule })
+        .select({ providerId: preferredVendors.providerId, categories: preferredVendors.categories, availabilitySchedule: preferredVendors.availabilitySchedule, skipQuote: preferredVendors.skipQuote })
         .from(preferredVendors)
         .where(and(
           eq(preferredVendors.workspaceId, job.workspaceId),
@@ -326,6 +331,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
       }
 
       preferredProviderIds.push(...availableRows.map(r => r.providerId));
+      for (const r of availableRows) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
       if (preferredProviderIds.length > 0) {
         logger.info(`[orchestration] dispatchJob: found ${preferredProviderIds.length} preferred vendors for job ${jobId}`);
       }
@@ -497,7 +503,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
     logger.info(`[orchestration] dispatchJob: Phase 1 — contacting ${preferredEligible.length} preferred vendors for job ${jobId}`);
 
     const preferredResults = await Promise.allSettled(
-      preferredEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters)),
+      preferredEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters, skipQuoteProviderIds.has(provider.id))),
     );
     const preferredFailed = preferredResults.filter((r) => r.status === 'rejected');
     if (preferredFailed.length > 0) {

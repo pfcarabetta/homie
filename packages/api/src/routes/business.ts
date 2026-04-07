@@ -523,6 +523,7 @@ router.get('/:workspaceId/vendors', requireWorkspace, async (req: Request, res: 
         notes: preferredVendors.notes,
         availabilitySchedule: preferredVendors.availabilitySchedule,
         active: preferredVendors.active,
+        skipQuote: preferredVendors.skipQuote,
         createdAt: preferredVendors.createdAt,
         providerName: providers.name,
         providerPhone: providers.phone,
@@ -703,6 +704,7 @@ router.patch('/:workspaceId/vendors/:vendorId', requireWorkspace, requireWorkspa
     priority: 'priority',
     notes: 'notes',
     active: 'active',
+    skip_quote: 'skipQuote',
     availability_schedule: 'availabilitySchedule',
   };
 

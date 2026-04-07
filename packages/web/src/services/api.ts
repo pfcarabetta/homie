@@ -827,6 +827,7 @@ export interface PreferredVendor {
   priority: number;
   notes: string | null;
   availabilitySchedule: VendorSchedule | null;
+  skipQuote: boolean;
   active: boolean;
   createdAt: string;
   providerName: string;

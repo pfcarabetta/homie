@@ -2184,6 +2184,7 @@ interface GroupedVendor {
   priority: number;
   notes: string | null;
   availabilitySchedule: VendorSched | null;
+  skipQuote: boolean;
   active: boolean;
   entries: PreferredVendor[]; // one per property assignment
   propertyIds: (string | null)[]; // null = workspace-wide
@@ -2208,6 +2209,7 @@ function groupVendors(vendors: PreferredVendor[]): GroupedVendor[] {
         priority: v.priority,
         notes: v.notes,
         availabilitySchedule: v.availabilitySchedule,
+        skipQuote: v.skipQuote,
         active: v.active,
         entries: [v],
         propertyIds: [v.propertyId],
@@ -2323,6 +2325,7 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                         <span style={{ fontWeight: 600, fontSize: 14, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.providerName}</span>
                         {!g.active && <span style={{ fontSize: 8, fontWeight: 700, color: '#9B9490', background: '#F3F4F6', padding: '1px 6px', borderRadius: 3, flexShrink: 0 }}>INACTIVE</span>}
+                        {g.skipQuote && <span style={{ fontSize: 8, fontWeight: 700, color: '#2563EB', background: '#EFF6FF', padding: '1px 6px', borderRadius: 3, flexShrink: 0 }}>NO QUOTE</span>}
                       </div>
                       <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         {g.providerRating && <span>★ {g.providerRating}</span>}
@@ -2402,6 +2405,27 @@ function VendorsTab({ workspaceId, role, plan }: { workspaceId: string; role: st
 
                     {/* Notes */}
                     {g.notes && <div style={{ fontSize: 12, color: '#6B6560', fontStyle: 'italic', marginBottom: 10 }}>{g.notes}</div>}
+
+                    {/* Skip Quote toggle */}
+                    {canEdit && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: '8px 10px', background: g.skipQuote ? '#EFF6FF' : W, borderRadius: 8, border: `1px solid ${g.skipQuote ? 'rgba(37,99,235,0.15)' : 'rgba(0,0,0,0.04)'}` }}>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: D }}>Skip Quotes</div>
+                          <div style={{ fontSize: 10, color: '#9B9490', marginTop: 1 }}>
+                            {g.skipQuote ? 'Auto-dispatch without requesting a quote' : 'Provider will be asked for a quote'}
+                          </div>
+                        </div>
+                        <button onClick={() => {
+                          const newVal = !g.skipQuote;
+                          Promise.all(g.entries.map(e =>
+                            businessService.updateVendor(workspaceId, e.id, { skip_quote: newVal })
+                          )).then(() => loadVendors());
+                        }}
+                          style={{ width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', background: g.skipQuote ? '#2563EB' : '#D1D5DB', position: 'relative', transition: 'background 0.2s', padding: 0 }}>
+                          <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: g.skipQuote ? 18 : 2, transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
+                        </button>
+                      </div>
+                    )}
 
                     {/* Action buttons */}
                     {canEdit && (
