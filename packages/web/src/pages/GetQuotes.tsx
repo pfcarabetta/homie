@@ -229,6 +229,11 @@ const TIERS = [
   { id: 'emergency', name: 'Emergency', price: '$29.99', time: '~15 min', detail: '15 pros, all channels blitz' },
 ];
 
+/** Strip duplicate dollar signs: "$$140" → "$140" */
+function cleanPrice(price: string): string {
+  return price.replace(/^\$+/, '$');
+}
+
 const MOCK_PROVIDERS = [
   { name: 'Rodriguez Plumbing', rating: 4.9, reviews: 214, quote: '$175', availability: 'Tomorrow 9\u201311 AM', channel: 'voice', note: 'Done hundreds of Moen cartridge swaps. Will bring the part.', distance: '4.2 mi', delay: 4500 },
   { name: 'Atlas Home Services', rating: 4.7, reviews: 89, quote: '$150\u2013200', availability: 'Wednesday afternoon', channel: 'sms', note: 'Can bring the part with me, 12 years experience', distance: '6.1 mi', delay: 8000 },
@@ -513,7 +518,7 @@ function OutreachView({ isDemo, jobId, costEstimate }: { isDemo?: boolean; jobId
                 name: r.provider.name,
                 rating: parseFloat(r.provider.google_rating ?? '0'),
                 reviews: r.provider.review_count,
-                quote: r.quoted_price ?? 'TBD',
+                quote: cleanPrice(r.quoted_price ?? 'TBD'),
                 availability: r.availability ?? 'To be confirmed',
                 channel: r.channel,
                 note: r.message ?? '',
@@ -814,7 +819,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                 name: r.provider.name,
                 rating: parseFloat(r.provider.google_rating ?? '0'),
                 reviews: r.provider.review_count,
-                quote: r.quoted_price ?? 'TBD',
+                quote: cleanPrice(r.quoted_price ?? 'TBD'),
                 availability: r.availability ?? 'To be confirmed',
                 channel: r.channel,
                 note: r.message ?? '',

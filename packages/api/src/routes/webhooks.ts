@@ -134,8 +134,8 @@ function formatQuotedPrice(raw: string | null): string | null {
   if (!raw) return null;
   const cleaned = raw.replace(/[.,!?]+$/g, '').trim();
 
-  // Already clean: "$150", "$150-200"
-  if (/^\$\d/.test(cleaned)) return cleaned;
+  // Already clean: "$150", "$150-200" — also fix double dollars
+  if (/^\$+\d/.test(cleaned)) return cleaned.replace(/^\$+/, '$');
 
   // Plain number: "150", "150 dollars", "200 bucks"
   const numMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|usd)?$/i);
