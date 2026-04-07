@@ -2029,9 +2029,6 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
           unitIdMapping.set(internalId, internalId);
         }
 
-        // Log unit id-to-name mapping for all units on this page
-        const unitSummary = trackUnits.map(tu => ({ id: tu.id, name: tu.name }));
-        logger.info({ units: JSON.stringify(unitSummary) }, '[Track reservations] unit id-name mapping');
 
         const links = uData._links as Record<string, { href?: string }> | undefined;
         const rawNext = links?.next?.href;
