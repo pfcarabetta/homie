@@ -1984,6 +1984,13 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
       }
     }
 
+    // Log property ID mapping for debugging
+    const propIdMap = new Map(linkedProps.map(p => [p.pmsExternalId!, p.id]));
+    const allUnitIds = [...allReservationsByUnit.keys()];
+    const matchedUnits = allUnitIds.filter(uid => propIdMap.has(uid));
+    const unmatchedUnits = allUnitIds.filter(uid => !propIdMap.has(uid));
+    logger.info({ propertyExternalIds: linkedProps.map(p => p.pmsExternalId), reservationUnitIds: allUnitIds.slice(0, 20), matchedCount: matchedUnits.length, unmatchedCount: unmatchedUnits.length, unmatchedSample: unmatchedUnits.slice(0, 10) }, '[Track reservations] unit ID matching');
+
     for (const prop of linkedProps) {
       const unitId = prop.pmsExternalId!;
 
