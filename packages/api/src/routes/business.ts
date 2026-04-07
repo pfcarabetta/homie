@@ -1849,15 +1849,27 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
 
     try {
       const testPerUnit = await fetch(perUnitUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+      logger.info({ status: testPerUnit.status, url: perUnitUrl }, '[Track reservations] per-unit endpoint test');
       if (testPerUnit.ok) reservationEndpointStyle = 'per-unit';
-    } catch { /* ignore */ }
+    } catch (err) { logger.warn({ err, url: perUnitUrl }, '[Track reservations] per-unit endpoint test failed'); }
 
     if (!reservationEndpointStyle) {
       try {
         const testGlobal = await fetch(globalUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-        if (testGlobal.ok) reservationEndpointStyle = 'global';
-      } catch { /* ignore */ }
+        logger.info({ status: testGlobal.status, url: globalUrl }, '[Track reservations] global endpoint test');
+        if (testGlobal.ok) {
+          reservationEndpointStyle = 'global';
+          // Log sample response
+          const ct = testGlobal.headers.get('content-type') || '';
+          if (ct.includes('json')) {
+            const sample = await testGlobal.json() as Record<string, unknown>;
+            logger.info({ keys: Object.keys(sample), embeddedKeys: sample._embedded ? Object.keys(sample._embedded as Record<string, unknown>) : null, isArray: Array.isArray(sample) }, '[Track reservations] global response structure');
+          }
+        }
+      } catch (err) { logger.warn({ err, url: globalUrl }, '[Track reservations] global endpoint test failed'); }
     }
+
+    logger.info({ style: reservationEndpointStyle }, '[Track reservations] endpoint detection result');
 
     if (!reservationEndpointStyle) {
       res.json({ data: { imported: 0, updated: 0, total: 0 }, error: null, meta: { message: 'Track API does not support reservations endpoint' } });
