@@ -2046,12 +2046,53 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
     // ── Batch-fetch contact details for all reservations ──────────────
     const contactCache = new Map<string, { name: string; email: string | null; phone: string | null }>();
 
+    // First check if contact data is already embedded in reservations
+    let contactsEmbedded = false;
+    for (const resList of allReservationsByUnit.values()) {
+      if (resList.length > 0) {
+        const sample = resList[0] as Record<string, unknown>;
+        const embedded = sample._embedded as Record<string, unknown> | undefined;
+        const links = sample._links as Record<string, unknown> | undefined;
+        logger.info({
+          hasEmbedded: !!embedded,
+          embeddedKeys: embedded ? Object.keys(embedded) : null,
+          linkKeys: links ? Object.keys(links) : null,
+          contactId: sample.contactId,
+        }, '[Track reservations] checking reservation for embedded contact');
+        if (embedded?.contact || embedded?.guest) {
+          contactsEmbedded = true;
+        }
+        break;
+      }
+    }
+
+    // Try to extract contacts from _embedded if available
+    if (contactsEmbedded) {
+      for (const resList of allReservationsByUnit.values()) {
+        for (const r of resList) {
+          const rr = r as Record<string, unknown>;
+          const embedded = rr._embedded as Record<string, unknown> | undefined;
+          const contact = (embedded?.contact ?? embedded?.guest) as Record<string, unknown> | undefined;
+          if (contact) {
+            const cid = String(rr.contactId ?? rr.contact_id ?? '');
+            const firstName = String(contact.firstName ?? contact.first_name ?? contact.givenName ?? '');
+            const lastName = String(contact.lastName ?? contact.last_name ?? contact.familyName ?? '');
+            const name = [firstName, lastName].filter(Boolean).join(' ');
+            const email = (contact.email ?? contact.emailAddress ?? contact.emails?.[0]) as string | null ?? null;
+            const phone = (contact.phone ?? contact.phoneNumber ?? contact.mobile ?? contact.phones?.[0]) as string | null ?? null;
+            if (cid) contactCache.set(cid, { name, email, phone });
+          }
+        }
+      }
+      logger.info({ cached: contactCache.size }, '[Track reservations] contacts extracted from embedded data');
+    }
+
     // Collect unique contactIds from all reservations
     const allContactIds = new Set<string>();
     for (const resList of allReservationsByUnit.values()) {
       for (const r of resList) {
         const cid = (r as Record<string, unknown>).contactId ?? (r as Record<string, unknown>).contact_id;
-        if (cid != null && String(cid) !== '') {
+        if (cid != null && String(cid) !== '' && !contactCache.has(String(cid))) {
           allContactIds.add(String(cid));
         }
       }
@@ -2062,25 +2103,44 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
       const contactIdArr = Array.from(allContactIds);
       let loggedSample = false;
 
-      const fetchContact = async (contactId: string): Promise<void> => {
+      // Discover the correct contact endpoint path
+      const testContactId = contactIdArr[0];
+      const contactPaths = [`${base}/crm/contacts/${testContactId}`, `${base}/pms/contacts/${testContactId}`, `${base}/contacts/${testContactId}`, `${base}/pms/reservations/${testContactId}/contact`];
+      let contactBasePath = '';
+      for (const path of contactPaths) {
         try {
-          const contactUrl = `${base}/pms/contacts/${contactId}`;
-          const contactRes = await fetch(contactUrl, {
-            headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
-          });
-          if (!contactRes.ok) {
-            if (!loggedSample) {
-              logger.warn({ status: contactRes.status, contactId, url: contactUrl }, '[Track reservations] contact fetch failed');
+          const res = await fetch(path, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+          if (res.ok) {
+            // Extract the base path pattern (everything before the contactId)
+            contactBasePath = path.replace(testContactId, '{ID}');
+            const ct = res.headers.get('content-type') || '';
+            if (ct.includes('json')) {
+              const sample = await res.json() as Record<string, unknown>;
+              logger.info({ path, contactKeys: Object.keys(sample) }, '[Track reservations] found working contact endpoint');
             }
-            return;
+            break;
+          } else {
+            logger.info({ path, status: res.status }, '[Track reservations] contact endpoint test');
           }
+        } catch { /* try next */ }
+      }
+
+      if (!contactBasePath) {
+        logger.warn({ triedPaths: contactPaths }, '[Track reservations] no working contact endpoint found');
+      }
+
+      const fetchContact = async (contactId: string): Promise<void> => {
+        if (!contactBasePath) return;
+        try {
+          const url = contactBasePath.replace('{ID}', contactId);
+          const contactRes = await fetch(url, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+          if (!contactRes.ok) return;
           const ct = contactRes.headers.get('content-type') || '';
           if (!ct.includes('json')) return;
           const contactData = await contactRes.json() as Record<string, unknown>;
 
-          // Log sample contact keys on first successful fetch
           if (!loggedSample) {
-            logger.info({ contactKeys: Object.keys(contactData) }, '[Track reservations] sample contact fields');
+            logger.info({ contactKeys: Object.keys(contactData), sample: JSON.stringify(contactData).slice(0, 500) }, '[Track reservations] sample contact data');
             loggedSample = true;
           }
 
@@ -2096,9 +2156,7 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
             email: email || null,
             phone: phone || null,
           });
-        } catch (err) {
-          logger.warn({ err, contactId }, '[Track reservations] failed to fetch contact');
-        }
+        } catch { /* skip */ }
       };
 
       // Process in chunks of 5 for concurrency control
