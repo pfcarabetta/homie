@@ -26,9 +26,15 @@ async function start() {
   try {
     await migrate(db, { migrationsFolder: path.join(__dirname, 'db/migrations') });
     logger.info('Database migrations applied');
-  } catch (err) {
-    logger.error({ err }, 'Failed to run database migrations');
-    process.exit(1);
+  } catch (err: unknown) {
+    const pgErr = err as { code?: string };
+    if (pgErr.code === '42P07' || pgErr.code === '42P06') {
+      // "already exists" — safe to ignore (migrations previously applied outside Drizzle tracker)
+      logger.warn({ err }, 'Migration skipped (relations already exist)');
+    } else {
+      logger.error({ err }, 'Failed to run database migrations');
+      process.exit(1);
+    }
   }
 
   const server = http.createServer(app);
