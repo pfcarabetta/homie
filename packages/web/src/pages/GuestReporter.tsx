@@ -682,6 +682,8 @@ export default function GuestReporterPage() {
   const [typing, setTyping] = useState(false);
   const [severity, setSeverity] = useState<string | null>(null);
   const [desc, setDesc] = useState('');
+  const [aiSummary, setAiSummary] = useState('');
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   // Tracking
   const [issueId, setIssueId] = useState<string | null>(null);
@@ -951,6 +953,43 @@ export default function GuestReporterPage() {
       });
   };
 
+  const goToSummary = async () => {
+    setSummaryLoading(true);
+    setScreen('summary');
+
+    const history = messages.map(m => ({
+      role: (m.from === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.text,
+    }));
+
+    const propertyDetails: Record<string, unknown> = {};
+    if (propertyData?.details) propertyDetails.details = propertyData.details;
+    if (propertyData?.bedrooms) propertyDetails.bedrooms = propertyData.bedrooms;
+    if (propertyData?.bathrooms) propertyDetails.bathrooms = propertyData.bathrooms;
+
+    try {
+      const data = await guestFetch<{ summary: string }>(
+        `/api/v1/guest/${workspaceId}/${propertyId}/summarize`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            categoryLabel: category?.label,
+            subcategoryLabel: subcategory,
+            severity,
+            propertyName,
+            propertyDetails: Object.keys(propertyDetails).length > 0 ? propertyDetails : undefined,
+            chatHistory: history,
+          }),
+        },
+      );
+      setAiSummary(data.summary);
+    } catch {
+      // Fallback to raw description
+      setAiSummary(userDesc || desc || 'No description provided.');
+    }
+    setSummaryLoading(false);
+  };
+
   const submitIssue = async () => {
     if (!workspaceId || !propertyId) return;
 
@@ -977,7 +1016,7 @@ export default function GuestReporterPage() {
         body: JSON.stringify({
           categoryId: category?.id,
           severity,
-          description: userDesc || desc,
+          description: aiSummary || userDesc || desc,
           photos: userPhotos,
           troubleshootLog: tAnswers,
           guestName: displayName,
@@ -1363,7 +1402,7 @@ export default function GuestReporterPage() {
                   {m.showActions && (
                     <div style={{ display: 'flex', gap: 7, marginTop: 7, animation: 'fadeUp 0.4s ease' }}>
                       <button
-                        onClick={() => setScreen('summary')}
+                        onClick={() => void goToSummary()}
                         style={{ padding: '9px 16px', borderRadius: 9, border: 'none', background: BRAND.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = BRAND.orangeDark; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = BRAND.orange; }}
@@ -1468,8 +1507,23 @@ export default function GuestReporterPage() {
                 {severity && <SevBadge level={severity} />}
               </div>
               <div style={{ borderTop: `1px solid ${BRAND.grayLight}20`, paddingTop: 12, marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: BRAND.gray, marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 }}>{tx(lang, 'description')}</div>
-                <div style={{ fontSize: 13, color: BRAND.dark, lineHeight: 1.5 }}>{userDesc || tx(lang, 'noDescProvided')}</div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: BRAND.gray, marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 }}>Diagnostic Summary</div>
+                {summaryLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0' }}>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {[0, 1, 2].map(i => (
+                        <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: BRAND.orange, animation: `typDot 1.2s ease infinite ${i * 0.2}s` }} />
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 12, color: BRAND.gray }}>Generating summary...</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: BRAND.dark, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}
+                    dangerouslySetInnerHTML={{ __html: (aiSummary || userDesc || 'No description provided.')
+                      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                      .replace(/\n/g, '<br/>') }}
+                  />
+                )}
               </div>
               {userPhotos.length > 0 && (
                 <div style={{ marginBottom: 12 }}>

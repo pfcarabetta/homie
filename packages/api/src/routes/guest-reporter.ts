@@ -532,6 +532,73 @@ guestPublicRouter.post('/:workspaceId/:propertyId/chat-message', async (req: Req
   }
 });
 
+// ── POST /:workspaceId/:propertyId/summarize — Generate comprehensive report summary ─
+
+guestPublicRouter.post('/:workspaceId/:propertyId/summarize', async (req: Request, res: Response) => {
+  const body = req.body as {
+    categoryLabel?: string;
+    subcategoryLabel?: string;
+    severity?: string;
+    propertyDetails?: Record<string, unknown>;
+    propertyName?: string;
+    chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
+  };
+
+  const { categoryLabel, subcategoryLabel, severity, propertyDetails, propertyName, chatHistory } = body;
+
+  if (!chatHistory || chatHistory.length === 0) {
+    res.status(400).json({ data: null, error: 'chatHistory is required', meta: {} });
+    return;
+  }
+
+  try {
+    const anthropic = new Anthropic();
+
+    const detailsStr = propertyDetails
+      ? `Property details: ${JSON.stringify(propertyDetails)}`
+      : '';
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 800,
+      system: `You are writing a comprehensive maintenance issue summary for a property manager. This summary will be sent to service providers during outreach, so include all relevant details.
+
+Property: ${propertyName ?? 'Unknown'}
+Category: ${categoryLabel ?? 'Unknown'}
+Subcategory: ${subcategoryLabel ?? 'Unknown'}
+Severity: ${severity ?? 'medium'}
+${detailsStr}
+
+Based on the chat conversation between the guest and the diagnostic assistant, write a structured summary with these sections:
+
+**Issue Summary** — 1-2 sentence overview of what's wrong
+**Symptoms** — Bullet points of what the guest is experiencing
+**What's Been Tried** — Any troubleshooting the guest attempted (if any)
+**Relevant Property Info** — Equipment brands, models, ages, locations if relevant from property details
+**Recommended Action** — What type of professional is likely needed and urgency level
+**Access Notes** — Property is currently occupied by a guest; include any relevant info about timing or access
+
+Keep it professional but thorough. This is what a service provider will read to understand the job. Format with markdown-style bold headers.`,
+      messages: [
+        {
+          role: 'user',
+          content: `Here is the diagnostic conversation:\n\n${chatHistory.map(m => `${m.role === 'user' ? 'Guest' : 'Assistant'}: ${m.content}`).join('\n\n')}\n\nGenerate the comprehensive summary.`,
+        },
+      ],
+    });
+
+    const textBlock = message.content.find(b => b.type === 'text');
+    const summary = textBlock && textBlock.type === 'text' ? textBlock.text : '';
+
+    res.json({ data: { summary }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /guest/:workspaceId/:propertyId/summarize]');
+    // Fallback: just concatenate the guest messages
+    const fallback = chatHistory.filter(m => m.role === 'user').map(m => m.content).join('\n');
+    res.json({ data: { summary: fallback }, error: null, meta: {} });
+  }
+});
+
 // ── POST /:workspaceId/:propertyId/chat-followup — AI conversational follow-up ─
 
 guestPublicRouter.post('/:workspaceId/:propertyId/chat-followup', async (req: Request, res: Response) => {
