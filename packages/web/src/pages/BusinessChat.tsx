@@ -541,7 +541,7 @@ function StreamingMsg({ text }: { text: string }) {
 
 /* ── Main component ─────────────────────────────────────────────────────── */
 
-type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'budget' | 'generating' | 'summary' | 'outreach' | 'results';
+type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'anything_else' | 'budget' | 'generating' | 'summary' | 'outreach' | 'results';
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -578,6 +578,9 @@ export default function BusinessChat() {
   const [showQ1Input, setShowQ1Input] = useState(false);
   const [q1InputVal, setQ1InputVal] = useState('');
   const [budget, setBudget] = useState('flexible');
+  const [anythingElseText, setAnythingElseText] = useState('');
+  const [anythingElseImage, setAnythingElseImage] = useState<string | null>(null);
+  const anythingElseFileRef = useRef<HTMLInputElement>(null);
 
   // Outreach state
   const [jobId, setJobId] = useState<string | null>(null);
@@ -959,11 +962,11 @@ export default function BusinessChat() {
     setImgPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    // If we've had enough exchanges, skip the AI call and go to budget
+    // If we've had enough exchanges, ask if there's anything else before budget
     if (exchangeCount >= 2) {
       setTimeout(() => {
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Got it. Would you like to set a budget for this dispatch?' }]);
-        setStep('budget');
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Got it. Is there anything else you\'d like to add before we dispatch? You can also upload a photo if it helps.' }]);
+        setStep('anything_else');
       }, 300);
       return;
     }
@@ -1494,6 +1497,65 @@ export default function BusinessChat() {
                 </>
               )}
 
+            </div>
+          )}
+
+          {/* Anything else before dispatch */}
+          {step === 'anything_else' && !streaming && (
+            <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease', marginBottom: 16 }}>
+              <div style={{ background: '#fff', borderRadius: 14, border: '2px solid rgba(0,0,0,0.06)', padding: 16, marginBottom: 10 }}>
+                <textarea
+                  value={anythingElseText}
+                  onChange={e => setAnythingElseText(e.target.value)}
+                  placeholder="Add any extra notes, access instructions, or details for the provider..."
+                  rows={3}
+                  style={{
+                    width: '100%', border: '1.5px solid rgba(0,0,0,0.08)', borderRadius: 10,
+                    padding: '10px 12px', fontSize: 14, fontFamily: "'DM Sans', sans-serif",
+                    resize: 'none', outline: 'none', color: D, boxSizing: 'border-box',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = O; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'; }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <button onClick={() => anythingElseFileRef.current?.click()} style={{
+                    padding: '6px 12px', borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.08)', background: '#fff',
+                    fontSize: 13, color: '#9B9490', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                    {'\uD83D\uDCF7'} {anythingElseImage ? 'Change photo' : 'Add photo'}
+                  </button>
+                  {anythingElseImage && (
+                    <div style={{ position: 'relative', width: 40, height: 40, borderRadius: 8, overflow: 'hidden', border: '2px solid rgba(0,0,0,0.08)' }}>
+                      <img src={anythingElseImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <button onClick={() => setAnythingElseImage(null)} style={{
+                        position: 'absolute', top: 1, right: 1, width: 16, height: 16, borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', fontSize: 9, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>{'\u00D7'}</button>
+                    </div>
+                  )}
+                  <input ref={anythingElseFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) { const r = new FileReader(); r.onload = ev => setAnythingElseImage(ev.target?.result as string); r.readAsDataURL(f); }
+                    e.target.value = '';
+                  }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => {
+                  if (anythingElseText.trim() || anythingElseImage) {
+                    const content = anythingElseImage ? `\uD83D\uDCF7 ${anythingElseText.trim() || 'Photo attached'}` : anythingElseText.trim();
+                    setMessages(prev => [...prev, { role: 'user', content }]);
+                  }
+                  setMessages(prev => [...prev, { role: 'assistant', content: 'Great. Would you like to set a budget for this dispatch?' }]);
+                  setStep('budget');
+                }} style={{
+                  flex: 1, padding: '12px 20px', borderRadius: 12, border: 'none', background: O, color: '#fff',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                }}>
+                  {anythingElseText.trim() || anythingElseImage ? 'Continue' : 'Nothing else — continue'}
+                </button>
+              </div>
             </div>
           )}
 
