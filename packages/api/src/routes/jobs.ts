@@ -427,6 +427,12 @@ router.post('/:id/book', async (req: Request, res: Response) => {
 
     void sendBookingNotifications(id, p.id, booking.id, booking.serviceAddress);
 
+    // Sync guest issue status if this is a guest reporter job
+    try {
+      const { syncGuestIssueFromJob } = await import('../services/orchestration');
+      void syncGuestIssueFromJob(id, 'provider_booked', { providerName: p.name, providerRating: p.googleRating });
+    } catch { /* silent */ }
+
     const out: ApiResponse<BookJobResponse> = {
       data: {
         booking_id: booking.id,

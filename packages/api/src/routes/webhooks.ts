@@ -249,6 +249,13 @@ async function createProviderResponse(
     );
   } catch (err) { logger.warn({ err, jobId }, '[webhooks] Failed to emit tracking event for provider response'); }
 
+  // Sync guest issue status if this is a guest reporter job
+  try {
+    const { syncGuestIssueFromJob } = await import('../services/orchestration');
+    const [prov2] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, providerId)).limit(1);
+    void syncGuestIssueFromJob(jobId, 'quote_received', { providerName: prov2?.name });
+  } catch (err) { logger.warn({ err, jobId }, '[webhooks] Failed to sync guest issue from provider response'); }
+
   // Slack notification — fire-and-forget
   try {
     const [job] = await db.select({ workspaceId: jobs.workspaceId, diagnosis: jobs.diagnosis }).from(jobs).where(eq(jobs.id, jobId)).limit(1);

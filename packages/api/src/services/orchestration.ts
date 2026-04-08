@@ -12,6 +12,8 @@ import { providerResponses } from '../db/schema/provider-responses';
 import { jobTrackingEvents, jobTrackingLinks, type TrackingEventType } from '../db/schema/job-tracking';
 import { reservations } from '../db/schema/reservations';
 import { properties } from '../db/schema/properties';
+import { guestIssues } from '../db/schema/guest-issues';
+import { guestIssueTimeline } from '../db/schema/guest-issue-timeline';
 import { discoverProviders } from './providers/discovery';
 import { generateScripts } from './scripts/generation';
 import { VoiceAdapter } from './outreach/voice';
@@ -820,5 +822,60 @@ export async function sendBookingNotifications(
     } catch (err) {
       logger.error({ err }, '[orchestration] provider booking email failed');
     }
+  }
+}
+
+// ─── Sync guest issue status when linked dispatch job progresses ────────────
+
+export async function syncGuestIssueFromJob(jobId: string, event: 'quote_received' | 'provider_booked' | 'resolved', metadata?: Record<string, unknown>): Promise<void> {
+  try {
+    // Find guest issue linked to this job
+    const [issue] = await db
+      .select({ id: guestIssues.id, status: guestIssues.status })
+      .from(guestIssues)
+      .where(eq(guestIssues.dispatchedJobId, jobId))
+      .limit(1);
+
+    if (!issue) return; // Not a guest reporter job
+
+    const now = new Date();
+
+    if (event === 'quote_received' && !['provider_responding', 'provider_booked', 'resolved'].includes(issue.status)) {
+      await db.update(guestIssues).set({ status: 'provider_responding', updatedAt: now }).where(eq(guestIssues.id, issue.id));
+      await db.insert(guestIssueTimeline).values({
+        issueId: issue.id,
+        eventType: 'provider_responded',
+        title: 'Provider responded',
+        description: metadata?.providerName ? `${metadata.providerName} sent a quote` : 'A provider responded with a quote',
+        metadata: metadata ?? null,
+      });
+      logger.info({ jobId, issueId: issue.id }, '[guest-issue-sync] Updated to provider_responding');
+    }
+
+    if (event === 'provider_booked' && !['provider_booked', 'resolved'].includes(issue.status)) {
+      await db.update(guestIssues).set({ status: 'provider_booked', updatedAt: now }).where(eq(guestIssues.id, issue.id));
+      await db.insert(guestIssueTimeline).values({
+        issueId: issue.id,
+        eventType: 'provider_booked',
+        title: 'Provider booked',
+        description: metadata?.providerName ? `${metadata.providerName} has been assigned` : 'A provider has been booked',
+        metadata: metadata ?? null,
+      });
+      logger.info({ jobId, issueId: issue.id }, '[guest-issue-sync] Updated to provider_booked');
+    }
+
+    if (event === 'resolved' && issue.status !== 'resolved') {
+      await db.update(guestIssues).set({ status: 'resolved', resolvedAt: now, updatedAt: now }).where(eq(guestIssues.id, issue.id));
+      await db.insert(guestIssueTimeline).values({
+        issueId: issue.id,
+        eventType: 'resolved',
+        title: 'Issue resolved',
+        description: 'The issue has been fixed',
+        metadata: metadata ?? null,
+      });
+      logger.info({ jobId, issueId: issue.id }, '[guest-issue-sync] Updated to resolved');
+    }
+  } catch (err) {
+    logger.warn({ err, jobId, event }, '[guest-issue-sync] Failed to sync guest issue status');
   }
 }
