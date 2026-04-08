@@ -5652,7 +5652,7 @@ const LANGUAGES = [
 
 type GuestSubTab = 'issues' | 'settings' | 'auto-dispatch' | 'qr-codes';
 
-function GuestRequestsTab({ workspaceId, plan }: { workspaceId: string; plan: string }) {
+function GuestRequestsTab({ workspaceId, plan, onViewDispatch }: { workspaceId: string; plan: string; onViewDispatch?: (jobId: string) => void }) {
   const [subTab, setSubTab] = useState<GuestSubTab>('issues');
   const isPro = ['professional', 'business', 'enterprise'].includes(plan);
   const isBizPlus = ['business', 'enterprise'].includes(plan);
@@ -5694,7 +5694,7 @@ function GuestRequestsTab({ workspaceId, plan }: { workspaceId: string; plan: st
           </button>
         ))}
       </div>
-      {subTab === 'issues' && <GuestIssuesSubTab workspaceId={workspaceId} />}
+      {subTab === 'issues' && <GuestIssuesSubTab workspaceId={workspaceId} onViewDispatch={onViewDispatch} />}
       {subTab === 'settings' && <GuestSettingsSubTab workspaceId={workspaceId} isBizPlus={isBizPlus} />}
       {subTab === 'auto-dispatch' && <GuestAutoDispatchSubTab workspaceId={workspaceId} />}
       {subTab === 'qr-codes' && <GuestQRCodesSubTab workspaceId={workspaceId} />}
@@ -5704,7 +5704,7 @@ function GuestRequestsTab({ workspaceId, plan }: { workspaceId: string; plan: st
 
 /* ── Issues sub-tab ── */
 
-function GuestIssuesSubTab({ workspaceId }: { workspaceId: string }) {
+function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: string; onViewDispatch?: (jobId: string) => void }) {
   const [issues, setIssues] = useState<GuestIssue[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -5955,10 +5955,7 @@ function GuestIssuesSubTab({ workspaceId }: { workspaceId: string }) {
                             </>
                           )}
                           {detail.dispatchedJobId && (
-                            <button onClick={() => {
-                              const el = document.getElementById(`dispatch-${detail.dispatchedJobId}`);
-                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }}
+                            <button onClick={() => onViewDispatch?.(detail.dispatchedJobId!)}
                               style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
                               View Dispatch
                             </button>
@@ -6620,7 +6617,7 @@ export default function BusinessPortal() {
               <BusinessBookingsTab workspaceId={workspace.id} focusJobId={focusJobId} onFocusHandled={() => setFocusJobId(null)} />
             )}
             {workspace && tab === 'guest-requests' && (
-              <GuestRequestsTab workspaceId={workspace.id} plan={workspace.plan} />
+              <GuestRequestsTab workspaceId={workspace.id} plan={workspace.plan} onViewDispatch={(jobId) => { setFocusJobId(jobId); setTab('dispatches'); }} />
             )}
             {workspace && tab === 'schedules' && (
               <SchedulesTab workspaceId={workspace.id} plan={workspace.plan} />
