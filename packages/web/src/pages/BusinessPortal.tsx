@@ -1706,11 +1706,11 @@ function BillingTab({ workspace, onUpdated }: { workspace: WorkspaceDetail; onUp
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Per property</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>$10/mo</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>${pricing.business[usage.plan as keyof typeof pricing.business]?.perProperty ?? usage.per_property_price}/mo</div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Est. monthly</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: O }}>${usage.base_price + 10 * usage.property_count}/mo</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: O }}>${(pricing.business[usage.plan as keyof typeof pricing.business]?.promoBase ?? pricing.business[usage.plan as keyof typeof pricing.business]?.base ?? usage.base_price) + (pricing.business[usage.plan as keyof typeof pricing.business]?.perProperty ?? usage.per_property_price) * usage.property_count}/mo</div>
             </div>
           </div>
 
