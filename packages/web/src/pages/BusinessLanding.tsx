@@ -277,14 +277,13 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
   const bp = pricing.business;
   const [propertyCount, setPropertyCount] = useState(20);
   const tiers = [
-    { name: "Starter", platformFee: bp.starter?.base ?? 0, promoFee: bp.starter?.promoBase ?? null, promoLabel: bp.starter?.promoLabel ?? null, maxProperties: bp.starter?.maxProperties ?? 10, members: `${bp.starter?.maxTeamMembers ?? 1} user${(bp.starter?.maxTeamMembers ?? 1) > 1 ? 's' : ''}`, badge: "Free to start", badgeColor: COLORS.green, popular: false,
+    { name: "Starter", platformFee: bp.starter?.base ?? 0, promoFee: bp.starter?.promoBase ?? null, promoLabel: bp.starter?.promoLabel ?? null, perProperty: bp.starter?.perProperty ?? 10, maxProperties: bp.starter?.maxProperties ?? 10, members: `${bp.starter?.maxTeamMembers ?? 1} user${(bp.starter?.maxTeamMembers ?? 1) > 1 ? 's' : ''}`, badge: "Free to start", badgeColor: COLORS.green, popular: false,
       features: ["Unlimited diagnostic chats", "Unlimited outreach searches", "Fair use: 5 searches/property/mo", "Preferred vendors (up to 5)", "Basic cost tracking", "Manual property entry"] },
-    { name: "Professional", platformFee: bp.professional?.base ?? 99, promoFee: bp.professional?.promoBase ?? null, promoLabel: bp.professional?.promoLabel ?? null, maxProperties: bp.professional?.maxProperties ?? 50, members: `${bp.professional?.maxTeamMembers ?? 5} team members`, badge: "Most popular", badgeColor: COLORS.orange, popular: true,
+    { name: "Professional", platformFee: bp.professional?.base ?? 99, promoFee: bp.professional?.promoBase ?? null, promoLabel: bp.professional?.promoLabel ?? null, perProperty: bp.professional?.perProperty ?? 10, maxProperties: bp.professional?.maxProperties ?? 50, members: `${bp.professional?.maxTeamMembers ?? 5} team members`, badge: "Most popular", badgeColor: COLORS.orange, popular: true,
       features: ["PMS import with weekly sync", "Full cost reporting", "Vendor scorecards", "Unlimited preferred vendors", "Slack integration", "Owner estimate summary PDF"] },
-    { name: "Business", platformFee: bp.business?.base ?? 249, promoFee: bp.business?.promoBase ?? null, promoLabel: bp.business?.promoLabel ?? null, maxProperties: bp.business?.maxProperties ?? 150, members: `${bp.business?.maxTeamMembers ?? 15} team members with roles`, badge: null, badgeColor: "", popular: false,
+    { name: "Business", platformFee: bp.business?.base ?? 249, promoFee: bp.business?.promoBase ?? null, promoLabel: bp.business?.promoLabel ?? null, perProperty: bp.business?.perProperty ?? 10, maxProperties: bp.business?.maxProperties ?? 150, members: `${bp.business?.maxTeamMembers ?? 15} team members with roles`, badge: null, badgeColor: "", popular: false,
       features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Guest diagnostic access", "API access", "All Professional features"] },
   ];
-  const perProperty = bp.starter?.perProperty ?? 10;
 
   return (
     <section id="pricing" style={{ background: COLORS.warm, padding: "96px 24px" }}>
@@ -292,7 +291,7 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
         <FadeIn>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, color: COLORS.orange, letterSpacing: 1, textTransform: "uppercase" }}>Pricing</span>
-            <h2 style={{ fontFamily: "Fraunces, serif", fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 700, color: COLORS.dark, margin: "12px 0 8px" }}>${perProperty} per property per month. Every plan.</h2>
+            <h2 style={{ fontFamily: "Fraunces, serif", fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 700, color: COLORS.dark, margin: "12px 0 8px" }}>Simple per-property pricing. Every plan.</h2>
             <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, color: COLORS.gray, margin: "0 0 32px", maxWidth: 520, marginLeft: "auto", marginRight: "auto" }}>Choose the features your team needs. Your homie handles the rest.</p>
 
             {/* Property count slider */}
@@ -313,7 +312,7 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
           {tiers.map((t, i) => {
             const props = Math.min(propertyCount, t.maxProperties);
             const activeFee = (t.promoFee != null && t.promoFee !== t.platformFee) ? t.promoFee : t.platformFee;
-            const total = activeFee + (props * perProperty);
+            const total = activeFee + (props * t.perProperty);
             return (
               <FadeIn key={i} delay={i * 0.1}>
                 <div style={{ background: COLORS.white, borderRadius: 24, padding: 36, position: "relative", border: t.popular ? `2px solid ${COLORS.orange}` : `1px solid ${COLORS.grayLight}`, transition: "transform 0.2s, box-shadow 0.2s" }} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 16px 48px rgba(0,0,0,0.08)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
@@ -337,7 +336,7 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
                       </div>
                     )}
                     <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, color: COLORS.darkMid, marginTop: 4 }}>
-                      + <strong>${perProperty}</strong>/property/mo
+                      + <strong>${t.perProperty}</strong>/property/mo
                     </div>
                     {propertyCount > 0 && (
                       <div style={{
