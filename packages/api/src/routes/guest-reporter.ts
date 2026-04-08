@@ -276,6 +276,7 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
     const [reservation] = await db
       .select({
         id: reservations.id,
+        pmsReservationId: reservations.pmsReservationId,
         guestName: reservations.guestName,
         guestEmail: reservations.guestEmail,
         guestPhone: reservations.guestPhone,
@@ -318,7 +319,7 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
           guestName: reservation?.guestName ?? null,
           checkIn: reservation?.checkIn ?? null,
           checkOut: reservation?.checkOut ?? null,
-          reservationId: reservation?.id ?? null,
+          reservationId: reservation?.pmsReservationId ?? reservation?.id ?? null,
         },
       },
       error: null,
