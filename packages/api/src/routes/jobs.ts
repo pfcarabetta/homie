@@ -430,7 +430,7 @@ router.post('/:id/book', async (req: Request, res: Response) => {
     // Sync guest issue status if this is a guest reporter job
     try {
       const { syncGuestIssueFromJob } = await import('../services/orchestration');
-      void syncGuestIssueFromJob(id, 'provider_booked', { providerName: p.name, providerRating: p.googleRating });
+      void syncGuestIssueFromJob(id, 'provider_booked', { providerName: p.name, providerRating: p.googleRating, availability: r.availability });
     } catch { /* silent */ }
 
     const out: ApiResponse<BookJobResponse> = {

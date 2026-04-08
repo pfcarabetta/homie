@@ -1690,7 +1690,7 @@ export default function GuestReporterPage() {
                   </div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.dark }}>{statusData.provider.name}</div>
-                    <div style={{ fontSize: 10, color: BRAND.gray }}>{'\u2B50'} {statusData.provider.rating} {'\u00b7'} {statusData.provider.specialty}</div>
+                    <div style={{ fontSize: 10, color: BRAND.gray }}>{statusData.provider.rating ? `\u2B50 ${statusData.provider.rating} \u00b7 ` : ''}{statusData.provider.specialty}</div>
                   </div>
                 </div>
                 {statusData.provider.eta && (

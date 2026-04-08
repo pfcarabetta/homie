@@ -937,6 +937,29 @@ guestPublicRouter.get('/issues/:issueId/status', async (req: Request, res: Respo
 
     const resolved = issue.status === 'resolved' || issue.status === 'closed';
 
+    // Extract provider info from the provider_booked timeline event
+    const bookedEvent = timeline.find(t => t.eventType === 'provider_booked');
+    const bookedMeta = bookedEvent?.metadata as Record<string, unknown> | null;
+    let provider: { name: string; initials: string; rating: number | null; specialty: string; eta: string } | undefined;
+
+    if (bookedMeta?.providerName) {
+      const fullName = String(bookedMeta.providerName);
+      const parts = fullName.split(' ');
+      const firstName = parts[0] ?? '';
+      const lastInitial = parts.length > 1 ? `${parts.slice(1).map(n => n.charAt(0) + '.').join(' ')}` : '';
+      const initials = `${firstName.charAt(0)}${parts[1]?.charAt(0) ?? ''}`.toUpperCase();
+      const rating = bookedMeta.providerRating != null ? Number(bookedMeta.providerRating) : null;
+      const availability = bookedMeta.availability ? String(bookedMeta.availability) : '';
+
+      provider = {
+        name: `${firstName} ${lastInitial}`.trim(),
+        initials,
+        rating,
+        specialty: category?.name ?? 'Maintenance',
+        eta: availability || 'To be confirmed',
+      };
+    }
+
     res.json({
       data: {
         status: issue.status,
@@ -945,6 +968,7 @@ guestPublicRouter.get('/issues/:issueId/status', async (req: Request, res: Respo
         resolved,
         autoDispatched: false,
         severity: issue.severity,
+        ...(provider ? { provider } : {}),
       },
       error: null,
       meta: {},
