@@ -755,6 +755,7 @@ export default function GuestReporterPage() {
 
   const displayName = reservation?.matched ? (reservation.guestName ?? 'Guest') : (guestName || 'Guest');
   const companyName = propertyData?.company ?? '';
+  const companyLogo = propertyData?.companyLogo ?? null;
   const propertyName = propertyData?.name ?? '';
 
   const botMsg = (text: string, extra: Partial<ChatMessage> = {}, delay = 800) => {
@@ -1042,7 +1043,11 @@ export default function GuestReporterPage() {
             </button>
           )}
           <div>
-            <div style={{ fontFamily: 'Fraunces,serif', fontWeight: 700, fontSize: 16, color: BRAND.dark }}>{companyName}</div>
+            {companyLogo ? (
+              <img src={companyLogo} alt={companyName} style={{ height: 28, maxWidth: 140, objectFit: 'contain' }} />
+            ) : (
+              <div style={{ fontFamily: 'Fraunces,serif', fontWeight: 700, fontSize: 16, color: BRAND.dark }}>{companyName}</div>
+            )}
             <div style={{ fontSize: 11, color: BRAND.gray }}>{propertyName}</div>
           </div>
         </div>
