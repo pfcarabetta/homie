@@ -793,27 +793,30 @@ guestPmRouter.get(
         .offset(offset);
 
       res.json({
-        data: issues.map((i) => ({
-          id: i.id,
-          property_id: i.propertyId,
-          property_name: i.propertyName,
-          category_id: i.categoryId,
-          category_name: i.categoryName,
-          category_icon: i.categoryIcon,
-          guest_name: i.guestName,
-          guest_email: i.guestEmail,
-          severity: i.severity,
-          status: i.status,
-          description: i.description,
-          is_recurring: i.isRecurring,
-          recurring_count: i.recurringCount,
-          auto_dispatched: i.autoDispatched,
-          self_resolved: i.selfResolved,
-          created_at: i.createdAt,
-          updated_at: i.updatedAt,
-        })),
+        data: {
+          issues: issues.map((i) => ({
+            id: i.id,
+            propertyId: i.propertyId,
+            propertyName: i.propertyName,
+            categoryId: i.categoryId,
+            categoryName: i.categoryName,
+            categoryIcon: i.categoryIcon,
+            guestName: i.guestName,
+            guestEmail: i.guestEmail,
+            severity: i.severity,
+            status: i.status,
+            description: i.description,
+            isRecurring: i.isRecurring,
+            recurringCount: i.recurringCount,
+            autoDispatched: i.autoDispatched,
+            selfResolved: i.selfResolved,
+            createdAt: i.createdAt,
+            updatedAt: i.updatedAt,
+          })),
+          total,
+        },
         error: null,
-        meta: { page: pageNum, limit: limitNum, total },
+        meta: { page: pageNum, limit: limitNum },
       });
     } catch (err) {
       logger.error({ err }, '[GET /:workspaceId/guest-issues]');
@@ -873,56 +876,38 @@ guestPmRouter.get(
       res.json({
         data: {
           id: issue.id,
-          workspace_id: issue.workspaceId,
-          property_id: issue.propertyId,
-          property_name: property?.name ?? null,
-          property_address: property?.address ?? null,
-          reservation_id: issue.reservationId,
-          category: category
-            ? {
-                id: category.id,
-                name: category.name,
-                icon: category.icon,
-                color: category.color,
-                type: category.type,
-              }
-            : null,
-          guest_name: issue.guestName,
-          guest_email: issue.guestEmail,
-          guest_phone: issue.guestPhone,
+          propertyId: issue.propertyId,
+          propertyName: property?.name ?? null,
+          categoryId: issue.categoryId,
+          categoryName: category?.name ?? null,
+          categoryIcon: category?.icon ?? null,
+          guestName: issue.guestName,
+          guestEmail: issue.guestEmail,
+          guestPhone: issue.guestPhone,
           description: issue.description,
           severity: issue.severity,
           status: issue.status,
-          troubleshoot_log: issue.troubleshootLog,
-          self_resolved: issue.selfResolved,
-          is_recurring: issue.isRecurring,
-          recurring_count: issue.recurringCount,
-          auto_dispatched: issue.autoDispatched,
-          auto_dispatch_rule_id: issue.autoDispatchRuleId,
-          dispatched_job_id: issue.dispatchedJobId,
-          pm_approved_by: issue.pmApprovedBy,
-          pm_approved_at: issue.pmApprovedAt,
-          resolved_at: issue.resolvedAt,
-          guest_satisfaction_rating: issue.guestSatisfactionRating,
-          guest_satisfaction_comment: issue.guestSatisfactionComment,
-          language: issue.language,
-          created_at: issue.createdAt,
-          updated_at: issue.updatedAt,
+          troubleshootLog: issue.troubleshootLog,
+          selfResolved: issue.selfResolved,
+          isRecurring: issue.isRecurring,
+          recurringCount: issue.recurringCount,
+          autoDispatched: issue.autoDispatched,
+          dispatchedJobId: issue.dispatchedJobId,
+          resolvedAt: issue.resolvedAt,
+          guestSatisfactionRating: issue.guestSatisfactionRating,
+          guestSatisfactionComment: issue.guestSatisfactionComment,
+          createdAt: issue.createdAt,
+          updatedAt: issue.updatedAt,
           photos: photos.map((p) => ({
             id: p.id,
-            storage_url: p.storageUrl,
-            thumbnail_url: p.thumbnailUrl,
-            uploaded_at: p.uploadedAt,
-            file_size: p.fileSize,
-            mime_type: p.mimeType,
+            storageUrl: p.storageUrl,
+            thumbnailUrl: p.thumbnailUrl,
           })),
-          timeline_events: timeline.map((t) => ({
-            id: t.id,
-            event_type: t.eventType,
+          timeline: timeline.map((t) => ({
+            eventType: t.eventType,
             title: t.title,
             description: t.description,
-            metadata: t.metadata,
-            created_at: t.createdAt,
+            createdAt: t.createdAt,
           })),
         },
         error: null,
@@ -997,14 +982,14 @@ guestPmRouter.post(
 
       res.json({
         data: {
-          issue_id: issueId,
+          issueId: issueId,
           status: 'dispatching',
-          timeline_events: [approvedEvent, dispatchingEvent].map((t) => ({
+          timelineEvents: [approvedEvent, dispatchingEvent].map((t) => ({
             id: t.id,
-            event_type: t.eventType,
+            eventType: t.eventType,
             title: t.title,
             description: t.description,
-            created_at: t.createdAt,
+            createdAt: t.createdAt,
           })),
         },
         error: null,
@@ -1063,15 +1048,15 @@ guestPmRouter.post(
 
       res.json({
         data: {
-          issue_id: issueId,
+          issueId: issueId,
           status: 'closed',
-          timeline_events: [
+          timelineEvents: [
             {
               id: timelineEntry.id,
-              event_type: timelineEntry.eventType,
+              eventType: timelineEntry.eventType,
               title: timelineEntry.title,
               description: timelineEntry.description,
-              created_at: timelineEntry.createdAt,
+              createdAt: timelineEntry.createdAt,
             },
           ],
         },
@@ -1103,17 +1088,17 @@ guestPmRouter.get(
       if (!settings) {
         res.json({
           data: {
-            is_enabled: false,
-            whitelabel_logo_url: null,
-            whitelabel_company_name: null,
-            show_powered_by_homie: true,
-            default_language: 'en',
-            supported_languages: ['en'],
-            sla_urgent_minutes: 30,
-            sla_high_minutes: 60,
-            sla_medium_minutes: 120,
-            sla_low_minutes: 240,
-            require_pm_approval: true,
+            isEnabled: false,
+            whitelabelLogoUrl: null,
+            whitelabelCompanyName: null,
+            showPoweredByHomie: true,
+            defaultLanguage: 'en',
+            supportedLanguages: ['en'],
+            slaUrgentMinutes: 30,
+            slaHighMinutes: 60,
+            slaMediumMinutes: 120,
+            slaLowMinutes: 240,
+            requirePmApproval: true,
           },
           error: null,
           meta: {},
@@ -1124,17 +1109,17 @@ guestPmRouter.get(
       res.json({
         data: {
           id: settings.id,
-          is_enabled: settings.isEnabled,
-          whitelabel_logo_url: settings.whitelabelLogoUrl,
-          whitelabel_company_name: settings.whitelabelCompanyName,
-          show_powered_by_homie: settings.showPoweredByHomie,
-          default_language: settings.defaultLanguage,
-          supported_languages: settings.supportedLanguages,
-          sla_urgent_minutes: settings.slaUrgentMinutes,
-          sla_high_minutes: settings.slaHighMinutes,
-          sla_medium_minutes: settings.slaMediumMinutes,
-          sla_low_minutes: settings.slaLowMinutes,
-          require_pm_approval: settings.requirePmApproval,
+          isEnabled: settings.isEnabled,
+          whitelabelLogoUrl: settings.whitelabelLogoUrl,
+          whitelabelCompanyName: settings.whitelabelCompanyName,
+          showPoweredByHomie: settings.showPoweredByHomie,
+          defaultLanguage: settings.defaultLanguage,
+          supportedLanguages: settings.supportedLanguages,
+          slaUrgentMinutes: settings.slaUrgentMinutes,
+          slaHighMinutes: settings.slaHighMinutes,
+          slaMediumMinutes: settings.slaMediumMinutes,
+          slaLowMinutes: settings.slaLowMinutes,
+          requirePmApproval: settings.requirePmApproval,
         },
         error: null,
         meta: {},
@@ -1155,6 +1140,19 @@ guestPmRouter.put(
   async (req: Request, res: Response) => {
     const { workspaceId } = req.params;
     const body = req.body as {
+      // Accept camelCase (preferred)
+      isEnabled?: boolean;
+      whitelabelLogoUrl?: string;
+      whitelabelCompanyName?: string;
+      showPoweredByHomie?: boolean;
+      defaultLanguage?: string;
+      supportedLanguages?: string[];
+      slaUrgentMinutes?: number;
+      slaHighMinutes?: number;
+      slaMediumMinutes?: number;
+      slaLowMinutes?: number;
+      requirePmApproval?: boolean;
+      // Accept snake_case (legacy)
       is_enabled?: boolean;
       whitelabel_logo_url?: string;
       whitelabel_company_name?: string;
@@ -1179,17 +1177,17 @@ guestPmRouter.put(
 
       const values = {
         workspaceId,
-        isEnabled: body.is_enabled ?? false,
-        whitelabelLogoUrl: body.whitelabel_logo_url ?? null,
-        whitelabelCompanyName: body.whitelabel_company_name ?? null,
-        showPoweredByHomie: body.show_powered_by_homie ?? true,
-        defaultLanguage: body.default_language ?? 'en',
-        supportedLanguages: body.supported_languages ?? ['en'],
-        slaUrgentMinutes: body.sla_urgent_minutes ?? 30,
-        slaHighMinutes: body.sla_high_minutes ?? 60,
-        slaMediumMinutes: body.sla_medium_minutes ?? 120,
-        slaLowMinutes: body.sla_low_minutes ?? 240,
-        requirePmApproval: body.require_pm_approval ?? true,
+        isEnabled: body.isEnabled ?? body.is_enabled ?? false,
+        whitelabelLogoUrl: body.whitelabelLogoUrl ?? body.whitelabel_logo_url ?? null,
+        whitelabelCompanyName: body.whitelabelCompanyName ?? body.whitelabel_company_name ?? null,
+        showPoweredByHomie: body.showPoweredByHomie ?? body.show_powered_by_homie ?? true,
+        defaultLanguage: body.defaultLanguage ?? body.default_language ?? 'en',
+        supportedLanguages: body.supportedLanguages ?? body.supported_languages ?? ['en'],
+        slaUrgentMinutes: body.slaUrgentMinutes ?? body.sla_urgent_minutes ?? 30,
+        slaHighMinutes: body.slaHighMinutes ?? body.sla_high_minutes ?? 60,
+        slaMediumMinutes: body.slaMediumMinutes ?? body.sla_medium_minutes ?? 120,
+        slaLowMinutes: body.slaLowMinutes ?? body.sla_low_minutes ?? 240,
+        requirePmApproval: body.requirePmApproval ?? body.require_pm_approval ?? true,
         updatedAt: now,
       };
 
@@ -1208,24 +1206,24 @@ guestPmRouter.put(
       }
 
       // Seed default categories when enabling for the first time
-      if (body.is_enabled && (!existing || !existing.isEnabled)) {
+      if ((body.isEnabled ?? body.is_enabled) && (!existing || !existing.isEnabled)) {
         await seedDefaultCategories(workspaceId);
       }
 
       res.json({
         data: {
           id: settings.id,
-          is_enabled: settings.isEnabled,
-          whitelabel_logo_url: settings.whitelabelLogoUrl,
-          whitelabel_company_name: settings.whitelabelCompanyName,
-          show_powered_by_homie: settings.showPoweredByHomie,
-          default_language: settings.defaultLanguage,
-          supported_languages: settings.supportedLanguages,
-          sla_urgent_minutes: settings.slaUrgentMinutes,
-          sla_high_minutes: settings.slaHighMinutes,
-          sla_medium_minutes: settings.slaMediumMinutes,
-          sla_low_minutes: settings.slaLowMinutes,
-          require_pm_approval: settings.requirePmApproval,
+          isEnabled: settings.isEnabled,
+          whitelabelLogoUrl: settings.whitelabelLogoUrl,
+          whitelabelCompanyName: settings.whitelabelCompanyName,
+          showPoweredByHomie: settings.showPoweredByHomie,
+          defaultLanguage: settings.defaultLanguage,
+          supportedLanguages: settings.supportedLanguages,
+          slaUrgentMinutes: settings.slaUrgentMinutes,
+          slaHighMinutes: settings.slaHighMinutes,
+          slaMediumMinutes: settings.slaMediumMinutes,
+          slaLowMinutes: settings.slaLowMinutes,
+          requirePmApproval: settings.requirePmApproval,
         },
         error: null,
         meta: {},
@@ -1267,15 +1265,15 @@ guestPmRouter.get(
       res.json({
         data: rules.map((r) => ({
           id: r.id,
-          category_id: r.categoryId,
-          category_name: r.categoryName,
-          category_icon: r.categoryIcon,
-          min_severity: r.minSeverity,
-          preferred_vendor_id: r.preferredVendorId,
-          is_enabled: r.isEnabled,
-          created_by: r.createdBy,
-          created_at: r.createdAt,
-          updated_at: r.updatedAt,
+          categoryId: r.categoryId,
+          categoryName: r.categoryName,
+          categoryIcon: r.categoryIcon,
+          minSeverity: r.minSeverity,
+          preferredVendorId: r.preferredVendorId,
+          isEnabled: r.isEnabled,
+          createdBy: r.createdBy,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
         })),
         error: null,
         meta: {},
@@ -1295,15 +1293,22 @@ guestPmRouter.post(
   requireWorkspaceRole('admin'),
   async (req: Request, res: Response) => {
     const { workspaceId } = req.params;
-    const { category_id, min_severity, preferred_vendor_id, is_enabled } = req.body as {
-      category_id: string;
+    const body = req.body as {
+      categoryId?: string;
+      minSeverity?: string;
+      preferredVendorId?: string;
+      isEnabled?: boolean;
+      // Legacy snake_case support
+      category_id?: string;
       min_severity?: string;
       preferred_vendor_id?: string;
       is_enabled?: boolean;
     };
 
-    if (!category_id) {
-      res.status(400).json({ data: null, error: 'category_id is required', meta: {} });
+    const categoryId = body.categoryId ?? body.category_id;
+
+    if (!categoryId) {
+      res.status(400).json({ data: null, error: 'categoryId is required', meta: {} });
       return;
     }
 
@@ -1312,10 +1317,10 @@ guestPmRouter.post(
         .insert(guestAutoDispatchRules)
         .values({
           workspaceId,
-          categoryId: category_id,
-          minSeverity: min_severity || 'high',
-          preferredVendorId: preferred_vendor_id || null,
-          isEnabled: is_enabled ?? true,
+          categoryId,
+          minSeverity: (body.minSeverity ?? body.min_severity) || 'high',
+          preferredVendorId: (body.preferredVendorId ?? body.preferred_vendor_id) || null,
+          isEnabled: body.isEnabled ?? body.is_enabled ?? true,
           createdBy: req.homeownerId,
         })
         .returning();
@@ -1323,13 +1328,13 @@ guestPmRouter.post(
       res.status(201).json({
         data: {
           id: rule.id,
-          category_id: rule.categoryId,
-          min_severity: rule.minSeverity,
-          preferred_vendor_id: rule.preferredVendorId,
-          is_enabled: rule.isEnabled,
-          created_by: rule.createdBy,
-          created_at: rule.createdAt,
-          updated_at: rule.updatedAt,
+          categoryId: rule.categoryId,
+          minSeverity: rule.minSeverity,
+          preferredVendorId: rule.preferredVendorId,
+          isEnabled: rule.isEnabled,
+          createdBy: rule.createdBy,
+          createdAt: rule.createdAt,
+          updatedAt: rule.updatedAt,
         },
         error: null,
         meta: {},
@@ -1349,7 +1354,12 @@ guestPmRouter.put(
   requireWorkspaceRole('admin'),
   async (req: Request, res: Response) => {
     const { workspaceId, ruleId } = req.params;
-    const { category_id, min_severity, preferred_vendor_id, is_enabled } = req.body as {
+    const body = req.body as {
+      categoryId?: string;
+      minSeverity?: string;
+      preferredVendorId?: string;
+      isEnabled?: boolean;
+      // Legacy snake_case support
       category_id?: string;
       min_severity?: string;
       preferred_vendor_id?: string;
@@ -1368,11 +1378,16 @@ guestPmRouter.put(
         return;
       }
 
+      const categoryId = body.categoryId ?? body.category_id;
+      const minSeverity = body.minSeverity ?? body.min_severity;
+      const preferredVendorId = body.preferredVendorId ?? body.preferred_vendor_id;
+      const isEnabled = body.isEnabled ?? body.is_enabled;
+
       const updateValues: Record<string, unknown> = { updatedAt: new Date() };
-      if (category_id !== undefined) updateValues.categoryId = category_id;
-      if (min_severity !== undefined) updateValues.minSeverity = min_severity;
-      if (preferred_vendor_id !== undefined) updateValues.preferredVendorId = preferred_vendor_id;
-      if (is_enabled !== undefined) updateValues.isEnabled = is_enabled;
+      if (categoryId !== undefined) updateValues.categoryId = categoryId;
+      if (minSeverity !== undefined) updateValues.minSeverity = minSeverity;
+      if (preferredVendorId !== undefined) updateValues.preferredVendorId = preferredVendorId;
+      if (isEnabled !== undefined) updateValues.isEnabled = isEnabled;
 
       const [rule] = await db
         .update(guestAutoDispatchRules)
@@ -1383,13 +1398,13 @@ guestPmRouter.put(
       res.json({
         data: {
           id: rule.id,
-          category_id: rule.categoryId,
-          min_severity: rule.minSeverity,
-          preferred_vendor_id: rule.preferredVendorId,
-          is_enabled: rule.isEnabled,
-          created_by: rule.createdBy,
-          created_at: rule.createdAt,
-          updated_at: rule.updatedAt,
+          categoryId: rule.categoryId,
+          minSeverity: rule.minSeverity,
+          preferredVendorId: rule.preferredVendorId,
+          isEnabled: rule.isEnabled,
+          createdBy: rule.createdBy,
+          createdAt: rule.createdAt,
+          updatedAt: rule.updatedAt,
         },
         error: null,
         meta: {},
