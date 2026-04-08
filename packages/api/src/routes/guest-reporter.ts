@@ -506,7 +506,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/subcategories', async (req: Re
       : '\nNo specific property details available.';
 
     const message = await callAnthropicWithRetry(anthropic, {
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
       system: 'You generate subcategory options for a property maintenance issue reporter. Return ONLY valid JSON — an array of objects with "label", "icon" (single emoji), and "desc" (under 40 chars). Include brand/model info from property details when available. Always include a "Something else" option as the last item. Generate 4-6 options total. Tailor options to what is actually in the property when details are provided.',
       messages: [
@@ -551,7 +551,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/chat-message', async (req: Req
       : 'No specific property details available.';
 
     const message = await callAnthropicWithRetry(anthropic, {
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
       system: `You are a friendly maintenance assistant for vacation rental guests. The guest just reported a ${subcategoryLabel} issue under ${categoryLabel}. ${detailsStr}. Give a brief, helpful response: if there's a simple thing they can try, suggest it in 1-2 sentences. If not, acknowledge the issue and ask them to describe it so you can send help. Keep it warm and casual — this is a guest on vacation, not filing a support ticket. Max 3 sentences.`,
       messages: [
@@ -600,7 +600,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/summarize', async (req: Reques
       : '';
 
     const message = await callAnthropicWithRetry(anthropic, {
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 400,
       system: `Write a concise dispatch-ready maintenance summary. This will be read by providers over SMS/phone, so keep it short and actionable.
 
@@ -665,7 +665,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/chat-followup', async (req: Re
       : '';
 
     const message = await callAnthropicWithRetry(anthropic, {
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 400,
       system: `You are a friendly maintenance assistant for a vacation rental guest reporting a "${subcategoryLabel ?? categoryLabel ?? 'maintenance'}" issue. ${detailsStr}
 
