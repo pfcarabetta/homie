@@ -3190,6 +3190,7 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [sharingJobId, setSharingJobId] = useState<string | null>(null);
   const [preferredProviderIds, setPreferredProviderIds] = useState<Set<string>>(new Set());
@@ -3281,6 +3282,10 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading dispatches...</div>;
 
+  const filteredDispatches = showArchived
+    ? dispatches.filter(d => d.status === 'archived')
+    : dispatches.filter(d => d.status !== 'archived');
+
   if (dispatches.length === 0) return (
     <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>🚀</div>
@@ -3298,6 +3303,10 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Dispatches</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => setShowArchived(!showArchived)}
+            style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${showArchived ? O : '#E0DAD4'}`, background: showArchived ? `${O}08` : '#fff', color: showArchived ? O : '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            {showArchived ? 'Active Dispatches' : 'Archived'}
+          </button>
           <button onClick={() => { if (isPro) onTabChange?.('schedules'); }}
             title={isPro ? 'Set up recurring dispatches' : 'Upgrade to Professional to use Auto-Dispatch'}
             style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, fontWeight: 600,
@@ -3313,7 +3322,12 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
 
       <style dangerouslySetInnerHTML={{ __html: DISPATCH_CARD_STYLES }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {dispatches.map(j => {
+        {filteredDispatches.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9B9490', fontSize: 14 }}>
+            {showArchived ? 'No archived dispatches' : 'No active dispatches'}
+          </div>
+        ) : null}
+        {filteredDispatches.map(j => {
           const sc = DISPATCH_STATUS_COLORS[j.status] || DISPATCH_STATUS_COLORS.expired;
           const isExpanded = expandedId === j.id;
           const jobResponses = responses[j.id] ?? [];
@@ -3572,6 +3586,24 @@ function DispatchesTab({ workspaceId, onTabChange, plan, focusJobId, onFocusHand
                         fontSize: 13, fontWeight: 600, cursor: cancellingId === j.id ? 'default' : 'pointer',
                         opacity: cancellingId === j.id ? 0.6 : 1,
                       }}>{cancellingId === j.id ? 'Cancelling...' : 'Cancel Dispatch'}</button>
+                    </div>
+                  )}
+
+                  {/* Archive button */}
+                  {(j.status === 'completed' || j.status === 'expired') && (
+                    <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 14 }}>
+                      <button onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          await businessService.archiveDispatch(workspaceId, j.id);
+                          setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'archived' } : d));
+                          setExpandedId(null);
+                        } catch { alert('Failed to archive'); }
+                      }} style={{
+                        width: '100%', padding: '10px 0', borderRadius: 100,
+                        border: '1px solid #9B9490', background: '#fff', color: '#9B9490',
+                        fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      }}>Archive</button>
                     </div>
                   )}
                 </div>

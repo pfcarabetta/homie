@@ -1221,6 +1221,36 @@ router.post('/:workspaceId/dispatches/:jobId/cancel', requireWorkspace, requireW
   }
 });
 
+// POST /:workspaceId/dispatches/:jobId/archive
+router.post('/:workspaceId/dispatches/:jobId/archive', requireWorkspace, async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+
+  try {
+    const [job] = await db
+      .select({ id: jobs.id, status: jobs.status, workspaceId: jobs.workspaceId })
+      .from(jobs)
+      .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Dispatch not found', meta: {} });
+      return;
+    }
+
+    if (job.status !== 'completed' && job.status !== 'expired') {
+      res.status(400).json({ data: null, error: 'Only completed or expired dispatches can be archived', meta: {} });
+      return;
+    }
+
+    await db.update(jobs).set({ status: 'archived' } as Record<string, unknown>).where(eq(jobs.id, jobId));
+
+    res.json({ data: { archived: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/dispatches/:jobId/archive]');
+    res.status(500).json({ data: null, error: 'Failed to archive dispatch', meta: {} });
+  }
+});
+
 // GET /:workspaceId/dispatches
 router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, res: Response) => {
   try {

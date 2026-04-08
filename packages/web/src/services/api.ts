@@ -1161,6 +1161,8 @@ export const businessService = {
   cancelDispatch: (workspaceId: string, jobId: string) =>
     fetchAPI<{ cancelled: boolean; credit_refunded: boolean; providers_notified: number }>(
       `/api/v1/business/${workspaceId}/dispatches/${jobId}/cancel`, { method: 'POST' }),
+  archiveDispatch: (workspaceId: string, jobId: string) =>
+    fetchAPI<{ archived: boolean }>(`/api/v1/business/${workspaceId}/dispatches/${jobId}/archive`, { method: 'POST' }),
 
   // Bookings
   listBookings: (workspaceId: string) =>
