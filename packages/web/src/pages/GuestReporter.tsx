@@ -814,40 +814,34 @@ export default function GuestReporterPage() {
 
   const selSubcat = (sub: Subcategory) => {
     setSubcategory(sub.label);
-    if (category?.troubleshootFlow?.length) {
-      setScreen('troubleshoot');
-      setTStep(0);
-      setTAnswers([]);
-    } else {
-      // Go to chat with AI-generated first message
-      setScreen('chat');
-      setMessages([]);
-      setTyping(true);
+    // Always go to AI conversational chat after subcategory selection
+    setScreen('chat');
+    setMessages([]);
+    setTyping(true);
 
-      const propertyDetails: Record<string, unknown> = {};
-      if (propertyData?.details) propertyDetails.details = propertyData.details;
-      if (propertyData?.bedrooms) propertyDetails.bedrooms = propertyData.bedrooms;
-      if (propertyData?.bathrooms) propertyDetails.bathrooms = propertyData.bathrooms;
+    const propertyDetails: Record<string, unknown> = {};
+    if (propertyData?.details) propertyDetails.details = propertyData.details;
+    if (propertyData?.bedrooms) propertyDetails.bedrooms = propertyData.bedrooms;
+    if (propertyData?.bathrooms) propertyDetails.bathrooms = propertyData.bathrooms;
 
-      guestFetch<{ message: string }>(`/api/v1/guest/${workspaceId}/${propertyId}/chat-message`, {
-        method: 'POST',
-        body: JSON.stringify({
-          categoryLabel: category?.label,
-          subcategoryLabel: sub.label,
-          propertyDetails: Object.keys(propertyDetails).length > 0 ? propertyDetails : undefined,
-        }),
+    guestFetch<{ message: string }>(`/api/v1/guest/${workspaceId}/${propertyId}/chat-message`, {
+      method: 'POST',
+      body: JSON.stringify({
+        categoryLabel: category?.label,
+        subcategoryLabel: sub.label,
+        propertyDetails: Object.keys(propertyDetails).length > 0 ? propertyDetails : undefined,
+      }),
+    })
+      .then(data => {
+        setTyping(false);
+        setMessages([{ from: 'bot', text: data.message, time: new Date() }]);
+        scroll();
       })
-        .then(data => {
-          setTyping(false);
-          setMessages([{ from: 'bot', text: data.message, time: new Date() }]);
-          scroll();
-        })
-        .catch(() => {
-          setTyping(false);
-          setMessages([{ from: 'bot', text: `${tx(lang, 'gotIt')} \u2014 ${sub.label.toLowerCase()}. ${tx(lang, 'describeMore')}`, time: new Date() }]);
-          scroll();
-        });
-    }
+      .catch(() => {
+        setTyping(false);
+        setMessages([{ from: 'bot', text: `${tx(lang, 'gotIt')} \u2014 ${sub.label.toLowerCase()}. ${tx(lang, 'describeMore')}`, time: new Date() }]);
+        scroll();
+      });
   };
 
   const tsAnswer = (answer: string) => {
