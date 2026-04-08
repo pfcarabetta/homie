@@ -530,6 +530,71 @@ guestPublicRouter.post('/:workspaceId/:propertyId/chat-message', async (req: Req
   }
 });
 
+// ── POST /:workspaceId/:propertyId/chat-followup — AI conversational follow-up ─
+
+guestPublicRouter.post('/:workspaceId/:propertyId/chat-followup', async (req: Request, res: Response) => {
+  const body = req.body as {
+    categoryLabel?: string;
+    subcategoryLabel?: string;
+    propertyDetails?: Record<string, unknown>;
+    history: Array<{ role: 'user' | 'assistant'; content: string }>;
+  };
+
+  const { categoryLabel, subcategoryLabel, propertyDetails, history } = body;
+
+  if (!history || !Array.isArray(history) || history.length === 0) {
+    res.status(400).json({ data: null, error: 'history is required', meta: {} });
+    return;
+  }
+
+  try {
+    const anthropic = new Anthropic();
+
+    const detailsStr = propertyDetails
+      ? `Property details: ${JSON.stringify(propertyDetails)}`
+      : '';
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 400,
+      system: `You are a friendly maintenance assistant for a vacation rental guest reporting a "${subcategoryLabel ?? categoryLabel ?? 'maintenance'}" issue. ${detailsStr}
+
+Your job is to have a brief, warm conversation to understand the issue well enough to dispatch help. Follow these rules:
+- Ask at most 1-2 follow-up questions total (check the conversation history to see how many you've asked)
+- If the guest has described the issue clearly enough OR you've asked 2+ follow-ups, conclude the conversation
+- When concluding, assess the severity (low/medium/high/urgent) and respond with EXACTLY this JSON at the END of your message: {"conclude":true,"severity":"medium"} (replace severity as appropriate)
+- Keep responses to 2-3 sentences max
+- If the issue is clearly urgent (active leak, gas smell, safety), conclude immediately with urgent severity
+- Be warm and casual — this is a guest on vacation
+- Reference specific property details (brands, models) when relevant
+- Don't repeat information the guest already gave
+- Never ask for their name or contact info`,
+      messages: history.map(m => ({ role: m.role, content: m.content })),
+    });
+
+    const textBlock = message.content.find(b => b.type === 'text');
+    const responseText = textBlock && textBlock.type === 'text' ? textBlock.text : '';
+
+    // Check if AI concluded the conversation
+    const concludeMatch = responseText.match(/\{"conclude"\s*:\s*true\s*,\s*"severity"\s*:\s*"(\w+)"\s*\}/);
+    let displayText = responseText;
+    let concluded = false;
+    let severity = 'medium';
+
+    if (concludeMatch) {
+      concluded = true;
+      severity = concludeMatch[1];
+      // Remove the JSON from the display text
+      displayText = responseText.replace(concludeMatch[0], '').trim();
+    }
+
+    res.json({ data: { message: displayText, concluded, severity }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /guest/:workspaceId/:propertyId/chat-followup]');
+    res.json({ data: { message: 'Thanks for that info. Ready to submit your report whenever you are.', concluded: true, severity: 'medium' }, error: null, meta: {} });
+  }
+});
+
 // ── POST /:workspaceId/:propertyId/issues — Create a guest issue ────────────
 
 guestPublicRouter.post('/:workspaceId/:propertyId/issues', async (req: Request, res: Response) => {

@@ -890,30 +890,71 @@ export default function GuestReporterPage() {
 
   const send = () => {
     if (!input.trim() && photos.length === 0) return;
-    setMessages(p => [...p, { from: 'user', text: input.trim(), photos: [...photos], time: new Date() }]);
-    setDesc(p => p + '\n' + input.trim());
-    const currentInput = input.trim();
+    const userText = input.trim();
+    setMessages(p => [...p, { from: 'user', text: userText, photos: [...photos], time: new Date() }]);
+    setDesc(p => p + '\n' + userText);
     setInput('');
     setPhotos([]);
     scroll();
 
-    if (!severity) {
-      setTyping(true);
-      setTimeout(() => {
+    // If already concluded (severity set), just acknowledge
+    if (severity) {
+      botMsg(tx(lang, 'addedToReport'));
+      return;
+    }
+
+    // Build conversation history for AI
+    setTyping(true);
+    const updatedMessages = [...messages, { from: 'user' as const, text: userText, time: new Date() }];
+    const history = updatedMessages.map(m => ({
+      role: (m.from === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.text,
+    }));
+
+    const propertyDetails: Record<string, unknown> = {};
+    if (propertyData?.details) propertyDetails.details = propertyData.details;
+    if (propertyData?.bedrooms) propertyDetails.bedrooms = propertyData.bedrooms;
+    if (propertyData?.bathrooms) propertyDetails.bathrooms = propertyData.bathrooms;
+
+    guestFetch<{ message: string; concluded: boolean; severity: string }>(
+      `/api/v1/guest/${workspaceId}/${propertyId}/chat-followup`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          categoryLabel: category?.label,
+          subcategoryLabel: subcategory,
+          propertyDetails: Object.keys(propertyDetails).length > 0 ? propertyDetails : undefined,
+          history,
+        }),
+      },
+    )
+      .then(data => {
+        setTyping(false);
+        if (data.concluded) {
+          setSeverity(data.severity);
+          setMessages(p => [...p, {
+            from: 'bot',
+            text: data.message,
+            time: new Date(),
+            showActions: true,
+          }]);
+        } else {
+          setMessages(p => [...p, { from: 'bot', text: data.message, time: new Date() }]);
+        }
+        scroll();
+      })
+      .catch(() => {
         setTyping(false);
         const s = category?.id === 'safety' ? 'urgent' : 'medium';
         setSeverity(s);
         setMessages(p => [...p, {
           from: 'bot',
-          text: `Thanks, ${displayName}. Flagged as ${s} priority ${category?.label.toLowerCase() ?? 'issue'}. Add photos, or submit when ready.`,
+          text: `Thanks, ${displayName}. We have enough info to help. Add photos if you'd like, or submit when ready.`,
           time: new Date(),
           showActions: true,
         }]);
         scroll();
-      }, 1200);
-    } else {
-      botMsg(tx(lang, 'addedToReport'));
-    }
+      });
   };
 
   const submitIssue = async () => {
