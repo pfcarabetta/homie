@@ -287,7 +287,10 @@ interface PropertyData {
   details: Record<string, unknown> | null;
   bedrooms: number | null;
   bathrooms: number | null;
-  settings: Record<string, unknown>;
+  settings: Record<string, unknown> & {
+    supportEmail?: string | null;
+    supportPhone?: string | null;
+  };
 }
 
 interface ReservationMatch {
@@ -1717,6 +1720,34 @@ export default function GuestReporterPage() {
           </div>
         )}
       </div>
+
+      {/* Contact Support footer */}
+      {!['welcome', 'identify'].includes(screen) && propertyData?.settings &&
+        (propertyData.settings.supportEmail || propertyData.settings.supportPhone) && (
+        <div style={{
+          borderTop: `1px solid ${BRAND.warm}`,
+          padding: '8px 14px',
+          textAlign: 'center',
+          background: BRAND.white,
+          flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 11, color: BRAND.gray, fontFamily: "'DM Sans',sans-serif" }}>Need to reach us?</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 4 }}>
+            {propertyData.settings.supportPhone && (
+              <>
+                <a href={`tel:${propertyData.settings.supportPhone}`} style={{ fontSize: 11, color: BRAND.gray, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                  title="Call">{'\uD83D\uDCDE'} Call</a>
+                <a href={`sms:${propertyData.settings.supportPhone}`} style={{ fontSize: 11, color: BRAND.gray, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                  title="Text">{'\uD83D\uDCAC'} Text</a>
+              </>
+            )}
+            {propertyData.settings.supportEmail && (
+              <a href={`mailto:${propertyData.settings.supportEmail}`} style={{ fontSize: 11, color: BRAND.gray, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                title="Email">{'\u2709\uFE0F'} Email</a>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

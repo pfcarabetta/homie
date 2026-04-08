@@ -930,6 +930,8 @@ export interface GuestReporterSettings {
   slaMediumMinutes: number;
   slaLowMinutes: number;
   requirePmApproval: boolean;
+  supportEmail: string | null;
+  supportPhone: string | null;
 }
 
 export interface AutoDispatchRule {

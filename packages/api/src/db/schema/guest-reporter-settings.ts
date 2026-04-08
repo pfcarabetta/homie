@@ -20,6 +20,8 @@ export const guestReporterSettings = pgTable(
     slaMediumMinutes: integer('sla_medium_minutes').default(120),
     slaLowMinutes: integer('sla_low_minutes').default(240),
     requirePmApproval: boolean('require_pm_approval').default(true),
+    supportEmail: text('support_email'),
+    supportPhone: text('support_phone'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

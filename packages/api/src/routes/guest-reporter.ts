@@ -372,6 +372,8 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
             slaHigh: settings.slaHighMinutes,
             slaMedium: settings.slaMediumMinutes,
             slaLow: settings.slaLowMinutes,
+            supportEmail: settings.supportEmail ?? null,
+            supportPhone: settings.supportPhone ?? null,
           },
         },
         reservation: {
@@ -1676,6 +1678,8 @@ guestPmRouter.get(
             slaMediumMinutes: 120,
             slaLowMinutes: 240,
             requirePmApproval: true,
+            supportEmail: null,
+            supportPhone: null,
           },
           error: null,
           meta: {},
@@ -1697,6 +1701,8 @@ guestPmRouter.get(
           slaMediumMinutes: settings.slaMediumMinutes,
           slaLowMinutes: settings.slaLowMinutes,
           requirePmApproval: settings.requirePmApproval,
+          supportEmail: settings.supportEmail ?? null,
+          supportPhone: settings.supportPhone ?? null,
         },
         error: null,
         meta: {},
@@ -1729,6 +1735,8 @@ guestPmRouter.put(
       slaMediumMinutes?: number;
       slaLowMinutes?: number;
       requirePmApproval?: boolean;
+      supportEmail?: string | null;
+      supportPhone?: string | null;
       // Accept snake_case (legacy)
       is_enabled?: boolean;
       whitelabel_logo_url?: string;
@@ -1741,6 +1749,8 @@ guestPmRouter.put(
       sla_medium_minutes?: number;
       sla_low_minutes?: number;
       require_pm_approval?: boolean;
+      support_email?: string | null;
+      support_phone?: string | null;
     };
 
     try {
@@ -1765,6 +1775,8 @@ guestPmRouter.put(
         slaMediumMinutes: body.slaMediumMinutes ?? body.sla_medium_minutes ?? 120,
         slaLowMinutes: body.slaLowMinutes ?? body.sla_low_minutes ?? 240,
         requirePmApproval: body.requirePmApproval ?? body.require_pm_approval ?? true,
+        supportEmail: body.supportEmail ?? body.support_email ?? null,
+        supportPhone: body.supportPhone ?? body.support_phone ?? null,
         updatedAt: now,
       };
 
@@ -1801,6 +1813,8 @@ guestPmRouter.put(
           slaMediumMinutes: settings.slaMediumMinutes,
           slaLowMinutes: settings.slaLowMinutes,
           requirePmApproval: settings.requirePmApproval,
+          supportEmail: settings.supportEmail ?? null,
+          supportPhone: settings.supportPhone ?? null,
         },
         error: null,
         meta: {},

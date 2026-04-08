@@ -6310,6 +6310,19 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
         </div>
       </div>
 
+      {/* Guest Support Contact */}
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>Guest Support Contact</div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Support Email</label>
+          <input value={draft.supportEmail || ''} onChange={e => setDraft(d => ({ ...d, supportEmail: e.target.value || null }))} placeholder="support@example.com" style={inputStyle} type="email" />
+        </div>
+        <div>
+          <label style={labelStyle}>Support Phone</label>
+          <input value={draft.supportPhone || ''} onChange={e => setDraft(d => ({ ...d, supportPhone: e.target.value || null }))} placeholder="+1 (555) 123-4567" style={inputStyle} type="tel" />
+        </div>
+      </div>
+
       {/* Save */}
       <button onClick={handleSave} disabled={saving}
         style={{ padding: '12px 32px', borderRadius: 10, border: 'none', background: O, color: '#fff', fontSize: 15, fontWeight: 600, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>
