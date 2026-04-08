@@ -993,8 +993,8 @@ export default function GuestReporterPage() {
                 </div>
                 {[
                   [tx(lang, 'property'), propertyName],
-                  [tx(lang, 'checkIn'), reservation.checkIn ?? ''],
-                  [tx(lang, 'checkOut'), reservation.checkOut ?? ''],
+                  [tx(lang, 'checkIn'), reservation.checkIn ? new Date(reservation.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''],
+                  [tx(lang, 'checkOut'), reservation.checkOut ? new Date(reservation.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''],
                   ['Guest', reservation.guestName ?? ''],
                   ['Reservation', reservation.reservationId ?? ''],
                 ].map(([k, v], i) => (
