@@ -12,6 +12,7 @@ import { providerResponses } from '../db/schema/provider-responses';
 import { jobTrackingEvents, jobTrackingLinks, type TrackingEventType } from '../db/schema/job-tracking';
 import { reservations } from '../db/schema/reservations';
 import { properties } from '../db/schema/properties';
+import { workspaces } from '../db/schema/workspaces';
 import { guestIssues } from '../db/schema/guest-issues';
 import { guestIssueTimeline } from '../db/schema/guest-issue-timeline';
 import { discoverProviders } from './providers/discovery';
@@ -105,6 +106,7 @@ async function sendOutreachToProvider(
   provider: DiscoveredProvider,
   adapters: Record<OutreachChannel, ChannelAdapter>,
   skipQuote = false,
+  workspaceName?: string,
 ): Promise<void> {
   logger.info(`[orchestration] Sending outreach to ${provider.name} (channels: ${provider.channels_available.join(',')}${skipQuote ? ', skip-quote' : ''})`);
 
@@ -183,7 +185,7 @@ async function sendOutreachToProvider(
           const script = scriptByChannel.voice;
           const [attempt] = await db.insert(outreachAttempts).values({ jobId: job.id, providerId: provider.id, channel: 'voice', scriptUsed: script, status: 'pending' }).returning({ id: outreachAttempts.id });
           const voicePhone = TEST_MODE && TEST_PHONE ? TEST_PHONE : (provider.phone ?? null);
-          const result = await adapters.voice.send({ attemptId: attempt.id, jobId: job.id, providerId: provider.id, providerName: provider.name, phone: voicePhone, email: null, website: null, script, channel: 'voice' });
+          const result = await adapters.voice.send({ attemptId: attempt.id, jobId: job.id, providerId: provider.id, providerName: provider.name, phone: voicePhone, email: null, website: null, script, channel: 'voice', workspaceName });
           if (result.status === 'failed') {
             logger.warn(`[orchestration] Voice follow-up failed for ${provider.name}: ${result.error}`);
             await db.update(outreachAttempts).set({ status: 'failed', responseRaw: result.error ?? null }).where(eq(outreachAttempts.id, attempt.id));
@@ -240,6 +242,7 @@ async function sendOutreachToProvider(
         website: TEST_MODE ? null : (provider.website ?? null),
         script,
         channel,
+        workspaceName,
       });
 
       if (result.status === 'failed') {
@@ -296,6 +299,15 @@ export async function dispatchJob(jobId: string): Promise<void> {
   const diagnosis = job.diagnosis as DiagnosisPayload;
   const tier = (job.tier as JobTier) in TIER_PROVIDER_LIMITS ? (job.tier as JobTier) : 'standard';
   const limit = TIER_PROVIDER_LIMITS[tier];
+
+  // Look up workspace name for outreach branding
+  let workspaceName: string | undefined;
+  if (job.workspaceId) {
+    try {
+      const [ws] = await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.id, job.workspaceId)).limit(1);
+      workspaceName = ws?.name ?? undefined;
+    } catch { /* silent */ }
+  }
 
   // ── Preferred vendor cascade (B2B jobs only) ──────────────────────────
   const preferredProviderIds: string[] = [];
@@ -573,7 +585,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
     logger.info(`[orchestration] dispatchJob: Phase 1 — contacting ${preferredEligible.length} preferred vendors for job ${jobId}`);
 
     const preferredResults = await Promise.allSettled(
-      preferredEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters, skipQuoteProviderIds.has(provider.id))),
+      preferredEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters, skipQuoteProviderIds.has(provider.id), workspaceName)),
     );
     const preferredFailed = preferredResults.filter((r) => r.status === 'rejected');
     if (preferredFailed.length > 0) {
@@ -613,7 +625,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
 
           const marketplaceAdapters = createAdapters();
           const marketplaceResults = await Promise.allSettled(
-            marketplaceEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, marketplaceAdapters)),
+            marketplaceEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, marketplaceAdapters, false, workspaceName)),
           );
           const marketplaceFailed = marketplaceResults.filter((r) => r.status === 'rejected');
           if (marketplaceFailed.length > 0) {
@@ -629,7 +641,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
   } else {
     // No preferred vendors — contact all eligible providers immediately (consumer flow)
     const results = await Promise.allSettled(
-      eligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters)),
+      eligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters, false, workspaceName)),
     );
 
     const failed = results.filter((r) => r.status === 'rejected');

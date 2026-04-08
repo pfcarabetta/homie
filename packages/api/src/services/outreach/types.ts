@@ -10,6 +10,7 @@ export interface OutreachPayload {
   website: string | null;
   script: string;
   channel: OutreachChannel;
+  workspaceName?: string;
 }
 
 /** Adapters return 'pending' when the interaction is async (webhook delivers the result later). */
