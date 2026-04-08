@@ -5972,13 +5972,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                           </div>
                         )}
 
-                        {/* Guest satisfaction */}
-                        {detail.guestSatisfactionRating && (
-                          <div style={{ background: W, borderRadius: 8, padding: 12, marginBottom: 16 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 4 }}>Guest Satisfaction</div>
-                            <div style={{ fontSize: 14, color: D }}>Rating: {detail.guestSatisfactionRating}{detail.guestSatisfactionComment ? ` - "${detail.guestSatisfactionComment}"` : ''}</div>
-                          </div>
-                        )}
+                        {/* Guest satisfaction — shown above timeline, before action buttons */}
 
                         {/* Timeline */}
                         {detail.timeline.length > 0 && (
@@ -5994,6 +5988,42 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                                 </div>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {/* Guest Feedback */}
+                        {detail.guestSatisfactionRating != null && (
+                          <div style={{
+                            background: detail.guestSatisfactionRating === 'positive' ? '#E8F5E9' : '#FFEBEE',
+                            border: `1px solid ${detail.guestSatisfactionRating === 'positive' ? G : '#E53935'}`,
+                            borderRadius: 10,
+                            padding: 14,
+                            marginBottom: 16,
+                          }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 8 }}>Guest Feedback</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 20 }}>{detail.guestSatisfactionRating === 'positive' ? '\uD83D\uDC4D' : '\uD83D\uDC4E'}</span>
+                              <span style={{
+                                fontSize: 14,
+                                fontWeight: 700,
+                                color: detail.guestSatisfactionRating === 'positive' ? G : '#E53935',
+                              }}>
+                                {detail.guestSatisfactionRating === 'positive' ? 'Positive' : 'Negative'}
+                              </span>
+                            </div>
+                            {detail.guestSatisfactionComment && (
+                              <div style={{
+                                marginTop: 8,
+                                fontSize: 13,
+                                color: D,
+                                background: W,
+                                borderRadius: 6,
+                                padding: '8px 10px',
+                                fontStyle: 'italic',
+                              }}>
+                                &ldquo;{detail.guestSatisfactionComment}&rdquo;
+                              </div>
+                            )}
                           </div>
                         )}
 

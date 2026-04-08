@@ -14,7 +14,9 @@ import { guestIssueTimeline } from '../db/schema/guest-issue-timeline';
 import { guestAutoDispatchRules } from '../db/schema/guest-auto-dispatch-rules';
 import { guestReporterSettings } from '../db/schema/guest-reporter-settings';
 import { jobs } from '../db/schema/jobs';
+import { bookings } from '../db/schema/bookings';
 import { dispatchJob } from '../services/orchestration';
+import { recordHomeownerRating } from '../services/providers/scores';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 
 function timeAgoShort(date: Date): string {
@@ -1018,6 +1020,36 @@ guestPublicRouter.post('/issues/:issueId/satisfaction', async (req: Request, res
       description: `Guest rated their experience as ${rating}`,
       metadata: { rating, comment: comment || null },
     });
+
+    // Record feedback on the provider's vendor scorecard
+    try {
+      const [issueWithJob] = await db
+        .select({ dispatchedJobId: guestIssues.dispatchedJobId })
+        .from(guestIssues)
+        .where(eq(guestIssues.id, issueId))
+        .limit(1);
+
+      if (issueWithJob?.dispatchedJobId) {
+        const [booking] = await db
+          .select({ providerId: bookings.providerId })
+          .from(bookings)
+          .where(eq(bookings.jobId, issueWithJob.dispatchedJobId))
+          .limit(1);
+
+        if (booking) {
+          // Convert guest satisfaction to a 1-5 star scale: positive = 5, negative = 1
+          const starRating = rating === 'positive' ? 5 : 1;
+          await recordHomeownerRating(booking.providerId, starRating);
+          logger.info(
+            { providerId: booking.providerId, issueId, rating, starRating },
+            '[guest-satisfaction] Recorded provider scorecard feedback',
+          );
+        }
+      }
+    } catch (scoreErr) {
+      // Non-fatal: log but don't fail the satisfaction submission
+      logger.error({ err: scoreErr, issueId }, '[guest-satisfaction] Failed to update provider scorecard');
+    }
 
     res.json({ data: { success: true }, error: null, meta: {} });
   } catch (err) {
