@@ -1217,7 +1217,7 @@ guestPmRouter.post(
   requireWorkspace,
   async (req: Request, res: Response) => {
     const { workspaceId, issueId } = req.params;
-    const { preferredOnly, preferredVendorId } = (req.body ?? {}) as { preferredOnly?: boolean; preferredVendorId?: string };
+    const { preferredOnly, preferredVendorIds, preferredVendorId } = (req.body ?? {}) as { preferredOnly?: boolean; preferredVendorIds?: string[]; preferredVendorId?: string };
 
     try {
       const [issue] = await db
@@ -1298,7 +1298,7 @@ guestPmRouter.post(
         severity: fullIssue.severity,
         summary: `Guest issue report: ${categoryName}\n\n${fullIssue.description ?? ''}${troubleshootContext}\n\nReported by: ${fullIssue.guestName ?? 'Guest'}`,
         recommendedActions: ['Dispatch professional'],
-        ...(preferredVendorId ? { preferredVendorId } : {}),
+        ...((preferredVendorIds?.length ?? 0) > 0 ? { preferredVendorIds } : preferredVendorId ? { preferredVendorIds: [preferredVendorId] } : {}),
       };
 
       const [job] = await db

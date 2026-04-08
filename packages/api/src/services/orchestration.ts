@@ -333,19 +333,21 @@ export async function dispatchJob(jobId: string): Promise<void> {
         logger.info(`[orchestration] dispatchJob: ${pvRows.length - availableRows.length} preferred vendors filtered out (outside operating hours)`);
       }
 
-      // If a specific preferred vendor was requested (e.g. from guest issue approval), filter to just that vendor
-      const requestedVendorId = (diagnosis as unknown as Record<string, unknown>).preferredVendorId as string | undefined;
-      if (requestedVendorId) {
-        const matchedVendor = availableRows.find(r => r.providerId === requestedVendorId);
-        if (matchedVendor) {
-          preferredProviderIds.push(matchedVendor.providerId);
-          if (matchedVendor.skipQuote) skipQuoteProviderIds.add(matchedVendor.providerId);
-          logger.info(`[orchestration] dispatchJob: PM selected specific vendor ${requestedVendorId} for job ${jobId}`);
+      // If specific preferred vendors were requested (e.g. from guest issue approval), filter to those
+      const diagExtra = diagnosis as unknown as Record<string, unknown>;
+      const requestedVendorIds = (diagExtra.preferredVendorIds as string[] | undefined) ?? (diagExtra.preferredVendorId ? [diagExtra.preferredVendorId as string] : undefined);
+      if (requestedVendorIds?.length) {
+        const requestedSet = new Set(requestedVendorIds);
+        const matchedVendors = availableRows.filter(r => requestedSet.has(r.providerId));
+        if (matchedVendors.length > 0) {
+          preferredProviderIds.push(...matchedVendors.map(r => r.providerId));
+          for (const r of matchedVendors) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
+          logger.info(`[orchestration] dispatchJob: PM selected ${matchedVendors.length} vendor(s) for job ${jobId}`);
         } else {
-          // Requested vendor not found/available, fall back to all preferred
+          // None of the requested vendors available, fall back to all preferred
           preferredProviderIds.push(...availableRows.map(r => r.providerId));
           for (const r of availableRows) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
-          logger.warn(`[orchestration] dispatchJob: requested vendor ${requestedVendorId} not available, using ${availableRows.length} preferred vendors`);
+          logger.warn(`[orchestration] dispatchJob: requested vendors not available, using ${availableRows.length} preferred vendors`);
         }
       } else {
         preferredProviderIds.push(...availableRows.map(r => r.providerId));

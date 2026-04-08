@@ -5720,7 +5720,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [preferredOnly, setPreferredOnly] = useState(false);
-  const [selectedVendorId, setSelectedVendorId] = useState('');
+  const [selectedVendorIds, setSelectedVendorIds] = useState<Set<string>>(new Set());
   const [vendors, setVendors] = useState<PreferredVendor[]>([]);
 
   useEffect(() => {
@@ -5762,12 +5762,12 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
     try {
       await businessService.approveGuestIssue(workspaceId, issueId, {
         preferredOnly: preferredOnly || undefined,
-        preferredVendorId: selectedVendorId || undefined,
+        preferredVendorIds: selectedVendorIds.size > 0 ? [...selectedVendorIds] : undefined,
       });
       setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: 'approved' } : i));
       if (detail?.id === issueId) setDetail({ ...detail, status: 'approved' });
       setPreferredOnly(false);
-      setSelectedVendorId('');
+      setSelectedVendorIds(new Set());
     } catch { alert('Failed to approve issue'); }
     setActionLoading(false);
   }
@@ -5956,7 +5956,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                           <div style={{ background: W, borderRadius: 10, padding: 14, marginBottom: 12 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: preferredOnly ? 10 : 0 }}>
                               <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: D }}>
-                                <div onClick={() => { setPreferredOnly(!preferredOnly); if (preferredOnly) setSelectedVendorId(''); }} style={{
+                                <div onClick={() => { setPreferredOnly(!preferredOnly); if (preferredOnly) setSelectedVendorIds(new Set()); }} style={{
                                   width: 38, height: 20, borderRadius: 10, background: preferredOnly ? G : '#E0DAD4',
                                   position: 'relative', transition: 'background 0.2s', flexShrink: 0, cursor: 'pointer',
                                 }}>
@@ -5970,18 +5970,31 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                             </div>
                             {preferredOnly && (
                               <div style={{ animation: 'fadeSlide 0.2s ease' }}>
-                                <select
-                                  value={selectedVendorId}
-                                  onChange={e => setSelectedVendorId(e.target.value)}
-                                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 13, color: D, cursor: 'pointer' }}
-                                >
-                                  <option value="">All preferred vendors</option>
+                                <div style={{ border: '1px solid #E0DAD4', borderRadius: 8, padding: '6px 0', maxHeight: 160, overflowY: 'auto' }}>
                                   {[...new Map(vendors.map(v => [v.providerId, v])).values()].map(v => (
-                                    <option key={v.providerId} value={v.providerId}>{v.providerName}</option>
+                                    <label key={v.providerId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 13, color: D }}
+                                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = W; }}
+                                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedVendorIds.has(v.providerId)}
+                                        onChange={() => {
+                                          setSelectedVendorIds(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(v.providerId)) next.delete(v.providerId);
+                                            else next.add(v.providerId);
+                                            return next;
+                                          });
+                                        }}
+                                        style={{ accentColor: G, width: 16, height: 16, cursor: 'pointer' }}
+                                      />
+                                      {v.providerName}
+                                    </label>
                                   ))}
-                                </select>
+                                </div>
                                 <div style={{ fontSize: 11, color: '#9B9490', marginTop: 4 }}>
-                                  {selectedVendorId ? 'Only this vendor will be contacted' : 'All preferred vendors will be contacted'}
+                                  {selectedVendorIds.size > 0 ? `${selectedVendorIds.size} vendor${selectedVendorIds.size > 1 ? 's' : ''} selected` : 'All preferred vendors will be contacted'}
                                 </div>
                               </div>
                             )}
