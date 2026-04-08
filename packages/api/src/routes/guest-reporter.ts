@@ -1263,18 +1263,17 @@ guestPmRouter.get(
         .orderBy(asc(guestAutoDispatchRules.createdAt));
 
       res.json({
-        data: rules.map((r) => ({
-          id: r.id,
-          categoryId: r.categoryId,
-          categoryName: r.categoryName,
-          categoryIcon: r.categoryIcon,
-          minSeverity: r.minSeverity,
-          preferredVendorId: r.preferredVendorId,
-          isEnabled: r.isEnabled,
-          createdBy: r.createdBy,
-          createdAt: r.createdAt,
-          updatedAt: r.updatedAt,
-        })),
+        data: {
+          rules: rules.map((r) => ({
+            id: r.id,
+            categoryId: r.categoryId,
+            categoryName: r.categoryName,
+            categoryIcon: r.categoryIcon,
+            minSeverity: r.minSeverity,
+            preferredVendorId: r.preferredVendorId,
+            isEnabled: r.isEnabled,
+          })),
+        },
         error: null,
         meta: {},
       });
