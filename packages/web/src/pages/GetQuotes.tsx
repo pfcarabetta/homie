@@ -255,6 +255,14 @@ function cleanPrice(price: string): string {
   const em = p.match(/(?:is|are|be|charge|cost|runs?|pay)\s+(?:about|around)?\s*\$?(\d+(?:\.\d+)?)/i);
   if (em) return `$${em[1]}`;
 
+  // "$150 service call", "$200 for the job", "$99 per visit" → "$X"
+  const leadingPrice = p.match(/^\$(\d+(?:\.\d+)?)\s+\w/);
+  if (leadingPrice) return `$${leadingPrice[1]}`;
+
+  // "150 service call", "200 for" → "$X"
+  const leadingNum = p.match(/^(\d+(?:\.\d+)?)\s+(?:service|for|per|flat|call|visit|fee|charge|total)/i);
+  if (leadingNum) return `$${leadingNum[1]}`;
+
   return p;
 }
 
