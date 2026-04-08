@@ -17,6 +17,17 @@ import { jobs } from '../db/schema/jobs';
 import { dispatchJob } from '../services/orchestration';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 
+function timeAgoShort(date: Date): string {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 // ── Public guest-facing router (no auth) ────────────────────────────────────
 export const guestPublicRouter = Router();
 
@@ -898,21 +909,42 @@ guestPublicRouter.get('/issues/:issueId/status', async (req: Request, res: Respo
       .where(eq(guestIssueTimeline.issueId, issueId))
       .orderBy(asc(guestIssueTimeline.createdAt));
 
+    // Map issue status to step progression for the guest tracker
+    const STATUS_STEP_ORDER = ['reported', 'pm_reviewing', 'approved', 'dispatching', 'provider_responding', 'provider_booked', 'resolved'];
+    const currentStatusIdx = STATUS_STEP_ORDER.indexOf(issue.status);
+    const currentStep = currentStatusIdx >= 0 ? currentStatusIdx : 0;
+
+    // Build timeline steps with titles and timestamps from actual events
+    const stepDefs = [
+      { key: 'reported', title: 'Issue reported', desc: 'Your report has been submitted' },
+      { key: 'pm_reviewing', title: 'Sent to property manager', desc: 'Your property manager has been notified' },
+      { key: 'approved', title: 'Dispatch approved', desc: 'A local pro is being contacted' },
+      { key: 'dispatching', title: 'Contacting providers', desc: 'Reaching out to available pros in the area' },
+      { key: 'provider_responding', title: 'Provider responding', desc: 'Waiting for availability and quote' },
+      { key: 'provider_booked', title: 'Provider booked', desc: 'A pro has been assigned' },
+      { key: 'resolved', title: 'Resolved', desc: 'Issue has been fixed' },
+    ];
+
+    const timelineMap = new Map(timeline.map(t => [t.eventType, t]));
+    const steps = stepDefs.map(s => {
+      const evt = timelineMap.get(s.key) ?? timelineMap.get(`pm_${s.key}`);
+      return {
+        title: evt?.title ?? s.title,
+        desc: evt?.description ?? s.desc,
+        time: evt?.createdAt ? timeAgoShort(evt.createdAt) : '',
+      };
+    });
+
+    const resolved = issue.status === 'resolved' || issue.status === 'closed';
+
     res.json({
       data: {
         status: issue.status,
+        currentStep,
+        steps,
+        resolved,
+        autoDispatched: false,
         severity: issue.severity,
-        category_name: category?.name ?? null,
-        category_icon: category?.icon ?? null,
-        property_name: property?.name ?? null,
-        timeline_events: timeline.map((t) => ({
-          id: t.id,
-          event_type: t.eventType,
-          title: t.title,
-          description: t.description,
-          created_at: t.createdAt,
-        })),
-        created_at: issue.createdAt,
       },
       error: null,
       meta: {},
