@@ -382,7 +382,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
   }
 
   // Categories that should only use preferred vendors — no marketplace discovery
-  const INTERNAL_ONLY_CATEGORIES = new Set(['inspection', 'restocking', 'concierge', 'trash']);
+  const INTERNAL_ONLY_CATEGORIES = new Set(['inspection', 'restocking', 'concierge', 'trash', 'guest_wifi', 'guest_lockout', 'guest_safety', 'guest_noise']);
   const isInternalOnly = INTERNAL_ONLY_CATEGORIES.has(diagnosis.category.toLowerCase());
 
   if (isInternalOnly && eligible.length === 0) {

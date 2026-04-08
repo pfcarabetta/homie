@@ -1230,17 +1230,19 @@ guestPmRouter.post(
       const categoryName = cat?.name ?? 'general';
 
       // Map guest issue categories to dispatch categories
+      // Map guest categories to dispatch categories
+      // guest_wifi, guest_lockout, guest_safety, guest_noise → preferred vendors only (no marketplace)
       const GUEST_TO_DISPATCH: Record<string, string> = {
-        'wifi / internet': 'electrical',
+        'wifi / internet': 'guest_wifi',
         'hvac / climate': 'hvac',
         'plumbing': 'plumbing',
         'electrical': 'electrical',
         'appliances': 'appliance',
-        'lockout / access': 'locksmith',
+        'lockout / access': 'guest_lockout',
         'pest control': 'pest_control',
         'cleanliness': 'cleaning',
-        'safety concern': 'general',
-        'noise complaint': 'general',
+        'safety concern': 'guest_safety',
+        'noise complaint': 'guest_noise',
         'pool / hot tub': 'pool',
         'other': 'general',
       };
