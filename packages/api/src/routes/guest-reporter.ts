@@ -249,7 +249,7 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
 
     // Get property
     const [property] = await db
-      .select({ name: properties.name })
+      .select({ name: properties.name, state: properties.state })
       .from(properties)
       .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, workspaceId)))
       .limit(1);
@@ -272,8 +272,34 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
     }
 
     // Find current reservation for this property
+    // Guest attribution: only match if after 4pm on check-in day and before 11am on check-out day
     const now = new Date();
-    const [reservation] = await db
+
+    // Derive timezone from property state (best-effort US mapping)
+    const stateTimezones: Record<string, string> = {
+      AZ: 'America/Phoenix', CA: 'America/Los_Angeles', OR: 'America/Los_Angeles', WA: 'America/Los_Angeles',
+      NV: 'America/Los_Angeles', HI: 'Pacific/Honolulu', AK: 'America/Anchorage',
+      MT: 'America/Denver', ID: 'America/Boise', WY: 'America/Denver', UT: 'America/Denver',
+      CO: 'America/Denver', NM: 'America/Denver', ND: 'America/Chicago', SD: 'America/Chicago',
+      NE: 'America/Chicago', KS: 'America/Chicago', OK: 'America/Chicago', TX: 'America/Chicago',
+      MN: 'America/Chicago', IA: 'America/Chicago', MO: 'America/Chicago', AR: 'America/Chicago',
+      LA: 'America/Chicago', WI: 'America/Chicago', IL: 'America/Chicago', MS: 'America/Chicago',
+      AL: 'America/Chicago', TN: 'America/Chicago',
+    };
+    const tz = stateTimezones[property.state?.toUpperCase() ?? ''] ?? 'America/New_York';
+
+    // Get local time components
+    const localNow = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+    const localHour = localNow.getHours();
+    const localDateStr = localNow.toISOString().split('T')[0]; // YYYY-MM-DD in local time
+
+    // Fetch reservations that broadly overlap today (check-in day or during stay)
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(now);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const candidateReservations = await db
       .select({
         id: reservations.id,
         pmsReservationId: reservations.pmsReservationId,
@@ -288,12 +314,27 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
         and(
           eq(reservations.propertyId, propertyId),
           eq(reservations.workspaceId, workspaceId),
-          lte(reservations.checkIn, now),
-          gte(reservations.checkOut, now),
+          lte(reservations.checkIn, dayEnd),
+          gte(reservations.checkOut, dayStart),
           ne(reservations.status, 'cancelled'),
+          ne(reservations.status, 'Cancelled'),
         ),
       )
-      .limit(1);
+      .orderBy(desc(reservations.checkIn))
+      .limit(5);
+
+    // Apply 4pm check-in / 11am check-out rule
+    const reservation = candidateReservations.find(r => {
+      const ciDate = new Date(r.checkIn).toISOString().split('T')[0];
+      const coDate = new Date(r.checkOut).toISOString().split('T')[0];
+
+      // Check-in day: only match after 4pm local
+      if (ciDate === localDateStr && localHour < 16) return false;
+      // Check-out day: only match before 11am local
+      if (coDate === localDateStr && localHour >= 11) return false;
+
+      return true;
+    }) ?? null;
 
     const logoUrl = settings.whitelabelLogoUrl || workspace.logoUrl;
     const companyName = settings.whitelabelCompanyName || workspace.name;
