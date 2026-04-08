@@ -30,6 +30,32 @@ function timeAgoShort(date: Date): string {
   return `${days}d ago`;
 }
 
+// Retry wrapper for Anthropic API calls (handles 529 overloaded)
+async function callAnthropicWithRetry(
+  anthropic: Anthropic,
+  params: Anthropic.MessageCreateParamsNonStreaming,
+  retries = 2,
+): Promise<Anthropic.Message> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await anthropic.messages.create(params);
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 529 && attempt < retries) {
+        // Wait before retry: 1s, then 2s
+        await new Promise(r => setTimeout(r, (attempt + 1) * 1000));
+        // Try fallback model on last retry
+        if (attempt === retries - 1) {
+          params = { ...params, model: 'claude-haiku-4-5-20251001' };
+        }
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Anthropic API retries exhausted');
+}
+
 // ── Public guest-facing router (no auth) ────────────────────────────────────
 export const guestPublicRouter = Router();
 
@@ -479,7 +505,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/subcategories', async (req: Re
       ? `\nProperty details: ${JSON.stringify(propertyDetails)}`
       : '\nNo specific property details available.';
 
-    const message = await anthropic.messages.create({
+    const message = await callAnthropicWithRetry(anthropic, {
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
       system: 'You generate subcategory options for a property maintenance issue reporter. Return ONLY valid JSON — an array of objects with "label", "icon" (single emoji), and "desc" (under 40 chars). Include brand/model info from property details when available. Always include a "Something else" option as the last item. Generate 4-6 options total. Tailor options to what is actually in the property when details are provided.',
@@ -524,7 +550,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/chat-message', async (req: Req
       ? `Property has: ${JSON.stringify(propertyDetails)}`
       : 'No specific property details available.';
 
-    const message = await anthropic.messages.create({
+    const message = await callAnthropicWithRetry(anthropic, {
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
       system: `You are a friendly maintenance assistant for vacation rental guests. The guest just reported a ${subcategoryLabel} issue under ${categoryLabel}. ${detailsStr}. Give a brief, helpful response: if there's a simple thing they can try, suggest it in 1-2 sentences. If not, acknowledge the issue and ask them to describe it so you can send help. Keep it warm and casual — this is a guest on vacation, not filing a support ticket. Max 3 sentences.`,
@@ -573,7 +599,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/summarize', async (req: Reques
       ? `Property details: ${JSON.stringify(propertyDetails)}`
       : '';
 
-    const message = await anthropic.messages.create({
+    const message = await callAnthropicWithRetry(anthropic, {
       model: 'claude-sonnet-4-6',
       max_tokens: 400,
       system: `Write a concise dispatch-ready maintenance summary. This will be read by providers over SMS/phone, so keep it short and actionable.
@@ -638,7 +664,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/chat-followup', async (req: Re
       ? `Property details: ${JSON.stringify(propertyDetails)}`
       : '';
 
-    const message = await anthropic.messages.create({
+    const message = await callAnthropicWithRetry(anthropic, {
       model: 'claude-sonnet-4-6',
       max_tokens: 400,
       system: `You are a friendly maintenance assistant for a vacation rental guest reporting a "${subcategoryLabel ?? categoryLabel ?? 'maintenance'}" issue. ${detailsStr}
