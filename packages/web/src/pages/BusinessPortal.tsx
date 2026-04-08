@@ -5722,6 +5722,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
   const [preferredOnly, setPreferredOnly] = useState(false);
   const [selectedVendorIds, setSelectedVendorIds] = useState<Set<string>>(new Set());
   const [vendors, setVendors] = useState<PreferredVendor[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
@@ -5735,16 +5736,21 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
   useEffect(() => {
     setLoading(true);
     businessService.listGuestIssues(workspaceId, {
-      status: filterStatus || undefined,
+      status: showArchived ? 'archived' : (filterStatus || undefined),
       severity: filterSeverity || undefined,
       property_id: filterProperty || undefined,
       page,
       limit: 20,
     }).then(res => {
-      if (res.data) { setIssues(res.data.issues); setTotal(res.data.total); }
+      if (res.data) {
+        // Filter out archived from normal view, show only archived in archive view
+        const filtered = showArchived ? res.data.issues : res.data.issues.filter(i => i.status !== 'archived');
+        setIssues(filtered);
+        setTotal(res.data.total);
+      }
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [workspaceId, filterStatus, filterSeverity, filterProperty, page]);
+  }, [workspaceId, filterStatus, filterSeverity, filterProperty, page, showArchived]);
 
   async function toggleExpand(issueId: string) {
     if (expandedId === issueId) { setExpandedId(null); setDetail(null); return; }
@@ -5785,6 +5791,35 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
     setActionLoading(false);
   }
 
+  async function handleSelfResolve(issueId: string) {
+    setActionLoading(true);
+    try {
+      await businessService.selfResolveGuestIssue(workspaceId, issueId);
+      setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: 'self_resolved' } : i));
+      if (detail?.id === issueId) setDetail({ ...detail, status: 'self_resolved' });
+    } catch { alert('Failed to self-resolve issue'); }
+    setActionLoading(false);
+  }
+
+  async function handleCancel(issueId: string) {
+    setActionLoading(true);
+    try {
+      await businessService.cancelGuestIssue(workspaceId, issueId);
+      setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: 'closed' } : i));
+      if (detail?.id === issueId) setDetail({ ...detail, status: 'closed' });
+    } catch { alert('Failed to cancel issue'); }
+    setActionLoading(false);
+  }
+
+  async function handleArchive(issueId: string) {
+    try {
+      await businessService.archiveGuestIssue(workspaceId, issueId);
+      setIssues(prev => prev.filter(i => i.id !== issueId));
+      setExpandedId(null);
+      setDetail(null);
+    } catch { alert('Failed to archive issue'); }
+  }
+
   const selectStyle: React.CSSProperties = {
     padding: '8px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 13, color: D, background: '#fff', cursor: 'pointer',
   };
@@ -5814,9 +5849,10 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
           <option value="">All Properties</option>
           {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <div style={{ marginLeft: 'auto', fontSize: 13, color: '#9B9490', alignSelf: 'center' }}>
-          {total} issue{total !== 1 ? 's' : ''}
-        </div>
+        <button onClick={() => { setShowArchived(!showArchived); setPage(1); setFilterStatus(''); }}
+          style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: 8, border: `1px solid ${showArchived ? O : '#E0DAD4'}`, background: showArchived ? `${O}08` : '#fff', color: showArchived ? O : '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          {showArchived ? 'Active Issues' : 'Archived'}
+        </button>
       </div>
 
       {loading ? (
@@ -6009,11 +6045,33 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                                 style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: G, color: '#fff', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
                                 Approve &amp; Dispatch
                               </button>
+                              <button onClick={() => handleSelfResolve(issue.id)} disabled={actionLoading}
+                                style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${G}`, background: '#fff', color: G, fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                Self-Resolved
+                              </button>
                               <button onClick={() => { setRejectModalId(issue.id); setRejectReason(''); }}
-                                style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid #DC2626', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                                 Close Issue
                               </button>
                             </>
+                          )}
+                          {['dispatching', 'approved', 'provider_responding'].includes(issue.status) && (
+                            <>
+                              <button onClick={() => handleSelfResolve(issue.id)} disabled={actionLoading}
+                                style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${G}`, background: '#fff', color: G, fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                Self-Resolved
+                              </button>
+                              <button onClick={() => handleCancel(issue.id)} disabled={actionLoading}
+                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                Cancel
+                              </button>
+                            </>
+                          )}
+                          {['closed', 'self_resolved', 'resolved'].includes(issue.status) && (
+                            <button onClick={() => handleArchive(issue.id)}
+                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #9B9490', background: '#fff', color: '#9B9490', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                              Archive
+                            </button>
                           )}
                           {detail.dispatchedJobId && (
                             <button onClick={() => onViewDispatch?.(detail.dispatchedJobId!)}

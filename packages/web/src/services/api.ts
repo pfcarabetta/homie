@@ -1211,6 +1211,12 @@ export const businessService = {
     }),
   rejectGuestIssue: (workspaceId: string, issueId: string, reason: string) =>
     fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  selfResolveGuestIssue: (workspaceId: string, issueId: string) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/self-resolve`, { method: 'POST' }),
+  cancelGuestIssue: (workspaceId: string, issueId: string) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/cancel`, { method: 'POST' }),
+  archiveGuestIssue: (workspaceId: string, issueId: string) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/archive`, { method: 'POST' }),
   getGuestReporterSettings: (workspaceId: string) =>
     fetchAPI<GuestReporterSettings>(`/api/v1/business/${workspaceId}/guest-reporter/settings`),
   updateGuestReporterSettings: (workspaceId: string, data: Partial<GuestReporterSettings>) =>

@@ -1452,6 +1452,104 @@ guestPmRouter.post(
   },
 );
 
+// ── POST /:workspaceId/guest-issues/:issueId/self-resolve — Mark as self-resolved ─
+
+guestPmRouter.post(
+  '/:workspaceId/guest-issues/:issueId/self-resolve',
+  requireWorkspace,
+  async (req: Request, res: Response) => {
+    const { workspaceId, issueId } = req.params;
+    try {
+      const [issue] = await db
+        .select({ id: guestIssues.id, status: guestIssues.status, dispatchedJobId: guestIssues.dispatchedJobId })
+        .from(guestIssues)
+        .where(and(eq(guestIssues.id, issueId), eq(guestIssues.workspaceId, workspaceId)))
+        .limit(1);
+
+      if (!issue) { res.status(404).json({ data: null, error: 'Issue not found', meta: {} }); return; }
+
+      const now = new Date();
+      await db.update(guestIssues).set({ status: 'self_resolved', selfResolved: true, resolvedAt: now, updatedAt: now }).where(eq(guestIssues.id, issueId));
+
+      // Cancel the dispatch job if one exists
+      if (issue.dispatchedJobId) {
+        await db.update(jobs).set({ status: 'expired' }).where(eq(jobs.id, issue.dispatchedJobId));
+      }
+
+      await db.insert(guestIssueTimeline).values({ issueId, eventType: 'self_resolved', title: 'Marked as self-resolved', description: 'PM marked this issue as self-resolved and cancelled outreach', metadata: { resolved_by: req.homeownerId } });
+
+      res.json({ data: { issueId, status: 'self_resolved' }, error: null, meta: {} });
+    } catch (err) {
+      logger.error({ err }, '[POST /:workspaceId/guest-issues/:issueId/self-resolve]');
+      res.status(500).json({ data: null, error: 'Failed to self-resolve issue', meta: {} });
+    }
+  },
+);
+
+// ── POST /:workspaceId/guest-issues/:issueId/cancel — Cancel and close ────────
+
+guestPmRouter.post(
+  '/:workspaceId/guest-issues/:issueId/cancel',
+  requireWorkspace,
+  async (req: Request, res: Response) => {
+    const { workspaceId, issueId } = req.params;
+    try {
+      const [issue] = await db
+        .select({ id: guestIssues.id, status: guestIssues.status, dispatchedJobId: guestIssues.dispatchedJobId })
+        .from(guestIssues)
+        .where(and(eq(guestIssues.id, issueId), eq(guestIssues.workspaceId, workspaceId)))
+        .limit(1);
+
+      if (!issue) { res.status(404).json({ data: null, error: 'Issue not found', meta: {} }); return; }
+
+      const now = new Date();
+      await db.update(guestIssues).set({ status: 'closed', updatedAt: now }).where(eq(guestIssues.id, issueId));
+
+      // Cancel the dispatch job if one exists
+      if (issue.dispatchedJobId) {
+        await db.update(jobs).set({ status: 'expired' }).where(eq(jobs.id, issue.dispatchedJobId));
+      }
+
+      await db.insert(guestIssueTimeline).values({ issueId, eventType: 'cancelled', title: 'Issue cancelled', description: 'PM cancelled this issue and stopped outreach', metadata: { cancelled_by: req.homeownerId } });
+
+      res.json({ data: { issueId, status: 'closed' }, error: null, meta: {} });
+    } catch (err) {
+      logger.error({ err }, '[POST /:workspaceId/guest-issues/:issueId/cancel]');
+      res.status(500).json({ data: null, error: 'Failed to cancel issue', meta: {} });
+    }
+  },
+);
+
+// ── POST /:workspaceId/guest-issues/:issueId/archive — Archive closed issue ───
+
+guestPmRouter.post(
+  '/:workspaceId/guest-issues/:issueId/archive',
+  requireWorkspace,
+  async (req: Request, res: Response) => {
+    const { workspaceId, issueId } = req.params;
+    try {
+      const [issue] = await db
+        .select({ id: guestIssues.id, status: guestIssues.status })
+        .from(guestIssues)
+        .where(and(eq(guestIssues.id, issueId), eq(guestIssues.workspaceId, workspaceId)))
+        .limit(1);
+
+      if (!issue) { res.status(404).json({ data: null, error: 'Issue not found', meta: {} }); return; }
+      if (!['closed', 'self_resolved', 'resolved'].includes(issue.status)) {
+        res.status(400).json({ data: null, error: 'Only closed/resolved issues can be archived', meta: {} });
+        return;
+      }
+
+      await db.update(guestIssues).set({ status: 'archived', updatedAt: new Date() }).where(eq(guestIssues.id, issueId));
+
+      res.json({ data: { issueId, status: 'archived' }, error: null, meta: {} });
+    } catch (err) {
+      logger.error({ err }, '[POST /:workspaceId/guest-issues/:issueId/archive]');
+      res.status(500).json({ data: null, error: 'Failed to archive issue', meta: {} });
+    }
+  },
+);
+
 // ── GET /:workspaceId/guest-reporter/settings — Get settings ────────────────
 
 guestPmRouter.get(
