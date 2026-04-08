@@ -1152,7 +1152,7 @@ export default function GuestReporterPage() {
             <div style={{ background: `linear-gradient(135deg, ${BRAND.warm} 0%, ${BRAND.greenLight} 100%)`, borderRadius: 22, padding: '30px 22px', marginBottom: 18, textAlign: 'center' }}>
               <div style={{ fontSize: 42, marginBottom: 8 }}>{'🏠'}</div>
               <h1 style={{ fontFamily: 'Fraunces,serif', fontSize: 25, fontWeight: 700, color: BRAND.dark, margin: '0 0 6px', lineHeight: 1.15 }}>
-                {reservation?.matched ? `${displayName}, ` : ''}{tx(lang, 'needHelp')}
+                Hi {displayName}, {tx(lang, 'needHelp')}
               </h1>
               <p style={{ fontSize: 14, color: BRAND.darkMid, lineHeight: 1.5, margin: 0 }}>{tx(lang, 'heroDesc')}</p>
             </div>
