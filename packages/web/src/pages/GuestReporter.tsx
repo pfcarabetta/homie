@@ -272,12 +272,21 @@ const SEV_ORDER = ['urgent', 'high', 'medium', 'low'];
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type Screen = 'welcome' | 'identify' | 'categories' | 'troubleshoot' | 'chat' | 'summary' | 'escalated' | 'tracking';
+type Screen = 'welcome' | 'identify' | 'categories' | 'subcategories' | 'troubleshoot' | 'chat' | 'summary' | 'escalated' | 'tracking';
+
+interface Subcategory {
+  label: string;
+  icon: string;
+  desc: string;
+}
 
 interface PropertyData {
   name: string;
   company: string;
   companyLogo: string | null;
+  details: Record<string, unknown> | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
   settings: Record<string, unknown>;
 }
 
@@ -657,6 +666,11 @@ export default function GuestReporterPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState<Category | null>(null);
 
+  // Subcategories (AI-generated)
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [subcategory, setSubcategory] = useState<string | null>(null);
+  const [loadingSubcats, setLoadingSubcats] = useState(false);
+
   // Troubleshooting
   const [tStep, setTStep] = useState(0);
   const [tAnswers, setTAnswers] = useState<Array<{ q: string; a: string }>>([]);
@@ -754,17 +768,84 @@ export default function GuestReporterPage() {
 
   const selCat = (cat: Category) => {
     setCategory(cat);
+    setSubcategory(null);
+    setSubcategories([]);
     if (cat.id === 'safety') {
       setSeverity('urgent');
       setScreen('chat');
       setMessages([{ from: 'bot', text: tx(lang, 'safetyUrgent'), time: new Date() }]);
-    } else if (cat.troubleshootFlow?.length) {
+      return;
+    }
+
+    // Fetch AI subcategories
+    setLoadingSubcats(true);
+    setScreen('subcategories');
+    const propertyDetails: Record<string, unknown> = {};
+    if (propertyData?.details) propertyDetails.details = propertyData.details;
+    if (propertyData?.bedrooms) propertyDetails.bedrooms = propertyData.bedrooms;
+    if (propertyData?.bathrooms) propertyDetails.bathrooms = propertyData.bathrooms;
+
+    guestFetch<Subcategory[]>(`/api/v1/guest/${workspaceId}/${propertyId}/subcategories`, {
+      method: 'POST',
+      body: JSON.stringify({
+        categoryId: cat.id,
+        categoryLabel: cat.label,
+        propertyDetails: Object.keys(propertyDetails).length > 0 ? propertyDetails : undefined,
+      }),
+    })
+      .then(subs => {
+        setSubcategories(subs);
+        setLoadingSubcats(false);
+      })
+      .catch(() => {
+        // On failure, skip subcategories and go to next step
+        setLoadingSubcats(false);
+        if (cat.troubleshootFlow?.length) {
+          setScreen('troubleshoot');
+          setTStep(0);
+          setTAnswers([]);
+        } else {
+          setScreen('chat');
+          setMessages([{ from: 'bot', text: `${tx(lang, 'gotIt')} \u2014 ${cat.label.toLowerCase()}. ${tx(lang, 'describeMore')}`, time: new Date() }]);
+        }
+      });
+  };
+
+  const selSubcat = (sub: Subcategory) => {
+    setSubcategory(sub.label);
+    if (category?.troubleshootFlow?.length) {
       setScreen('troubleshoot');
       setTStep(0);
       setTAnswers([]);
     } else {
+      // Go to chat with AI-generated first message
       setScreen('chat');
-      setMessages([{ from: 'bot', text: `${tx(lang, 'gotIt')} \u2014 ${cat.label.toLowerCase()}. ${tx(lang, 'describeMore')}`, time: new Date() }]);
+      setMessages([]);
+      setTyping(true);
+
+      const propertyDetails: Record<string, unknown> = {};
+      if (propertyData?.details) propertyDetails.details = propertyData.details;
+      if (propertyData?.bedrooms) propertyDetails.bedrooms = propertyData.bedrooms;
+      if (propertyData?.bathrooms) propertyDetails.bathrooms = propertyData.bathrooms;
+
+      guestFetch<{ message: string }>(`/api/v1/guest/${workspaceId}/${propertyId}/chat-message`, {
+        method: 'POST',
+        body: JSON.stringify({
+          categoryLabel: category?.label,
+          subcategoryLabel: sub.label,
+          propertyDetails: Object.keys(propertyDetails).length > 0 ? propertyDetails : undefined,
+        }),
+      })
+        .then(data => {
+          setTyping(false);
+          setMessages([{ from: 'bot', text: data.message, time: new Date() }]);
+          scroll();
+        })
+        .catch(() => {
+          setTyping(false);
+          setMessages([{ from: 'bot', text: `${tx(lang, 'gotIt')} \u2014 ${sub.label.toLowerCase()}. ${tx(lang, 'describeMore')}`, time: new Date() }]);
+          scroll();
+        });
     }
   };
 
@@ -786,7 +867,23 @@ export default function GuestReporterPage() {
     } else {
       setScreen('chat');
       setDesc(na.map(a => `\u2022 ${a.a}`).join('\n'));
-      setMessages([{ from: 'bot', text: `${tx(lang, 'proHelp')} ${tx(lang, 'describeMore')}`, time: new Date() }]);
+      if (subcategory) {
+        // Use AI-generated message when we have subcategory context
+        setMessages([]);
+        setTyping(true);
+        const pd: Record<string, unknown> = {};
+        if (propertyData?.details) pd.details = propertyData.details;
+        if (propertyData?.bedrooms) pd.bedrooms = propertyData.bedrooms;
+        if (propertyData?.bathrooms) pd.bathrooms = propertyData.bathrooms;
+        guestFetch<{ message: string }>(`/api/v1/guest/${workspaceId}/${propertyId}/chat-message`, {
+          method: 'POST',
+          body: JSON.stringify({ categoryLabel: category?.label, subcategoryLabel: subcategory, propertyDetails: Object.keys(pd).length > 0 ? pd : undefined }),
+        })
+          .then(data => { setTyping(false); setMessages([{ from: 'bot', text: data.message, time: new Date() }]); scroll(); })
+          .catch(() => { setTyping(false); setMessages([{ from: 'bot', text: `${tx(lang, 'proHelp')} ${tx(lang, 'describeMore')}`, time: new Date() }]); scroll(); });
+      } else {
+        setMessages([{ from: 'bot', text: `${tx(lang, 'proHelp')} ${tx(lang, 'describeMore')}`, time: new Date() }]);
+      }
     }
   };
 
@@ -932,7 +1029,11 @@ export default function GuestReporterPage() {
             <button
               onClick={() => {
                 if (screen === 'categories') setScreen('welcome');
-                else if (screen === 'troubleshoot' || screen === 'chat') setScreen('categories');
+                else if (screen === 'subcategories') setScreen('categories');
+                else if (screen === 'troubleshoot' || screen === 'chat') {
+                  if (subcategory) setScreen('subcategories');
+                  else setScreen('categories');
+                }
                 else if (screen === 'summary') setScreen('chat');
               }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, fontSize: 17, color: BRAND.gray }}
@@ -1087,6 +1188,43 @@ export default function GuestReporterPage() {
           </div>
         )}
 
+        {/* SUBCATEGORIES */}
+        {screen === 'subcategories' && (
+          <div style={{ padding: '14px 12px', animation: 'fadeUp 0.4s ease' }}>
+            <div style={{ padding: '0 6px', marginBottom: 14 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', borderRadius: 100, background: (category?.color ?? BRAND.gray) + '14', marginBottom: 8 }}>
+                <span style={{ fontSize: 12 }}>{category?.icon}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: category?.color ?? BRAND.gray }}>{category?.label}</span>
+              </div>
+              <h2 style={{ fontFamily: 'Fraunces,serif', fontSize: 18, fontWeight: 700, color: BRAND.dark, margin: '0 0 3px' }}>What specifically?</h2>
+              <p style={{ fontSize: 12, color: BRAND.gray, margin: 0 }}>Pick the closest match so we can help faster</p>
+            </div>
+            {loadingSubcats ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', border: `3px solid ${BRAND.warm}`, borderTopColor: BRAND.orange, animation: 'spin 0.8s linear infinite' }} />
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+                {subcategories.map((s, i) => (
+                  <button
+                    key={s.label}
+                    onClick={() => selSubcat(s)}
+                    style={{ background: BRAND.white, border: `1.5px solid ${BRAND.warm}`, borderRadius: 12, padding: '11px 10px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s', animation: `fadeUp 0.3s ease ${i * 0.04}s both`, display: 'flex', flexDirection: 'column', gap: 2 }}
+                    onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = category?.color ?? BRAND.orange; el.style.background = BRAND.warm; el.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = BRAND.warm; el.style.background = BRAND.white; el.style.transform = 'translateY(0)'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ fontSize: 15 }}>{s.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: BRAND.dark, lineHeight: 1.2 }}>{s.label}</span>
+                    </div>
+                    <span style={{ fontSize: 10, color: BRAND.gray, lineHeight: 1.3 }}>{s.desc}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* TROUBLESHOOT */}
         {screen === 'troubleshoot' && category?.troubleshootFlow && (
           <div style={{ padding: '18px 16px', animation: 'fadeUp 0.4s ease' }}>
@@ -1127,7 +1265,22 @@ export default function GuestReporterPage() {
             <button
               onClick={() => {
                 setScreen('chat');
-                setMessages([{ from: 'bot', text: `${tx(lang, 'proHelp')} ${tx(lang, 'describeMore')}`, time: new Date() }]);
+                if (subcategory) {
+                  setMessages([]);
+                  setTyping(true);
+                  const pd: Record<string, unknown> = {};
+                  if (propertyData?.details) pd.details = propertyData.details;
+                  if (propertyData?.bedrooms) pd.bedrooms = propertyData.bedrooms;
+                  if (propertyData?.bathrooms) pd.bathrooms = propertyData.bathrooms;
+                  guestFetch<{ message: string }>(`/api/v1/guest/${workspaceId}/${propertyId}/chat-message`, {
+                    method: 'POST',
+                    body: JSON.stringify({ categoryLabel: category?.label, subcategoryLabel: subcategory, propertyDetails: Object.keys(pd).length > 0 ? pd : undefined }),
+                  })
+                    .then(data => { setTyping(false); setMessages([{ from: 'bot', text: data.message, time: new Date() }]); scroll(); })
+                    .catch(() => { setTyping(false); setMessages([{ from: 'bot', text: `${tx(lang, 'proHelp')} ${tx(lang, 'describeMore')}`, time: new Date() }]); scroll(); });
+                } else {
+                  setMessages([{ from: 'bot', text: `${tx(lang, 'proHelp')} ${tx(lang, 'describeMore')}`, time: new Date() }]);
+                }
               }}
               style={{ marginTop: 18, border: 'none', background: 'none', color: BRAND.gray, fontSize: 12, cursor: 'pointer', textDecoration: 'underline', display: 'block', width: '100%', textAlign: 'center' }}
             >
@@ -1141,9 +1294,16 @@ export default function GuestReporterPage() {
           <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 55px)' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 6px' }}>
               {category && (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', borderRadius: 100, background: category.color + '14', marginBottom: 8 }}>
-                  <span style={{ fontSize: 12 }}>{category.icon}</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: category.color }}>{category.label}</span>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', borderRadius: 100, background: category.color + '14' }}>
+                    <span style={{ fontSize: 12 }}>{category.icon}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: category.color }}>{category.label}</span>
+                  </div>
+                  {subcategory && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 100, background: BRAND.warm }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: BRAND.darkMid }}>{subcategory}</span>
+                    </div>
+                  )}
                 </div>
               )}
               {messages.map((m, i) => (

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { eq, and, desc, sql, lte, gte, ne, asc, count } from 'drizzle-orm';
+import Anthropic from '@anthropic-ai/sdk';
 import logger from '../logger';
 import { db } from '../db';
 import { workspaces } from '../db/schema/workspaces';
@@ -249,7 +250,7 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
 
     // Get property
     const [property] = await db
-      .select({ name: properties.name, state: properties.state })
+      .select({ name: properties.name, state: properties.state, details: properties.details, bedrooms: properties.bedrooms, bathrooms: properties.bathrooms })
       .from(properties)
       .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, workspaceId)))
       .limit(1);
@@ -345,6 +346,9 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
           name: property.name,
           company: companyName,
           companyLogo: logoUrl,
+          details: property.details ?? null,
+          bedrooms: property.bedrooms ?? null,
+          bathrooms: property.bathrooms ?? null,
           settings: {
             supportedLanguages: settings.supportedLanguages,
             defaultLanguage: settings.defaultLanguage,
@@ -435,6 +439,94 @@ guestPublicRouter.get('/:workspaceId/:propertyId/categories', async (req: Reques
   } catch (err) {
     logger.error({ err }, '[GET /guest/:workspaceId/:propertyId/categories]');
     res.status(500).json({ data: null, error: 'Failed to load categories', meta: {} });
+  }
+});
+
+// ── POST /:workspaceId/:propertyId/subcategories — AI-generated subcategories ─
+
+guestPublicRouter.post('/:workspaceId/:propertyId/subcategories', async (req: Request, res: Response) => {
+  const body = req.body as Record<string, unknown>;
+  const categoryId = body.categoryId as string | undefined;
+  const categoryLabel = body.categoryLabel as string | undefined;
+  const propertyDetails = body.propertyDetails as Record<string, unknown> | undefined;
+
+  if (!categoryId || !categoryLabel) {
+    res.status(400).json({ data: null, error: 'categoryId and categoryLabel are required', meta: {} });
+    return;
+  }
+
+  try {
+    const anthropic = new Anthropic();
+
+    const detailsStr = propertyDetails
+      ? `\nProperty details: ${JSON.stringify(propertyDetails)}`
+      : '\nNo specific property details available.';
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250514',
+      max_tokens: 500,
+      system: 'You generate subcategory options for a property maintenance issue reporter. Return ONLY valid JSON — an array of objects with "label", "icon" (single emoji), and "desc" (under 40 chars). Include brand/model info from property details when available. Always include a "Something else" option as the last item. Generate 4-6 options total. Tailor options to what is actually in the property when details are provided.',
+      messages: [
+        {
+          role: 'user',
+          content: `Category: ${categoryLabel}${detailsStr}\n\nGenerate subcategory tiles for this maintenance category.`,
+        },
+      ],
+    });
+
+    const textBlock = message.content.find(b => b.type === 'text');
+    const raw = textBlock && textBlock.type === 'text' ? textBlock.text : '[]';
+    // Extract JSON array from response (handle markdown code blocks)
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    const subcategories = jsonMatch ? JSON.parse(jsonMatch[0]) as Array<{ label: string; icon: string; desc: string }> : [];
+
+    res.json({ data: subcategories, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /guest/:workspaceId/:propertyId/subcategories]');
+    res.status(500).json({ data: null, error: 'Failed to generate subcategories', meta: {} });
+  }
+});
+
+// ── POST /:workspaceId/:propertyId/chat-message — AI first chat message ──────
+
+guestPublicRouter.post('/:workspaceId/:propertyId/chat-message', async (req: Request, res: Response) => {
+  const body = req.body as Record<string, unknown>;
+  const categoryLabel = body.categoryLabel as string | undefined;
+  const subcategoryLabel = body.subcategoryLabel as string | undefined;
+  const propertyDetails = body.propertyDetails as Record<string, unknown> | undefined;
+
+  if (!categoryLabel || !subcategoryLabel) {
+    res.status(400).json({ data: null, error: 'categoryLabel and subcategoryLabel are required', meta: {} });
+    return;
+  }
+
+  try {
+    const anthropic = new Anthropic();
+
+    const detailsStr = propertyDetails
+      ? `Property has: ${JSON.stringify(propertyDetails)}`
+      : 'No specific property details available.';
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250514',
+      max_tokens: 500,
+      system: `You are a friendly maintenance assistant for vacation rental guests. The guest just reported a ${subcategoryLabel} issue under ${categoryLabel}. ${detailsStr}. Give a brief, helpful response: if there's a simple thing they can try, suggest it in 1-2 sentences. If not, acknowledge the issue and ask them to describe it so you can send help. Keep it warm and casual — this is a guest on vacation, not filing a support ticket. Max 3 sentences.`,
+      messages: [
+        {
+          role: 'user',
+          content: `The guest selected "${subcategoryLabel}" under the "${categoryLabel}" category. Generate the first chat message.`,
+        },
+      ],
+    });
+
+    const textBlock = message.content.find(b => b.type === 'text');
+    const chatMessage = textBlock && textBlock.type === 'text' ? textBlock.text : `Got it — ${subcategoryLabel.toLowerCase()}. Can you describe what you're seeing so we can get the right help?`;
+
+    res.json({ data: { message: chatMessage }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /guest/:workspaceId/:propertyId/chat-message]');
+    // Fallback message on error
+    res.json({ data: { message: `Got it — ${subcategoryLabel?.toLowerCase() ?? 'that issue'}. Can you describe what you're seeing so we can get the right help?` }, error: null, meta: {} });
   }
 });
 
