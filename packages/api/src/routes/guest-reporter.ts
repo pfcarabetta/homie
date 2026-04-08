@@ -560,29 +560,29 @@ guestPublicRouter.post('/:workspaceId/:propertyId/summarize', async (req: Reques
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 800,
-      system: `You are writing a comprehensive maintenance issue summary for a property manager. This summary will be sent to service providers during outreach, so include all relevant details.
+      max_tokens: 400,
+      system: `Write a concise dispatch-ready maintenance summary. This will be read by providers over SMS/phone, so keep it short and actionable.
 
 Property: ${propertyName ?? 'Unknown'}
-Category: ${categoryLabel ?? 'Unknown'}
-Subcategory: ${subcategoryLabel ?? 'Unknown'}
+Category: ${categoryLabel ?? 'Unknown'} — ${subcategoryLabel ?? ''}
 Severity: ${severity ?? 'medium'}
 ${detailsStr}
 
-Based on the chat conversation between the guest and the diagnostic assistant, write a structured summary with these sections:
+Format (use exactly these headers, skip any section that doesn't apply):
 
-**Issue Summary** — 1-2 sentence overview of what's wrong
-**Symptoms** — Bullet points of what the guest is experiencing
-**What's Been Tried** — Any troubleshooting the guest attempted (if any)
-**Relevant Property Info** — Equipment brands, models, ages, locations if relevant from property details
-**Recommended Action** — What type of professional is likely needed and urgency level
-**Access Notes** — Property is currently occupied by a guest; include any relevant info about timing or access
+**Issue:** One sentence — what's wrong.
+**Details:** 2-3 bullet points max — key symptoms, what was tried, equipment info (brand/model only if known).
+**Action needed:** One sentence — what type of pro and urgency.
 
-Keep it professional but thorough. This is what a service provider will read to understand the job. Format with markdown-style bold headers.`,
+Rules:
+- Total summary under 150 words
+- No filler, no pleasantries
+- Include brand/model from property details ONLY if relevant to this issue
+- Write like a work order, not an essay`,
       messages: [
         {
           role: 'user',
-          content: `Here is the diagnostic conversation:\n\n${chatHistory.map(m => `${m.role === 'user' ? 'Guest' : 'Assistant'}: ${m.content}`).join('\n\n')}\n\nGenerate the comprehensive summary.`,
+          content: `Diagnostic conversation:\n${chatHistory.map(m => `${m.role === 'user' ? 'Guest' : 'Bot'}: ${m.content}`).join('\n')}\n\nGenerate the dispatch summary.`,
         },
       ],
     });
