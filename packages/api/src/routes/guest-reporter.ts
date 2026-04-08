@@ -1185,6 +1185,7 @@ guestPmRouter.post(
   requireWorkspace,
   async (req: Request, res: Response) => {
     const { workspaceId, issueId } = req.params;
+    const { preferredOnly, preferredVendorId } = (req.body ?? {}) as { preferredOnly?: boolean; preferredVendorId?: string };
 
     try {
       const [issue] = await db
@@ -1246,19 +1247,26 @@ guestPmRouter.post(
         'pool / hot tub': 'pool',
         'other': 'general',
       };
-      const dispatchCategory = GUEST_TO_DISPATCH[categoryName.toLowerCase()] ?? 'general';
+      let dispatchCategory = GUEST_TO_DISPATCH[categoryName.toLowerCase()] ?? 'general';
+
+      // If PM toggled preferred vendors only, use an internal-only category key
+      // so orchestration skips marketplace discovery
+      if (preferredOnly && !dispatchCategory.startsWith('guest_')) {
+        dispatchCategory = `guest_${dispatchCategory}`;
+      }
 
       const troubleshootContext = fullIssue.troubleshootLog
         ? `\n\nTroubleshooting attempted:\n${(fullIssue.troubleshootLog as Array<{ q: string; a: string }>).map(t => `Q: ${t.q}\nA: ${t.a}`).join('\n')}`
         : '';
 
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      const diagnosis = {
+      const diagnosis: Record<string, unknown> = {
         category: dispatchCategory,
         subcategory: dispatchCategory,
         severity: fullIssue.severity,
         summary: `Guest issue report: ${categoryName}\n\n${fullIssue.description ?? ''}${troubleshootContext}\n\nReported by: ${fullIssue.guestName ?? 'Guest'}`,
         recommendedActions: ['Dispatch professional'],
+        ...(preferredVendorId ? { preferredVendorId } : {}),
       };
 
       const [job] = await db

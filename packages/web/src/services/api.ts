@@ -1204,8 +1204,11 @@ export const businessService = {
   },
   getGuestIssue: (workspaceId: string, issueId: string) =>
     fetchAPI<GuestIssueDetail>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}`),
-  approveGuestIssue: (workspaceId: string, issueId: string) =>
-    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/approve`, { method: 'POST' }),
+  approveGuestIssue: (workspaceId: string, issueId: string, options?: { preferredOnly?: boolean; preferredVendorId?: string }) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    }),
   rejectGuestIssue: (workspaceId: string, issueId: string, reason: string) =>
     fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
   getGuestReporterSettings: (workspaceId: string) =>

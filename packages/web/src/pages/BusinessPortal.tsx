@@ -5719,10 +5719,16 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [preferredOnly, setPreferredOnly] = useState(false);
+  const [selectedVendorId, setSelectedVendorId] = useState('');
+  const [vendors, setVendors] = useState<PreferredVendor[]>([]);
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
       if (res.data) setProperties(res.data);
+    }).catch(() => {});
+    businessService.listVendors(workspaceId).then(res => {
+      if (res.data) setVendors(res.data.filter(v => v.active));
     }).catch(() => {});
   }, [workspaceId]);
 
@@ -5754,9 +5760,14 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
   async function handleApprove(issueId: string) {
     setActionLoading(true);
     try {
-      await businessService.approveGuestIssue(workspaceId, issueId);
+      await businessService.approveGuestIssue(workspaceId, issueId, {
+        preferredOnly: preferredOnly || undefined,
+        preferredVendorId: selectedVendorId || undefined,
+      });
       setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: 'approved' } : i));
       if (detail?.id === issueId) setDetail({ ...detail, status: 'approved' });
+      setPreferredOnly(false);
+      setSelectedVendorId('');
     } catch { alert('Failed to approve issue'); }
     setActionLoading(false);
   }
@@ -5937,6 +5948,43 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                                 </div>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {/* Dispatch options */}
+                        {issue.status === 'pm_reviewing' && (
+                          <div style={{ background: W, borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: preferredOnly ? 10 : 0 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: D }}>
+                                <div onClick={() => { setPreferredOnly(!preferredOnly); if (preferredOnly) setSelectedVendorId(''); }} style={{
+                                  width: 38, height: 20, borderRadius: 10, background: preferredOnly ? G : '#E0DAD4',
+                                  position: 'relative', transition: 'background 0.2s', flexShrink: 0, cursor: 'pointer',
+                                }}>
+                                  <div style={{
+                                    width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute',
+                                    top: 2, left: preferredOnly ? 20 : 2, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                  }} />
+                                </div>
+                                <span style={{ fontWeight: 500 }}>Preferred vendors only</span>
+                              </label>
+                            </div>
+                            {preferredOnly && (
+                              <div style={{ animation: 'fadeSlide 0.2s ease' }}>
+                                <select
+                                  value={selectedVendorId}
+                                  onChange={e => setSelectedVendorId(e.target.value)}
+                                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 13, color: D, cursor: 'pointer' }}
+                                >
+                                  <option value="">All preferred vendors</option>
+                                  {vendors.map(v => (
+                                    <option key={v.providerId} value={v.providerId}>{v.providerName}</option>
+                                  ))}
+                                </select>
+                                <div style={{ fontSize: 11, color: '#9B9490', marginTop: 4 }}>
+                                  {selectedVendorId ? 'Only this vendor will be contacted' : 'All preferred vendors will be contacted'}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 

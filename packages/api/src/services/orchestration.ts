@@ -333,8 +333,24 @@ export async function dispatchJob(jobId: string): Promise<void> {
         logger.info(`[orchestration] dispatchJob: ${pvRows.length - availableRows.length} preferred vendors filtered out (outside operating hours)`);
       }
 
-      preferredProviderIds.push(...availableRows.map(r => r.providerId));
-      for (const r of availableRows) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
+      // If a specific preferred vendor was requested (e.g. from guest issue approval), filter to just that vendor
+      const requestedVendorId = (diagnosis as unknown as Record<string, unknown>).preferredVendorId as string | undefined;
+      if (requestedVendorId) {
+        const matchedVendor = availableRows.find(r => r.providerId === requestedVendorId);
+        if (matchedVendor) {
+          preferredProviderIds.push(matchedVendor.providerId);
+          if (matchedVendor.skipQuote) skipQuoteProviderIds.add(matchedVendor.providerId);
+          logger.info(`[orchestration] dispatchJob: PM selected specific vendor ${requestedVendorId} for job ${jobId}`);
+        } else {
+          // Requested vendor not found/available, fall back to all preferred
+          preferredProviderIds.push(...availableRows.map(r => r.providerId));
+          for (const r of availableRows) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
+          logger.warn(`[orchestration] dispatchJob: requested vendor ${requestedVendorId} not available, using ${availableRows.length} preferred vendors`);
+        }
+      } else {
+        preferredProviderIds.push(...availableRows.map(r => r.providerId));
+        for (const r of availableRows) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
+      }
       if (preferredProviderIds.length > 0) {
         logger.info(`[orchestration] dispatchJob: found ${preferredProviderIds.length} preferred vendors for job ${jobId}`);
       }
@@ -383,7 +399,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
 
   // Categories that should only use preferred vendors — no marketplace discovery
   const INTERNAL_ONLY_CATEGORIES = new Set(['inspection', 'restocking', 'concierge', 'trash', 'guest_wifi', 'guest_lockout', 'guest_safety', 'guest_noise']);
-  const isInternalOnly = INTERNAL_ONLY_CATEGORIES.has(diagnosis.category.toLowerCase());
+  const isInternalOnly = INTERNAL_ONLY_CATEGORIES.has(diagnosis.category.toLowerCase()) || diagnosis.category.toLowerCase().startsWith('guest_');
 
   if (isInternalOnly && eligible.length === 0) {
     logger.warn(`[orchestration] dispatchJob: internal-only category '${diagnosis.category}' has no preferred vendors for job ${jobId}`);
