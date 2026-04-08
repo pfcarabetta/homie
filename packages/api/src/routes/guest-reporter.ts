@@ -941,7 +941,10 @@ guestPublicRouter.get('/issues/:issueId/status', async (req: Request, res: Respo
 
     // Map issue status to step progression for the guest tracker
     const STATUS_STEP_ORDER = ['reported', 'pm_reviewing', 'approved', 'dispatching', 'provider_responding', 'provider_booked', 'resolved'];
-    const currentStatusIdx = STATUS_STEP_ORDER.indexOf(issue.status);
+    // Map terminal statuses to their display step
+    const statusMap: Record<string, string> = { self_resolved: 'resolved', closed: 'resolved', archived: 'resolved' };
+    const mappedStatus = statusMap[issue.status] ?? issue.status;
+    const currentStatusIdx = STATUS_STEP_ORDER.indexOf(mappedStatus);
     const currentStep = currentStatusIdx >= 0 ? currentStatusIdx : 0;
 
     // Build timeline steps with titles and timestamps from actual events
