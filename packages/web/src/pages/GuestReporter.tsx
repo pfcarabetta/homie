@@ -891,9 +891,9 @@ export default function GuestReporterPage() {
     setPhotos([]);
     scroll();
 
-    // If already concluded (severity set), just acknowledge
+    // If already concluded (severity set), acknowledge and re-show submit button
     if (severity) {
-      botMsg(tx(lang, 'addedToReport'));
+      botMsg(tx(lang, 'addedToReport'), { showActions: true });
       return;
     }
 
