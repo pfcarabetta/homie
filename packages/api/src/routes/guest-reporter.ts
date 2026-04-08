@@ -463,7 +463,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/subcategories', async (req: Re
       : '\nNo specific property details available.';
 
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 500,
       system: 'You generate subcategory options for a property maintenance issue reporter. Return ONLY valid JSON — an array of objects with "label", "icon" (single emoji), and "desc" (under 40 chars). Include brand/model info from property details when available. Always include a "Something else" option as the last item. Generate 4-6 options total. Tailor options to what is actually in the property when details are provided.',
       messages: [
@@ -508,7 +508,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/chat-message', async (req: Req
       : 'No specific property details available.';
 
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 500,
       system: `You are a friendly maintenance assistant for vacation rental guests. The guest just reported a ${subcategoryLabel} issue under ${categoryLabel}. ${detailsStr}. Give a brief, helpful response: if there's a simple thing they can try, suggest it in 1-2 sentences. If not, acknowledge the issue and ask them to describe it so you can send help. Keep it warm and casual — this is a guest on vacation, not filing a support ticket. Max 3 sentences.`,
       messages: [
