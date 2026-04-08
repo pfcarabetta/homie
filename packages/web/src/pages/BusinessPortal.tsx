@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { usePricing, PricingConfig } from '@/hooks/usePricing';
-import { businessService, jobService, slackService, templateService, estimateService, trackingService, accountService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate, type AccountProfile, type Reservation } from '@/services/api';
+import { businessService, jobService, slackService, templateService, estimateService, trackingService, accountService, getToken, type Workspace, type WorkspaceDetail, type Property, type BedConfig, type PropertyDetails, type WorkspaceMember, type PreferredVendor, type ProviderSearchResult, type WorkspaceDispatch, type WorkspaceBooking, type ProviderResponseItem, type SlackSettings, type DashboardData, type SeasonalSuggestion, type VendorSchedule, type DispatchSchedule, type ScheduleTemplate, type ScheduleRun, type CostEstimate, type AccountProfile, type Reservation, type GuestIssue, type GuestIssueDetail, type GuestReporterSettings, type AutoDispatchRule } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -5624,11 +5624,773 @@ function SettingsTab({ workspace, onUpdated, themeMode, onThemeChange }: {
   );
 }
 
+/* ── Guest Requests Tab ────────────────────────────────────────────────── */
+
+const GUEST_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  pm_reviewing: { bg: '#FFF3E0', text: '#E65100' },
+  approved: { bg: '#E3F2FD', text: '#1565C0' },
+  dispatching: { bg: '#F3E5F5', text: '#7B1FA2' },
+  provider_booked: { bg: '#E8F5E9', text: '#2E7D32' },
+  resolved: { bg: '#E8F5E9', text: '#2E7D32' },
+  closed: { bg: '#F5F5F5', text: '#757575' },
+  self_resolved: { bg: '#E0F2F1', text: '#00695C' },
+};
+
+const SEVERITY_COLORS: Record<string, { bg: string; text: string }> = {
+  urgent: { bg: '#FFEBEE', text: '#C62828' },
+  high: { bg: '#FFF3E0', text: '#E65100' },
+  medium: { bg: '#FFFDE7', text: '#F9A825' },
+  low: { bg: '#E8F5E9', text: '#2E7D32' },
+};
+
+const LANGUAGES = [
+  { value: 'en', label: 'English' }, { value: 'es', label: 'Spanish' }, { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' }, { value: 'pt', label: 'Portuguese' }, { value: 'zh', label: 'Chinese' },
+  { value: 'ja', label: 'Japanese' }, { value: 'ko', label: 'Korean' }, { value: 'ar', label: 'Arabic' },
+  { value: 'it', label: 'Italian' },
+];
+
+type GuestSubTab = 'issues' | 'settings' | 'auto-dispatch' | 'qr-codes';
+
+function GuestRequestsTab({ workspaceId, plan }: { workspaceId: string; plan: string }) {
+  const [subTab, setSubTab] = useState<GuestSubTab>('issues');
+  const isPro = ['professional', 'business', 'enterprise'].includes(plan);
+  const isBizPlus = ['business', 'enterprise'].includes(plan);
+
+  if (!isPro) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
+        <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>Upgrade to unlock Guest Requests</div>
+        <div style={{ fontSize: 14, color: '#9B9490', maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
+          Guest issue reporting, auto-dispatch rules, and QR code links are available on the <strong style={{ color: O }}>Professional</strong> plan and above.
+        </div>
+      </div>
+    );
+  }
+
+  const subTabs: { key: GuestSubTab; label: string }[] = [
+    { key: 'issues', label: 'Issues' },
+    { key: 'settings', label: 'Settings' },
+    { key: 'auto-dispatch', label: 'Auto-Dispatch Rules' },
+    { key: 'qr-codes', label: 'QR Codes' },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Guest Requests</h3>
+      </div>
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #E0DAD4', marginBottom: 20 }}>
+        {subTabs.map(st => (
+          <button key={st.key} onClick={() => setSubTab(st.key)}
+            style={{
+              padding: '10px 18px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              color: subTab === st.key ? O : '#9B9490',
+              borderBottom: subTab === st.key ? `2px solid ${O}` : '2px solid transparent',
+              marginBottom: -1, whiteSpace: 'nowrap',
+            }}>
+            {st.label}
+          </button>
+        ))}
+      </div>
+      {subTab === 'issues' && <GuestIssuesSubTab workspaceId={workspaceId} />}
+      {subTab === 'settings' && <GuestSettingsSubTab workspaceId={workspaceId} isBizPlus={isBizPlus} />}
+      {subTab === 'auto-dispatch' && <GuestAutoDispatchSubTab workspaceId={workspaceId} />}
+      {subTab === 'qr-codes' && <GuestQRCodesSubTab workspaceId={workspaceId} />}
+    </div>
+  );
+}
+
+/* ── Issues sub-tab ── */
+
+function GuestIssuesSubTab({ workspaceId }: { workspaceId: string }) {
+  const [issues, setIssues] = useState<GuestIssue[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<GuestIssueDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterSeverity, setFilterSeverity] = useState('');
+  const [filterProperty, setFilterProperty] = useState('');
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [page, setPage] = useState(1);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [rejectModalId, setRejectModalId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  useEffect(() => {
+    businessService.listProperties(workspaceId).then(res => {
+      if (res.data) setProperties(res.data);
+    }).catch(() => {});
+  }, [workspaceId]);
+
+  useEffect(() => {
+    setLoading(true);
+    businessService.listGuestIssues(workspaceId, {
+      status: filterStatus || undefined,
+      severity: filterSeverity || undefined,
+      property_id: filterProperty || undefined,
+      page,
+      limit: 20,
+    }).then(res => {
+      if (res.data) { setIssues(res.data.issues); setTotal(res.data.total); }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [workspaceId, filterStatus, filterSeverity, filterProperty, page]);
+
+  async function toggleExpand(issueId: string) {
+    if (expandedId === issueId) { setExpandedId(null); setDetail(null); return; }
+    setExpandedId(issueId);
+    setDetailLoading(true);
+    try {
+      const res = await businessService.getGuestIssue(workspaceId, issueId);
+      if (res.data) setDetail(res.data);
+    } catch { /* ignore */ }
+    setDetailLoading(false);
+  }
+
+  async function handleApprove(issueId: string) {
+    setActionLoading(true);
+    try {
+      await businessService.approveGuestIssue(workspaceId, issueId);
+      setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: 'approved' } : i));
+      if (detail?.id === issueId) setDetail({ ...detail, status: 'approved' });
+    } catch { alert('Failed to approve issue'); }
+    setActionLoading(false);
+  }
+
+  async function handleReject(issueId: string) {
+    if (!rejectReason.trim()) return;
+    setActionLoading(true);
+    try {
+      await businessService.rejectGuestIssue(workspaceId, issueId, rejectReason.trim());
+      setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: 'closed' } : i));
+      if (detail?.id === issueId) setDetail({ ...detail, status: 'closed' });
+      setRejectModalId(null);
+      setRejectReason('');
+    } catch { alert('Failed to close issue'); }
+    setActionLoading(false);
+  }
+
+  const selectStyle: React.CSSProperties = {
+    padding: '8px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 13, color: D, background: '#fff', cursor: 'pointer',
+  };
+
+  return (
+    <div>
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }} style={selectStyle}>
+          <option value="">All Statuses</option>
+          <option value="pm_reviewing">PM Reviewing</option>
+          <option value="approved">Approved</option>
+          <option value="dispatching">Dispatching</option>
+          <option value="provider_booked">Provider Booked</option>
+          <option value="resolved">Resolved</option>
+          <option value="closed">Closed</option>
+          <option value="self_resolved">Self Resolved</option>
+        </select>
+        <select value={filterSeverity} onChange={e => { setFilterSeverity(e.target.value); setPage(1); }} style={selectStyle}>
+          <option value="">All Severities</option>
+          <option value="urgent">Urgent</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select value={filterProperty} onChange={e => { setFilterProperty(e.target.value); setPage(1); }} style={selectStyle}>
+          <option value="">All Properties</option>
+          {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <div style={{ marginLeft: 'auto', fontSize: 13, color: '#9B9490', alignSelf: 'center' }}>
+          {total} issue{total !== 1 ? 's' : ''}
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading issues...</div>
+      ) : issues.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
+          <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No guest issues found</div>
+          <div style={{ fontSize: 14, color: '#9B9490' }}>Issues reported by guests will appear here.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {issues.map(issue => {
+            const sc = GUEST_STATUS_COLORS[issue.status] || GUEST_STATUS_COLORS.closed;
+            const sev = SEVERITY_COLORS[issue.severity] || SEVERITY_COLORS.low;
+            const isExpanded = expandedId === issue.id;
+            const isReviewing = issue.status === 'pm_reviewing';
+
+            return (
+              <div key={issue.id} onClick={() => toggleExpand(issue.id)} style={{
+                background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+                border: isReviewing ? `2px solid ${O}` : isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
+                transition: 'all 0.2s',
+                boxShadow: isReviewing ? `0 2px 12px ${O}15` : isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
+              }}>
+                {/* Collapsed header */}
+                <div style={{ padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: W, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #F0EBE6', fontSize: 18 }}>
+                      {issue.categoryIcon || '🔧'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
+                        <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{issue.categoryName}</span>
+                        <span style={{ background: sc.bg, color: sc.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0 }}>
+                          {issue.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        </span>
+                        <span style={{ background: sev.bg, color: sev.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0 }}>
+                          {issue.severity.charAt(0).toUpperCase() + issue.severity.slice(1)}
+                        </span>
+                        {issue.isRecurring && <span style={{ background: '#FFF3E0', color: '#E65100', padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600 }}>Recurring</span>}
+                        {issue.autoDispatched && <span style={{ background: '#E8F5E9', color: '#2E7D32', padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600 }}>Auto-dispatched</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <span>🏠 {issue.propertyName}</span>
+                        {issue.guestName && <span>👤 {issue.guestName}</span>}
+                        <span>{timeAgo(issue.createdAt)}</span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, color: '#C0BBB6', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
+                  </div>
+                </div>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div style={{ padding: '0 14px 16px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
+                    {detailLoading ? (
+                      <div style={{ textAlign: 'center', padding: 20, color: '#9B9490' }}>Loading details...</div>
+                    ) : detail && detail.id === issue.id ? (
+                      <div style={{ paddingTop: 12 }}>
+                        {/* Description */}
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 6 }}>Description</div>
+                          <div style={{ fontSize: 14, color: D, lineHeight: 1.6, background: W, padding: 12, borderRadius: 8 }}>{detail.description}</div>
+                        </div>
+
+                        {/* Photos */}
+                        {detail.photos.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 6 }}>Photos ({detail.photos.length})</div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              {detail.photos.map(photo => (
+                                <a key={photo.id} href={photo.storageUrl} target="_blank" rel="noopener noreferrer">
+                                  <img src={photo.thumbnailUrl || photo.storageUrl} alt="Issue photo"
+                                    style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid #E0DAD4' }} />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Troubleshoot log */}
+                        {detail.troubleshootLog && detail.troubleshootLog.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 6 }}>Troubleshoot Log</div>
+                            <div style={{ background: W, borderRadius: 8, padding: 12 }}>
+                              {detail.troubleshootLog.map((entry, i) => (
+                                <div key={i} style={{ marginBottom: i < detail.troubleshootLog!.length - 1 ? 10 : 0 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: '#6B6560' }}>Q: {entry.question}</div>
+                                  <div style={{ fontSize: 13, color: D, marginTop: 2 }}>A: {entry.answer}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Recurring alert */}
+                        {issue.isRecurring && (
+                          <div style={{ background: '#FFF3E0', borderRadius: 8, padding: 12, marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span style={{ fontSize: 16 }}>🔄</span>
+                            <div style={{ fontSize: 13, color: '#E65100', fontWeight: 600 }}>This issue has been reported multiple times and may need a permanent fix.</div>
+                          </div>
+                        )}
+
+                        {/* Guest satisfaction */}
+                        {detail.guestSatisfactionRating && (
+                          <div style={{ background: W, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 4 }}>Guest Satisfaction</div>
+                            <div style={{ fontSize: 14, color: D }}>Rating: {detail.guestSatisfactionRating}{detail.guestSatisfactionComment ? ` - "${detail.guestSatisfactionComment}"` : ''}</div>
+                          </div>
+                        )}
+
+                        {/* Timeline */}
+                        {detail.timeline.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 6 }}>Timeline</div>
+                            <div style={{ borderLeft: '2px solid #E0DAD4', paddingLeft: 14 }}>
+                              {detail.timeline.map((evt, i) => (
+                                <div key={i} style={{ marginBottom: 10, position: 'relative' }}>
+                                  <div style={{ position: 'absolute', left: -19, top: 4, width: 8, height: 8, borderRadius: '50%', background: O }} />
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: D }}>{evt.title}</div>
+                                  {evt.description && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{evt.description}</div>}
+                                  <div style={{ fontSize: 11, color: '#C0BBB6', marginTop: 2 }}>{timeAgo(evt.createdAt)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {issue.status === 'pm_reviewing' && (
+                            <>
+                              <button onClick={() => handleApprove(issue.id)} disabled={actionLoading}
+                                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: G, color: '#fff', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                Approve &amp; Dispatch
+                              </button>
+                              <button onClick={() => { setRejectModalId(issue.id); setRejectReason(''); }}
+                                style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid #DC2626', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                Close Issue
+                              </button>
+                            </>
+                          )}
+                          {detail.dispatchedJobId && (
+                            <button onClick={() => {
+                              const el = document.getElementById(`dispatch-${detail.dispatchedJobId}`);
+                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }}
+                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                              View Dispatch
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {total > 20 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 20 }}>
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: page === 1 ? 'default' : 'pointer', fontSize: 13, color: page === 1 ? '#C0BBB6' : D }}>
+            Previous
+          </button>
+          <span style={{ padding: '8px 12px', fontSize: 13, color: '#9B9490' }}>Page {page} of {Math.ceil(total / 20)}</span>
+          <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 20)}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: page >= Math.ceil(total / 20) ? 'default' : 'pointer', fontSize: 13, color: page >= Math.ceil(total / 20) ? '#C0BBB6' : D }}>
+            Next
+          </button>
+        </div>
+      )}
+
+      {/* Reject modal */}
+      {rejectModalId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+          onClick={() => setRejectModalId(null)}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 16px' }}>Close Issue</h3>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Reason for closing *</label>
+            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={3} placeholder="Enter reason..."
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setRejectModalId(null)} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+              <button onClick={() => handleReject(rejectModalId)} disabled={actionLoading || !rejectReason.trim()}
+                style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: '#DC2626', color: '#fff', cursor: actionLoading ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: actionLoading || !rejectReason.trim() ? 0.6 : 1 }}>
+                Close Issue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Settings sub-tab ── */
+
+function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; isBizPlus: boolean }) {
+  const [settings, setSettings] = useState<GuestReporterSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [draft, setDraft] = useState<Partial<GuestReporterSettings>>({});
+
+  useEffect(() => {
+    businessService.getGuestReporterSettings(workspaceId).then(res => {
+      if (res.data) { setSettings(res.data); setDraft(res.data); }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [workspaceId]);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      const res = await businessService.updateGuestReporterSettings(workspaceId, draft);
+      if (res.data) { setSettings(res.data); setDraft(res.data); }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch { alert('Failed to save settings'); }
+    setSaving(false);
+  }
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading settings...</div>;
+  if (!settings) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Could not load settings.</div>;
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box',
+  };
+  const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+
+  return (
+    <div style={{ maxWidth: 600 }}>
+      {/* Enable toggle */}
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D }}>Guest Reporter</div>
+            <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>Allow guests to report maintenance issues via a link or QR code.</div>
+          </div>
+          <button onClick={() => setDraft(d => ({ ...d, isEnabled: !d.isEnabled }))}
+            style={{ width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', background: draft.isEnabled ? G : '#D0CBC6', transition: 'background 0.2s' }}>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: draft.isEnabled ? 25 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Whitelabel */}
+      {isBizPlus && (
+        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>Whitelabel</div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>Logo URL</label>
+            <input value={draft.whitelabelLogoUrl || ''} onChange={e => setDraft(d => ({ ...d, whitelabelLogoUrl: e.target.value || null }))} placeholder="https://..." style={inputStyle} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>Company Name</label>
+            <input value={draft.whitelabelCompanyName || ''} onChange={e => setDraft(d => ({ ...d, whitelabelCompanyName: e.target.value || null }))} placeholder="Your Company" style={inputStyle} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input type="checkbox" checked={draft.showPoweredByHomie ?? true} onChange={e => setDraft(d => ({ ...d, showPoweredByHomie: e.target.checked }))} />
+            <span style={{ fontSize: 13, color: D }}>Show "Powered by Homie" badge</span>
+          </div>
+        </div>
+      )}
+
+      {/* Language */}
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>Language</div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Default Language</label>
+          <select value={draft.defaultLanguage || 'en'} onChange={e => setDraft(d => ({ ...d, defaultLanguage: e.target.value }))}
+            style={{ ...inputStyle, cursor: 'pointer' }}>
+            {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Supported Languages</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            {LANGUAGES.map(l => (
+              <label key={l.value} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: D, cursor: 'pointer' }}>
+                <input type="checkbox" checked={(draft.supportedLanguages || []).includes(l.value)}
+                  onChange={e => {
+                    const current = draft.supportedLanguages || [];
+                    setDraft(d => ({
+                      ...d,
+                      supportedLanguages: e.target.checked ? [...current, l.value] : current.filter(v => v !== l.value),
+                    }));
+                  }} />
+                {l.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* SLA */}
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>SLA Response Times (minutes)</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {([['slaUrgentMinutes', 'Urgent'] as const, ['slaHighMinutes', 'High'] as const, ['slaMediumMinutes', 'Medium'] as const, ['slaLowMinutes', 'Low'] as const]).map(([key, label]) => (
+            <div key={key}>
+              <label style={labelStyle}>{label}</label>
+              <input type="number" value={draft[key] ?? ''} onChange={e => setDraft(d => ({ ...d, [key]: parseInt(e.target.value) || 0 }))}
+                style={inputStyle} min={0} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* PM Approval */}
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D }}>Require PM Approval</div>
+            <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>Issues must be reviewed by a PM before auto-dispatching.</div>
+          </div>
+          <button onClick={() => setDraft(d => ({ ...d, requirePmApproval: !d.requirePmApproval }))}
+            style={{ width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', background: draft.requirePmApproval ? G : '#D0CBC6', transition: 'background 0.2s' }}>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: draft.requirePmApproval ? 25 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Save */}
+      <button onClick={handleSave} disabled={saving}
+        style={{ padding: '12px 32px', borderRadius: 10, border: 'none', background: O, color: '#fff', fontSize: 15, fontWeight: 600, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+        {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Settings'}
+      </button>
+    </div>
+  );
+}
+
+/* ── Auto-Dispatch Rules sub-tab ── */
+
+function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
+  const [rules, setRules] = useState<AutoDispatchRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formCat, setFormCat] = useState('');
+  const [formSeverity, setFormSeverity] = useState('medium');
+  const [formVendor, setFormVendor] = useState('');
+  const [formEnabled, setFormEnabled] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [vendors, setVendors] = useState<PreferredVendor[]>([]);
+
+  useEffect(() => {
+    businessService.listAutoDispatchRules(workspaceId).then(res => {
+      if (res.data) setRules(res.data.rules);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+    businessService.listVendors(workspaceId).then(res => {
+      if (res.data) setVendors(res.data.filter(v => v.active));
+    }).catch(() => {});
+  }, [workspaceId]);
+
+  function resetForm() {
+    setFormCat(''); setFormSeverity('medium'); setFormVendor(''); setFormEnabled(true);
+    setShowAdd(false); setEditingId(null);
+  }
+
+  function startEdit(rule: AutoDispatchRule) {
+    setEditingId(rule.id);
+    setFormCat(rule.categoryId);
+    setFormSeverity(rule.minSeverity);
+    setFormVendor(rule.preferredVendorId || '');
+    setFormEnabled(rule.isEnabled);
+    setShowAdd(true);
+  }
+
+  async function handleSave() {
+    if (!formCat) return;
+    setSaving(true);
+    try {
+      if (editingId) {
+        const res = await businessService.updateAutoDispatchRule(workspaceId, editingId, {
+          category_id: formCat, min_severity: formSeverity,
+          preferred_vendor_id: formVendor || undefined,
+          is_enabled: formEnabled,
+        });
+        if (res.data) setRules(prev => prev.map(r => r.id === editingId ? res.data! : r));
+      } else {
+        const res = await businessService.createAutoDispatchRule(workspaceId, {
+          category_id: formCat, min_severity: formSeverity,
+          preferred_vendor_id: formVendor || undefined,
+        });
+        if (res.data) setRules(prev => [...prev, res.data!]);
+      }
+      resetForm();
+    } catch { alert('Failed to save rule'); }
+    setSaving(false);
+  }
+
+  async function handleDelete(ruleId: string) {
+    if (!confirm('Delete this auto-dispatch rule?')) return;
+    try {
+      await businessService.deleteAutoDispatchRule(workspaceId, ruleId);
+      setRules(prev => prev.filter(r => r.id !== ruleId));
+    } catch { alert('Failed to delete rule'); }
+  }
+
+  async function handleToggle(rule: AutoDispatchRule) {
+    try {
+      const res = await businessService.updateAutoDispatchRule(workspaceId, rule.id, { is_enabled: !rule.isEnabled });
+      if (res.data) setRules(prev => prev.map(r => r.id === rule.id ? res.data! : r));
+    } catch { alert('Failed to toggle rule'); }
+  }
+
+  const selectStyle: React.CSSProperties = {
+    padding: '10px 14px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, boxSizing: 'border-box' as const, width: '100%', cursor: 'pointer',
+  };
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading rules...</div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 14, color: '#9B9490' }}>{rules.length} rule{rules.length !== 1 ? 's' : ''}</div>
+        <button onClick={() => { resetForm(); setShowAdd(true); }}
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          + Add Rule
+        </button>
+      </div>
+
+      {/* Add/Edit form */}
+      {showAdd && (
+        <div style={{ background: '#fff', borderRadius: 14, border: `2px solid ${O}`, padding: 20, marginBottom: 16 }}>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>
+            {editingId ? 'Edit Rule' : 'New Auto-Dispatch Rule'}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Category *</label>
+              <select value={formCat} onChange={e => setFormCat(e.target.value)} style={selectStyle}>
+                <option value="">Select category</option>
+                {VENDOR_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Min Severity</label>
+              <select value={formSeverity} onChange={e => setFormSeverity(e.target.value)} style={selectStyle}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Preferred Vendor (optional)</label>
+            <select value={formVendor} onChange={e => setFormVendor(e.target.value)} style={selectStyle}>
+              <option value="">None - use default matching</option>
+              {vendors.map(v => <option key={v.id} value={v.providerId}>{v.providerName}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <input type="checkbox" checked={formEnabled} onChange={e => setFormEnabled(e.target.checked)} />
+            <span style={{ fontSize: 13, color: D }}>Enabled</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleSave} disabled={saving || !formCat}
+              style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', opacity: saving || !formCat ? 0.6 : 1 }}>
+              {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
+            </button>
+            <button onClick={resetForm} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Rules list */}
+      {rules.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🤖</div>
+          <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No auto-dispatch rules</div>
+          <div style={{ fontSize: 14, color: '#9B9490' }}>Create rules to automatically dispatch guest issues to vendors.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rules.map(rule => {
+            const sev = SEVERITY_COLORS[rule.minSeverity] || SEVERITY_COLORS.low;
+            return (
+              <div key={rule.id} style={{
+                background: '#fff', borderRadius: 14, padding: '14px 16px', border: '1px solid rgba(0,0,0,0.06)',
+                opacity: rule.isEnabled ? 1 : 0.6,
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 14, color: D }}>
+                      {rule.categoryName || VENDOR_CATEGORIES.find(c => c.value === rule.categoryId)?.label || rule.categoryId}
+                    </span>
+                    <span style={{ background: sev.bg, color: sev.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600 }}>
+                      {rule.minSeverity}+
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#9B9490' }}>
+                    {rule.preferredVendorName || (rule.preferredVendorId ? 'Preferred vendor' : 'Default matching')}
+                  </div>
+                </div>
+                <button onClick={() => handleToggle(rule)}
+                  style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', background: rule.isEnabled ? G : '#D0CBC6', transition: 'background 0.2s', flexShrink: 0 }}>
+                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: rule.isEnabled ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </button>
+                <button onClick={() => startEdit(rule)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, color: D, cursor: 'pointer' }}>Edit</button>
+                <button onClick={() => handleDelete(rule.id)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #FECACA', background: '#FFF5F5', fontSize: 12, color: '#DC2626', cursor: 'pointer' }}>Delete</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── QR Codes sub-tab ── */
+
+function GuestQRCodesSubTab({ workspaceId }: { workspaceId: string }) {
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    businessService.listProperties(workspaceId).then(res => {
+      if (res.data) setProperties(res.data.sort((a, b) => a.name.localeCompare(b.name)));
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [workspaceId]);
+
+  function copyLink(propertyId: string) {
+    const url = `https://homiepro.ai/guest/${workspaceId}/${propertyId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(propertyId);
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch(() => { alert('Failed to copy'); });
+  }
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading properties...</div>;
+
+  if (properties.length === 0) return (
+    <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>🏠</div>
+      <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No properties</div>
+      <div style={{ fontSize: 14, color: '#9B9490' }}>Add properties first to generate guest reporting links.</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 16 }}>
+        Share these links with guests so they can report maintenance issues. QR code images coming soon.
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+        {properties.map(p => {
+          const url = `https://homiepro.ai/guest/${workspaceId}/${p.id}`;
+          const isCopied = copiedId === p.id;
+          return (
+            <div key={p.id} style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
+              <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, marginBottom: 4 }}>{p.name}</div>
+              {p.address && <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 10 }}>{p.address}</div>}
+              <div style={{ fontSize: 11, color: '#9B9490', wordBreak: 'break-all', marginBottom: 10, background: W, padding: '6px 8px', borderRadius: 6 }}>{url}</div>
+              <button onClick={() => copyLink(p.id)}
+                style={{ padding: '8px 16px', borderRadius: 8, border: isCopied ? `1px solid ${G}` : '1px solid #E0DAD4', background: isCopied ? `${G}10` : '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: isCopied ? G : D, width: '100%', transition: 'all 0.2s' }}>
+                {isCopied ? 'Copied!' : 'Copy Link'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main Page ──────────────────────────────────────────────────────────── */
 
-const TABS = ['dashboard', 'dispatches', 'bookings', 'schedules', 'reports', 'properties', 'vendors', 'team', 'settings', 'billing'] as const;
+const TABS = ['dashboard', 'dispatches', 'bookings', 'guest-requests', 'schedules', 'reports', 'properties', 'vendors', 'team', 'settings', 'billing'] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings', schedules: 'Auto-Dispatch', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Providers', team: 'Team', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = { dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings', 'guest-requests': 'Guest Requests', schedules: 'Auto-Dispatch', billing: 'Billing', reports: 'Reports', properties: 'Properties', vendors: 'Providers', team: 'Team', settings: 'Settings' };
 
 function useThemeMode() {
   const [mode, setMode] = useState<'light' | 'dark' | 'auto'>(() => {
@@ -5823,7 +6585,7 @@ export default function BusinessPortal() {
                 if (t === 'schedules') return false; // accessed via Auto-Dispatch button on Dispatches tab
                 return true;
               }).map(t => {
-                const isLocked = (t === 'reports' || t === 'schedules') && !['professional', 'business', 'enterprise'].includes(workspace?.plan ?? '');
+                const isLocked = (t === 'reports' || t === 'schedules' || t === 'guest-requests') && !['professional', 'business', 'enterprise'].includes(workspace?.plan ?? '');
                 return (
                   <button key={t} onClick={() => {
                     if (isLocked) { setShowReportsUpgrade(true); return; }
@@ -5851,6 +6613,9 @@ export default function BusinessPortal() {
             )}
             {workspace && tab === 'bookings' && (
               <BusinessBookingsTab workspaceId={workspace.id} focusJobId={focusJobId} onFocusHandled={() => setFocusJobId(null)} />
+            )}
+            {workspace && tab === 'guest-requests' && (
+              <GuestRequestsTab workspaceId={workspace.id} plan={workspace.plan} />
             )}
             {workspace && tab === 'schedules' && (
               <SchedulesTab workspaceId={workspace.id} plan={workspace.plan} />

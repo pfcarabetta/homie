@@ -32,6 +32,7 @@ import AdminBookings from '@/pages/admin/AdminBookings';
 import AdminBusiness from '@/pages/admin/AdminBusiness';
 import AdminPricing from '@/pages/admin/AdminPricing';
 import TrackingStatus from '@/pages/TrackingStatus';
+import GuestReporterPage from '@/pages/GuestReporter';
 import LoadingDemo from '@/pages/LoadingDemo';
 import OutreachDemo from '@/pages/OutreachDemo';
 import QuoteCardDemo from '@/pages/QuoteCardDemo';
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="/demo/loading" element={<LoadingDemo />} />
           <Route path="/demo/outreach" element={<OutreachDemo />} />
           <Route path="/demo/quote-card" element={<QuoteCardDemo />} />
+          <Route path="/guest/:workspaceId/:propertyId" element={<GuestReporterPage />} />
           <Route path="/t/:token" element={<TrackingStatus />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
           <Route path="/portal/login" element={<ProviderLogin />} />
