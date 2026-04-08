@@ -928,6 +928,18 @@ guestPublicRouter.get('/issues/:issueId/status', async (req: Request, res: Respo
     ];
 
     const timelineMap = new Map(timeline.map(t => [t.eventType, t]));
+    // Also map alternate event names to their step keys
+    const EVENT_ALIASES: Record<string, string> = {
+      'provider_responded': 'provider_responding',
+      'pm_approved': 'approved',
+      'pm_rejected': 'closed',
+      'cancelled': 'closed',
+      'self_resolved': 'resolved',
+    };
+    for (const t of timeline) {
+      const alias = EVENT_ALIASES[t.eventType];
+      if (alias && !timelineMap.has(alias)) timelineMap.set(alias, t);
+    }
     const steps = stepDefs.map(s => {
       const evt = timelineMap.get(s.key) ?? timelineMap.get(`pm_${s.key}`);
       return {
