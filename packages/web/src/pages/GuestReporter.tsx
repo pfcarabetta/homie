@@ -1138,12 +1138,7 @@ export default function GuestReporterPage() {
             <div style={{ fontSize: 11, color: BRAND.gray }}>{propertyName}</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <LangPicker lang={lang} setLang={setLang} open={langOpen} setOpen={setLangOpen} />
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: BRAND.orange, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontFamily: 'Fraunces,serif', fontWeight: 700, fontSize: 12, color: '#fff' }}>h</span>
-          </div>
-        </div>
+        <LangPicker lang={lang} setLang={setLang} open={langOpen} setOpen={setLangOpen} />
       </div>
 
       {/* Content */}
@@ -1745,6 +1740,26 @@ export default function GuestReporterPage() {
               <a href={`mailto:${propertyData.settings.supportEmail}`} style={{ fontSize: 11, color: BRAND.gray, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}
                 title="Email">{'\u2709\uFE0F'} Email</a>
             )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 6 }}>
+            <span style={{ fontSize: 10, color: BRAND.grayLight, fontFamily: "'DM Sans',sans-serif" }}>Powered by</span>
+            <span style={{ fontFamily: 'Fraunces,serif', fontWeight: 700, fontSize: 11, color: BRAND.orange }}>homie</span>
+          </div>
+        </div>
+      )}
+
+      {/* Powered by homie - shown when no support contact is configured */}
+      {!['welcome', 'identify'].includes(screen) && !(propertyData?.settings?.supportEmail || propertyData?.settings?.supportPhone) && (
+        <div style={{
+          borderTop: `1px solid ${BRAND.warm}`,
+          padding: '8px 14px',
+          textAlign: 'center',
+          background: BRAND.white,
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+            <span style={{ fontSize: 10, color: BRAND.grayLight, fontFamily: "'DM Sans',sans-serif" }}>Powered by</span>
+            <span style={{ fontFamily: 'Fraunces,serif', fontWeight: 700, fontSize: 11, color: BRAND.orange }}>homie</span>
           </div>
         </div>
       )}
