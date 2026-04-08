@@ -13,6 +13,8 @@ import { guestIssuePhotos } from '../db/schema/guest-issue-photos';
 import { guestIssueTimeline } from '../db/schema/guest-issue-timeline';
 import { guestAutoDispatchRules } from '../db/schema/guest-auto-dispatch-rules';
 import { guestReporterSettings } from '../db/schema/guest-reporter-settings';
+import { jobs } from '../db/schema/jobs';
+import { dispatchJob } from '../services/orchestration';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 
 // ── Public guest-facing router (no auth) ────────────────────────────────────
@@ -1136,12 +1138,71 @@ guestPmRouter.post(
 
       const now = new Date();
 
+      // Get full issue details for job creation
+      const [fullIssue] = await db
+        .select()
+        .from(guestIssues)
+        .where(eq(guestIssues.id, issueId))
+        .limit(1);
+
+      // Get category name
+      const [cat] = await db
+        .select({ name: guestIssueCategories.name })
+        .from(guestIssueCategories)
+        .where(eq(guestIssueCategories.id, fullIssue.categoryId))
+        .limit(1);
+
+      // Get property zip code
+      const [prop] = await db
+        .select({ zipCode: properties.zipCode, name: properties.name })
+        .from(properties)
+        .where(eq(properties.id, fullIssue.propertyId))
+        .limit(1);
+
+      // Create a job in the existing dispatch system
+      const categoryName = cat?.name ?? 'general';
+      const troubleshootContext = fullIssue.troubleshootLog
+        ? `\n\nTroubleshooting attempted:\n${(fullIssue.troubleshootLog as Array<{ q: string; a: string }>).map(t => `Q: ${t.q}\nA: ${t.a}`).join('\n')}`
+        : '';
+
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const diagnosis = {
+        category: categoryName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+        subcategory: categoryName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+        severity: fullIssue.severity,
+        summary: `Guest issue report: ${categoryName}\n\n${fullIssue.description ?? ''}${troubleshootContext}\n\nReported by: ${fullIssue.guestName ?? 'Guest'}`,
+        recommendedActions: ['Dispatch professional'],
+      };
+
+      const [job] = await db
+        .insert(jobs)
+        .values({
+          homeownerId: req.homeownerId,
+          diagnosis: diagnosis as unknown as typeof jobs.$inferInsert['diagnosis'],
+          preferredTiming: 'asap',
+          budget: 'flexible',
+          tier: 'priority',
+          status: 'dispatching',
+          paymentStatus: 'paid',
+          zipCode: prop?.zipCode ?? '00000',
+          workspaceId,
+          propertyId: fullIssue.propertyId,
+          consentGiven: true,
+          consentText: 'Guest issue approved for dispatch by property manager',
+          consentIp: '',
+          consentAt: now,
+          expiresAt,
+        } as typeof jobs.$inferInsert)
+        .returning();
+
+      // Link the job to the guest issue
       await db
         .update(guestIssues)
         .set({
           status: 'dispatching',
           pmApprovedBy: req.homeownerId,
           pmApprovedAt: now,
+          dispatchedJobId: job.id,
           updatedAt: now,
         })
         .where(eq(guestIssues.id, issueId));
@@ -1164,15 +1225,20 @@ guestPmRouter.post(
           issueId,
           eventType: 'dispatching',
           title: 'Dispatching to vendor',
-          description: 'Finding an available vendor for this issue',
-          metadata: null,
+          description: `Job ${job.id.slice(0, 8)} created — contacting providers`,
+          metadata: { jobId: job.id },
         })
         .returning();
 
+      // Trigger actual provider outreach (fire and forget)
+      logger.info({ jobId: job.id, issueId, category: categoryName }, '[guest-reporter] Dispatch job created from approved guest issue');
+      void dispatchJob(job.id);
+
       res.json({
         data: {
-          issueId: issueId,
+          issueId,
           status: 'dispatching',
+          jobId: job.id,
           timelineEvents: [approvedEvent, dispatchingEvent].map((t) => ({
             id: t.id,
             eventType: t.eventType,
