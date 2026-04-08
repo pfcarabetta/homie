@@ -1085,7 +1085,7 @@ export default function GuestReporterPage() {
           )}
           <div>
             {companyLogo ? (
-              <img src={companyLogo} alt={companyName} style={{ height: 28, maxWidth: 140, objectFit: 'contain' }} />
+              <img src={companyLogo} alt={companyName} style={{ height: 44, maxWidth: 200, objectFit: 'contain' }} />
             ) : (
               <div style={{ fontFamily: 'Fraunces,serif', fontWeight: 700, fontSize: 16, color: BRAND.dark }}>{companyName}</div>
             )}
