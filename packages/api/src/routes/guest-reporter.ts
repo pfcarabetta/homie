@@ -299,23 +299,26 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
 
     res.json({
       data: {
-        property_name: property.name,
-        company_name: companyName,
-        logo_url: logoUrl,
-        guest_name: reservation?.guestName ?? null,
-        guest_email: reservation?.guestEmail ?? null,
-        guest_phone: reservation?.guestPhone ?? null,
-        check_in: reservation?.checkIn ?? null,
-        check_out: reservation?.checkOut ?? null,
-        reservation_id: reservation?.id ?? null,
-        settings: {
-          supported_languages: settings.supportedLanguages,
-          default_language: settings.defaultLanguage,
-          show_powered_by: settings.showPoweredByHomie,
-          sla_urgent: settings.slaUrgentMinutes,
-          sla_high: settings.slaHighMinutes,
-          sla_medium: settings.slaMediumMinutes,
-          sla_low: settings.slaLowMinutes,
+        property: {
+          name: property.name,
+          company: companyName,
+          companyLogo: logoUrl,
+          settings: {
+            supportedLanguages: settings.supportedLanguages,
+            defaultLanguage: settings.defaultLanguage,
+            showPoweredBy: settings.showPoweredByHomie,
+            slaUrgent: settings.slaUrgentMinutes,
+            slaHigh: settings.slaHighMinutes,
+            slaMedium: settings.slaMediumMinutes,
+            slaLow: settings.slaLowMinutes,
+          },
+        },
+        reservation: {
+          matched: !!reservation,
+          guestName: reservation?.guestName ?? null,
+          checkIn: reservation?.checkIn ?? null,
+          checkOut: reservation?.checkOut ?? null,
+          reservationId: reservation?.id ?? null,
         },
       },
       error: null,
@@ -370,23 +373,21 @@ guestPublicRouter.get('/:workspaceId/:propertyId/categories', async (req: Reques
       }
     }
 
-    const result = categories.map((cat) => ({
-      id: cat.id,
-      name: cat.name,
-      icon: cat.icon,
-      description: cat.description,
-      color: cat.color,
-      type: cat.type,
-      has_troubleshooting: cat.hasTroubleshooting,
-      display_order: cat.displayOrder,
-      troubleshoot_steps: (flowsByCategory[cat.id] || []).map((s) => ({
-        id: s.id,
-        step_order: s.stepOrder,
-        question: s.question,
-        options: s.options,
-        is_resolution_option: s.isResolutionOption,
-      })),
-    }));
+    const result = categories.map((cat) => {
+      const steps = (flowsByCategory[cat.id] || []).map((s) => ({
+        q: s.question,
+        options: s.options as string[],
+      }));
+      return {
+        id: cat.id,
+        label: cat.name,
+        icon: cat.icon ?? '',
+        desc: cat.description ?? '',
+        color: cat.color ?? '#9B9490',
+        type: cat.type,
+        troubleshootFlow: steps.length > 0 ? steps : undefined,
+      };
+    });
 
     res.json({ data: result, error: null, meta: {} });
   } catch (err) {
@@ -399,32 +400,20 @@ guestPublicRouter.get('/:workspaceId/:propertyId/categories', async (req: Reques
 
 guestPublicRouter.post('/:workspaceId/:propertyId/issues', async (req: Request, res: Response) => {
   const { workspaceId, propertyId } = req.params;
-  const {
-    reservation_id,
-    guest_name,
-    guest_email,
-    guest_phone,
-    category_id,
-    description,
-    severity,
-    troubleshoot_log,
-    language,
-    self_resolved,
-  } = req.body as {
-    reservation_id?: string;
-    guest_name: string;
-    guest_email?: string;
-    guest_phone?: string;
-    category_id: string;
-    description: string;
-    severity: string;
-    troubleshoot_log?: unknown;
-    language?: string;
-    self_resolved?: boolean;
-  };
+  const body = req.body as Record<string, unknown>;
+  const reservation_id = (body.reservationId ?? body.reservation_id) as string | undefined;
+  const guest_name = (body.guestName ?? body.guest_name) as string;
+  const guest_email = (body.guestEmail ?? body.guest_email) as string | undefined;
+  const guest_phone = (body.guestPhone ?? body.guest_phone) as string | undefined;
+  const category_id = (body.categoryId ?? body.category_id) as string;
+  const description = body.description as string;
+  const severity = body.severity as string;
+  const troubleshoot_log = (body.troubleshootLog ?? body.troubleshoot_log) as unknown;
+  const language = (body.language) as string | undefined;
+  const self_resolved = (body.selfResolved ?? body.self_resolved) as boolean | undefined;
 
   if (!guest_name || !category_id || !description || !severity) {
-    res.status(400).json({ data: null, error: 'guest_name, category_id, description, and severity are required', meta: {} });
+    res.status(400).json({ data: null, error: 'guestName, categoryId, description, and severity are required', meta: {} });
     return;
   }
 
@@ -576,14 +565,15 @@ guestPublicRouter.post('/:workspaceId/:propertyId/issues', async (req: Request, 
 
     res.status(201).json({
       data: {
-        issue_id: issue.id,
+        issueId: issue.id,
         status: issue.status,
-        timeline_events: insertedTimeline.map((t) => ({
+        autoDispatched: issue.autoDispatched,
+        timelineEvents: insertedTimeline.map((t) => ({
           id: t.id,
-          event_type: t.eventType,
+          eventType: t.eventType,
           title: t.title,
           description: t.description,
-          created_at: t.createdAt,
+          createdAt: t.createdAt,
         })),
       },
       error: null,
