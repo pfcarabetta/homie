@@ -5976,7 +5976,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                                   style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 13, color: D, cursor: 'pointer' }}
                                 >
                                   <option value="">All preferred vendors</option>
-                                  {vendors.map(v => (
+                                  {[...new Map(vendors.map(v => [v.providerId, v])).values()].map(v => (
                                     <option key={v.providerId} value={v.providerId}>{v.providerName}</option>
                                   ))}
                                 </select>
