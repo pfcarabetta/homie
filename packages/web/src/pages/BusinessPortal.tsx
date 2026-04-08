@@ -5869,7 +5869,12 @@ function GuestIssuesSubTab({ workspaceId }: { workspaceId: string }) {
                         {/* Description */}
                         <div style={{ marginBottom: 16 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 6 }}>Description</div>
-                          <div style={{ fontSize: 14, color: D, lineHeight: 1.6, background: W, padding: 12, borderRadius: 8 }}>{detail.description}</div>
+                          <div style={{ fontSize: 14, color: D, lineHeight: 1.6, background: W, padding: 12, borderRadius: 8 }}
+                            dangerouslySetInnerHTML={{ __html: (detail.description ?? '')
+                              .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                              .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                              .replace(/\n/g, '<br/>') }}
+                          />
                         </div>
 
                         {/* Photos */}
