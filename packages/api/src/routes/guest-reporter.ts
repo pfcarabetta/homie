@@ -1520,6 +1520,35 @@ guestPmRouter.post(
   },
 );
 
+// ── POST /:workspaceId/guest-issues/:issueId/resolve — Mark as resolved ───────
+
+guestPmRouter.post(
+  '/:workspaceId/guest-issues/:issueId/resolve',
+  requireWorkspace,
+  async (req: Request, res: Response) => {
+    const { workspaceId, issueId } = req.params;
+    try {
+      const [issue] = await db
+        .select({ id: guestIssues.id, status: guestIssues.status })
+        .from(guestIssues)
+        .where(and(eq(guestIssues.id, issueId), eq(guestIssues.workspaceId, workspaceId)))
+        .limit(1);
+
+      if (!issue) { res.status(404).json({ data: null, error: 'Issue not found', meta: {} }); return; }
+
+      const now = new Date();
+      await db.update(guestIssues).set({ status: 'resolved', resolvedAt: now, updatedAt: now }).where(eq(guestIssues.id, issueId));
+
+      await db.insert(guestIssueTimeline).values({ issueId, eventType: 'resolved', title: 'Issue resolved', description: 'PM marked this issue as resolved', metadata: { resolved_by: req.homeownerId } });
+
+      res.json({ data: { issueId, status: 'resolved' }, error: null, meta: {} });
+    } catch (err) {
+      logger.error({ err }, '[POST /:workspaceId/guest-issues/:issueId/resolve]');
+      res.status(500).json({ data: null, error: 'Failed to resolve issue', meta: {} });
+    }
+  },
+);
+
 // ── POST /:workspaceId/guest-issues/:issueId/archive — Archive closed issue ───
 
 guestPmRouter.post(

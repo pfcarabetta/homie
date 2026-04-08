@@ -5811,6 +5811,16 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
     setActionLoading(false);
   }
 
+  async function handleResolve(issueId: string) {
+    setActionLoading(true);
+    try {
+      await businessService.resolveGuestIssue(workspaceId, issueId);
+      setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: 'resolved' } : i));
+      if (detail?.id === issueId) setDetail({ ...detail, status: 'resolved' });
+    } catch { alert('Failed to resolve issue'); }
+    setActionLoading(false);
+  }
+
   async function handleArchive(issueId: string) {
     try {
       await businessService.archiveGuestIssue(workspaceId, issueId);
@@ -6060,6 +6070,18 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                               <button onClick={() => handleSelfResolve(issue.id)} disabled={actionLoading}
                                 style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${G}`, background: '#fff', color: G, fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
                                 Self-Resolved
+                              </button>
+                              <button onClick={() => handleCancel(issue.id)} disabled={actionLoading}
+                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                Cancel
+                              </button>
+                            </>
+                          )}
+                          {issue.status === 'provider_booked' && (
+                            <>
+                              <button onClick={() => handleResolve(issue.id)} disabled={actionLoading}
+                                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: G, color: '#fff', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                Mark Resolved
                               </button>
                               <button onClick={() => handleCancel(issue.id)} disabled={actionLoading}
                                 style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>

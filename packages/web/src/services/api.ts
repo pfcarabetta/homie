@@ -1215,6 +1215,8 @@ export const businessService = {
     fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/self-resolve`, { method: 'POST' }),
   cancelGuestIssue: (workspaceId: string, issueId: string) =>
     fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/cancel`, { method: 'POST' }),
+  resolveGuestIssue: (workspaceId: string, issueId: string) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/resolve`, { method: 'POST' }),
   archiveGuestIssue: (workspaceId: string, issueId: string) =>
     fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/archive`, { method: 'POST' }),
   getGuestReporterSettings: (workspaceId: string) =>
