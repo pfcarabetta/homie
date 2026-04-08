@@ -745,7 +745,8 @@ export default function GuestReporterPage() {
         .then(data => {
           if (!active) return;
           setStatusData(data);
-          setTrackStep(data.currentStep);
+          // Only advance step forward, never backward (prevents flash on initial load)
+          setTrackStep(prev => Math.max(prev, data.currentStep));
           if (data.steps?.length) setTrackSteps(data.steps);
           if (data.resolved) setShowResolved(true);
         })
@@ -1040,20 +1041,14 @@ export default function GuestReporterPage() {
 
       setIssueId(result.issueId);
 
-      // Animate the escalated steps
-      if (result.autoDispatched) {
-        setTimeout(() => setTrackStep(1), 800);
-        setTimeout(() => setTrackStep(2), 1500);
-        setTimeout(() => setTrackStep(3), 2500);
-        setTimeout(() => { setScreen('tracking'); setTrackStep(4); }, 3500);
-      } else {
-        setTimeout(() => setTrackStep(1), 1000);
-        setTimeout(() => setTrackStep(2), 2500);
-        setTimeout(() => setTrackStep(3), 5000);
-        setTimeout(() => { setScreen('tracking'); setTrackStep(3); }, 6000);
-      }
+      // Animate just the confirmed steps (reported → sent to PM), then go to tracking
+      setTimeout(() => setTrackStep(1), 800);
+      setTimeout(() => {
+        setScreen('tracking');
+        // Don't set a fake step — let the poll set the real one
+      }, 2500);
     } catch {
-      // On error, still show escalated screen but stay there
+      // On error, still show escalated screen
       setTimeout(() => setTrackStep(1), 1000);
     }
   };
@@ -1677,7 +1672,11 @@ export default function GuestReporterPage() {
               {severity && <SevBadge level={severity} />}
             </div>
 
-            <StatusTracker steps={trackSteps} cur={trackStep} />
+            {severity && !statusData?.provider && <SLABanner severity={severity} lang={lang} />}
+
+            <div style={{ marginTop: 14 }}>
+              <StatusTracker steps={trackSteps} cur={trackStep} />
+            </div>
 
             {statusData?.provider && (
               <div style={{ animation: 'fadeUp 0.5s ease', marginTop: 10, background: BRAND.white, border: `1.5px solid ${BRAND.greenLight}`, borderRadius: 13, padding: '13px 14px' }}>
