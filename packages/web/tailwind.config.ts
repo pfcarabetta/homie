@@ -15,6 +15,15 @@ export default {
         },
         dark: '#2D2926',
         warm: '#F9F5F2',
+        // CSS variable-backed theme colors (light/dark via data-theme)
+        'bp-bg': 'var(--bp-bg)',
+        'bp-card': 'var(--bp-card)',
+        'bp-text': 'var(--bp-text)',
+        'bp-muted': 'var(--bp-muted)',
+        'bp-subtle': 'var(--bp-subtle)',
+        'bp-border': 'var(--bp-border)',
+        'bp-hover': 'var(--bp-hover)',
+        'bp-header': 'var(--bp-header)',
       },
       fontFamily: {
         display: ['Fraunces', 'serif'],

@@ -13,7 +13,7 @@ import Register from '@/pages/Register';
 import ResetPassword from '@/pages/ResetPassword';
 import ResetPasswordConfirm from '@/pages/ResetPasswordConfirm';
 import Account from '@/pages/Account';
-import BusinessPortal from '@/pages/BusinessPortal';
+import BusinessPortal from '@/pages/business';
 import BusinessChat from '@/pages/BusinessChat';
 import BusinessLanding from '@/pages/BusinessLanding';
 import ProSignup from '@/pages/ProSignup';
