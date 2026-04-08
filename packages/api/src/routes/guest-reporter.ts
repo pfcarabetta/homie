@@ -1228,14 +1228,32 @@ guestPmRouter.post(
 
       // Create a job in the existing dispatch system
       const categoryName = cat?.name ?? 'general';
+
+      // Map guest issue categories to dispatch categories
+      const GUEST_TO_DISPATCH: Record<string, string> = {
+        'wifi / internet': 'electrical',
+        'hvac / climate': 'hvac',
+        'plumbing': 'plumbing',
+        'electrical': 'electrical',
+        'appliances': 'appliance',
+        'lockout / access': 'locksmith',
+        'pest control': 'pest_control',
+        'cleanliness': 'cleaning',
+        'safety concern': 'general',
+        'noise complaint': 'general',
+        'pool / hot tub': 'pool',
+        'other': 'general',
+      };
+      const dispatchCategory = GUEST_TO_DISPATCH[categoryName.toLowerCase()] ?? 'general';
+
       const troubleshootContext = fullIssue.troubleshootLog
         ? `\n\nTroubleshooting attempted:\n${(fullIssue.troubleshootLog as Array<{ q: string; a: string }>).map(t => `Q: ${t.q}\nA: ${t.a}`).join('\n')}`
         : '';
 
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const diagnosis = {
-        category: categoryName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-        subcategory: categoryName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+        category: dispatchCategory,
+        subcategory: dispatchCategory,
         severity: fullIssue.severity,
         summary: `Guest issue report: ${categoryName}\n\n${fullIssue.description ?? ''}${troubleshootContext}\n\nReported by: ${fullIssue.guestName ?? 'Guest'}`,
         recommendedActions: ['Dispatch professional'],
