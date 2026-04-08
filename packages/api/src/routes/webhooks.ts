@@ -398,6 +398,13 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
               { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
             );
           } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[webhooks] Failed to emit tracking event for voice conversation response'); }
+
+          // Sync guest issue status
+          try {
+            const { syncGuestIssueFromJob } = await import('../services/orchestration');
+            const [prov3] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+            void syncGuestIssueFromJob(attempt.jobId, 'quote_received', { providerName: prov3?.name });
+          } catch { /* silent */ }
         }
 
         const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
@@ -714,6 +721,12 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
             { provider_name: `${firstName} ${initial}`.trim(), ...(provDetail?.googleRating ? { rating: `${provDetail.googleRating} ★` } : {}) },
           );
         } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[webhooks] Failed to emit tracking event for SMS conversation response'); }
+
+        // Sync guest issue status
+        try {
+          const { syncGuestIssueFromJob } = await import('../services/orchestration');
+          void syncGuestIssueFromJob(attempt.jobId, 'quote_received', { providerName: provider.name });
+        } catch { /* silent */ }
       }
 
       const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
@@ -942,6 +955,13 @@ router.post('/web/submit-quote', async (req: Request, res: Response) => {
       { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
     );
   } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[webhooks] Failed to emit tracking event for web portal response'); }
+
+  // Sync guest issue status
+  try {
+    const { syncGuestIssueFromJob } = await import('../services/orchestration');
+    const [provSync] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+    void syncGuestIssueFromJob(attempt.jobId, 'quote_received', { providerName: provSync?.name });
+  } catch { /* silent */ }
 
   const responseTimeSec = (respondedAt.getTime() - attempt.attemptedAt.getTime()) / 1000;
   void recordProviderResponse(attempt.providerId, responseTimeSec);
