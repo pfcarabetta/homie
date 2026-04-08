@@ -684,6 +684,8 @@ export default function GuestReporterPage() {
   const [desc, setDesc] = useState('');
   const [aiSummary, setAiSummary] = useState('');
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [accessPermission, setAccessPermission] = useState<'enter' | 'schedule' | null>(null);
+  const [scheduleAvailability, setScheduleAvailability] = useState('');
 
   // Tracking
   const [issueId, setIssueId] = useState<string | null>(null);
@@ -1016,7 +1018,15 @@ export default function GuestReporterPage() {
         body: JSON.stringify({
           categoryId: category?.id,
           severity,
-          description: aiSummary || userDesc || desc,
+          description: [
+            aiSummary || userDesc || desc,
+            '',
+            accessPermission === 'enter'
+              ? '**Provider Access:** Guest has given permission to enter the property while away.'
+              : accessPermission === 'schedule'
+                ? `**Provider Access:** Guest prefers to be home. Availability: ${scheduleAvailability.trim()}`
+                : '',
+          ].filter(Boolean).join('\n'),
           photos: userPhotos,
           troubleshootLog: tAnswers,
           guestName: displayName,
@@ -1551,11 +1561,79 @@ export default function GuestReporterPage() {
 
             {statusData?.recurring && <RecurringAlert recurring={statusData.recurring} lang={lang} />}
 
+            {/* Access permission */}
+            <div style={{ background: BRAND.white, borderRadius: 14, border: `1.5px solid ${BRAND.warm}`, padding: '16px', marginTop: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: BRAND.gray, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Provider access</div>
+              <p style={{ fontSize: 13, color: BRAND.dark, margin: '0 0 12px', lineHeight: 1.5 }}>
+                If a pro needs to come out, can they enter while you're away?
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button
+                  onClick={() => { setAccessPermission('enter'); setScheduleAvailability(''); }}
+                  style={{
+                    padding: '12px 16px', borderRadius: 10, border: `1.5px solid ${accessPermission === 'enter' ? BRAND.green : BRAND.grayLight}`,
+                    background: accessPermission === 'enter' ? BRAND.greenLight : BRAND.white,
+                    color: accessPermission === 'enter' ? BRAND.greenDark : BRAND.dark,
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{'\u{1F513}'}</span>
+                  <div>
+                    <div>Yes, they can enter anytime</div>
+                    <div style={{ fontSize: 11, fontWeight: 400, color: BRAND.gray, marginTop: 2 }}>Provider can access the property while I'm out</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setAccessPermission('schedule')}
+                  style={{
+                    padding: '12px 16px', borderRadius: 10, border: `1.5px solid ${accessPermission === 'schedule' ? BRAND.orange : BRAND.grayLight}`,
+                    background: accessPermission === 'schedule' ? `${BRAND.orange}08` : BRAND.white,
+                    color: accessPermission === 'schedule' ? BRAND.orangeDark : BRAND.dark,
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{'\u{1F4C5}'}</span>
+                  <div>
+                    <div>I'd like to schedule a time</div>
+                    <div style={{ fontSize: 11, fontWeight: 400, color: BRAND.gray, marginTop: 2 }}>I prefer to be home when the provider arrives</div>
+                  </div>
+                </button>
+              </div>
+              {accessPermission === 'schedule' && (
+                <div style={{ marginTop: 12, animation: 'fadeUp 0.3s ease' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.dark, marginBottom: 6 }}>When are you available?</div>
+                  <textarea
+                    value={scheduleAvailability}
+                    onChange={e => setScheduleAvailability(e.target.value)}
+                    placeholder="e.g. Tomorrow morning between 9-11am, or any afternoon this week..."
+                    rows={3}
+                    style={{
+                      width: '100%', border: `1.5px solid ${BRAND.grayLight}`, borderRadius: 10,
+                      padding: '10px 12px', fontSize: 13, fontFamily: "'DM Sans',sans-serif",
+                      resize: 'none', outline: 'none', background: BRAND.white, color: BRAND.dark,
+                      boxSizing: 'border-box',
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = BRAND.orange; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = BRAND.grayLight; }}
+                  />
+                </div>
+              )}
+            </div>
+
             <button
               onClick={submitIssue}
-              style={{ width: '100%', padding: '14px', borderRadius: 11, border: 'none', background: BRAND.orange, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', marginTop: 14, boxShadow: '0 4px 18px rgba(232,99,43,0.25)' }}
-              onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.background = BRAND.orangeDark; el.style.transform = 'translateY(-1px)'; }}
-              onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.background = BRAND.orange; el.style.transform = 'translateY(0)'; }}
+              disabled={!accessPermission || summaryLoading || (accessPermission === 'schedule' && !scheduleAvailability.trim())}
+              style={{
+                width: '100%', padding: '14px', borderRadius: 11, border: 'none',
+                background: (!accessPermission || summaryLoading || (accessPermission === 'schedule' && !scheduleAvailability.trim())) ? BRAND.grayLight : BRAND.orange,
+                color: (!accessPermission || summaryLoading || (accessPermission === 'schedule' && !scheduleAvailability.trim())) ? BRAND.gray : '#fff',
+                fontSize: 14, fontWeight: 600, cursor: (!accessPermission || summaryLoading) ? 'default' : 'pointer',
+                transition: 'all 0.2s', marginTop: 14, boxShadow: accessPermission ? '0 4px 18px rgba(232,99,43,0.25)' : 'none',
+              }}
+              onMouseEnter={e => { if (accessPermission) { const el = e.currentTarget as HTMLButtonElement; el.style.background = BRAND.orangeDark; el.style.transform = 'translateY(-1px)'; } }}
+              onMouseLeave={e => { if (accessPermission) { const el = e.currentTarget as HTMLButtonElement; el.style.background = BRAND.orange; el.style.transform = 'translateY(0)'; } }}
             >
               {tx(lang, 'sendToPM')} {'\u2192'}
             </button>
