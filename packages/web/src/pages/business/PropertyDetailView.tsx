@@ -438,7 +438,7 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
       </>)}
 
       {/* Water Heater */}
-      {d?.waterHeater && Object.values(d.waterHeater).some(Boolean) && (<>
+      {d?.waterHeater && Object.values(d.waterHeater).some(v => !!v) && (<>
         {sectionHeader('Water Heater', '🔥')}
         {card(<>
           {infoRow('Type', d.waterHeater.type)}
@@ -491,37 +491,37 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
       </>)}
 
       {/* Pool / Spa */}
-      {dx?.pool && Object.values(d.pool).some(Boolean) && (<>
+      {(() => { const pool = dx?.pool as Record<string, string> | undefined; return pool && Object.values(pool).some(Boolean) ? (<>
         {sectionHeader('Pool / Spa', '🏊')}
         {card(<>
-          {infoRow('Pool Type', (d.pool as Record<string, string>).type)}
-          {infoRow('Heating', (d.pool as Record<string, string>).heating)}
-          {infoRow('Equipment', (d.pool as Record<string, string>).equipment)}
+          {infoRow('Pool Type', pool.type)}
+          {infoRow('Heating', pool.heating)}
+          {infoRow('Equipment', pool.equipment)}
         </>)}
-      </>)}
+      </>) : null; })()}
 
       {/* Exterior */}
-      {dx?.exterior && Object.values(d.exterior).some(Boolean) && (<>
+      {(() => { const ext = dx?.exterior as Record<string, string> | undefined; return ext && Object.values(ext).some(Boolean) ? (<>
         {sectionHeader('Exterior', '🏡')}
         {card(<>
-          {infoRow('Roof Type', (d.exterior as Record<string, string>).roofType)}
-          {infoRow('Siding', (d.exterior as Record<string, string>).siding)}
-          {infoRow('Fence', (d.exterior as Record<string, string>).fence)}
-          {infoRow('Garage Door', (d.exterior as Record<string, string>).garageDoor)}
-          {infoRow('Irrigation', (d.exterior as Record<string, string>).irrigation)}
+          {infoRow('Roof Type', ext.roofType)}
+          {infoRow('Siding', ext.siding)}
+          {infoRow('Fence', ext.fence)}
+          {infoRow('Garage Door', ext.garageDoor)}
+          {infoRow('Irrigation', ext.irrigation)}
         </>)}
-      </>)}
+      </>) : null; })()}
 
       {/* Access */}
-      {dx?.access && Object.values(d.access).some(Boolean) && (<>
+      {(() => { const acc = dx?.access as Record<string, string> | undefined; return acc && Object.values(acc).some(Boolean) ? (<>
         {sectionHeader('Access', '🔑')}
         {card(<>
-          {infoRow('Lockbox', (d.access as Record<string, string>).lockbox)}
-          {infoRow('Gate Code', (d.access as Record<string, string>).gate)}
-          {infoRow('Alarm Code', (d.access as Record<string, string>).alarm)}
-          {infoRow('WiFi', (d.access as Record<string, string>).wifi)}
+          {infoRow('Lockbox', acc.lockbox)}
+          {infoRow('Gate Code', acc.gate)}
+          {infoRow('Alarm Code', acc.alarm)}
+          {infoRow('WiFi', acc.wifi)}
         </>)}
-      </>)}
+      </>) : null; })()}
 
       {/* Notes */}
       {property.notes && (<>
