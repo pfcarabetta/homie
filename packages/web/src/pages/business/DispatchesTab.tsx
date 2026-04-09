@@ -306,7 +306,25 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
             {showArchived ? 'No archived dispatches' : 'No active dispatches'}
           </div>
         ) : null}
-        {filteredDispatches.map(j => {
+        {(() => {
+          let lastDateLabel = '';
+          return filteredDispatches.map(j => {
+            const dateObj = new Date(j.createdAt);
+            const today = new Date();
+            const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+            const isToday = dateObj.toDateString() === today.toDateString();
+            const isYesterday = dateObj.toDateString() === yesterday.toDateString();
+            const dateLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: dateObj.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
+            const showHeader = dateLabel !== lastDateLabel;
+            lastDateLabel = dateLabel;
+
+            return (<div key={j.id}>
+              {showHeader && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>
+                  {dateLabel}
+                </div>
+              )}
+              {(() => {
           const sc = DISPATCH_STATUS_COLORS[j.status] || DISPATCH_STATUS_COLORS.expired;
           const isExpanded = expandedId === j.id;
           const jobResponses = responses[j.id] ?? [];
@@ -589,7 +607,10 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
               )}
             </div>
           );
-        })}
+        })()}
+        </div>);
+          });
+        })()}
       </div>
 
       {/* Share tracking modal */}
