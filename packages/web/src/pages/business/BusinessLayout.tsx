@@ -211,6 +211,34 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
           .bp-dashboard-mid { grid-template-columns: 1fr !important; }
         }
         .bp-search-row:hover { background: var(--bp-hover); }
+        .bp-sidebar-tooltip {
+          display: none;
+          position: absolute;
+          left: 100%;
+          top: 50%;
+          transform: translateY(-50%);
+          margin-left: 8px;
+          background: var(--bp-text);
+          color: var(--bp-bg);
+          font-size: 12px;
+          font-weight: 600;
+          padding: 5px 10px;
+          border-radius: 6px;
+          white-space: nowrap;
+          pointer-events: none;
+          z-index: 50;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .bp-sidebar-tooltip::before {
+          content: '';
+          position: absolute;
+          right: 100%;
+          top: 50%;
+          transform: translateY(-50%);
+          border: 5px solid transparent;
+          border-right-color: var(--bp-text);
+        }
+        button:hover > .bp-sidebar-tooltip { display: block; }
       `}</style>
 
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />

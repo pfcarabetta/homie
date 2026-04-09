@@ -199,9 +199,11 @@ export default function BusinessSidebar({
               }}
                 onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--bp-hover)'; }}
                 onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                title={collapsed ? item.label : undefined}
               >
                 <span style={{ flexShrink: 0, display: 'flex' }}><Icon name={item.icon} /></span>
+                {collapsed && (
+                  <span className="bp-sidebar-tooltip">{item.label}</span>
+                )}
                 {!collapsed && <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>}
                 {!collapsed && item.locked && <Icon name="lock" size={12} />}
                 {!collapsed && hasChildren && (
