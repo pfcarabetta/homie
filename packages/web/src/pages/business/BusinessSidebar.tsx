@@ -49,7 +49,7 @@ function getNavItems(plan: string, role: string): NavItem[] {
     {
       id: 'vendors-group', label: 'Providers', icon: 'vendors', children: [
         { id: 'vendors', label: 'Preferred', icon: 'vendors', tab: 'vendors' },
-        { id: 'reports-scorecards', label: 'Scorecards', icon: 'scorecards', tab: 'reports', locked: !isPro },
+        { id: 'reports-scorecards', label: 'Scorecards', icon: 'scorecards', tab: 'scorecards', locked: !isPro },
       ],
     },
     { id: 'reports', label: 'Reports', icon: 'costs', tab: 'reports', locked: !isPro },
@@ -91,7 +91,7 @@ interface BusinessSidebarProps {
   collapsed: boolean;
   setCollapsed: (v: boolean) => void;
   activeTab: Tab;
-  onNavigate: (tab: Tab, options?: { initialView?: string }) => void;
+  onNavigate: (tab: Tab) => void;
   onNewDispatch: () => void;
   onLockedTab: () => void;
   workspacePlan: string;
@@ -123,8 +123,7 @@ export default function BusinessSidebar({
     if (item.locked) { onLockedTab(); return; }
     if (item.action === 'new-dispatch') { onNewDispatch(); onNavigateCallback?.(); return; }
     if (item.tab) {
-      const opts = item.id === 'reports-scorecards' ? { initialView: 'scorecards' } : undefined;
-      onNavigate(item.tab, opts);
+      onNavigate(item.tab);
       onNavigateCallback?.();
     }
   }
@@ -180,8 +179,7 @@ export default function BusinessSidebar({
                   if (!wasExpanded && !active && item.children) {
                     const firstClickable = item.children.find(c => !c.locked && c.tab);
                     if (firstClickable && firstClickable.tab) {
-                      const opts = firstClickable.id === 'reports-scorecards' ? { initialView: 'scorecards' } : undefined;
-                      onNavigate(firstClickable.tab, opts);
+                      onNavigate(firstClickable.tab);
                       // Don't call onNavigateCallback here — keep drawer open to show sub-menu
                     }
                   }

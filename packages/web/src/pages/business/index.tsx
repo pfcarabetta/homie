@@ -13,12 +13,11 @@ import BookingsTab from './BookingsTab';
 import GuestRequestsTab from './GuestRequestsTab';
 import SchedulesTab from './SchedulesTab';
 import ReportsTab from './ReportsTab';
+import ScorecardsTab from './ScorecardsTab';
 import VendorsTab from './VendorsTab';
 import TeamTab from './TeamTab';
 import SettingsTab from './SettingsTab';
 import BillingTab from './BillingTab';
-
-type ReportView = 'summary' | 'property' | 'category' | 'vendor' | 'monthly' | 'scorecards';
 
 /* ── Create Workspace Modal ─────────────────────────────────────────────── */
 
@@ -89,7 +88,6 @@ export default function BusinessPortal() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('bp_sidebar_collapsed') === 'true';
   });
-  const [reportsInitialView, setReportsInitialView] = useState<ReportView | undefined>(undefined);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   function handleSidebarCollapse(v: boolean) {
@@ -140,12 +138,7 @@ export default function BusinessPortal() {
     ? `${homeowner.first_name[0]}${(homeowner.last_name || '')[0] || ''}`.toUpperCase()
     : homeowner.email[0].toUpperCase();
 
-  function handleSidebarNavigate(t: Tab, options?: { initialView?: string }) {
-    if (t === 'reports' && options?.initialView) {
-      setReportsInitialView(options.initialView as ReportView);
-    } else if (t === 'reports') {
-      setReportsInitialView(undefined);
-    }
+  function handleSidebarNavigate(t: Tab) {
     setTab(t);
   }
 
@@ -268,7 +261,10 @@ export default function BusinessPortal() {
         <SchedulesTab workspaceId={workspace.id} plan={workspace.plan} />
       )}
       {workspace && tab === 'reports' && (
-        <ReportsTab workspaceId={workspace.id} plan={workspace.plan} initialView={reportsInitialView} />
+        <ReportsTab workspaceId={workspace.id} plan={workspace.plan} />
+      )}
+      {workspace && tab === 'scorecards' && (
+        <ScorecardsTab workspaceId={workspace.id} plan={workspace.plan} />
       )}
       {workspace && tab === 'properties' && (
         <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} />
