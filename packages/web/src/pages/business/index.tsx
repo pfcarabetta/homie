@@ -197,8 +197,8 @@ export default function BusinessPortal() {
         setMobileOpen={setMobileMenuOpen}
         sidebar={
           <BusinessSidebar
-            collapsed={true}
-            setCollapsed={() => { setSelectedProperty(null); setTab('properties'); handleSidebarCollapse(false); }}
+            collapsed={sidebarCollapsed}
+            setCollapsed={handleSidebarCollapse}
             activeTab={tab}
             onNavigate={(t) => { setSelectedProperty(null); setTab(t); }}
             onNewDispatch={() => { setSelectedProperty(null); navigate(`/business/chat?workspace=${selectedId}`); }}
