@@ -246,6 +246,44 @@ router.get('/:workspaceId/properties', requireWorkspace, async (req: Request, re
   }
 });
 
+// NOTE: export/import routes must come BEFORE /:propertyId to avoid matching "export" as a propertyId
+// They are defined below the helper functions but registered here via forward references
+// (Actual route handlers moved inline)
+
+// GET /:workspaceId/properties/export — CSV download
+router.get('/:workspaceId/properties/export', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.workspaceId, req.workspaceId))
+      .orderBy(desc(properties.createdAt));
+
+    const allColumns = [...CSV_COLUMNS, ...DETAIL_COLUMNS];
+    const headerRow = allColumns.map(c => escapeCsvField(c)).join(',');
+
+    const dataRows = rows.map(row => {
+      const vals: string[] = [];
+      for (const col of CSV_COLUMNS) {
+        vals.push(escapeCsvField(row[col as keyof typeof row] as string | number | boolean | null));
+      }
+      const details = row.details as Record<string, unknown> | null;
+      for (const col of DETAIL_COLUMNS) {
+        vals.push(escapeCsvField(getDetailValue(details, col)));
+      }
+      return vals.join(',');
+    });
+
+    const csv = [headerRow, ...dataRows].join('\r\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="properties.csv"');
+    res.send(csv);
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/export]');
+    res.status(500).json({ data: null, error: 'Failed to export properties', meta: {} });
+  }
+});
+
 // GET /:workspaceId/properties/:propertyId
 router.get('/:workspaceId/properties/:propertyId', requireWorkspace, async (req: Request, res: Response) => {
   try {
@@ -398,39 +436,7 @@ function setDetailValue(details: Record<string, unknown>, column: string, value:
   }
 }
 
-// GET /:workspaceId/properties/export
-router.get('/:workspaceId/properties/export', requireWorkspace, async (req: Request, res: Response) => {
-  try {
-    const rows = await db
-      .select()
-      .from(properties)
-      .where(eq(properties.workspaceId, req.workspaceId))
-      .orderBy(desc(properties.createdAt));
-
-    const allColumns = [...CSV_COLUMNS, ...DETAIL_COLUMNS];
-    const headerRow = allColumns.map(c => escapeCsvField(c)).join(',');
-
-    const dataRows = rows.map(row => {
-      const vals: string[] = [];
-      for (const col of CSV_COLUMNS) {
-        vals.push(escapeCsvField(row[col] as string | number | boolean | null));
-      }
-      const details = row.details as Record<string, unknown> | null;
-      for (const col of DETAIL_COLUMNS) {
-        vals.push(escapeCsvField(getDetailValue(details, col)));
-      }
-      return vals.join(',');
-    });
-
-    const csv = [headerRow, ...dataRows].join('\r\n');
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="properties.csv"');
-    res.send(csv);
-  } catch (err) {
-    logger.error({ err }, '[GET /business/:id/properties/export]');
-    res.status(500).json({ data: null, error: 'Failed to export properties', meta: {} });
-  }
-});
+// (export route moved above /:propertyId to avoid route conflict)
 
 // POST /:workspaceId/properties/import
 router.post('/:workspaceId/properties/import', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
