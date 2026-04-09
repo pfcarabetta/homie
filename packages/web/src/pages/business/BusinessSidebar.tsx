@@ -107,6 +107,15 @@ export default function BusinessSidebar({
   workspacePlan, userRole, userName, userInitials, userTitle, onNavigateCallback,
 }: BusinessSidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ 'dispatch-group': true });
+  const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
+
+  function showTooltip(e: React.MouseEvent, label: string) {
+    if (!collapsed) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltip({ label, top: rect.top + rect.height / 2, left: rect.right + 10 });
+  }
+
+  function hideTooltip() { setTooltip(null); }
   const navItems = getNavItems(workspacePlan, userRole);
 
   function toggle(id: string) {
@@ -197,13 +206,10 @@ export default function BusinessSidebar({
                 transition: 'all 0.15s', whiteSpace: 'nowrap', position: 'relative',
                 opacity: item.locked ? 0.6 : 1,
               }}
-                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--bp-hover)'; }}
-                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--bp-hover)'; showTooltip(e, item.label); }}
+                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; hideTooltip(); }}
               >
                 <span style={{ flexShrink: 0, display: 'flex' }}><Icon name={item.icon} /></span>
-                {collapsed && (
-                  <span className="bp-sidebar-tooltip">{item.label}</span>
-                )}
                 {!collapsed && <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>}
                 {!collapsed && item.locked && <Icon name="lock" size={12} />}
                 {!collapsed && hasChildren && (
@@ -279,6 +285,38 @@ export default function BusinessSidebar({
         }}>
           <Icon name="expand" size={14} />
         </button>
+      )}
+      {/* Tooltip rendered as fixed overlay */}
+      {tooltip && (
+        <div style={{
+          position: 'fixed',
+          top: tooltip.top,
+          left: tooltip.left,
+          transform: 'translateY(-50%)',
+          background: '#2D2926',
+          color: '#fff',
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: 12,
+          fontWeight: 600,
+          padding: '6px 12px',
+          borderRadius: 6,
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+          zIndex: 99999,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+        }}>
+          <div style={{
+            position: 'absolute',
+            right: '100%',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 0, height: 0,
+            borderTop: '5px solid transparent',
+            borderBottom: '5px solid transparent',
+            borderRight: '5px solid #2D2926',
+          }} />
+          {tooltip.label}
+        </div>
       )}
     </div>
   );

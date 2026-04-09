@@ -211,35 +211,6 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
           .bp-dashboard-mid { grid-template-columns: 1fr !important; }
         }
         .bp-search-row:hover { background: var(--bp-hover); }
-        .bp-sidebar-tooltip {
-          display: none;
-          position: absolute;
-          left: calc(100% + 8px);
-          top: 50%;
-          transform: translateY(-50%);
-          background: #2D2926;
-          color: #ffffff;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 12px;
-          font-weight: 600;
-          padding: 6px 12px;
-          border-radius: 6px;
-          white-space: nowrap;
-          pointer-events: none;
-          z-index: 9999;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-          line-height: 1;
-        }
-        .bp-sidebar-tooltip::before {
-          content: '';
-          position: absolute;
-          right: 100%;
-          top: 50%;
-          transform: translateY(-50%);
-          border: 5px solid transparent;
-          border-right-color: #2D2926;
-        }
-        button:hover > .bp-sidebar-tooltip { display: block; }
       `}</style>
 
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
