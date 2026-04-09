@@ -95,7 +95,11 @@ Job summary: ${summary}
 Recommended actions: ${recommendedActions.join('; ')}
 
 Create templates for all three channels using the generate_scripts tool.
-Use {{placeholder}} syntax for dynamic values — do NOT hard-code specific names, dollar amounts, or zip codes.`;
+Use {{placeholder}} syntax for dynamic values — do NOT hard-code specific names, dollar amounts, or zip codes.
+
+Available placeholders: {{provider_name}}, {{category}}, {{severity}}, {{summary}}, {{budget}}, {{zip_code}}, {{timing}}, {{callback_number}}
+
+IMPORTANT: The SMS template MUST include the timing requirement using {{timing}} — e.g. "Timing: {{timing}}" or "Needed: {{timing}}". This tells the provider when the homeowner needs the work done.`;
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
