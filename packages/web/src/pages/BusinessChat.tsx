@@ -1216,22 +1216,10 @@ export default function BusinessChat() {
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-          <button onClick={() => navigate('/business')} style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
-            fontSize: 18, color: '#9B9490', display: 'flex', alignItems: 'center', flexShrink: 0,
-          }} title="Back to portal">←</button>
-          <span onClick={() => navigate('/business')} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'baseline', flexShrink: 0 }}>
-            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>homie</span>
-            <span className="b2b-chat-badge" style={{
-              fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 800,
-              color: '#fff', background: G, padding: '2px 6px',
-              borderRadius: 4, marginLeft: 7, letterSpacing: '0.08em',
-              textTransform: 'uppercase', position: 'relative', top: -1,
-            }}>Business</span>
-          </span>
+          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: D, flexShrink: 0 }}>New Dispatch</span>
           {selectedProperty && (
             <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-              {selectedProperty.name}
+              — {selectedProperty.name}
             </span>
           )}
         </div>
@@ -1283,7 +1271,6 @@ export default function BusinessChat() {
             padding: '5px 12px', fontSize: 13, fontWeight: 600, color: '#6B6560',
             cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
           }}>+ New</button>
-          <AvatarDropdown />
         </div>
       </nav>
 
