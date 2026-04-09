@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { businessService, type Property, type WorkspaceDispatch, type WorkspaceBooking, type PreferredVendor, type Reservation } from '@/services/api';
 import { O, G, D, PROPERTY_TYPES, VENDOR_CATEGORIES, MiniCalendar } from './constants';
+import { EditPropertyModal } from './PropertiesTab';
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
@@ -11,7 +12,6 @@ interface PropertyDetailViewProps {
   property: Property;
   plan: string;
   onBack: () => void;
-  onEditProperty?: (p: Property) => void;
 }
 
 /* ── Icons ──────────────────────────────────────────────────────────────── */
@@ -353,7 +353,8 @@ function ProvidersSubPage({ vendors, loading }: { vendors: PreferredVendor[]; lo
 
 /* ── Sub-page: Settings ─────────────────────────────────────────────────── */
 
-function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: () => void }) {
+function SettingsSubPage({ property, workspaceId, onPropertyUpdated }: { property: Property; workspaceId: string; onPropertyUpdated?: (p: Property) => void }) {
+  const [editing, setEditing] = useState(false);
   const infoRow = (label: string, value: string | number | null | undefined) => {
     if (value == null || value === '' || value === 0) return null;
     return (
@@ -385,15 +386,13 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
         <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 600, color: 'var(--bp-text)' }}>
           Property Details
         </div>
-        {onEdit && (
-          <button onClick={onEdit} style={{
-            padding: '6px 16px', borderRadius: 8, border: '1px solid var(--bp-border)',
-            background: 'var(--bp-card)', color: 'var(--bp-text)', cursor: 'pointer',
-            fontSize: 13, fontWeight: 500,
-          }}>
-            Edit
-          </button>
-        )}
+        <button onClick={() => setEditing(true)} style={{
+          padding: '6px 16px', borderRadius: 8, border: '1px solid var(--bp-border)',
+          background: 'var(--bp-card)', color: 'var(--bp-text)', cursor: 'pointer',
+          fontSize: 13, fontWeight: 500,
+        }}>
+          Edit
+        </button>
       </div>
 
       {/* General */}
@@ -533,14 +532,25 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
           {property.notes}
         </div>
       </>)}
+
+      {editing && (
+        <EditPropertyModal
+          workspaceId={workspaceId}
+          property={property}
+          onClose={() => setEditing(false)}
+          onUpdated={(updated) => { setEditing(false); onPropertyUpdated?.(updated); }}
+          onDeleted={() => { setEditing(false); }}
+        />
+      )}
     </div>
   );
 }
 
 /* ── Main Component ─────────────────────────────────────────────────────── */
 
-export default function PropertyDetailView({ workspaceId, property, plan: _plan, onBack, onEditProperty }: PropertyDetailViewProps) {
+export default function PropertyDetailView({ workspaceId, property, plan: _plan, onBack }: PropertyDetailViewProps) {
   const [activePage, setActivePage] = useState<SubPage>('activity');
+  const [currentProperty, setCurrentProperty] = useState<Property>(property);
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
   const [bookings, setBookings] = useState<WorkspaceBooking[]>([]);
   const [vendors, setVendors] = useState<PreferredVendor[]>([]);
@@ -588,8 +598,8 @@ export default function PropertyDetailView({ workspaceId, property, plan: _plan,
       .finally(() => setLoadingVendors(false));
   }, [workspaceId, property.id]);
 
-  const addressLine = [property.address, property.city, property.state].filter(Boolean).join(', ');
-  const hasPhoto = property.photoUrls && property.photoUrls.length > 0;
+  const addressLine = [currentProperty.address, currentProperty.city, currentProperty.state].filter(Boolean).join(', ');
+  const hasPhoto = currentProperty.photoUrls && currentProperty.photoUrls.length > 0;
 
   function renderContent() {
     switch (activePage) {
@@ -604,7 +614,7 @@ export default function PropertyDetailView({ workspaceId, property, plan: _plan,
       case 'providers':
         return <ProvidersSubPage vendors={vendors} loading={loadingVendors} />;
       case 'settings':
-        return <SettingsSubPage property={property} onEdit={onEditProperty ? () => onEditProperty(property) : undefined} />;
+        return <SettingsSubPage property={currentProperty} workspaceId={workspaceId} onPropertyUpdated={(updated) => { setCurrentProperty(updated); }} />;
     }
   }
 
@@ -636,8 +646,8 @@ export default function PropertyDetailView({ workspaceId, property, plan: _plan,
       }}>
         {hasPhoto ? (
           <img
-            src={property.photoUrls![0]}
-            alt={property.name}
+            src={currentProperty.photoUrls![0]}
+            alt={currentProperty.name}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
@@ -653,7 +663,7 @@ export default function PropertyDetailView({ workspaceId, property, plan: _plan,
       {/* Property info */}
       <div style={{ padding: '16px 20px 12px', flexShrink: 0 }}>
         <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: 'var(--bp-text)', lineHeight: 1.3 }}>
-          {property.name}
+          {currentProperty.name}
         </div>
         {addressLine && (
           <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 4, lineHeight: 1.4 }}>

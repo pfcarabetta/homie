@@ -102,7 +102,7 @@ function AddPropertyModal({ workspaceId, onClose, onCreated }: { workspaceId: st
 
 /* ── Edit Property Modal ────────────────────────────────────────────────── */
 
-function EditPropertyModal({ workspaceId, property, onClose, onUpdated, onDeleted }: {
+export function EditPropertyModal({ workspaceId, property, onClose, onUpdated, onDeleted }: {
   workspaceId: string; property: Property; onClose: () => void; onUpdated: (p: Property) => void; onDeleted: (id: string) => void;
 }) {
   const [name, setName] = useState(property.name);

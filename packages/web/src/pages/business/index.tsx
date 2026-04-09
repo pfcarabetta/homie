@@ -233,7 +233,6 @@ export default function BusinessPortal() {
             property={selectedProperty}
             plan={workspace.plan}
             onBack={() => { setSelectedProperty(null); setTab('properties'); }}
-            onEditProperty={(p) => { setEditPropertyId(p.id); setSelectedProperty(null); setTab('properties'); }}
           />
         </div>
       </BusinessLayout>
