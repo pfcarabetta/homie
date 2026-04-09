@@ -225,8 +225,8 @@ export default function BusinessPortal() {
           />
         }
       >
-        <div style={{ margin: '-32px', height: 'calc(100% + 64px)' }} className="bp-pdv-wrapper">
-          <style>{`@media (max-width: 768px) { .bp-pdv-wrapper { margin: -16px !important; height: calc(100% + 32px) !important; } }`}</style>
+        <div style={{ margin: '-32px', height: 'calc(100vh - 64px)' }} className="bp-pdv-wrapper">
+          <style>{`@media (max-width: 768px) { .bp-pdv-wrapper { margin: -16px !important; height: calc(100vh - 64px) !important; } }`}</style>
           <PropertyDetailView
             workspaceId={workspace.id}
             property={selectedProperty}
