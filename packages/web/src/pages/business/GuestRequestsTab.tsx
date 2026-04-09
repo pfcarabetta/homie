@@ -81,6 +81,9 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
   const [filterStatus, setFilterStatus] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('');
   const [filterProperty, setFilterProperty] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [properties, setProperties] = useState<Property[]>([]);
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState(false);
@@ -204,7 +207,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
   return (
     <div>
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }} style={selectStyle}>
           <option value="">All Statuses</option>
           <option value="pm_reviewing">PM Reviewing</option>
@@ -214,6 +217,12 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
           <option value="resolved">Resolved</option>
           <option value="closed">Closed</option>
           <option value="self_resolved">Self Resolved</option>
+        </select>
+        <select value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setPage(1); }} style={selectStyle}>
+          <option value="">All Categories</option>
+          {[...new Set(issues.map(i => i.categoryName).filter(Boolean))].map(c => (
+            <option key={c!} value={c!}>{c}</option>
+          ))}
         </select>
         <select value={filterSeverity} onChange={e => { setFilterSeverity(e.target.value); setPage(1); }} style={selectStyle}>
           <option value="">All Severities</option>
@@ -226,6 +235,14 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
           <option value="">All Properties</option>
           {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        <input type="date" value={filterDateFrom} onChange={e => { setFilterDateFrom(e.target.value); setPage(1); }} style={selectStyle} title="From date" />
+        <input type="date" value={filterDateTo} onChange={e => { setFilterDateTo(e.target.value); setPage(1); }} style={selectStyle} title="To date" />
+        {(filterStatus || filterCategory || filterSeverity || filterProperty || filterDateFrom || filterDateTo) && (
+          <button onClick={() => { setFilterStatus(''); setFilterCategory(''); setFilterSeverity(''); setFilterProperty(''); setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }}
+            style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: '#F5F5F5', color: '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            Clear filters
+          </button>
+        )}
         <button onClick={() => { setShowArchived(!showArchived); setPage(1); setFilterStatus(''); }}
           style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: 8, border: `1px solid ${showArchived ? O : '#E0DAD4'}`, background: showArchived ? `${O}08` : '#fff', color: showArchived ? O : '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
           {showArchived ? 'Active Issues' : 'Archived'}
@@ -234,15 +251,47 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading issues...</div>
-      ) : issues.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
-          <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No guest issues found</div>
-          <div style={{ fontSize: 14, color: '#9B9490' }}>Issues reported by guests will appear here.</div>
-        </div>
-      ) : (
+      ) : (() => {
+        // Client-side filtering for category and date (server handles status, severity, property)
+        const clientFiltered = issues.filter(i => {
+          if (filterCategory && i.categoryName !== filterCategory) return false;
+          if (filterDateFrom && new Date(i.created_at) < new Date(filterDateFrom)) return false;
+          if (filterDateTo) { const to = new Date(filterDateTo); to.setHours(23, 59, 59, 999); if (new Date(i.created_at) > to) return false; }
+          return true;
+        });
+
+        if (clientFiltered.length === 0) return (
+          <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
+            <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No guest requests found</div>
+            <div style={{ fontSize: 14, color: '#9B9490' }}>
+              {issues.length > 0 ? 'Try adjusting your filters.' : 'Issues reported by guests will appear here.'}
+            </div>
+          </div>
+        );
+
+        let lastDateLabel = '';
+        return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {issues.map(issue => {
+          <div style={{ fontSize: 12, color: '#9B9490', marginBottom: -4 }}>{clientFiltered.length} request{clientFiltered.length !== 1 ? 's' : ''}</div>
+          {clientFiltered.map(issue => {
+            const dateObj = new Date(issue.createdAt);
+            const today = new Date();
+            const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+            const isToday = dateObj.toDateString() === today.toDateString();
+            const isYesterday = dateObj.toDateString() === yesterday.toDateString();
+            const dateLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: dateObj.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
+            const showDateHeader = dateLabel !== lastDateLabel;
+            lastDateLabel = dateLabel;
+
+            return (<div key={issue.id}>
+            {showDateHeader && (
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>
+                {dateLabel}
+              </div>
+            )}
+            {(() => { const issue_ = issue; return (() => {
+            const issue = issue_;
             const sc = GUEST_STATUS_COLORS[issue.status] || GUEST_STATUS_COLORS.closed;
             const sev = SEVERITY_COLORS[issue.severity] || SEVERITY_COLORS.low;
             const isExpanded = expandedId === issue.id;
@@ -505,9 +554,12 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                 )}
               </div>
             );
+          })(); })()}
+          </div>);
           })}
         </div>
-      )}
+        );
+      })()}
 
       {/* Pagination */}
       {total > 20 && (
