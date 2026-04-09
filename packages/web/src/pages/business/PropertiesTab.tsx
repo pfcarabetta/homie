@@ -524,7 +524,7 @@ function EditPropertyModal({ workspaceId, property, onClose, onUpdated, onDelete
 
 /* ── Properties Tab ─────────────────────────────────────────────────────── */
 
-export default function PropertiesTab({ workspaceId, role, plan }: { workspaceId: string; role: string; plan: string }) {
+export default function PropertiesTab({ workspaceId, role, plan, onSelectProperty }: { workspaceId: string; role: string; plan: string; onSelectProperty?: (p: Property) => void }) {
   const { pricing } = usePricing();
   const PLAN_TIERS_ORDERED = getPlanTiersOrdered(pricing);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -665,7 +665,7 @@ export default function PropertiesTab({ workspaceId, role, plan }: { workspaceId
               background: '#fff', borderRadius: 12, border: isExpanded ? `2px solid ${O}` : '1px solid #E0DAD4', overflow: 'hidden',
               opacity: p.active ? 1 : 0.5, cursor: 'pointer', transition: 'all 0.2s',
               boxShadow: isExpanded ? `0 4px 20px ${O}10` : 'none',
-            }} onClick={() => togglePropertyExpand(p.id)}>
+            }} onClick={() => onSelectProperty ? onSelectProperty(p) : togglePropertyExpand(p.id)}>
               <div className="bp-prop-inner" style={{ display: 'flex' }}>
               {p.photoUrls && p.photoUrls.length > 0 && (
                 <div className="bp-prop-img" style={{ width: 120, minHeight: 100, flexShrink: 0 }}>

@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { businessService, type Workspace, type WorkspaceDetail } from '@/services/api';
+import { businessService, type Workspace, type WorkspaceDetail, type Property } from '@/services/api';
 import { O, G, D, TABS, type Tab, HomieBizLogo, useThemeMode } from './constants';
 import BusinessLayout from './BusinessLayout';
 import BusinessSidebar from './BusinessSidebar';
 import DashboardTab from './DashboardTab';
 import PropertiesTab from './PropertiesTab';
+import PropertyDetailView from './PropertyDetailView';
 import DispatchesTab from './DispatchesTab';
 import BookingsTab from './BookingsTab';
 import GuestRequestsTab from './GuestRequestsTab';
@@ -85,6 +86,7 @@ export default function BusinessPortal() {
   const [showReportsUpgrade, setShowReportsUpgrade] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('bp_sidebar_collapsed') === 'true';
   });
@@ -182,6 +184,34 @@ export default function BusinessPortal() {
     );
   }
 
+  // When a property is selected, show the property detail view with its own drawer
+  if (selectedProperty && workspace) {
+    return (
+      <BusinessLayout
+        resolvedTheme={resolvedTheme}
+        workspaceLogo={workspace.logoUrl}
+        workspaceName={workspace.name}
+        workspaceId={selectedId || undefined}
+        onNavigate={(t, focusId) => { setSelectedProperty(null); setFocusJobId(focusId ?? null); setTab(t as Tab); }}
+        mobileOpen={mobileMenuOpen}
+        setMobileOpen={setMobileMenuOpen}
+        sidebar={<div style={{ width: 0, minWidth: 0, overflow: 'hidden' }} />}
+        sidebarMobile={<div />}
+      >
+        <div style={{ margin: '-32px', height: 'calc(100% + 64px)' }} className="bp-pdv-wrapper">
+          <style>{`@media (max-width: 768px) { .bp-pdv-wrapper { margin: -16px !important; height: calc(100% + 32px) !important; } }`}</style>
+          <PropertyDetailView
+            workspaceId={workspace.id}
+            property={selectedProperty}
+            plan={workspace.plan}
+            onBack={() => { setSelectedProperty(null); setTab('properties'); }}
+            onEditProperty={() => { /* Edit handled via PropertiesTab */ }}
+          />
+        </div>
+      </BusinessLayout>
+    );
+  }
+
   return (
     <BusinessLayout
       resolvedTheme={resolvedTheme}
@@ -269,7 +299,7 @@ export default function BusinessPortal() {
         <ScorecardsTab workspaceId={workspace.id} plan={workspace.plan} />
       )}
       {workspace && tab === 'properties' && (
-        <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} />
+        <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} onSelectProperty={setSelectedProperty} />
       )}
       {workspace && tab === 'vendors' && (
         <VendorsTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} />
