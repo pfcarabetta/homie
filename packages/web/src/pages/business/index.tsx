@@ -249,6 +249,14 @@ export default function BusinessPortal() {
       onNavigate={(t, focusId) => { setFocusJobId(focusId ?? null); setTab(t as Tab); }}
       mobileOpen={mobileMenuOpen}
       setMobileOpen={setMobileMenuOpen}
+      fullWidthContent={tab === 'dispatch-chat' && workspace ? (() => {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('workspace') !== workspace.id) {
+          url.searchParams.set('workspace', workspace.id);
+          window.history.replaceState({}, '', url.toString());
+        }
+        return <BusinessChat key={`chat-${workspace.id}`} />;
+      })() : undefined}
       sidebar={
         <BusinessSidebar
           collapsed={sidebarCollapsed}
@@ -299,19 +307,7 @@ export default function BusinessPortal() {
       )}
 
       {/* Tab content */}
-      {workspace && tab === 'dispatch-chat' && (() => {
-        // Set URL params so BusinessChat reads the workspace ID
-        const url = new URL(window.location.href);
-        if (url.searchParams.get('workspace') !== workspace.id) {
-          url.searchParams.set('workspace', workspace.id);
-          window.history.replaceState({}, '', url.toString());
-        }
-        return (
-          <div style={{ margin: '-32px', height: 'calc(100vh - 64px)', maxWidth: 'none', width: 'calc(100% + 64px)' }} className="bp-pdv-wrapper">
-            <BusinessChat key={`chat-${workspace.id}`} />
-          </div>
-        );
-      })()}
+      {/* dispatch-chat rendered via fullWidthContent prop on BusinessLayout */}
       {workspace && tab === 'dashboard' && <DashboardTab workspace={workspace} onNavigate={(t, jobId) => { setFocusJobId(jobId ?? null); setTab(t); }} />}
       {workspace && tab === 'billing' && workspace.user_role === 'admin' && (
         <BillingTab workspace={workspace} onUpdated={w => setWorkspace(w)} />

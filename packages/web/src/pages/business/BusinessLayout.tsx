@@ -14,6 +14,7 @@ interface BusinessLayoutProps {
   workspaceName?: string;
   workspaceId?: string;
   onNavigate?: (tab: string, focusId?: string) => void;
+  fullWidthContent?: ReactNode;
 }
 
 interface SearchResultItem {
@@ -68,7 +69,7 @@ interface SearchResults {
   dispatches: SearchResultItem[];
 }
 
-export default function BusinessLayout({ children, sidebar, sidebarMobile, mobileOpen: mobileOpenProp, setMobileOpen: setMobileOpenProp, resolvedTheme, workspaceLogo, workspaceName, workspaceId, onNavigate }: BusinessLayoutProps) {
+export default function BusinessLayout({ children, sidebar, sidebarMobile, mobileOpen: mobileOpenProp, setMobileOpen: setMobileOpenProp, resolvedTheme, workspaceLogo, workspaceName, workspaceId, onNavigate, fullWidthContent }: BusinessLayoutProps) {
   const [mobileOpenInternal, setMobileOpenInternal] = useState(false);
   const mobileOpen = mobileOpenProp ?? mobileOpenInternal;
   const setMobileOpen = setMobileOpenProp ?? setMobileOpenInternal;
@@ -411,11 +412,17 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div className="bp-content-padding" style={{ padding: 32, maxWidth: 1200 }}>
-            {children}
+        {fullWidthContent ? (
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            {fullWidthContent}
           </div>
-        </div>
+        ) : (
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="bp-content-padding" style={{ padding: 32, maxWidth: 1200 }}>
+              {children}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
