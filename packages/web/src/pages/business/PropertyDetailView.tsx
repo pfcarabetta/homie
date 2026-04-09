@@ -934,12 +934,13 @@ function SettingsSubPage({ property, workspaceId, onPropertyUpdated }: { propert
       </>)}
 
       {/* Pool / Spa */}
-      {(() => { const pool = dx?.pool as Record<string, string> | undefined; return pool && Object.values(pool).some(Boolean) ? (<>
+      {(() => { const pool = (dx?.poolSpa ?? dx?.pool) as Record<string, string> | undefined; return pool && Object.values(pool).some(Boolean) ? (<>
         {sectionHeader('Pool / Spa', '🏊')}
         {card(<>
-          {infoRow('Pool Type', pool.type)}
-          {infoRow('Heating', pool.heating)}
+          {infoRow('Pool Type', pool.poolType || pool.type)}
+          {infoRow('Heating', pool.heatingType || pool.heating)}
           {infoRow('Equipment', pool.equipment)}
+          {infoRow('Hot Tub', pool.hotTubBrand)}
         </>)}
       </>) : null; })()}
 
@@ -948,10 +949,11 @@ function SettingsSubPage({ property, workspaceId, onPropertyUpdated }: { propert
         {sectionHeader('Exterior', '🏡')}
         {card(<>
           {infoRow('Roof Type', ext.roofType)}
-          {infoRow('Siding', ext.siding)}
-          {infoRow('Fence', ext.fence)}
-          {infoRow('Garage Door', ext.garageDoor)}
-          {infoRow('Irrigation', ext.irrigation)}
+          {infoRow('Roof Age', ext.roofAge)}
+          {infoRow('Siding', ext.sidingMaterial || ext.siding)}
+          {infoRow('Fence', ext.fenceMaterial || ext.fence)}
+          {infoRow('Garage Door', ext.garageDoorBrand || ext.garageDoor)}
+          {infoRow('Irrigation', ext.irrigationBrand || ext.irrigation)}
         </>)}
       </>) : null; })()}
 
@@ -959,10 +961,11 @@ function SettingsSubPage({ property, workspaceId, onPropertyUpdated }: { propert
       {(() => { const acc = dx?.access as Record<string, string> | undefined; return acc && Object.values(acc).some(Boolean) ? (<>
         {sectionHeader('Access', '🔑')}
         {card(<>
-          {infoRow('Lockbox', acc.lockbox)}
-          {infoRow('Gate Code', acc.gate)}
-          {infoRow('Alarm Code', acc.alarm)}
-          {infoRow('WiFi', acc.wifi)}
+          {infoRow('Lockbox Code', acc.lockboxCode || acc.lockbox)}
+          {infoRow('Gate Code', acc.gateCode || acc.gate)}
+          {infoRow('Alarm', [acc.alarmBrand, acc.alarmCode || acc.alarm].filter(Boolean).join(' — ') || null)}
+          {infoRow('WiFi Network', acc.wifiNetwork || acc.wifi)}
+          {infoRow('WiFi Password', acc.wifiPassword)}
         </>)}
       </>) : null; })()}
 
