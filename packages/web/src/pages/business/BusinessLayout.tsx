@@ -28,7 +28,7 @@ function BellIcon() {
 
 export default function BusinessLayout({ children, sidebar, resolvedTheme, workspaceLogo, workspaceName }: BusinessLayoutProps) {
   return (
-    <div className="bp-portal" data-theme={resolvedTheme} style={{ minHeight: '100vh', background: 'var(--bp-bg)', display: 'flex' }}>
+    <div className="bp-portal" data-theme={resolvedTheme} style={{ height: '100vh', background: 'var(--bp-bg)', display: 'flex', overflow: 'hidden' }}>
       <style>{`
         .bp-portal {
           --bp-bg: ${W};

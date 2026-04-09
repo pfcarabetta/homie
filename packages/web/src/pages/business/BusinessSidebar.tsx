@@ -127,7 +127,7 @@ export default function BusinessSidebar({
       width: w, minWidth: w, height: '100vh', background: 'var(--bp-card)',
       borderRight: '1px solid var(--bp-border)', display: 'flex', flexDirection: 'column',
       transition: 'width 0.25s cubic-bezier(.4,0,.2,1), min-width 0.25s cubic-bezier(.4,0,.2,1)',
-      position: 'relative', zIndex: 10, overflow: 'hidden',
+      position: 'sticky', top: 0, zIndex: 10, overflow: 'hidden', flexShrink: 0,
     }}>
       {/* Logo */}
       <div style={{
