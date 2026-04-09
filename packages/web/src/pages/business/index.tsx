@@ -238,8 +238,13 @@ export default function BusinessPortal() {
       {workspace && tab === 'bookings' && (
         <BookingsTab workspaceId={workspace.id} focusJobId={focusJobId} onFocusHandled={() => setFocusJobId(null)} />
       )}
-      {workspace && tab === 'guest-requests' && (
-        <GuestRequestsTab workspaceId={workspace.id} plan={workspace.plan} onViewDispatch={(jobId) => { setFocusJobId(jobId); setTab('dispatches'); }} />
+      {workspace && (tab === 'guest-requests' || tab === 'guest-issues' || tab === 'guest-settings' || tab === 'guest-auto-dispatch' || tab === 'guest-qr-codes') && (
+        <GuestRequestsTab
+          workspaceId={workspace.id}
+          plan={workspace.plan}
+          onViewDispatch={(jobId) => { setFocusJobId(jobId); setTab('dispatches'); }}
+          initialSubTab={tab === 'guest-settings' ? 'settings' : tab === 'guest-auto-dispatch' ? 'auto-dispatch' : tab === 'guest-qr-codes' ? 'qr-codes' : 'issues'}
+        />
       )}
       {workspace && tab === 'schedules' && (
         <SchedulesTab workspaceId={workspace.id} plan={workspace.plan} />

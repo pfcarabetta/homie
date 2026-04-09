@@ -28,10 +28,14 @@ const LANGUAGES = [
   { value: 'it', label: 'Italian' },
 ];
 
-export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch }: { workspaceId: string; plan: string; onViewDispatch?: (jobId: string) => void }) {
-  const [subTab, setSubTab] = useState<GuestSubTab>('issues');
+export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, initialSubTab }: { workspaceId: string; plan: string; onViewDispatch?: (jobId: string) => void; initialSubTab?: GuestSubTab }) {
+  const [subTab, setSubTab] = useState<GuestSubTab>(initialSubTab ?? 'issues');
   const isPro = ['professional', 'business', 'enterprise'].includes(plan);
   const isBizPlus = ['business', 'enterprise'].includes(plan);
+
+  useEffect(() => {
+    if (initialSubTab) setSubTab(initialSubTab);
+  }, [initialSubTab]);
 
   if (!isPro) {
     return (
@@ -45,30 +49,17 @@ export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch }: 
     );
   }
 
-  const subTabs: { key: GuestSubTab; label: string }[] = [
-    { key: 'issues', label: 'Issues' },
-    { key: 'settings', label: 'Settings' },
-    { key: 'auto-dispatch', label: 'Auto-Dispatch Rules' },
-    { key: 'qr-codes', label: 'QR Codes' },
-  ];
+  const SUB_TAB_TITLES: Record<GuestSubTab, string> = {
+    issues: 'Guest Issues',
+    settings: 'Guest Reporter Settings',
+    'auto-dispatch': 'Auto-Dispatch Rules',
+    'qr-codes': 'QR Codes',
+  };
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Guest Requests</h3>
-      </div>
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #E0DAD4', marginBottom: 20 }}>
-        {subTabs.map(st => (
-          <button key={st.key} onClick={() => setSubTab(st.key)}
-            style={{
-              padding: '10px 18px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              color: subTab === st.key ? O : '#9B9490',
-              borderBottom: subTab === st.key ? `2px solid ${O}` : '2px solid transparent',
-              marginBottom: -1, whiteSpace: 'nowrap',
-            }}>
-            {st.label}
-          </button>
-        ))}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>{SUB_TAB_TITLES[subTab]}</h3>
       </div>
       {subTab === 'issues' && <GuestIssuesSubTab workspaceId={workspaceId} onViewDispatch={onViewDispatch} />}
       {subTab === 'settings' && <GuestSettingsSubTab workspaceId={workspaceId} isBizPlus={isBizPlus} />}
