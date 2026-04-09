@@ -408,7 +408,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                                     top: 2, left: preferredOnly ? 20 : 2, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                                   }} />
                                 </div>
-                                <span style={{ fontWeight: 500 }}>Preferred vendors only</span>
+                                <span style={{ fontWeight: 500 }}>Preferred providers only</span>
                               </label>
                             </div>
                             {preferredOnly && (
@@ -437,7 +437,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
                                   ))}
                                 </div>
                                 <div style={{ fontSize: 11, color: '#9B9490', marginTop: 4 }}>
-                                  {selectedVendorIds.size > 0 ? `${selectedVendorIds.size} vendor${selectedVendorIds.size > 1 ? 's' : ''} selected` : 'All preferred vendors will be contacted'}
+                                  {selectedVendorIds.size > 0 ? `${selectedVendorIds.size} provider${selectedVendorIds.size > 1 ? 's' : ''} selected` : 'All preferred providers will be contacted'}
                                 </div>
                               </div>
                             )}
@@ -816,7 +816,7 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Preferred Vendor (optional)</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Preferred Provider (optional)</label>
             <select value={formVendor} onChange={e => setFormVendor(e.target.value)} style={selectStyle}>
               <option value="">None - use default matching</option>
               {vendors.map(v => <option key={v.id} value={v.providerId}>{v.providerName}</option>)}
@@ -863,7 +863,7 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
                     </span>
                   </div>
                   <div style={{ fontSize: 12, color: '#9B9490' }}>
-                    {rule.preferredVendorName || (rule.preferredVendorId ? 'Preferred vendor' : 'Default matching')}
+                    {rule.preferredVendorName || (rule.preferredVendorId ? 'Preferred provider' : 'Default matching')}
                   </div>
                 </div>
                 <button onClick={() => handleToggle(rule)}

@@ -47,7 +47,7 @@ function getNavItems(plan: string, role: string): NavItem[] {
     },
     { id: 'div1', label: '', icon: '', divider: true },
     {
-      id: 'vendors-group', label: 'Vendors', icon: 'vendors', children: [
+      id: 'vendors-group', label: 'Providers', icon: 'vendors', children: [
         { id: 'vendors', label: 'Preferred', icon: 'vendors', tab: 'vendors' },
         { id: 'reports-scorecards', label: 'Scorecards', icon: 'scorecards', tab: 'reports', locked: !isPro },
       ],
