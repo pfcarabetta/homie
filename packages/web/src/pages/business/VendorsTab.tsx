@@ -4,7 +4,7 @@ import { businessService, type PreferredVendor, type ProviderSearchResult, type 
 
 /* ── Add Vendor Modal ──────────────────────────────────────────────── */
 
-function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string; onClose: () => void; onAdded: () => void }) {
+export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyId }: { workspaceId: string; onClose: () => void; onAdded: () => void; defaultPropertyId?: string }) {
   const [mode, setMode] = useState<'search' | 'create'>('search');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ProviderSearchResult[]>([]);
@@ -26,9 +26,9 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
 
   // Property assignment
   const [allProperties, setAllProperties] = useState<Property[]>([]);
-  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>(defaultPropertyId ? [defaultPropertyId] : []);
   const [cityFilter, setCityFilter] = useState('');
-  const [assignMode, setAssignMode] = useState<'all' | 'specific'>('all');
+  const [assignMode, setAssignMode] = useState<'all' | 'specific'>(defaultPropertyId ? 'specific' : 'all');
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
@@ -378,7 +378,7 @@ function AddVendorModal({ workspaceId, onClose, onAdded }: { workspaceId: string
 
 /* ── Grouped Vendor Types ──────────────────────────────────────────── */
 
-interface GroupedVendor {
+export interface GroupedVendor {
   providerId: string;
   providerName: string;
   providerPhone: string | null;
@@ -395,7 +395,7 @@ interface GroupedVendor {
   propertyIds: (string | null)[]; // null = workspace-wide
 }
 
-function groupVendors(vendors: PreferredVendor[]): GroupedVendor[] {
+export function groupVendors(vendors: PreferredVendor[]): GroupedVendor[] {
   const map = new Map<string, GroupedVendor>();
   for (const v of vendors) {
     const existing = map.get(v.providerId);
@@ -430,7 +430,7 @@ const PLAN_VENDOR_LIMITS: Record<string, number> = {
 
 /* ── Edit Vendor Modal ────────────────────────────────────────────────── */
 
-function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved }: {
+export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, onSaved }: {
   workspaceId: string; vendor: GroupedVendor; allProperties: Property[]; onClose: () => void; onSaved: () => void;
 }) {
   const [selectedCats, setSelectedCats] = useState<string[]>(vendor.categories ?? []);

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { businessService, jobService, estimateService, type Property, type WorkspaceDispatch, type WorkspaceBooking, type PreferredVendor, type Reservation, type ProviderResponseItem, type CostEstimate } from '@/services/api';
 import { O, G, D, W, PROPERTY_TYPES, VENDOR_CATEGORIES, MiniCalendar, cleanPrice, renderBold, timeAgo } from './constants';
 import { EditPropertyModal } from './PropertiesTab';
+import { AddVendorModal, EditVendorModal, groupVendors, type GroupedVendor } from './VendorsTab';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
 
@@ -713,58 +714,83 @@ function CalendarSubPage({ workspaceId, propertyId }: { workspaceId: string; pro
 
 /* ── Sub-page: Providers ────────────────────────────────────────────────── */
 
-function ProvidersSubPage({ vendors, loading }: { vendors: PreferredVendor[]; loading: boolean }) {
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--bp-subtle)', fontSize: 13 }}>Loading providers...</div>;
-
-  if (vendors.length === 0) {
-    return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--bp-subtle)' }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>&#128100;</div>
-        <div style={{ fontSize: 14, fontWeight: 500 }}>No providers assigned</div>
-        <div style={{ fontSize: 13, marginTop: 4 }}>Preferred providers for this property will appear here.</div>
-      </div>
-    );
-  }
+function ProvidersSubPage({ vendors, loading, workspaceId, propertyId, properties, onRefresh }: { vendors: PreferredVendor[]; loading: boolean; workspaceId: string; propertyId: string; properties: Property[]; onRefresh: () => void }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingVendor, setEditingVendor] = useState<GroupedVendor | null>(null);
 
   function categoryLabel(val: string): string {
     return VENDOR_CATEGORIES.find(c => c.value === val)?.label ?? val;
   }
 
+  const grouped = groupVendors(vendors);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {vendors.map(v => (
-        <div key={v.id} style={{
-          background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10,
-          padding: '14px 16px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bp-text)' }}>{v.providerName}</div>
-              {v.providerPhone && <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginTop: 2 }}>{v.providerPhone}</div>}
-            </div>
-            <span style={{
-              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 100,
-              background: v.active ? '#F0FDF4' : '#F5F5F5',
-              color: v.active ? '#16A34A' : '#9B9490',
-            }}>
-              {v.active ? 'Active' : 'Inactive'}
-            </span>
-          </div>
-          {v.categories && v.categories.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-              {v.categories.map(cat => (
-                <span key={cat} style={{
-                  fontSize: 11, padding: '2px 8px', borderRadius: 100,
-                  background: '#EFF6FF', color: '#2563EB', fontWeight: 500,
-                }}>
-                  {categoryLabel(cat)}
-                </span>
-              ))}
-            </div>
-          )}
-          {v.notes && <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 6, fontStyle: 'italic' }}>{v.notes}</div>}
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button onClick={() => setShowAdd(true)} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          + Add Provider
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--bp-subtle)', fontSize: 13 }}>Loading providers...</div>
+      ) : grouped.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--bp-subtle)' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>{'\uD83D\uDC64'}</div>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>No providers assigned</div>
+          <div style={{ fontSize: 13, marginTop: 4 }}>Add preferred providers for this property.</div>
         </div>
-      ))}
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {grouped.map(g => (
+            <div key={g.providerId} style={{
+              background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10,
+              padding: '14px 16px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bp-text)' }}>{g.providerName}</div>
+                  {g.providerPhone && <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginTop: 2 }}>{g.providerPhone}</div>}
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button onClick={() => setEditingVendor(g)} style={{
+                    padding: '3px 10px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)',
+                    fontSize: 11, cursor: 'pointer', color: 'var(--bp-muted)', fontWeight: 500,
+                  }}>Edit</button>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 100,
+                    background: g.active ? '#F0FDF4' : '#F5F5F5',
+                    color: g.active ? '#16A34A' : '#9B9490',
+                  }}>
+                    {g.active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+              {g.categories && g.categories.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {g.categories.map(cat => (
+                    <span key={cat} style={{
+                      fontSize: 11, padding: '2px 8px', borderRadius: 100,
+                      background: '#EFF6FF', color: '#2563EB', fontWeight: 500,
+                    }}>
+                      {categoryLabel(cat)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {g.notes && <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 6, fontStyle: 'italic' }}>{g.notes}</div>}
+              {g.skipQuote && <div style={{ fontSize: 11, color: G, marginTop: 4, fontWeight: 500 }}>Skip quote — dispatch directly</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <AddVendorModal workspaceId={workspaceId} onClose={() => setShowAdd(false)} onAdded={() => { setShowAdd(false); onRefresh(); }} defaultPropertyId={propertyId} />
+      )}
+      {editingVendor && (
+        <EditVendorModal workspaceId={workspaceId} vendor={editingVendor} allProperties={properties} onClose={() => setEditingVendor(null)} onSaved={() => { setEditingVendor(null); onRefresh(); }} />
+      )}
     </div>
   );
 }
@@ -1030,7 +1056,11 @@ export default function PropertyDetailView({ workspaceId, property, plan: _plan,
       case 'calendar':
         return <CalendarSubPage workspaceId={workspaceId} propertyId={property.id} />;
       case 'providers':
-        return <ProvidersSubPage vendors={vendors} loading={loadingVendors} />;
+        return <ProvidersSubPage vendors={vendors} loading={loadingVendors} workspaceId={workspaceId} propertyId={currentProperty.id} properties={[currentProperty]} onRefresh={() => {
+          businessService.listVendors(workspaceId).then(res => {
+            if (res.data) setVendors(res.data.filter(v => v.propertyId === currentProperty.id || v.propertyId === null));
+          }).catch(() => {});
+        }} />;
       case 'settings':
         return <SettingsSubPage property={currentProperty} workspaceId={workspaceId} onPropertyUpdated={(updated) => { setCurrentProperty(updated); }} />;
     }
