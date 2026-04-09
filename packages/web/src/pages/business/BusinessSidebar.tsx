@@ -151,10 +151,10 @@ export default function BusinessSidebar({
           </span>
           {!collapsed && <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)', fontWeight: 500 }}>for business</span>}
         </div>
-        <button onClick={() => setCollapsed(!collapsed)} style={{
+        <button onClick={() => { onNavigateCallback ? onNavigateCallback() : setCollapsed(!collapsed); }} style={{
           background: 'none', border: 'none', cursor: 'pointer', color: 'var(--bp-subtle)', padding: 4,
           display: collapsed ? 'none' : 'flex', alignItems: 'center',
-        }} title="Collapse sidebar">
+        }} title="Close menu">
           <Icon name="collapse" size={18} />
         </button>
       </div>
