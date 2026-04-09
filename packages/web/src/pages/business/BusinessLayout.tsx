@@ -277,7 +277,7 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
                 position: 'absolute',
                 top: '100%',
                 left: 0,
-                right: 0,
+                width: 480,
                 marginTop: 4,
                 background: 'var(--bp-card)',
                 border: '1px solid var(--bp-border)',
