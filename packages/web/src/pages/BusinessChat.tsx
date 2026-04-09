@@ -1191,7 +1191,7 @@ export default function BusinessChat() {
 
 
   return (
-    <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ height: '100%', background: 'white', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <style>{`
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin { to { transform:rotate(360deg); } }
@@ -1211,9 +1211,9 @@ export default function BusinessChat() {
 
       {/* Header */}
       <nav style={{
-        position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
+        zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
         padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid rgba(0,0,0,0.05)',
+        borderBottom: '1px solid rgba(0,0,0,0.05)', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
           {selectedProperty && (
@@ -1289,7 +1289,8 @@ export default function BusinessChat() {
       })()}
 
       {/* Chat area */}
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+      <div style={{ maxWidth: 700, margin: '0 auto', padding: '16px 16px 120px' }}>
 
           {/* Step: Property selection */}
           {step === 'property' && (
@@ -1875,6 +1876,7 @@ export default function BusinessChat() {
 
           <div ref={chatEndRef} />
         </div>
+      </div>
     </div>
   );
 }
