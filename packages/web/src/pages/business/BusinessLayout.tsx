@@ -151,7 +151,7 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {workspaceLogo && (
               <>
-                <img src={workspaceLogo} alt={workspaceName || ''} style={{ height: 32, maxWidth: 120, objectFit: 'contain' }} />
+                <img src={workspaceLogo} alt={workspaceName || ''} style={{ height: 48, maxWidth: 200, objectFit: 'contain' }} />
                 <div style={{ width: 1, height: 24, background: 'var(--bp-border)' }} />
               </>
             )}

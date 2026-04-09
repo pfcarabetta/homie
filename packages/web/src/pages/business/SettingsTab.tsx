@@ -566,7 +566,7 @@ export default function SettingsTab({ workspace, onUpdated, themeMode, onThemeCh
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
               {logoPreview ? (
                 <div style={{ position: 'relative' }}>
-                  <img src={logoPreview} alt="Brand logo" style={{ width: 72, height: 72, borderRadius: 12, objectFit: 'contain', border: '1px solid var(--bp-border)', background: 'var(--bp-bg)', padding: 4 }} />
+                  <img src={logoPreview} alt="Brand logo" style={{ width: 200, height: 100, borderRadius: 12, objectFit: 'contain', border: '1px solid var(--bp-border)', background: 'var(--bp-bg)', padding: 8 }} />
                   <button onClick={async () => {
                     setLogoUploading(true);
                     try {
