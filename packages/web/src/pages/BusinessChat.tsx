@@ -443,7 +443,7 @@ function PropertySelector({ properties, workspaces, selectedWorkspace, onSelectW
                   <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, color: '#9B9490', pointerEvents: 'none' }}>🔍</span>
                 </div>
               )}
-              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+              <div style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
                 {filtered.map(p => (
                   <button key={p.id} onClick={() => onSelect(p)} style={{
                     display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: 'pointer',
