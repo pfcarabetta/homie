@@ -666,7 +666,7 @@ export default function PropertiesTab({ workspaceId, role, plan }: { workspaceId
               opacity: p.active ? 1 : 0.5, cursor: 'pointer', transition: 'all 0.2s',
               boxShadow: isExpanded ? `0 4px 20px ${O}10` : 'none',
             }} onClick={() => togglePropertyExpand(p.id)}>
-              <div style={{ display: 'flex' }}>
+              <div className="bp-prop-inner" style={{ display: 'flex' }}>
               {p.photoUrls && p.photoUrls.length > 0 && (
                 <div className="bp-prop-img" style={{ width: 120, minHeight: 100, flexShrink: 0 }}>
                   <img src={p.photoUrls[0]} alt={p.name}

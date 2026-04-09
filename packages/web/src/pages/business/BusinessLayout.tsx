@@ -83,7 +83,7 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         @media (max-width: 640px) {
-          .bp-prop-card { flex-direction: column !important; }
+          .bp-prop-inner { flex-direction: column !important; }
           .bp-prop-img { width: 100% !important; height: 140px !important; min-height: auto !important; }
           .bp-prop-body { padding: 14px !important; }
           .bp-prop-name { font-size: 14px !important; }
