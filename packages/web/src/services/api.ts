@@ -1235,7 +1235,20 @@ export const businessService = {
     fetchAPI<AutoDispatchRule>(`/api/v1/business/${workspaceId}/guest-reporter/auto-dispatch-rules/${ruleId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteAutoDispatchRule: (workspaceId: string, ruleId: string) =>
     fetchAPI<void>(`/api/v1/business/${workspaceId}/guest-reporter/auto-dispatch-rules/${ruleId}`, { method: 'DELETE' }),
+
+  // Search
+  search: (workspaceId: string, query: string) =>
+    fetchAPI<{ properties: SearchResult[]; providers: SearchResult[]; dispatches: SearchResult[] }>(
+      `/api/v1/business/${workspaceId}/search?q=${encodeURIComponent(query)}`),
 };
+
+export interface SearchResult {
+  id: string;
+  type: 'property' | 'provider' | 'dispatch';
+  name: string;
+  detail: string;
+  tab: string;
+}
 
 export interface SlackSettings {
   connected: boolean;

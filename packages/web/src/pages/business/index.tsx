@@ -187,6 +187,8 @@ export default function BusinessPortal() {
       resolvedTheme={resolvedTheme}
       workspaceLogo={workspace?.logoUrl}
       workspaceName={workspace?.name}
+      workspaceId={selectedId || undefined}
+      onNavigate={(t, focusId) => { setFocusJobId(focusId ?? null); setTab(t as Tab); }}
       mobileOpen={mobileMenuOpen}
       setMobileOpen={setMobileMenuOpen}
       sidebar={

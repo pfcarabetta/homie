@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { W, D } from './constants';
+import { businessService } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 interface BusinessLayoutProps {
@@ -11,6 +12,19 @@ interface BusinessLayoutProps {
   resolvedTheme: 'light' | 'dark';
   workspaceLogo?: string | null;
   workspaceName?: string;
+  workspaceId?: string;
+  onNavigate?: (tab: string, focusId?: string) => void;
+}
+
+interface SearchResultItem {
+  id: string;
+  name?: string;
+  address?: string;
+  phone?: string;
+  category?: string;
+  summary?: string;
+  status?: string;
+  tab: string;
 }
 
 function SearchIcon() {
@@ -37,10 +51,98 @@ function HamburgerIcon() {
   );
 }
 
-export default function BusinessLayout({ children, sidebar, sidebarMobile, mobileOpen: mobileOpenProp, setMobileOpen: setMobileOpenProp, resolvedTheme, workspaceLogo, workspaceName }: BusinessLayoutProps) {
+function SpinnerIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
+      <circle cx="8" cy="8" r="6" stroke="var(--bp-border)" strokeWidth="2" />
+      <path d="M8 2a6 6 0 014.9 2.5" stroke="var(--bp-subtle)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+interface SearchResults {
+  properties: SearchResultItem[];
+  providers: SearchResultItem[];
+  dispatches: SearchResultItem[];
+}
+
+export default function BusinessLayout({ children, sidebar, sidebarMobile, mobileOpen: mobileOpenProp, setMobileOpen: setMobileOpenProp, resolvedTheme, workspaceLogo, workspaceName, workspaceId, onNavigate }: BusinessLayoutProps) {
   const [mobileOpenInternal, setMobileOpenInternal] = useState(false);
   const mobileOpen = mobileOpenProp ?? mobileOpenInternal;
   const setMobileOpen = setMobileOpenProp ?? setMobileOpenInternal;
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const doSearch = useCallback(async (query: string) => {
+    if (!workspaceId || query.length < 2) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const res = await businessService.search(workspaceId, query);
+      if (res.data) {
+        setSearchResults(res.data as unknown as SearchResults);
+      }
+    } catch {
+      setSearchResults(null);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (searchQuery.length < 2) {
+      setSearchResults(null);
+      setSearchOpen(false);
+      return;
+    }
+    setSearchOpen(true);
+    debounceRef.current = setTimeout(() => {
+      doSearch(searchQuery);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchQuery, doSearch]);
+
+  // Close dropdown on click outside or Escape
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSearchOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  function handleResultClick(tab: string, id?: string) {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults(null);
+    if (onNavigate) onNavigate(tab, id);
+  }
+
+  const hasResults = searchResults && (
+    searchResults.properties.length > 0 ||
+    searchResults.providers.length > 0 ||
+    searchResults.dispatches.length > 0
+  );
 
   return (
     <div className="bp-portal" data-theme={resolvedTheme} style={{ height: '100vh', background: 'var(--bp-bg)', display: 'flex', overflow: 'hidden' }}>
@@ -106,6 +208,7 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
           .bp-content-padding { padding: 16px !important; }
           .bp-dashboard-mid { grid-template-columns: 1fr !important; }
         }
+        .bp-search-row:hover { background: var(--bp-hover); }
       `}</style>
 
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -141,12 +244,136 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
           </button>
 
           {/* Search bar (desktop only) */}
-          <div className="bp-search-desktop" style={{
-            display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bp-bg)',
-            borderRadius: 10, padding: '8px 14px', width: 280,
+          <div ref={searchRef} className="bp-search-desktop" style={{
+            display: 'flex', alignItems: 'center', gap: 8, position: 'relative', width: 280,
           }}>
-            <span style={{ color: 'var(--bp-subtle)', display: 'flex' }}><SearchIcon /></span>
-            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)' }}>Search properties, tasks, vendors...</span>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bp-bg)',
+              borderRadius: 10, padding: '8px 14px', width: '100%',
+            }}>
+              <span style={{ color: 'var(--bp-subtle)', display: 'flex', flexShrink: 0 }}><SearchIcon /></span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onFocus={() => { if (searchQuery.length >= 2) setSearchOpen(true); }}
+                placeholder="Search properties, tasks, vendors..."
+                style={{
+                  fontFamily: "'DM Sans',sans-serif",
+                  fontSize: 13,
+                  color: 'var(--bp-text)',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  width: '100%',
+                  padding: 0,
+                }}
+              />
+            </div>
+
+            {/* Search dropdown */}
+            {searchOpen && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                marginTop: 4,
+                background: 'var(--bp-card)',
+                border: '1px solid var(--bp-border)',
+                borderRadius: 12,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                maxHeight: 400,
+                overflowY: 'auto',
+                zIndex: 200,
+              }}>
+                {searchLoading && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 8 }}>
+                    <SpinnerIcon />
+                    <span style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>Searching...</span>
+                  </div>
+                )}
+
+                {!searchLoading && searchResults && !hasResults && (
+                  <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: 'var(--bp-subtle)' }}>
+                    No results
+                  </div>
+                )}
+
+                {!searchLoading && searchResults && hasResults && (
+                  <>
+                    {searchResults.properties.length > 0 && (
+                      <div>
+                        <div style={{ padding: '10px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--bp-subtle)', letterSpacing: 1, textTransform: 'uppercase' }}>
+                          Properties
+                        </div>
+                        {searchResults.properties.map(p => (
+                          <div
+                            key={p.id}
+                            className="bp-search-row"
+                            onClick={() => handleResultClick(p.tab, p.id)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px',
+                              height: 40, cursor: 'pointer', transition: 'background 0.1s',
+                            }}
+                          >
+                            <span style={{ fontSize: 14, flexShrink: 0 }}>&#127968;</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                            <span style={{ fontSize: 12, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginLeft: 'auto' }}>{p.address}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {searchResults.providers.length > 0 && (
+                      <div>
+                        <div style={{ padding: '10px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--bp-subtle)', letterSpacing: 1, textTransform: 'uppercase' }}>
+                          Providers
+                        </div>
+                        {searchResults.providers.map(p => (
+                          <div
+                            key={p.id}
+                            className="bp-search-row"
+                            onClick={() => handleResultClick(p.tab, p.id)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px',
+                              height: 40, cursor: 'pointer', transition: 'background 0.1s',
+                            }}
+                          >
+                            <span style={{ fontSize: 14, flexShrink: 0 }}>&#128100;</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                            <span style={{ fontSize: 12, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginLeft: 'auto' }}>{p.phone}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {searchResults.dispatches.length > 0 && (
+                      <div>
+                        <div style={{ padding: '10px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--bp-subtle)', letterSpacing: 1, textTransform: 'uppercase' }}>
+                          Dispatches
+                        </div>
+                        {searchResults.dispatches.map(d => (
+                          <div
+                            key={d.id}
+                            className="bp-search-row"
+                            onClick={() => handleResultClick(d.tab, d.id)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px',
+                              height: 40, cursor: 'pointer', transition: 'background 0.1s',
+                            }}
+                          >
+                            <span style={{ fontSize: 14, flexShrink: 0 }}>&#128203;</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.category || 'Dispatch'}</span>
+                            <span style={{ fontSize: 12, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginLeft: 'auto' }}>{d.summary}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {workspaceLogo && (

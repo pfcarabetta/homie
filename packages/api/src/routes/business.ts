@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, or, desc, ne, sql, gte, lte, count } from 'drizzle-orm';
+import { eq, and, or, desc, ne, sql, gte, lte, count, ilike } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import logger from '../logger';
 import { db } from '../db';
@@ -2897,6 +2897,116 @@ router.post('/:workspaceId/dashboard/seasonal-suggestions', requireWorkspace, as
   } catch (err) {
     logger.error({ err }, '[POST /business/:id/dashboard/seasonal-suggestions]');
     res.status(500).json({ data: null, error: 'Failed to generate seasonal suggestions', meta: {} });
+  }
+});
+
+// ── GET /:workspaceId/search — Site-wide search ────────────────────────────
+
+router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: Response) => {
+  const q = (req.query.q as string || '').trim();
+  if (!q || q.length < 2) {
+    res.json({ data: { properties: [], providers: [], dispatches: [] }, error: null, meta: {} });
+    return;
+  }
+
+  const escaped = q.replace(/[%_\\]/g, '\\$&');
+  const pattern = `%${escaped}%`;
+
+  try {
+    // 1. Properties
+    const propertyRows = await db
+      .select({
+        id: properties.id,
+        name: properties.name,
+        address: properties.address,
+      })
+      .from(properties)
+      .where(
+        and(
+          eq(properties.workspaceId, req.workspaceId),
+          or(
+            ilike(properties.name, pattern),
+            sql`${properties.address} ILIKE ${pattern}`,
+            sql`${properties.city} ILIKE ${pattern}`,
+            sql`${properties.state} ILIKE ${pattern}`,
+            sql`${properties.zipCode} ILIKE ${pattern}`,
+          ),
+        ),
+      )
+      .limit(5);
+
+    // 2. Providers (via preferred_vendors)
+    const providerRows = await db
+      .select({
+        id: providers.id,
+        name: providers.name,
+        phone: providers.phone,
+      })
+      .from(preferredVendors)
+      .innerJoin(providers, eq(preferredVendors.providerId, providers.id))
+      .where(
+        and(
+          eq(preferredVendors.workspaceId, req.workspaceId),
+          or(
+            ilike(providers.name, pattern),
+            sql`${providers.phone} ILIKE ${pattern}`,
+            sql`${providers.email} ILIKE ${pattern}`,
+          ),
+        ),
+      )
+      .limit(5);
+
+    // 3. Dispatches (jobs for this workspace)
+    const dispatchRows = await db
+      .select({
+        id: jobs.id,
+        diagnosis: jobs.diagnosis,
+        status: jobs.status,
+      })
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.workspaceId, req.workspaceId),
+          or(
+            sql`${jobs.diagnosis}->>'summary' ILIKE ${pattern}`,
+            sql`${jobs.diagnosis}->>'category' ILIKE ${pattern}`,
+          ),
+        ),
+      )
+      .orderBy(desc(jobs.createdAt))
+      .limit(5);
+
+    res.json({
+      data: {
+        properties: propertyRows.map(p => ({
+          id: p.id,
+          name: p.name,
+          address: p.address || '',
+          tab: 'properties',
+        })),
+        providers: providerRows.map(p => ({
+          id: p.id,
+          name: p.name,
+          phone: p.phone || '',
+          tab: 'vendors',
+        })),
+        dispatches: dispatchRows.map(d => {
+          const diag = d.diagnosis as Record<string, string> | null;
+          return {
+            id: d.id,
+            category: diag?.category || '',
+            summary: diag?.summary || '',
+            status: d.status,
+            tab: 'dispatches',
+          };
+        }),
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/search]');
+    res.status(500).json({ data: null, error: 'Failed to search', meta: {} });
   }
 });
 
