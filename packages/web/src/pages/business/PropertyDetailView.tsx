@@ -377,6 +377,7 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
   );
 
   const d = property.details;
+  const dx = d as Record<string, unknown> | null;
 
   return (
     <div>
@@ -490,7 +491,7 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
       </>)}
 
       {/* Pool / Spa */}
-      {d?.pool && Object.values(d.pool).some(Boolean) && (<>
+      {dx?.pool && Object.values(d.pool).some(Boolean) && (<>
         {sectionHeader('Pool / Spa', '🏊')}
         {card(<>
           {infoRow('Pool Type', (d.pool as Record<string, string>).type)}
@@ -500,7 +501,7 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
       </>)}
 
       {/* Exterior */}
-      {d?.exterior && Object.values(d.exterior).some(Boolean) && (<>
+      {dx?.exterior && Object.values(d.exterior).some(Boolean) && (<>
         {sectionHeader('Exterior', '🏡')}
         {card(<>
           {infoRow('Roof Type', (d.exterior as Record<string, string>).roofType)}
@@ -512,7 +513,7 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
       </>)}
 
       {/* Access */}
-      {d?.access && Object.values(d.access).some(Boolean) && (<>
+      {dx?.access && Object.values(d.access).some(Boolean) && (<>
         {sectionHeader('Access', '🔑')}
         {card(<>
           {infoRow('Lockbox', (d.access as Record<string, string>).lockbox)}
