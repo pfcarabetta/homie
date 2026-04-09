@@ -541,7 +541,7 @@ function StreamingMsg({ text }: { text: string }) {
 
 /* ── Main component ─────────────────────────────────────────────────────── */
 
-type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'anything_else' | 'budget' | 'generating' | 'summary' | 'outreach' | 'results';
+type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'anything_else' | 'budget' | 'timing' | 'generating' | 'summary' | 'outreach' | 'results';
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -581,6 +581,10 @@ export default function BusinessChat() {
   const [anythingElseText, setAnythingElseText] = useState('');
   const [anythingElseImage, setAnythingElseImage] = useState<string | null>(null);
   const anythingElseFileRef = useRef<HTMLInputElement>(null);
+
+  const [timing, setTiming] = useState('asap');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
 
   // Outreach state
   const [jobId, setJobId] = useState<string | null>(null);
@@ -981,8 +985,15 @@ export default function BusinessChat() {
   function handleBudget(selected: string) {
     setBudget(selected);
     setMessages(prev => [...prev, { role: 'user', content: selected === 'flexible' ? 'No budget preference' : selected }]);
+    setMessages(prev => [...prev, { role: 'assistant', content: 'When do you need this done?' }]);
+    setStep('timing');
+  }
 
-    // Generate the scope after budget is selected
+  function handleTiming(selected: string) {
+    setTiming(selected);
+    setMessages(prev => [...prev, { role: 'user', content: selected }]);
+
+    // Generate the scope after timing is selected (same logic as original handleBudget)
     const promptText = category?.group === 'service'
       ? 'Please generate a final scope summary so I can dispatch a provider.'
       : 'Please generate your diagnosis so I can dispatch a pro.';
@@ -1250,6 +1261,9 @@ export default function BusinessChat() {
             setShowQ1Input(false);
             setQ1InputVal('');
             setBudget('flexible');
+            setTiming('asap');
+            setShowDatePicker(false);
+            setSelectedDate('');
             setJobId(null);
             setOutreachStatus(null);
             setResponses([]);
@@ -1580,6 +1594,64 @@ export default function BusinessChat() {
                 onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#9B9490'; }}
               >Skip</button>
+            </div>
+          )}
+
+          {/* Timing selection */}
+          {step === 'timing' && !streaming && (
+            <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease', marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginBottom: showDatePicker ? 10 : 0 }}>
+                {['Today', 'Tomorrow', 'This week', 'Flexible'].map(t => (
+                  <button key={t} onClick={() => handleTiming(t)} style={{
+                    padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
+                    background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                  >{t}</button>
+                ))}
+                <button onClick={() => setShowDatePicker(!showDatePicker)} style={{
+                  padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: `2px ${showDatePicker ? 'solid' : 'dashed'} ${showDatePicker ? O : 'rgba(0,0,0,0.12)'}`,
+                  background: showDatePicker ? 'rgba(232,99,43,0.03)' : 'white', fontSize: 14,
+                  color: showDatePicker ? O : '#9B9490', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
+                  onMouseLeave={e => { if (!showDatePicker) { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#9B9490'; } }}
+                >{'\uD83D\uDCC5'} Pick a date</button>
+              </div>
+              {showDatePicker && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', animation: 'fadeSlide 0.2s ease' }}>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={e => setSelectedDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    style={{
+                      flex: 1, padding: '10px 14px', borderRadius: 10, border: '2px solid rgba(0,0,0,0.08)',
+                      fontSize: 14, color: D, fontFamily: "'DM Sans', sans-serif", outline: 'none',
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = O; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'; }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (selectedDate) {
+                        const formatted = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                        handleTiming(formatted);
+                      }
+                    }}
+                    disabled={!selectedDate}
+                    style={{
+                      padding: '10px 20px', borderRadius: 10, border: 'none',
+                      background: selectedDate ? O : '#E0DAD4', color: selectedDate ? '#fff' : '#9B9490',
+                      fontSize: 14, fontWeight: 600, cursor: selectedDate ? 'pointer' : 'default',
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >Confirm</button>
+                </div>
+              )}
             </div>
           )}
 
