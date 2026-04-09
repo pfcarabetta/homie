@@ -159,7 +159,7 @@ export default function BusinessSidebar({
       </div>
 
       {/* Nav */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 8px', overflowX: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 8px', overflowX: collapsed ? 'visible' : 'hidden' }}>
         {navItems.map(item => {
           if (item.divider) return <div key={item.id} style={{ height: 1, background: 'var(--bp-border)', margin: '8px 8px' }} />;
           if (item.adminOnly && userRole !== 'admin') return null;
