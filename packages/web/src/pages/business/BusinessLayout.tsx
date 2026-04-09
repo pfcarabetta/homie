@@ -245,7 +245,7 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
 
           {/* Search bar (desktop only) */}
           <div ref={searchRef} className="bp-search-desktop" style={{
-            display: 'flex', alignItems: 'center', gap: 8, position: 'relative', width: 280,
+            display: 'flex', alignItems: 'center', gap: 8, position: 'relative', width: 400,
           }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bp-bg)',
