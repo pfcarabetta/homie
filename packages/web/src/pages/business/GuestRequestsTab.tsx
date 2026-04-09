@@ -255,8 +255,8 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
         // Client-side filtering for category and date (server handles status, severity, property)
         const clientFiltered = issues.filter(i => {
           if (filterCategory && i.categoryName !== filterCategory) return false;
-          if (filterDateFrom && new Date(i.created_at) < new Date(filterDateFrom)) return false;
-          if (filterDateTo) { const to = new Date(filterDateTo); to.setHours(23, 59, 59, 999); if (new Date(i.created_at) > to) return false; }
+          if (filterDateFrom && new Date(i.createdAt) < new Date(filterDateFrom)) return false;
+          if (filterDateTo) { const to = new Date(filterDateTo); to.setHours(23, 59, 59, 999); if (new Date(i.createdAt) > to) return false; }
           return true;
         });
 
