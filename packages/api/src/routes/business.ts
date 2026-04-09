@@ -2935,26 +2935,22 @@ router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: R
       )
       .limit(5);
 
-    // 2. Providers (via preferred_vendors)
-    const providerRows = await db
-      .select({
-        id: providers.id,
-        name: providers.name,
-        phone: providers.phone,
-      })
-      .from(preferredVendors)
-      .innerJoin(providers, eq(preferredVendors.providerId, providers.id))
-      .where(
-        and(
-          eq(preferredVendors.workspaceId, req.workspaceId),
-          or(
-            ilike(providers.name, pattern),
-            sql`${providers.phone} ILIKE ${pattern}`,
-            sql`${providers.email} ILIKE ${pattern}`,
-          ),
-        ),
+    // 2. Providers — all providers associated with this workspace (preferred, booked, or quoted)
+    const providerRows = await db.execute(sql`
+      SELECT DISTINCT p.id, p.name, p.phone
+      FROM providers p
+      WHERE (
+        p.id IN (SELECT provider_id FROM preferred_vendors WHERE workspace_id = ${req.workspaceId})
+        OR p.id IN (SELECT provider_id FROM bookings WHERE job_id IN (SELECT id FROM jobs WHERE workspace_id = ${req.workspaceId}))
+        OR p.id IN (SELECT provider_id FROM provider_responses WHERE job_id IN (SELECT id FROM jobs WHERE workspace_id = ${req.workspaceId}))
       )
-      .limit(5);
+      AND (
+        p.name ILIKE ${pattern}
+        OR p.phone ILIKE ${pattern}
+        OR p.email ILIKE ${pattern}
+      )
+      LIMIT 5
+    `) as unknown as Array<{ id: string; name: string; phone: string | null }>;
 
     // 3. Dispatches (jobs for this workspace)
     const dispatchRows = await db
