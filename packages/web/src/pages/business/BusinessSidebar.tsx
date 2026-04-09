@@ -99,11 +99,12 @@ interface BusinessSidebarProps {
   userName?: string;
   userInitials?: string;
   userTitle?: string;
+  onNavigateCallback?: () => void;
 }
 
 export default function BusinessSidebar({
   collapsed, setCollapsed, activeTab, onNavigate, onNewDispatch, onLockedTab,
-  workspacePlan, userRole, userName, userInitials, userTitle,
+  workspacePlan, userRole, userName, userInitials, userTitle, onNavigateCallback,
 }: BusinessSidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ 'dispatch-group': true });
   const navItems = getNavItems(workspacePlan, userRole);
@@ -120,10 +121,11 @@ export default function BusinessSidebar({
 
   function handleClick(item: NavItem | NavChild) {
     if (item.locked) { onLockedTab(); return; }
-    if (item.action === 'new-dispatch') { onNewDispatch(); return; }
+    if (item.action === 'new-dispatch') { onNewDispatch(); onNavigateCallback?.(); return; }
     if (item.tab) {
       const opts = item.id === 'reports-scorecards' ? { initialView: 'scorecards' } : undefined;
       onNavigate(item.tab, opts);
+      onNavigateCallback?.();
     }
   }
 

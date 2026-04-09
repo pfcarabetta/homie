@@ -90,6 +90,7 @@ export default function BusinessPortal() {
     return localStorage.getItem('bp_sidebar_collapsed') === 'true';
   });
   const [reportsInitialView, setReportsInitialView] = useState<ReportView | undefined>(undefined);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   function handleSidebarCollapse(v: boolean) {
     setSidebarCollapsed(v);
@@ -193,6 +194,8 @@ export default function BusinessPortal() {
       resolvedTheme={resolvedTheme}
       workspaceLogo={workspace?.logoUrl}
       workspaceName={workspace?.name}
+      mobileOpen={mobileMenuOpen}
+      setMobileOpen={setMobileMenuOpen}
       sidebar={
         <BusinessSidebar
           collapsed={sidebarCollapsed}
@@ -205,6 +208,21 @@ export default function BusinessPortal() {
           userRole={workspace?.user_role ?? 'viewer'}
           userName={userName}
           userInitials={userInitials}
+        />
+      }
+      sidebarMobile={
+        <BusinessSidebar
+          collapsed={false}
+          setCollapsed={() => {}}
+          activeTab={tab}
+          onNavigate={handleSidebarNavigate}
+          onNewDispatch={() => navigate(`/business/chat?workspace=${selectedId}`)}
+          onLockedTab={() => setShowReportsUpgrade(true)}
+          workspacePlan={workspace?.plan ?? 'trial'}
+          userRole={workspace?.user_role ?? 'viewer'}
+          userName={userName}
+          userInitials={userInitials}
+          onNavigateCallback={() => { setMobileMenuOpen(false); }}
         />
       }
     >

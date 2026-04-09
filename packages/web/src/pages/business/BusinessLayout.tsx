@@ -1,10 +1,13 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { W, D } from './constants';
 import AvatarDropdown from '@/components/AvatarDropdown';
 
 interface BusinessLayoutProps {
   children: ReactNode;
   sidebar: ReactNode;
+  sidebarMobile?: ReactNode;
+  mobileOpen?: boolean;
+  setMobileOpen?: (open: boolean) => void;
   resolvedTheme: 'light' | 'dark';
   workspaceLogo?: string | null;
   workspaceName?: string;
@@ -26,7 +29,19 @@ function BellIcon() {
   );
 }
 
-export default function BusinessLayout({ children, sidebar, resolvedTheme, workspaceLogo, workspaceName }: BusinessLayoutProps) {
+function HamburgerIcon() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M3 5h14" /><path d="M3 10h14" /><path d="M3 15h14" />
+    </svg>
+  );
+}
+
+export default function BusinessLayout({ children, sidebar, sidebarMobile, mobileOpen: mobileOpenProp, setMobileOpen: setMobileOpenProp, resolvedTheme, workspaceLogo, workspaceName }: BusinessLayoutProps) {
+  const [mobileOpenInternal, setMobileOpenInternal] = useState(false);
+  const mobileOpen = mobileOpenProp ?? mobileOpenInternal;
+  const setMobileOpen = setMobileOpenProp ?? setMobileOpenInternal;
+
   return (
     <div className="bp-portal" data-theme={resolvedTheme} style={{ height: '100vh', background: 'var(--bp-bg)', display: 'flex', overflow: 'hidden' }}>
       <style>{`
@@ -79,12 +94,35 @@ export default function BusinessLayout({ children, sidebar, resolvedTheme, works
           .bp-prop-details { font-size: 12px !important; gap: 6px !important; margin-top: 6px !important; }
           .bp-prop-notes { font-size: 12px !important; margin-top: 6px !important; }
         }
+        .bp-sidebar-desktop { display: flex; }
+        .bp-sidebar-mobile-overlay { display: none; }
+        .bp-hamburger { display: none; }
+        .bp-search-desktop { display: flex; }
+        @media (max-width: 768px) {
+          .bp-sidebar-desktop { display: none !important; }
+          .bp-sidebar-mobile-overlay { display: flex; }
+          .bp-hamburger { display: flex !important; }
+          .bp-search-desktop { display: none !important; }
+          .bp-content-padding { padding: 16px !important; }
+        }
       `}</style>
 
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* Sidebar */}
-      {sidebar}
+      {/* Desktop sidebar */}
+      <div className="bp-sidebar-desktop" style={{ display: 'flex' }}>
+        {sidebar}
+      </div>
+
+      {/* Mobile drawer overlay */}
+      <div className="bp-sidebar-mobile-overlay" style={{ position: 'fixed', inset: 0, zIndex: 100, pointerEvents: mobileOpen ? 'auto' : 'none' }}>
+        {/* Backdrop */}
+        <div onClick={() => setMobileOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', opacity: mobileOpen ? 1 : 0, transition: 'opacity 0.3s' }} />
+        {/* Drawer */}
+        <div style={{ position: 'relative', transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.3s ease', height: '100%', zIndex: 1, width: 280 }}>
+          {sidebarMobile || sidebar}
+        </div>
+      </div>
 
       {/* Main content area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -93,7 +131,16 @@ export default function BusinessLayout({ children, sidebar, resolvedTheme, works
           height: 64, background: 'var(--bp-header)', borderBottom: '1px solid var(--bp-border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', flexShrink: 0,
         }}>
-          <div style={{
+          {/* Hamburger button (mobile only) */}
+          <button className="bp-hamburger" onClick={() => setMobileOpen(true)} style={{
+            display: 'none', alignItems: 'center', justifyContent: 'center',
+            background: 'none', border: 'none', cursor: 'pointer', color: 'var(--bp-text)', padding: 4,
+          }}>
+            <HamburgerIcon />
+          </button>
+
+          {/* Search bar (desktop only) */}
+          <div className="bp-search-desktop" style={{
             display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bp-bg)',
             borderRadius: 10, padding: '8px 14px', width: 280,
           }}>
@@ -120,7 +167,7 @@ export default function BusinessLayout({ children, sidebar, resolvedTheme, works
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div style={{ padding: 32, maxWidth: 1200 }}>
+          <div className="bp-content-padding" style={{ padding: 32, maxWidth: 1200 }}>
             {children}
           </div>
         </div>
