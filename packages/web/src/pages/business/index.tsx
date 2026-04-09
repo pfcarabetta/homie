@@ -195,8 +195,35 @@ export default function BusinessPortal() {
         onNavigate={(t, focusId) => { setSelectedProperty(null); setFocusJobId(focusId ?? null); setTab(t as Tab); }}
         mobileOpen={mobileMenuOpen}
         setMobileOpen={setMobileMenuOpen}
-        sidebar={<div style={{ width: 0, minWidth: 0, overflow: 'hidden' }} />}
-        sidebarMobile={<div />}
+        sidebar={
+          <BusinessSidebar
+            collapsed={true}
+            setCollapsed={() => { setSelectedProperty(null); setTab('properties'); handleSidebarCollapse(false); }}
+            activeTab={tab}
+            onNavigate={(t) => { setSelectedProperty(null); setTab(t); }}
+            onNewDispatch={() => { setSelectedProperty(null); navigate(`/business/chat?workspace=${selectedId}`); }}
+            onLockedTab={() => setShowReportsUpgrade(true)}
+            workspacePlan={workspace?.plan ?? 'trial'}
+            userRole={workspace?.user_role ?? 'viewer'}
+            userName={userName}
+            userInitials={userInitials}
+          />
+        }
+        sidebarMobile={
+          <BusinessSidebar
+            collapsed={false}
+            setCollapsed={() => {}}
+            activeTab={tab}
+            onNavigate={(t) => { setSelectedProperty(null); setMobileMenuOpen(false); setTab(t); }}
+            onNewDispatch={() => { setSelectedProperty(null); setMobileMenuOpen(false); navigate(`/business/chat?workspace=${selectedId}`); }}
+            onLockedTab={() => setShowReportsUpgrade(true)}
+            workspacePlan={workspace?.plan ?? 'trial'}
+            userRole={workspace?.user_role ?? 'viewer'}
+            userName={userName}
+            userInitials={userInitials}
+            onNavigateCallback={() => setMobileMenuOpen(false)}
+          />
+        }
       >
         <div style={{ margin: '-32px', height: 'calc(100% + 64px)' }} className="bp-pdv-wrapper">
           <style>{`@media (max-width: 768px) { .bp-pdv-wrapper { margin: -16px !important; height: calc(100% + 32px) !important; } }`}</style>
