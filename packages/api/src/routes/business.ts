@@ -2958,8 +2958,11 @@ router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: R
         id: jobs.id,
         diagnosis: jobs.diagnosis,
         status: jobs.status,
+        createdAt: jobs.createdAt,
+        propertyName: properties.name,
       })
       .from(jobs)
+      .leftJoin(properties, eq(jobs.propertyId, properties.id))
       .where(
         and(
           eq(jobs.workspaceId, req.workspaceId),
@@ -2988,11 +2991,14 @@ router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: R
         })),
         dispatches: dispatchRows.map(d => {
           const diag = d.diagnosis as Record<string, string> | null;
+          const cat = (diag?.category || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
           return {
             id: d.id,
-            category: diag?.category || '',
+            category: cat,
             summary: diag?.summary || '',
             status: d.status,
+            propertyName: d.propertyName || '',
+            date: d.createdAt,
             tab: 'dispatches',
           };
         }),

@@ -24,6 +24,8 @@ interface SearchResultItem {
   category?: string;
   summary?: string;
   status?: string;
+  propertyName?: string;
+  date?: string;
   tab: string;
 }
 
@@ -353,21 +355,36 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
                         <div style={{ padding: '10px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--bp-subtle)', letterSpacing: 1, textTransform: 'uppercase' }}>
                           Dispatches
                         </div>
-                        {searchResults.dispatches.map(d => (
-                          <div
-                            key={d.id}
-                            className="bp-search-row"
-                            onClick={() => handleResultClick(d.tab, d.id)}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px',
-                              height: 40, cursor: 'pointer', transition: 'background 0.1s',
-                            }}
-                          >
-                            <span style={{ fontSize: 14, flexShrink: 0 }}>&#128203;</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.category || 'Dispatch'}</span>
-                            <span style={{ fontSize: 12, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginLeft: 'auto' }}>{d.summary}</span>
-                          </div>
-                        ))}
+                        {searchResults.dispatches.map(d => {
+                          const statusColors: Record<string, string> = {
+                            open: '#2563EB', dispatching: '#C2410C', collecting: '#7C3AED',
+                            completed: '#16A34A', expired: '#9B9490', archived: '#9B9490',
+                          };
+                          const sc = statusColors[d.status as string] ?? '#9B9490';
+                          const dateStr = d.date ? new Date(d.date as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+                          return (
+                            <div
+                              key={d.id}
+                              className="bp-search-row"
+                              onClick={() => handleResultClick(d.tab, d.id)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+                                cursor: 'pointer', transition: 'background 0.1s',
+                              }}
+                            >
+                              <span style={{ fontSize: 14, flexShrink: 0 }}>{'\uD83D\uDCCB'}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)' }}>{d.category || 'Dispatch'}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 600, color: sc, background: `${sc}15`, padding: '1px 6px', borderRadius: 100, textTransform: 'capitalize' }}>{d.status}</span>
+                                </div>
+                                <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {[dateStr, d.propertyName].filter(Boolean).join(' · ')}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </>
