@@ -1216,10 +1216,9 @@ export default function BusinessChat() {
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: D, flexShrink: 0 }}>New Dispatch</span>
           {selectedProperty && (
-            <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-              — {selectedProperty.name}
+            <span style={{ fontSize: 14, color: '#9B9490', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+              {selectedProperty.name}
             </span>
           )}
         </div>

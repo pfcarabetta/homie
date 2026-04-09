@@ -307,7 +307,7 @@ export default function BusinessPortal() {
           window.history.replaceState({}, '', url.toString());
         }
         return (
-          <div style={{ margin: '-32px', height: 'calc(100vh - 64px)' }} className="bp-pdv-wrapper">
+          <div style={{ margin: '-32px', height: 'calc(100vh - 64px)', maxWidth: 'none', width: 'calc(100% + 64px)' }} className="bp-pdv-wrapper">
             <BusinessChat key={`chat-${workspace.id}`} />
           </div>
         );
