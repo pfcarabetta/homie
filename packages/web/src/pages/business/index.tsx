@@ -19,6 +19,7 @@ import VendorsTab from './VendorsTab';
 import TeamTab from './TeamTab';
 import SettingsTab from './SettingsTab';
 import BillingTab from './BillingTab';
+import BusinessChat from '../BusinessChat';
 
 /* ── Create Workspace Modal ─────────────────────────────────────────────── */
 
@@ -202,7 +203,7 @@ export default function BusinessPortal() {
             setCollapsed={handleSidebarCollapse}
             activeTab={tab}
             onNavigate={(t) => { setSelectedProperty(null); setTab(t); }}
-            onNewDispatch={() => { setSelectedProperty(null); navigate(`/business/chat?workspace=${selectedId}`); }}
+            onNewDispatch={() => { setSelectedProperty(null); setTab('dispatch-chat'); }}
             onLockedTab={() => setShowReportsUpgrade(true)}
             workspacePlan={workspace?.plan ?? 'trial'}
             userRole={workspace?.user_role ?? 'viewer'}
@@ -216,7 +217,7 @@ export default function BusinessPortal() {
             setCollapsed={() => {}}
             activeTab={tab}
             onNavigate={(t) => { setSelectedProperty(null); setMobileMenuOpen(false); setTab(t); }}
-            onNewDispatch={() => { setSelectedProperty(null); setMobileMenuOpen(false); navigate(`/business/chat?workspace=${selectedId}`); }}
+            onNewDispatch={() => { setSelectedProperty(null); setMobileMenuOpen(false); setTab('dispatch-chat'); }}
             onLockedTab={() => setShowReportsUpgrade(true)}
             workspacePlan={workspace?.plan ?? 'trial'}
             userRole={workspace?.user_role ?? 'viewer'}
@@ -254,7 +255,7 @@ export default function BusinessPortal() {
           setCollapsed={handleSidebarCollapse}
           activeTab={tab}
           onNavigate={handleSidebarNavigate}
-          onNewDispatch={() => navigate(`/business/chat?workspace=${selectedId}`)}
+          onNewDispatch={() => setTab('dispatch-chat')}
           onLockedTab={() => setShowReportsUpgrade(true)}
           workspacePlan={workspace?.plan ?? 'trial'}
           userRole={workspace?.user_role ?? 'viewer'}
@@ -268,7 +269,7 @@ export default function BusinessPortal() {
           setCollapsed={() => {}}
           activeTab={tab}
           onNavigate={handleSidebarNavigate}
-          onNewDispatch={() => navigate(`/business/chat?workspace=${selectedId}`)}
+          onNewDispatch={() => setTab('dispatch-chat')}
           onLockedTab={() => setShowReportsUpgrade(true)}
           workspacePlan={workspace?.plan ?? 'trial'}
           userRole={workspace?.user_role ?? 'viewer'}
@@ -298,6 +299,19 @@ export default function BusinessPortal() {
       )}
 
       {/* Tab content */}
+      {workspace && tab === 'dispatch-chat' && (() => {
+        // Set URL params so BusinessChat reads the workspace ID
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('workspace') !== workspace.id) {
+          url.searchParams.set('workspace', workspace.id);
+          window.history.replaceState({}, '', url.toString());
+        }
+        return (
+          <div style={{ margin: '-32px', height: 'calc(100vh - 64px)' }} className="bp-pdv-wrapper">
+            <BusinessChat key={`chat-${workspace.id}`} />
+          </div>
+        );
+      })()}
       {workspace && tab === 'dashboard' && <DashboardTab workspace={workspace} onNavigate={(t, jobId) => { setFocusJobId(jobId ?? null); setTab(t); }} />}
       {workspace && tab === 'billing' && workspace.user_role === 'admin' && (
         <BillingTab workspace={workspace} onUpdated={w => setWorkspace(w)} />

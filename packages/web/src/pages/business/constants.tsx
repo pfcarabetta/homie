@@ -6,10 +6,10 @@ import type { Reservation } from '@/services/api';
 export const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
 // ── Tab Types ────────────────────────────────────────────────────────────────
-export const TABS = ['dashboard', 'dispatches', 'bookings', 'guest-requests', 'guest-issues', 'guest-settings', 'guest-auto-dispatch', 'guest-qr-codes', 'schedules', 'reports', 'scorecards', 'properties', 'vendors', 'team', 'settings', 'billing'] as const;
+export const TABS = ['dashboard', 'dispatch-chat', 'dispatches', 'bookings', 'guest-requests', 'guest-issues', 'guest-settings', 'guest-auto-dispatch', 'guest-qr-codes', 'schedules', 'reports', 'scorecards', 'properties', 'vendors', 'team', 'settings', 'billing'] as const;
 export type Tab = typeof TABS[number];
 export const TAB_LABELS: Record<Tab, string> = {
-  dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings',
+  dashboard: 'Dashboard', 'dispatch-chat': 'New Dispatch', dispatches: 'Dispatches', bookings: 'Bookings',
   'guest-requests': 'Guest Requests', 'guest-issues': 'Requests', 'guest-settings': 'Settings',
   'guest-auto-dispatch': 'Auto-Dispatch', 'guest-qr-codes': 'QR Codes',
   schedules: 'Auto-Dispatch', billing: 'Billing',
