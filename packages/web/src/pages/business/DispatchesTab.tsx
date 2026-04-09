@@ -175,6 +175,12 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
   const [preferredProviderIds, setPreferredProviderIds] = useState<Set<string>>(new Set());
   const [estimates, setEstimates] = useState<Record<string, CostEstimate>>({});
   const isPro = ['professional', 'business', 'enterprise'].includes(plan);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterProperty, setFilterProperty] = useState('');
+  const [filterSeverity, setFilterSeverity] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
 
   useEffect(() => {
     businessService.listVendors(workspaceId).then(res => {
@@ -261,9 +267,32 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading dispatches...</div>;
 
-  const filteredDispatches = showArchived
-    ? dispatches.filter(d => d.status === 'archived')
-    : dispatches.filter(d => d.status !== 'archived');
+  const filteredDispatches = dispatches.filter(d => {
+    if (showArchived) { if (d.status !== 'archived') return false; }
+    else { if (d.status === 'archived') return false; }
+    if (filterStatus && d.status !== filterStatus) return false;
+    if (filterCategory) {
+      const cat = (d.diagnosis?.category ?? '').toLowerCase();
+      if (cat !== filterCategory) return false;
+    }
+    if (filterProperty && d.propertyId !== filterProperty) return false;
+    if (filterSeverity) {
+      const sev = (d.diagnosis?.severity ?? '').toLowerCase();
+      if (sev !== filterSeverity) return false;
+    }
+    if (filterDateFrom) {
+      if (new Date(d.createdAt) < new Date(filterDateFrom)) return false;
+    }
+    if (filterDateTo) {
+      const to = new Date(filterDateTo); to.setHours(23, 59, 59, 999);
+      if (new Date(d.createdAt) > to) return false;
+    }
+    return true;
+  });
+
+  // Derive unique categories and properties for filter dropdowns
+  const uniqueCategories = [...new Set(dispatches.map(d => d.diagnosis?.category).filter(Boolean))] as string[];
+  const uniqueProperties = [...new Map(dispatches.filter(d => d.propertyId && d.propertyName).map(d => [d.propertyId, d.propertyName])).entries()].map(([id, name]) => ({ id: id as string, name: name as string }));
 
   if (dispatches.length === 0) return (
     <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
@@ -297,6 +326,54 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
             + New Dispatch
           </button>
         </div>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' }}>
+          <option value="">All Statuses</option>
+          <option value="open">Open</option>
+          <option value="dispatching">Dispatching</option>
+          <option value="collecting">Collecting</option>
+          <option value="completed">Completed</option>
+          <option value="expired">Expired</option>
+        </select>
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' }}>
+          <option value="">All Categories</option>
+          {uniqueCategories.map(c => (
+            <option key={c} value={c}>{c.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase())}</option>
+          ))}
+        </select>
+        <select value={filterProperty} onChange={e => setFilterProperty(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' }}>
+          <option value="">All Properties</option>
+          {uniqueProperties.map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+        <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' }}>
+          <option value="">All Severities</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+        <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, background: '#fff' }}
+          title="From date" />
+        <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, background: '#fff' }}
+          title="To date" />
+        {(filterStatus || filterCategory || filterProperty || filterSeverity || filterDateFrom || filterDateTo) && (
+          <button onClick={() => { setFilterStatus(''); setFilterCategory(''); setFilterProperty(''); setFilterSeverity(''); setFilterDateFrom(''); setFilterDateTo(''); }}
+            style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: '#F5F5F5', color: '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            Clear filters
+          </button>
+        )}
+        <span style={{ fontSize: 12, color: '#9B9490', marginLeft: 'auto' }}>{filteredDispatches.length} dispatch{filteredDispatches.length !== 1 ? 'es' : ''}</span>
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: DISPATCH_CARD_STYLES }} />
