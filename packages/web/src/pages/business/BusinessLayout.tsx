@@ -104,6 +104,7 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
           .bp-hamburger { display: flex !important; }
           .bp-search-desktop { display: none !important; }
           .bp-content-padding { padding: 16px !important; }
+          .bp-dashboard-mid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 

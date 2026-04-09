@@ -97,7 +97,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
       </div>
 
       {/* ── Middle row: Category breakdown + Top vendors ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
+      <div className="bp-dashboard-mid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
         {/* Category breakdown */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20 }}>
           <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Dispatches by Category</h4>
