@@ -10,6 +10,12 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
   const [addingProvider, setAddingProvider] = useState<string | null>(null);
   const [cancellingBooking, setCancellingBooking] = useState<string | null>(null);
   const [showCancelBooking, setShowCancelBooking] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterProperty, setFilterProperty] = useState('');
+  const [filterSeverity, setFilterSeverity] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
 
   useEffect(() => {
     businessService.listBookings(workspaceId).then(res => {
@@ -46,12 +52,83 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
     </div>
   );
 
+  const filteredBookings = bookingsList.filter(b => {
+    if (filterStatus && b.status !== filterStatus) return false;
+    if (filterCategory && (b.diagnosis?.category ?? '').toLowerCase() !== filterCategory) return false;
+    if (filterProperty && b.propertyId !== filterProperty) return false;
+    if (filterSeverity && (b.diagnosis?.severity ?? '').toLowerCase() !== filterSeverity) return false;
+    if (filterDateFrom && new Date(b.confirmedAt) < new Date(filterDateFrom)) return false;
+    if (filterDateTo) { const to = new Date(filterDateTo); to.setHours(23, 59, 59, 999); if (new Date(b.confirmedAt) > to) return false; }
+    return true;
+  });
+
+  const uniqueCategories = [...new Set(bookingsList.map(b => b.diagnosis?.category).filter(Boolean))] as string[];
+  const uniqueProperties = [...new Map(bookingsList.filter(b => b.propertyId && b.propertyName).map(b => [b.propertyId, b.propertyName])).entries()].map(([id, name]) => ({ id: id as string, name: name as string }));
+
+  const selectStyle: React.CSSProperties = { padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' };
+  const hasFilters = !!(filterStatus || filterCategory || filterProperty || filterSeverity || filterDateFrom || filterDateTo);
+
   return (
     <div>
-      <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 20px' }}>Bookings</h3>
+      <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 14px' }}>Bookings</h3>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
+          <option value="">All Statuses</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} style={selectStyle}>
+          <option value="">All Categories</option>
+          {uniqueCategories.map(c => <option key={c} value={c}>{c.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase())}</option>)}
+        </select>
+        <select value={filterProperty} onChange={e => setFilterProperty(e.target.value)} style={selectStyle}>
+          <option value="">All Properties</option>
+          {uniqueProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)} style={selectStyle}>
+          <option value="">All Severities</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+        <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} style={selectStyle} title="From date" />
+        <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} style={selectStyle} title="To date" />
+        {hasFilters && (
+          <button onClick={() => { setFilterStatus(''); setFilterCategory(''); setFilterProperty(''); setFilterSeverity(''); setFilterDateFrom(''); setFilterDateTo(''); }}
+            style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: '#F5F5F5', color: '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            Clear filters
+          </button>
+        )}
+        <span style={{ fontSize: 12, color: '#9B9490', marginLeft: 'auto' }}>{filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}</span>
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {bookingsList.map(b => {
+        {filteredBookings.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9B9490', fontSize: 14 }}>No bookings match the selected filters</div>
+        ) : null}
+        {(() => {
+          let lastDateLabel = '';
+          return filteredBookings.map(b => {
+            const dateObj = new Date(b.confirmedAt);
+            const today = new Date();
+            const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+            const isToday = dateObj.toDateString() === today.toDateString();
+            const isYesterday = dateObj.toDateString() === yesterday.toDateString();
+            const dateLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: dateObj.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
+            const showHeader = dateLabel !== lastDateLabel;
+            lastDateLabel = dateLabel;
+
+        return (<div key={b.id}>
+          {showHeader && (
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>
+              {dateLabel}
+            </div>
+          )}
+          {(() => {
           const isExpanded = expandedId === b.id;
           const catLabel = b.diagnosis?.category ? b.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Service';
           const sc = b.status === 'confirmed' ? { bg: '#F0FDF4', text: '#16A34A' } : b.status === 'completed' ? { bg: '#EFF6FF', text: '#2563EB' } : { bg: '#F5F5F5', text: '#9B9490' };
@@ -193,7 +270,10 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
               )}
             </div>
           );
-        })}
+        })()}
+        </div>);
+          });
+        })()}
       </div>
 
       {/* Cancel booking confirmation modal */}
