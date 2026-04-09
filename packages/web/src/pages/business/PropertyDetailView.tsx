@@ -359,10 +359,24 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
     return (
       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--bp-border)' }}>
         <span style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>{label}</span>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--bp-text)' }}>{value}</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--bp-text)', textAlign: 'right', maxWidth: '60%' }}>{value}</span>
       </div>
     );
   };
+
+  const sectionHeader = (title: string, icon: string) => (
+    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 10, marginTop: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span>{icon}</span> {title}
+    </div>
+  );
+
+  const card = (children: React.ReactNode) => (
+    <div style={{ background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10, padding: '4px 16px' }}>
+      {children}
+    </div>
+  );
+
+  const d = property.details;
 
   return (
     <div>
@@ -381,7 +395,8 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
         )}
       </div>
 
-      <div style={{ background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10, padding: '4px 16px' }}>
+      {/* General */}
+      {card(<>
         {infoRow('Property Type', PROPERTY_TYPES[property.propertyType] || property.propertyType)}
         {infoRow('Address', [property.address, property.city, property.state, property.zipCode].filter(Boolean).join(', '))}
         {infoRow('Bedrooms', property.bedrooms)}
@@ -389,33 +404,134 @@ function SettingsSubPage({ property, onEdit }: { property: Property; onEdit?: ()
         {infoRow('Square Feet', property.sqft ? property.sqft.toLocaleString() : null)}
         {infoRow('Unit Count', property.unitCount > 1 ? property.unitCount : null)}
         {infoRow('Status', property.active ? 'Active' : 'Inactive')}
-      </div>
+      </>)}
 
-      {property.beds && property.beds.length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 10 }}>Bed Configuration</div>
-          <div style={{ background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10, padding: '4px 16px' }}>
-            {property.beds.map((b, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < property.beds!.length - 1 ? '1px solid var(--bp-border)' : 'none' }}>
-                <span style={{ fontSize: 13, color: 'var(--bp-subtle)', textTransform: 'capitalize' }}>{b.type.replace('_', ' ')}</span>
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--bp-text)' }}>x{b.count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Bed Configuration */}
+      {property.beds && property.beds.length > 0 && (<>
+        {sectionHeader('Bed Configuration', '🛏️')}
+        {card(<>
+          {property.beds.map((b, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < property.beds!.length - 1 ? '1px solid var(--bp-border)' : 'none' }}>
+              <span style={{ fontSize: 13, color: 'var(--bp-subtle)', textTransform: 'capitalize' }}>{b.type.replace('_', ' ')}</span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--bp-text)' }}>x{b.count}</span>
+            </div>
+          ))}
+        </>)}
+      </>)}
 
-      {property.notes && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 10 }}>Notes</div>
-          <div style={{
-            background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10,
-            padding: 16, fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
-          }}>
-            {property.notes}
-          </div>
+      {/* HVAC */}
+      {d?.hvac && Object.values(d.hvac).some(Boolean) && (<>
+        {sectionHeader('HVAC / Climate', '🌡️')}
+        {card(<>
+          {infoRow('AC Type', d.hvac.acType)}
+          {infoRow('AC Brand', d.hvac.acBrand)}
+          {infoRow('AC Model', d.hvac.acModel)}
+          {infoRow('AC Age', d.hvac.acAge)}
+          {infoRow('Heating Type', d.hvac.heatingType)}
+          {infoRow('Heating Brand', d.hvac.heatingBrand)}
+          {infoRow('Heating Model', d.hvac.heatingModel)}
+          {infoRow('Thermostat Brand', d.hvac.thermostatBrand)}
+          {infoRow('Thermostat Model', d.hvac.thermostatModel)}
+          {infoRow('Filter Size', d.hvac.filterSize)}
+        </>)}
+      </>)}
+
+      {/* Water Heater */}
+      {d?.waterHeater && Object.values(d.waterHeater).some(Boolean) && (<>
+        {sectionHeader('Water Heater', '🔥')}
+        {card(<>
+          {infoRow('Type', d.waterHeater.type)}
+          {infoRow('Brand', d.waterHeater.brand)}
+          {infoRow('Model', d.waterHeater.model)}
+          {infoRow('Age', d.waterHeater.age)}
+          {infoRow('Fuel', d.waterHeater.fuel)}
+          {infoRow('Capacity', d.waterHeater.capacity)}
+          {infoRow('Location', d.waterHeater.location)}
+        </>)}
+      </>)}
+
+      {/* Appliances */}
+      {d?.appliances && Object.values(d.appliances).some(Boolean) && (<>
+        {sectionHeader('Appliances', '🍳')}
+        {card(<>
+          {d.appliances.refrigerator && (d.appliances.refrigerator.brand || d.appliances.refrigerator.model) && infoRow('Refrigerator', [d.appliances.refrigerator.brand, d.appliances.refrigerator.model].filter(Boolean).join(' — '))}
+          {d.appliances.washer && (d.appliances.washer.brand || d.appliances.washer.model) && infoRow('Washer', [d.appliances.washer.brand, d.appliances.washer.model].filter(Boolean).join(' — '))}
+          {d.appliances.dryer && (d.appliances.dryer.brand || d.appliances.dryer.model) && infoRow('Dryer', [d.appliances.dryer.brand, d.appliances.dryer.model, d.appliances.dryer.fuel].filter(Boolean).join(' — '))}
+          {d.appliances.dishwasher && (d.appliances.dishwasher.brand || d.appliances.dishwasher.model) && infoRow('Dishwasher', [d.appliances.dishwasher.brand, d.appliances.dishwasher.model].filter(Boolean).join(' — '))}
+          {d.appliances.oven && (d.appliances.oven.brand || d.appliances.oven.model) && infoRow('Oven', [d.appliances.oven.brand, d.appliances.oven.model, d.appliances.oven.fuel].filter(Boolean).join(' — '))}
+          {d.appliances.disposal?.brand && infoRow('Disposal', d.appliances.disposal.brand)}
+          {d.appliances.microwave && (d.appliances.microwave.brand || d.appliances.microwave.type) && infoRow('Microwave', [d.appliances.microwave.brand, d.appliances.microwave.type].filter(Boolean).join(' — '))}
+        </>)}
+      </>)}
+
+      {/* Plumbing */}
+      {d?.plumbing && Object.values(d.plumbing).some(Boolean) && (<>
+        {sectionHeader('Plumbing', '🚿')}
+        {card(<>
+          {infoRow('Kitchen Faucet', d.plumbing.kitchenFaucetBrand)}
+          {infoRow('Bathroom Faucet', d.plumbing.bathroomFaucetBrand)}
+          {infoRow('Toilet Brand', d.plumbing.toiletBrand)}
+          {infoRow('Water Softener', d.plumbing.waterSoftener)}
+          {infoRow('Septic / Sewer', d.plumbing.septicOrSewer)}
+          {infoRow('Main Shutoff', d.plumbing.mainShutoffLocation)}
+        </>)}
+      </>)}
+
+      {/* Electrical */}
+      {d?.electrical && Object.values(d.electrical).some(Boolean) && (<>
+        {sectionHeader('Electrical', '💡')}
+        {card(<>
+          {infoRow('Breaker Box', d.electrical.breakerBoxLocation)}
+          {infoRow('Panel Amperage', d.electrical.panelAmperage)}
+          {infoRow('Generator', d.electrical.hasGenerator ? (d.electrical.generatorType || 'Yes') : null)}
+          {infoRow('Solar', d.electrical.hasSolar ? (d.electrical.solarSystem || 'Yes') : null)}
+          {infoRow('EV Charger', d.electrical.hasEvCharger ? (d.electrical.evChargerBrand || 'Yes') : null)}
+        </>)}
+      </>)}
+
+      {/* Pool / Spa */}
+      {d?.pool && Object.values(d.pool).some(Boolean) && (<>
+        {sectionHeader('Pool / Spa', '🏊')}
+        {card(<>
+          {infoRow('Pool Type', (d.pool as Record<string, string>).type)}
+          {infoRow('Heating', (d.pool as Record<string, string>).heating)}
+          {infoRow('Equipment', (d.pool as Record<string, string>).equipment)}
+        </>)}
+      </>)}
+
+      {/* Exterior */}
+      {d?.exterior && Object.values(d.exterior).some(Boolean) && (<>
+        {sectionHeader('Exterior', '🏡')}
+        {card(<>
+          {infoRow('Roof Type', (d.exterior as Record<string, string>).roofType)}
+          {infoRow('Siding', (d.exterior as Record<string, string>).siding)}
+          {infoRow('Fence', (d.exterior as Record<string, string>).fence)}
+          {infoRow('Garage Door', (d.exterior as Record<string, string>).garageDoor)}
+          {infoRow('Irrigation', (d.exterior as Record<string, string>).irrigation)}
+        </>)}
+      </>)}
+
+      {/* Access */}
+      {d?.access && Object.values(d.access).some(Boolean) && (<>
+        {sectionHeader('Access', '🔑')}
+        {card(<>
+          {infoRow('Lockbox', (d.access as Record<string, string>).lockbox)}
+          {infoRow('Gate Code', (d.access as Record<string, string>).gate)}
+          {infoRow('Alarm Code', (d.access as Record<string, string>).alarm)}
+          {infoRow('WiFi', (d.access as Record<string, string>).wifi)}
+        </>)}
+      </>)}
+
+      {/* Notes */}
+      {property.notes && (<>
+        {sectionHeader('Notes', '📝')}
+        <div style={{
+          background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10,
+          padding: 16, fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
+        }}>
+          {property.notes}
         </div>
-      )}
+      </>)}
     </div>
   );
 }

@@ -87,6 +87,7 @@ export default function BusinessPortal() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [editPropertyId, setEditPropertyId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('bp_sidebar_collapsed') === 'true';
   });
@@ -232,7 +233,7 @@ export default function BusinessPortal() {
             property={selectedProperty}
             plan={workspace.plan}
             onBack={() => { setSelectedProperty(null); setTab('properties'); }}
-            onEditProperty={() => { /* Edit handled via PropertiesTab */ }}
+            onEditProperty={(p) => { setEditPropertyId(p.id); setSelectedProperty(null); setTab('properties'); }}
           />
         </div>
       </BusinessLayout>
@@ -326,7 +327,7 @@ export default function BusinessPortal() {
         <ScorecardsTab workspaceId={workspace.id} plan={workspace.plan} />
       )}
       {workspace && tab === 'properties' && (
-        <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} onSelectProperty={setSelectedProperty} />
+        <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} onSelectProperty={setSelectedProperty} editPropertyId={editPropertyId} onEditHandled={() => setEditPropertyId(null)} />
       )}
       {workspace && tab === 'vendors' && (
         <VendorsTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} />

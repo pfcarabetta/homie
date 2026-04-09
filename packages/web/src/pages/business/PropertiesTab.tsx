@@ -524,7 +524,7 @@ function EditPropertyModal({ workspaceId, property, onClose, onUpdated, onDelete
 
 /* ── Properties Tab ─────────────────────────────────────────────────────── */
 
-export default function PropertiesTab({ workspaceId, role, plan, onSelectProperty }: { workspaceId: string; role: string; plan: string; onSelectProperty?: (p: Property) => void }) {
+export default function PropertiesTab({ workspaceId, role, plan, onSelectProperty, editPropertyId, onEditHandled }: { workspaceId: string; role: string; plan: string; onSelectProperty?: (p: Property) => void; editPropertyId?: string | null; onEditHandled?: () => void }) {
   const { pricing } = usePricing();
   const PLAN_TIERS_ORDERED = getPlanTiersOrdered(pricing);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -575,6 +575,14 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
       setLoading(false);
     });
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (editPropertyId && properties.length > 0) {
+      const p = properties.find(pr => pr.id === editPropertyId);
+      if (p) setEditingProperty(p);
+      onEditHandled?.();
+    }
+  }, [editPropertyId, properties, onEditHandled]);
 
   const canEdit = role === 'admin' || role === 'coordinator';
   const propertyLimit = getPlanPropertyLimit(plan, pricing);
