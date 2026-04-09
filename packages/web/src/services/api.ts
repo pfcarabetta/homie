@@ -1041,6 +1041,12 @@ export const businessService = {
       method: 'DELETE',
     }),
 
+  // CSV Export/Import
+  exportPropertiesCsv: (workspaceId: string) =>
+    fetch(`${API_BASE}/api/v1/business/${workspaceId}/properties/export`, { headers: authHeaders() }).then(r => r.text()),
+  importPropertiesCsv: (workspaceId: string, csv: string) =>
+    fetchAPI<{ imported: number; updated: number; errors: string[] }>(`/api/v1/business/${workspaceId}/properties/import`, { method: 'POST', body: JSON.stringify({ csv }) }),
+
   // Track PMS Import
   importFromTrack: (workspaceId: string, data: { track_domain: string; api_key: string; api_secret: string; update_existing?: boolean }) =>
     fetchAPI<{ imported: number; updated: number; skipped: number; total: number }>(`/api/v1/business/${workspaceId}/import/track`, {

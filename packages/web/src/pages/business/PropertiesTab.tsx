@@ -546,6 +546,8 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
   const [syncingReservations, setSyncingReservations] = useState(false);
   const [syncReservationResult, setSyncReservationResult] = useState<{ imported: number; updated: number; total: number } | null>(null);
   const [syncReservationError, setSyncReservationError] = useState('');
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvResult, setCsvResult] = useState<{ imported: number; updated: number; errors: string[] } | null>(null);
 
   function togglePropertyExpand(propertyId: string) {
     if (expandedPropertyId === propertyId) {
@@ -644,6 +646,55 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                   Import from Track (Pro+)
                 </button>
               )}
+              <button onClick={async () => {
+                try {
+                  const csv = await businessService.exportPropertiesCsv(workspaceId);
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'properties.csv';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                } catch { /* ignore download errors */ }
+              }}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Download CSV
+              </button>
+              <button onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.csv,text/csv';
+                input.onchange = async () => {
+                  const file = input.files?.[0];
+                  if (!file) return;
+                  setCsvImporting(true);
+                  setCsvResult(null);
+                  try {
+                    const text = await file.text();
+                    const res = await businessService.importPropertiesCsv(workspaceId, text);
+                    if (res.data) {
+                      setCsvResult(res.data);
+                      // Refresh properties list
+                      const refreshed = await businessService.listProperties(workspaceId);
+                      if (refreshed.data) setProperties(refreshed.data.sort((a, b) => a.name.localeCompare(b.name)));
+                    } else if (res.error) {
+                      setCsvResult({ imported: 0, updated: 0, errors: [res.error] });
+                    }
+                  } catch (err: unknown) {
+                    setCsvResult({ imported: 0, updated: 0, errors: [err instanceof Error ? err.message : 'Import failed'] });
+                  } finally {
+                    setCsvImporting(false);
+                  }
+                };
+                input.click();
+              }}
+                disabled={csvImporting}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: csvImporting ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, opacity: csvImporting ? 0.7 : 1 }}>
+                {csvImporting ? 'Importing...' : 'Upload CSV'}
+              </button>
               <button onClick={() => {
                 if (checkTierWarning(1)) return;
                 setShowAdd(true);
@@ -655,6 +706,26 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
           )
         )}
       </div>
+
+      {csvResult && (
+        <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, background: csvResult.errors.length > 0 && csvResult.imported === 0 && csvResult.updated === 0 ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${csvResult.errors.length > 0 && csvResult.imported === 0 && csvResult.updated === 0 ? '#FECACA' : '#BBF7D0'}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: D, marginBottom: 4 }}>
+                CSV Import Complete
+                {csvResult.imported > 0 && ` — ${csvResult.imported} created`}
+                {csvResult.updated > 0 && `, ${csvResult.updated} updated`}
+              </div>
+              {csvResult.errors.length > 0 && (
+                <div style={{ fontSize: 13, color: '#DC2626', marginTop: 4 }}>
+                  {csvResult.errors.map((e, i) => <div key={i}>{e}</div>)}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setCsvResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B9490', padding: 0, lineHeight: 1 }}>x</button>
+          </div>
+        </div>
+      )}
 
       {properties.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>

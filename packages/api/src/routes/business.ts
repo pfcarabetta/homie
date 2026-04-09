@@ -324,6 +324,296 @@ router.delete('/:workspaceId/properties/:propertyId', requireWorkspace, requireW
   }
 });
 
+// ── CSV Export / Import ────────────────────────────────────────────────────
+
+const CSV_COLUMNS = [
+  'id', 'name', 'address', 'city', 'state', 'zipCode', 'propertyType',
+  'bedrooms', 'bathrooms', 'sqft', 'unitCount', 'active', 'notes',
+  'pmsSource', 'pmsExternalId',
+] as const;
+
+const DETAIL_COLUMNS = [
+  'hvac_acType', 'hvac_acBrand', 'hvac_acModel', 'hvac_heatingType',
+  'hvac_thermostatBrand', 'hvac_filterSize',
+  'waterHeater_type', 'waterHeater_brand', 'waterHeater_fuel',
+  'waterHeater_capacity', 'waterHeater_location',
+  'appliances_refrigerator_brand', 'appliances_washer_brand',
+  'appliances_dryer_brand', 'appliances_dishwasher_brand',
+  'appliances_oven_brand',
+  'plumbing_kitchenFaucetBrand', 'plumbing_toiletBrand',
+  'plumbing_mainShutoffLocation',
+  'electrical_breakerBoxLocation', 'electrical_panelAmperage',
+  'access_lockboxCode', 'access_gateCode', 'access_alarmBrand',
+  'access_alarmCode', 'access_wifiNetwork', 'access_wifiPassword',
+] as const;
+
+function escapeCsvField(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function getDetailValue(details: Record<string, unknown> | null | undefined, column: string): string {
+  if (!details) return '';
+  const parts = column.split('_');
+  // e.g. 'hvac_acType' -> details.hvac.acType
+  // e.g. 'appliances_refrigerator_brand' -> details.appliances.refrigerator.brand
+  // e.g. 'waterHeater_type' -> details.waterHeater.type
+  const section = parts[0];
+  const sectionData = details[section] as Record<string, unknown> | undefined;
+  if (!sectionData) return '';
+
+  if (section === 'appliances') {
+    // appliances_refrigerator_brand -> appliances.refrigerator.brand
+    const appliance = parts[1];
+    const field = parts[2];
+    const appData = sectionData[appliance] as Record<string, unknown> | undefined;
+    return appData?.[field] != null ? String(appData[field]) : '';
+  }
+
+  // For all others: section_fieldName -> details[section][fieldName]
+  const fieldName = parts.slice(1).join('_');
+  // Convert back: acType stays acType (camelCase)
+  return sectionData[fieldName] != null ? String(sectionData[fieldName]) : '';
+}
+
+function setDetailValue(details: Record<string, unknown>, column: string, value: string): void {
+  const parts = column.split('_');
+  const section = parts[0];
+
+  if (!details[section]) details[section] = {};
+  const sectionData = details[section] as Record<string, unknown>;
+
+  if (section === 'appliances') {
+    const appliance = parts[1];
+    const field = parts[2];
+    if (!sectionData[appliance]) sectionData[appliance] = {};
+    (sectionData[appliance] as Record<string, unknown>)[field] = value;
+  } else {
+    const fieldName = parts.slice(1).join('_');
+    sectionData[fieldName] = value;
+  }
+}
+
+// GET /:workspaceId/properties/export
+router.get('/:workspaceId/properties/export', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.workspaceId, req.workspaceId))
+      .orderBy(desc(properties.createdAt));
+
+    const allColumns = [...CSV_COLUMNS, ...DETAIL_COLUMNS];
+    const headerRow = allColumns.map(c => escapeCsvField(c)).join(',');
+
+    const dataRows = rows.map(row => {
+      const vals: string[] = [];
+      for (const col of CSV_COLUMNS) {
+        vals.push(escapeCsvField(row[col] as string | number | boolean | null));
+      }
+      const details = row.details as Record<string, unknown> | null;
+      for (const col of DETAIL_COLUMNS) {
+        vals.push(escapeCsvField(getDetailValue(details, col)));
+      }
+      return vals.join(',');
+    });
+
+    const csv = [headerRow, ...dataRows].join('\r\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="properties.csv"');
+    res.send(csv);
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/export]');
+    res.status(500).json({ data: null, error: 'Failed to export properties', meta: {} });
+  }
+});
+
+// POST /:workspaceId/properties/import
+router.post('/:workspaceId/properties/import', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  try {
+    let csvText: string;
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('text/csv')) {
+      csvText = typeof req.body === 'string' ? req.body : String(req.body);
+    } else {
+      const body = req.body as { csv?: string };
+      if (!body.csv || typeof body.csv !== 'string') {
+        res.status(400).json({ data: null, error: 'Missing csv field in request body', meta: {} });
+        return;
+      }
+      csvText = body.csv;
+    }
+
+    // Parse CSV
+    const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) {
+      res.status(400).json({ data: null, error: 'CSV must have a header row and at least one data row', meta: {} });
+      return;
+    }
+
+    const headers = parseCsvLine(lines[0]);
+    const errors: string[] = [];
+    let imported = 0;
+    let updated = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      try {
+        const values = parseCsvLine(lines[i]);
+        const row: Record<string, string> = {};
+        for (let j = 0; j < headers.length; j++) {
+          row[headers[j]] = values[j] ?? '';
+        }
+
+        const id = row['id']?.trim() || '';
+        const name = row['name']?.trim() || '';
+
+        if (!id && !name) {
+          errors.push(`Row ${i + 1}: skipped (no id or name)`);
+          continue;
+        }
+
+        // Build base fields (skip PMS fields)
+        const baseFields: Record<string, unknown> = {};
+        if (row['name'] !== undefined && row['name'].trim()) baseFields.name = row['name'].trim();
+        if (row['address'] !== undefined) baseFields.address = row['address'] || null;
+        if (row['city'] !== undefined) baseFields.city = row['city'] || null;
+        if (row['state'] !== undefined) baseFields.state = row['state'] || null;
+        if (row['zipCode'] !== undefined) baseFields.zipCode = row['zipCode'] || null;
+        if (row['propertyType'] !== undefined && row['propertyType'].trim()) baseFields.propertyType = row['propertyType'].trim();
+        if (row['bedrooms'] !== undefined && row['bedrooms'].trim()) baseFields.bedrooms = parseInt(row['bedrooms'], 10) || null;
+        if (row['bathrooms'] !== undefined && row['bathrooms'].trim()) baseFields.bathrooms = row['bathrooms'].trim();
+        if (row['sqft'] !== undefined && row['sqft'].trim()) baseFields.sqft = parseInt(row['sqft'], 10) || null;
+        if (row['unitCount'] !== undefined && row['unitCount'].trim()) baseFields.unitCount = parseInt(row['unitCount'], 10) || 1;
+        if (row['active'] !== undefined && row['active'].trim()) baseFields.active = row['active'].trim().toLowerCase() === 'true';
+        if (row['notes'] !== undefined) baseFields.notes = row['notes'] || null;
+
+        // Build details from detail columns (merge)
+        const detailUpdates: Record<string, string> = {};
+        for (const col of DETAIL_COLUMNS) {
+          if (row[col] !== undefined && row[col].trim()) {
+            detailUpdates[col] = row[col].trim();
+          }
+        }
+
+        if (id) {
+          // UPDATE existing property
+          const [existing] = await db
+            .select()
+            .from(properties)
+            .where(and(eq(properties.id, id), eq(properties.workspaceId, req.workspaceId)))
+            .limit(1);
+
+          if (!existing) {
+            errors.push(`Row ${i + 1}: property id "${id}" not found in workspace`);
+            continue;
+          }
+
+          // For PMS-synced properties, only update non-empty CSV fields
+          const isPms = !!existing.pmsSource;
+          const updateFields: Record<string, unknown> = {};
+
+          for (const [key, val] of Object.entries(baseFields)) {
+            if (isPms && (val === null || val === '')) continue;
+            updateFields[key] = val;
+          }
+
+          // Merge details
+          if (Object.keys(detailUpdates).length > 0) {
+            const existingDetails = (existing.details as Record<string, unknown>) ?? {};
+            const merged = JSON.parse(JSON.stringify(existingDetails));
+            for (const [col, val] of Object.entries(detailUpdates)) {
+              setDetailValue(merged, col, val);
+            }
+            updateFields.details = merged;
+          }
+
+          if (Object.keys(updateFields).length > 0) {
+            updateFields.updatedAt = new Date();
+            await db
+              .update(properties)
+              .set(updateFields)
+              .where(and(eq(properties.id, id), eq(properties.workspaceId, req.workspaceId)));
+          }
+          updated++;
+        } else {
+          // CREATE new property
+          if (!baseFields.name) {
+            errors.push(`Row ${i + 1}: name is required for new properties`);
+            continue;
+          }
+
+          const newDetails: Record<string, unknown> = {};
+          for (const [col, val] of Object.entries(detailUpdates)) {
+            setDetailValue(newDetails, col, val);
+          }
+
+          await db.insert(properties).values({
+            workspaceId: req.workspaceId,
+            name: baseFields.name as string,
+            address: (baseFields.address as string) ?? null,
+            city: (baseFields.city as string) ?? null,
+            state: (baseFields.state as string) ?? null,
+            zipCode: (baseFields.zipCode as string) ?? null,
+            propertyType: (baseFields.propertyType as string) ?? 'residential',
+            unitCount: (baseFields.unitCount as number) ?? 1,
+            bedrooms: (baseFields.bedrooms as number) ?? null,
+            bathrooms: (baseFields.bathrooms as string) ?? null,
+            sqft: (baseFields.sqft as number) ?? null,
+            notes: (baseFields.notes as string) ?? null,
+            active: (baseFields.active as boolean) ?? true,
+            details: Object.keys(newDetails).length > 0 ? newDetails : null,
+          });
+          imported++;
+        }
+      } catch (rowErr) {
+        errors.push(`Row ${i + 1}: ${rowErr instanceof Error ? rowErr.message : 'unknown error'}`);
+      }
+    }
+
+    res.json({ data: { imported, updated, errors }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/properties/import]');
+    res.status(500).json({ data: null, error: 'Failed to import properties', meta: {} });
+  }
+});
+
+/** Parse a single CSV line respecting quoted fields */
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        result.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+  }
+  result.push(current);
+  return result;
+}
+
 // ── Team Members ────────────────────────────────────────────────────────────
 
 // GET /:workspaceId/members
