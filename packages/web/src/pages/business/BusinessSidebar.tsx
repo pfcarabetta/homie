@@ -181,15 +181,18 @@ export default function BusinessSidebar({
             <div key={item.id}>
               <button onClick={() => {
                 if (hasChildren) {
-                  const wasExpanded = expanded[item.id];
-                  toggle(item.id);
-                  // If expanding for the first time and not already on a child tab, navigate to first child
-                  // But don't close the mobile drawer — let the user see the sub-menu
-                  if (!wasExpanded && !active && item.children) {
-                    const firstClickable = item.children.find(c => !c.locked && c.tab);
-                    if (firstClickable && firstClickable.tab) {
-                      onNavigate(firstClickable.tab);
-                      // Don't call onNavigateCallback here — keep drawer open to show sub-menu
+                  if (collapsed) {
+                    // Expand the sidebar to reveal sub-menu
+                    setCollapsed(false);
+                    setExpanded(p => ({ ...p, [item.id]: true }));
+                  } else {
+                    const wasExpanded = expanded[item.id];
+                    toggle(item.id);
+                    if (!wasExpanded && !active && item.children) {
+                      const firstClickable = item.children.find(c => !c.locked && c.tab);
+                      if (firstClickable && firstClickable.tab) {
+                        onNavigate(firstClickable.tab);
+                      }
                     }
                   }
                 } else {
