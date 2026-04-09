@@ -50,7 +50,7 @@ export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, in
   }
 
   const SUB_TAB_TITLES: Record<GuestSubTab, string> = {
-    issues: 'Guest Issues',
+    issues: 'Guest Requests',
     settings: 'Guest Reporter Settings',
     'auto-dispatch': 'Auto-Dispatch Rules',
     'qr-codes': 'QR Codes',

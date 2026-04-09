@@ -10,7 +10,7 @@ export const TABS = ['dashboard', 'dispatches', 'bookings', 'guest-requests', 'g
 export type Tab = typeof TABS[number];
 export const TAB_LABELS: Record<Tab, string> = {
   dashboard: 'Dashboard', dispatches: 'Dispatches', bookings: 'Bookings',
-  'guest-requests': 'Guest Requests', 'guest-issues': 'Issues', 'guest-settings': 'Settings',
+  'guest-requests': 'Guest Requests', 'guest-issues': 'Requests', 'guest-settings': 'Settings',
   'guest-auto-dispatch': 'Auto-Dispatch', 'guest-qr-codes': 'QR Codes',
   schedules: 'Auto-Dispatch', billing: 'Billing',
   reports: 'Reports', properties: 'Properties', vendors: 'Providers', team: 'Team', settings: 'Settings',

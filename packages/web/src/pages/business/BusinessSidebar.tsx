@@ -39,7 +39,7 @@ function getNavItems(plan: string, role: string): NavItem[] {
     },
     {
       id: 'guest-group', label: 'Guest Requests', icon: 'reported', locked: !isPro, children: [
-        { id: 'guest-issues', label: 'Issues', icon: 'reported', tab: 'guest-issues' },
+        { id: 'guest-issues', label: 'Requests', icon: 'reported', tab: 'guest-issues' },
         { id: 'guest-auto-dispatch', label: 'Auto-Dispatch', icon: 'history', tab: 'guest-auto-dispatch' },
         { id: 'guest-settings', label: 'Settings', icon: 'settings', tab: 'guest-settings' },
         { id: 'guest-qr-codes', label: 'QR Codes', icon: 'search', tab: 'guest-qr-codes' },
