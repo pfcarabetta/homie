@@ -11,6 +11,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
   const [loading, setLoading] = useState(true);
   const [suggestionsGeneratedAt, setSuggestionsGeneratedAt] = useState<string | null>(null);
   const [dispatchSuggestion, setDispatchSuggestion] = useState<SeasonalSuggestion | null>(null);
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
   const [allProperties, setAllProperties] = useState<Property[]>([]);
 
   useEffect(() => {
@@ -211,34 +212,50 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
           </div>
         )}
 
-        {suggestions.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {suggestions.map((s, i) => {
-              const priorityColor = s.priority === 'high' ? '#DC2626' : s.priority === 'medium' ? '#D4A017' : G;
-              return (
-                <div key={i} style={{ background: W, borderRadius: 12, padding: 16, border: '1px solid #E0DAD4' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: D, lineHeight: 1.3 }}>{s.title}</div>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: priorityColor, background: `${priorityColor}15`, padding: '2px 8px', borderRadius: 100, flexShrink: 0, marginLeft: 8, textTransform: 'capitalize' }}>{s.priority}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>{s.description}</div>
-                  <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 10 }}>
-                    <span style={{ textTransform: 'capitalize' }}>{s.category.replace(/_/g, ' ')}</span>
-                    {s.properties.length > 0 && <span> · {s.properties.slice(0, 3).join(', ')}{s.properties.length > 3 ? ` +${s.properties.length - 3} more` : ''}</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: O, fontStyle: 'italic', marginBottom: 10 }}>{s.reason}</div>
-                  <button onClick={() => setDispatchSuggestion(s)}
-                    style={{
-                      width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
-                      background: O, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    }}>
-                    Dispatch
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {suggestions.length > 0 && (() => {
+          const visibleSuggestions = suggestionsExpanded ? suggestions : suggestions.slice(0, 2);
+          const hasMore = suggestions.length > 2;
+          return (
+            <>
+              <div className="bp-suggestions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                {visibleSuggestions.map((s, i) => {
+                  const priorityColor = s.priority === 'high' ? '#DC2626' : s.priority === 'medium' ? '#D4A017' : G;
+                  return (
+                    <div key={i} style={{ background: W, borderRadius: 12, padding: 16, border: '1px solid #E0DAD4' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: D, lineHeight: 1.3 }}>{s.title}</div>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: priorityColor, background: `${priorityColor}15`, padding: '2px 8px', borderRadius: 100, flexShrink: 0, marginLeft: 8, textTransform: 'capitalize' }}>{s.priority}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>{s.description}</div>
+                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 10 }}>
+                        <span style={{ textTransform: 'capitalize' }}>{s.category.replace(/_/g, ' ')}</span>
+                        {s.properties.length > 0 && <span> · {s.properties.slice(0, 3).join(', ')}{s.properties.length > 3 ? ` +${s.properties.length - 3} more` : ''}</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: O, fontStyle: 'italic', marginBottom: 10 }}>{s.reason}</div>
+                      <button onClick={() => setDispatchSuggestion(s)}
+                        style={{
+                          width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
+                          background: O, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        }}>
+                        Dispatch
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              {hasMore && (
+                <button onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
+                  style={{
+                    display: 'block', width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 10,
+                    border: '1px solid #E0DAD4', background: '#fff', color: '#6B6560',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'center',
+                  }}>
+                  {suggestionsExpanded ? `Show less` : `Show ${suggestions.length - 2} more suggestions`}
+                </button>
+              )}
+            </>
+          );
+        })()}
 
         {!loadingSuggestions && suggestions.length === 0 && (
           <div style={{ textAlign: 'center', padding: '30px 0', color: '#9B9490', fontSize: 13 }}>
