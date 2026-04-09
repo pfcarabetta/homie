@@ -602,7 +602,7 @@ export default function PropertiesTab({ workspaceId, role, plan }: { workspaceId
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Properties</h3>
           <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>
@@ -616,7 +616,7 @@ export default function PropertiesTab({ workspaceId, role, plan }: { workspaceId
               <div style={{ fontSize: 12, color: '#9B9490' }}>Upgrade your plan to add more properties</div>
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {['professional', 'business', 'enterprise'].includes(plan) ? (
                 <>
                   <button onClick={() => setShowTrackImport(true)}
