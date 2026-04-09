@@ -484,6 +484,9 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId }: { dispa
               {showHeader && (
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>{dateLabel}</div>
               )}
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: item.type === 'dispatch' ? '#C2410C' : '#16A34A', marginBottom: 4 }}>
+                {item.type === 'dispatch' ? '📋 Dispatch' : '✅ Booking'}
+              </div>
               {item.type === 'dispatch' ? (
                 <DispatchCard
                   j={item.data as WorkspaceDispatch}
