@@ -15,16 +15,40 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
   const [scorecards, setScorecards] = useState<Scorecard[]>([]);
   const [expandedVendor, setExpandedVendor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [preferredIds, setPreferredIds] = useState<Set<string>>(new Set());
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [justAdded, setJustAdded] = useState<Set<string>>(new Set());
 
   const isPremium = ['professional', 'business', 'enterprise'].includes(plan);
 
   useEffect(() => {
     if (!isPremium) { setLoading(false); return; }
-    businessService.getVendorScorecards(workspaceId).then(res => {
-      if (res.data) setScorecards(res.data.vendors);
+    Promise.all([
+      businessService.getVendorScorecards(workspaceId),
+      businessService.listVendors(workspaceId),
+    ]).then(([scoreRes, vendorRes]) => {
+      if (scoreRes.data) setScorecards(scoreRes.data.vendors);
+      if (vendorRes.data) setPreferredIds(new Set(vendorRes.data.filter(v => v.active).map(v => v.providerId)));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [workspaceId, isPremium]);
+
+  async function handleAddPreferred(providerId: string, categories: string[] | null) {
+    setAddingId(providerId);
+    try {
+      await businessService.addVendor(workspaceId, {
+        provider_id: providerId,
+        categories: categories ?? undefined,
+        priority: 1,
+      });
+      setPreferredIds(prev => new Set(prev).add(providerId));
+      setJustAdded(prev => new Set(prev).add(providerId));
+    } catch { /* ignore if already added */
+      setPreferredIds(prev => new Set(prev).add(providerId));
+      setJustAdded(prev => new Set(prev).add(providerId));
+    }
+    setAddingId(null);
+  }
 
   if (!isPremium) return (
     <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
@@ -73,7 +97,12 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
                       fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: gc.text,
                     }}>{v.grade}</div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 15, color: D }}>{v.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontWeight: 700, fontSize: 15, color: D }}>{v.name}</span>
+                        {preferredIds.has(v.id) && (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: O, padding: '2px 6px', borderRadius: 4, letterSpacing: '0.04em' }}>PREFERRED</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 12, color: '#9B9490' }}>
                         {v.google_rating && `★ ${v.google_rating}`} · {v.total_outreach} outreach · {v.total_bookings} bookings
                       </div>
@@ -144,14 +173,42 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
                     </div>
                   )}
 
-                  {/* Contact */}
-                  {v.phone && (
-                    <a href={`tel:${v.phone}`} style={{
-                      display: 'block', textAlign: 'center', padding: '10px 0', borderRadius: 100,
-                      border: `1px solid ${O}`, color: O, fontSize: 14, fontWeight: 600,
-                      textDecoration: 'none',
-                    }}>📞 Call {v.name.split(' ')[0]}</a>
-                  )}
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {v.phone && (
+                      <a href={`tel:${v.phone}`} style={{
+                        flex: 1, textAlign: 'center', padding: '10px 0', borderRadius: 100,
+                        border: `1px solid ${O}`, color: O, fontSize: 14, fontWeight: 600,
+                        textDecoration: 'none', display: 'block', minWidth: 120,
+                      }}>📞 Call {v.name.split(' ')[0]}</a>
+                    )}
+                    {preferredIds.has(v.id) ? (
+                      justAdded.has(v.id) ? (
+                        <div style={{
+                          flex: 1, textAlign: 'center', padding: '10px 0', borderRadius: 100,
+                          background: `${G}10`, border: `1px solid ${G}30`, color: G,
+                          fontSize: 13, fontWeight: 600, minWidth: 120,
+                        }}>✅ Added to preferred</div>
+                      ) : (
+                        <div style={{
+                          flex: 1, textAlign: 'center', padding: '10px 0', borderRadius: 100,
+                          background: `${G}10`, border: `1px solid ${G}30`, color: G,
+                          fontSize: 13, fontWeight: 600, minWidth: 120,
+                        }}>⭐ Preferred provider</div>
+                      )
+                    ) : (
+                      <button
+                        onClick={() => handleAddPreferred(v.id, v.categories)}
+                        disabled={addingId === v.id}
+                        style={{
+                          flex: 1, padding: '10px 0', borderRadius: 100,
+                          border: `1px solid ${G}`, background: '#fff', color: G,
+                          fontSize: 13, fontWeight: 600, cursor: addingId === v.id ? 'default' : 'pointer',
+                          opacity: addingId === v.id ? 0.6 : 1, minWidth: 120,
+                        }}
+                      >{addingId === v.id ? 'Adding...' : `⭐ Add ${v.name.split(' ')[0]} to Preferred`}</button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
