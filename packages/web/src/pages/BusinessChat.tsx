@@ -630,24 +630,31 @@ export default function BusinessChat() {
         const activeProps = res.data.filter(p => p.active);
         setProperties(activeProps);
 
-        // Auto-select property and category from seasonal suggestion prefill
-        if (prefillPropertyId && prefillCategory && !prefillHandledRef.current) {
+        // Auto-select property (and optionally category) from URL params
+        if (prefillPropertyId && !prefillHandledRef.current) {
           prefillHandledRef.current = true;
           const prop = activeProps.find(p => p.id === prefillPropertyId);
           if (prop) {
             setSelectedProperty(prop);
-            // Find matching category
-            const cat = B2B_CATEGORIES.find(c => c.id === prefillCategory);
-            if (cat) {
-              setCategory(cat);
-              const propName = prop.name;
-              const title = prefillTitle || cat.label;
-              const desc = prefillDescription || '';
-              setMessages([
-                { role: 'assistant', content: `${cat.icon} **${title}** at ${propName}${desc ? ` — ${desc}` : ''}. ${cat.q1.text}` },
-              ]);
-              setStep('q1');
+            if (prefillCategory) {
+              // Find matching category
+              const cat = B2B_CATEGORIES.find(c => c.id === prefillCategory);
+              if (cat) {
+                setCategory(cat);
+                const propName = prop.name;
+                const title = prefillTitle || cat.label;
+                const desc = prefillDescription || '';
+                setMessages([
+                  { role: 'assistant', content: `${cat.icon} **${title}** at ${propName}${desc ? ` — ${desc}` : ''}. ${cat.q1.text}` },
+                ]);
+                setStep('q1');
+              } else {
+                setMessages([{ role: 'assistant', content: `Selected **${prop.name}**. What do you need help with?` }]);
+                setStep('category');
+              }
             } else {
+              // Property only — skip property selection, go to category
+              setMessages([{ role: 'assistant', content: `Selected **${prop.name}**. What do you need help with?` }]);
               setStep('category');
             }
           }
