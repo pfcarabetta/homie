@@ -257,7 +257,7 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onFocus={() => { if (searchQuery.length >= 2) setSearchOpen(true); }}
-                placeholder="Search properties, tasks, vendors..."
+                placeholder="Search properties, providers, and dispatches..."
                 style={{
                   fontFamily: "'DM Sans',sans-serif",
                   fontSize: 13,
