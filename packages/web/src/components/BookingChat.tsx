@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { businessService, BookingMessage, WorkspaceBooking } from '@/services/api';
+import { renderBold } from '@/pages/business/constants';
 
 const O = '#E8632B';
 const D = '#2D2926';
@@ -113,7 +114,7 @@ function BookingCard({ booking }: { booking: WorkspaceBooking }) {
           background: 'white', borderRadius: 8, padding: '8px 10px',
           border: '1px solid rgba(0,0,0,0.06)',
         }}>
-          {booking.diagnosis.summary}
+          {renderBold(booking.diagnosis.summary)}
         </div>
       )}
     </div>
