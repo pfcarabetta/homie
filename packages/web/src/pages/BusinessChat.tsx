@@ -1209,6 +1209,21 @@ export default function BusinessChat() {
         }
       `}</style>
 
+      {/* After hours notice — sits above the header */}
+      {(() => {
+        const hour = new Date().getHours();
+        return (hour < 8 || hour >= 18) ? (
+          <div style={{
+            background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
+            padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center', flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>🌙</span>
+            <span>Some providers may not be reachable outside business hours (8 AM – 6 PM). Responses may be limited and take longer.</span>
+          </div>
+        ) : null;
+      })()}
+
       {/* Header */}
       <nav style={{
         zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
@@ -1272,21 +1287,6 @@ export default function BusinessChat() {
           }}>+ New</button>
         </div>
       </nav>
-
-      {/* After hours notice */}
-      {(() => {
-        const hour = new Date().getHours();
-        return (hour < 8 || hour >= 18) ? (
-          <div style={{
-            background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
-            padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center',
-          }}>
-            <span style={{ fontSize: 16, flexShrink: 0 }}>🌙</span>
-            <span>Some providers may not be reachable outside business hours (8 AM – 6 PM). Responses may be limited and take longer.</span>
-          </div>
-        ) : null;
-      })()}
 
       {/* Chat area */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
