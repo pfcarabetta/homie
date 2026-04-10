@@ -37,6 +37,8 @@ function AICostBadge({ diagnosis }: { diagnosis: WorkspaceBooking['diagnosis'] }
 }
 
 function BookingCard({ booking }: { booking: WorkspaceBooking }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   const catLabel = booking.diagnosis?.category
     ? booking.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     : 'Service';
@@ -44,78 +46,95 @@ function BookingCard({ booking }: { booking: WorkspaceBooking }) {
   return (
     <div style={{
       background: W, borderBottom: '1px solid rgba(0,0,0,0.07)',
-      padding: '14px 16px',
+      padding: collapsed ? '10px 16px' : '14px 16px',
+      transition: 'padding 0.15s',
     }}>
       {/* Status row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed ? 0 : 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
           <div style={{
-            width: 36, height: 36, borderRadius: '50%',
+            width: collapsed ? 30 : 36, height: collapsed ? 30 : 36, borderRadius: '50%',
             background: `${G}15`, border: `2px solid ${G}30`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 700, color: G,
+            fontSize: collapsed ? 11 : 13, fontWeight: 700, color: G, flexShrink: 0,
+            transition: 'width 0.15s, height 0.15s',
           }}>
             {initials(booking.providerName)}
           </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: D }}>{booking.providerName}</div>
-            {booking.providerRating && (
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.providerName}</div>
+            {collapsed ? (
+              <div style={{ fontSize: 10, color: '#9B9490', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {catLabel}{booking.serviceAddress ? ` · ${booking.serviceAddress}` : ''}
+              </div>
+            ) : booking.providerRating && (
               <div style={{ fontSize: 10, color: '#9B9490' }}>
                 ★ {booking.providerRating} · {booking.providerReviewCount} reviews
               </div>
             )}
           </div>
         </div>
-        <div style={{
-          background: `${G}12`, color: G, border: `1px solid ${G}25`,
-          borderRadius: 20, padding: '3px 10px', fontSize: 10, fontWeight: 600,
-          display: 'flex', alignItems: 'center', gap: 4,
-        }}>
-          <span>📱</span> SMS Channel
-        </div>
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          aria-label={collapsed ? 'Expand details' : 'Collapse details'}
+          style={{
+            background: 'rgba(0,0,0,0.04)', border: 'none', borderRadius: 6,
+            cursor: 'pointer', padding: '4px 6px', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            color: '#6B6560', marginLeft: 8,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
       </div>
 
-      {/* Details chips */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-        {[
-          { icon: '🔧', label: catLabel },
-          ...(booking.propertyName ? [{ icon: '🏠', label: booking.propertyName }] : []),
-          ...(booking.availability ? [{ icon: '📅', label: booking.availability }] : []),
-          ...(booking.serviceAddress ? [{ icon: '📍', label: booking.serviceAddress }] : []),
-        ].map((chip, i) => (
-          <div key={i} style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            background: 'white', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 20,
-            padding: '3px 9px', fontSize: 11, color: D,
-          }}>
-            <span style={{ fontSize: 11 }}>{chip.icon}</span>
-            <span style={{ fontWeight: 500 }}>{chip.label}</span>
+      {!collapsed && (
+        <>
+          {/* Details chips */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+            {[
+              { icon: '🔧', label: catLabel },
+              ...(booking.propertyName ? [{ icon: '🏠', label: booking.propertyName }] : []),
+              ...(booking.availability ? [{ icon: '📅', label: booking.availability }] : []),
+              ...(booking.serviceAddress ? [{ icon: '📍', label: booking.serviceAddress }] : []),
+            ].map((chip, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: 'white', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 20,
+                padding: '3px 9px', fontSize: 11, color: D,
+              }}>
+                <span style={{ fontSize: 11 }}>{chip.icon}</span>
+                <span style={{ fontWeight: 500 }}>{chip.label}</span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Price + AI estimate row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        {booking.quotedPrice && (
-          <div style={{
-            background: 'white', border: `1px solid ${O}25`, borderRadius: 20,
-            padding: '4px 12px', fontSize: 13, fontWeight: 700, color: O,
-          }}>
-            {booking.quotedPrice} quoted
+          {/* Price + AI estimate row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {booking.quotedPrice && (
+              <div style={{
+                background: 'white', border: `1px solid ${O}25`, borderRadius: 20,
+                padding: '4px 12px', fontSize: 13, fontWeight: 700, color: O,
+              }}>
+                {booking.quotedPrice} quoted
+              </div>
+            )}
+            <AICostBadge diagnosis={booking.diagnosis} />
           </div>
-        )}
-        <AICostBadge diagnosis={booking.diagnosis} />
-      </div>
 
-      {/* Diagnosis summary */}
-      {booking.diagnosis?.summary && (
-        <div style={{
-          marginTop: 10, fontSize: 12, color: '#6B6560', lineHeight: 1.5,
-          background: 'white', borderRadius: 8, padding: '8px 10px',
-          border: '1px solid rgba(0,0,0,0.06)',
-        }}>
-          {renderBold(booking.diagnosis.summary)}
-        </div>
+          {/* Diagnosis summary */}
+          {booking.diagnosis?.summary && (
+            <div style={{
+              marginTop: 10, fontSize: 12, color: '#6B6560', lineHeight: 1.5,
+              background: 'white', borderRadius: 8, padding: '8px 10px',
+              border: '1px solid rgba(0,0,0,0.06)',
+            }}>
+              {renderBold(booking.diagnosis.summary)}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
