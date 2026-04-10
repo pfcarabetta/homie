@@ -88,22 +88,27 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
     if (!open) loadNotifications();
   }
 
-  async function handleItemClick(n: BusinessNotification) {
+  function handleItemClick(n: BusinessNotification, e?: React.MouseEvent) {
+    console.log('[notif] click', { id: n.id, link: n.link });
+    if (e) e.preventDefault();
     setOpen(false);
-    if (workspaceId && !n.read) {
-      try {
-        await businessService.markNotificationsRead(workspaceId, { ids: [n.id] });
-        setUnreadCount(c => Math.max(0, c - 1));
-        setItems(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
-      } catch { /* ignore */ }
-    }
+    // Navigate first so it happens immediately, regardless of mark-read
     if (n.link) {
-      // For internal app links, use navigate
       if (n.link.startsWith('/')) {
         navigate(n.link);
       } else {
         window.location.href = n.link;
+        return;
       }
+    }
+    // Mark as read in the background
+    if (workspaceId && !n.read) {
+      businessService.markNotificationsRead(workspaceId, { ids: [n.id] })
+        .then(() => {
+          setUnreadCount(c => Math.max(0, c - 1));
+          setItems(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
+        })
+        .catch(() => { /* ignore */ });
     }
   }
 
@@ -192,9 +197,10 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
               </div>
             )}
             {items.map(n => (
-              <div
+              <a
                 key={n.id}
-                onClick={() => handleItemClick(n)}
+                href={n.link || '#'}
+                onClick={(e) => handleItemClick(n, e)}
                 style={{
                   padding: '12px 16px',
                   borderBottom: '1px solid #F5F0EB',
@@ -202,6 +208,8 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
                   background: n.read ? '#fff' : '#FFF8F3',
                   display: 'flex', gap: 12,
                   transition: 'background 0.1s',
+                  textDecoration: 'none',
+                  color: 'inherit',
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = '#FAFAF8'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = n.read ? '#fff' : '#FFF8F3'; }}
@@ -223,7 +231,7 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
                     {timeAgo(n.createdAt)}
                   </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>,
