@@ -315,19 +315,20 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
 
             {/* Search dropdown — rendered via portal to escape parent containment */}
             {searchOpen && createPortal(
-              <div ref={searchDropdownRef} className="bp-search-portal" style={{
+              <div ref={searchDropdownRef} className="bp-search-portal" data-search-dropdown="true" style={{
                 position: 'fixed',
                 top: searchDropdownPos.top,
                 left: searchDropdownPos.left,
                 width: searchDropdownPos.width,
                 background: '#ffffff',
-                border: '1px solid #E0DAD4',
+                border: '2px solid #E8632B',
                 borderRadius: 12,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
                 maxHeight: 400,
                 overflowY: 'auto',
-                zIndex: 99999,
+                zIndex: 2147483647,
                 fontFamily: "'DM Sans', sans-serif",
+                isolation: 'isolate',
               }}>
                 {searchLoading && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 8 }}>
