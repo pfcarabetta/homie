@@ -6,6 +6,9 @@ export interface DiscoveryParams {
   radiusMiles: number;
   minRating: number;
   limit: number;
+  // When set, rate-limiting is scoped to attempts made by this workspace only
+  // (and uses a shorter cooldown) instead of the global 7-day window.
+  workspaceId?: string;
 }
 
 export interface HomieScore {

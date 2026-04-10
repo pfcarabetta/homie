@@ -5,16 +5,20 @@ import { providers } from '../../db/schema/providers';
 import { providerScores } from '../../db/schema/provider-scores';
 import { suppressionList } from '../../db/schema/suppression-list';
 import { outreachAttempts } from '../../db/schema/outreach-attempts';
+import { jobs } from '../../db/schema/jobs';
 import * as googleMaps from './google-maps';
 import * as yelp from './yelp';
 import { calculateRankScore, buildHomieScore, haversineDistanceMiles } from './ranking';
 import { DiscoveryParams, DiscoveredProvider, DiscoveryResult } from '../../types/providers';
 
 const MILES_TO_METERS = 1609.344;
+// Global default — applied when no workspace context is provided (consumer flow)
 const RATE_LIMIT_DAYS = 7;
+// Per-workspace cooldown — same workspace can re-contact a provider after 2 days
+const WORKSPACE_RATE_LIMIT_DAYS = 2;
 
 export async function discoverProviders(params: DiscoveryParams): Promise<DiscoveryResult> {
-  const { category, zipCode, radiusMiles, minRating, limit } = params;
+  const { category, zipCode, radiusMiles, minRating, limit, workspaceId } = params;
   const radiusMeters = Math.round(radiusMiles * MILES_TO_METERS);
 
   // ── Phase 1: External discovery — Google Maps + Yelp in parallel ─────────
@@ -159,22 +163,43 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
 
   // ── Phase 2c: Enrichment — suppression, rate limits, scores, last contact ─
 
+  // Rate-limit window depends on whether we have a workspace context:
+  //   - Workspace flow: 2-day cooldown, scoped to attempts from this workspace's jobs only
+  //   - Consumer flow: 7-day global cooldown across all attempts
+  const rateLimitDays = workspaceId ? WORKSPACE_RATE_LIMIT_DAYS : RATE_LIMIT_DAYS;
+  const rateLimitCutoff = new Date(Date.now() - rateLimitDays * 86_400_000);
+
+  const recentContactQuery = workspaceId
+    ? db
+        .select({ providerId: outreachAttempts.providerId })
+        .from(outreachAttempts)
+        .innerJoin(jobs, eq(outreachAttempts.jobId, jobs.id))
+        .where(
+          and(
+            inArray(outreachAttempts.providerId, providerIds),
+            gte(outreachAttempts.attemptedAt, rateLimitCutoff),
+            eq(jobs.workspaceId, workspaceId),
+          ),
+        )
+        .groupBy(outreachAttempts.providerId)
+    : db
+        .select({ providerId: outreachAttempts.providerId })
+        .from(outreachAttempts)
+        .where(
+          and(
+            inArray(outreachAttempts.providerId, providerIds),
+            gte(outreachAttempts.attemptedAt, rateLimitCutoff),
+          ),
+        )
+        .groupBy(outreachAttempts.providerId);
+
   const [suppressedRows, recentContactRows, scoreRows, lastContactRows] = await Promise.all([
     db
       .select({ providerId: suppressionList.providerId })
       .from(suppressionList)
       .where(inArray(suppressionList.providerId, providerIds)),
 
-    db
-      .select({ providerId: outreachAttempts.providerId })
-      .from(outreachAttempts)
-      .where(
-        and(
-          inArray(outreachAttempts.providerId, providerIds),
-          gte(outreachAttempts.attemptedAt, new Date(Date.now() - RATE_LIMIT_DAYS * 86_400_000)),
-        ),
-      )
-      .groupBy(outreachAttempts.providerId),
+    recentContactQuery,
 
     db
       .select()

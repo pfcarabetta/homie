@@ -440,6 +440,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
         radiusMiles: 15,
         minRating: 4.0,
         limit: remainingSlots + DISCOVERY_BUFFER,
+        workspaceId: job.workspaceId ?? undefined,
       });
       discoveredProviders = result.providers;
       logger.info(`[orchestration] dispatchJob: found ${discoveredProviders.length} providers at 15mi for job ${jobId}`);
@@ -454,6 +455,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
           radiusMiles: 25,
           minRating: 3.5,
           limit: remainingSlots + DISCOVERY_BUFFER + 5,
+          workspaceId: job.workspaceId ?? undefined,
         });
         discoveredProviders = expanded.providers;
         logger.info(`[orchestration] dispatchJob: found ${discoveredProviders.length} providers at 25mi for job ${jobId}`);
@@ -743,6 +745,7 @@ export async function expandJobOutreach(jobId: string): Promise<{ expanded: numb
       radiusMiles: radius,
       minRating,
       limit: EXPANSION_BATCH_SIZE + alreadyContacted.size + 10,
+      workspaceId: job.workspaceId ?? undefined,
     });
     discovered = result.providers;
   } catch (err) {
