@@ -7,6 +7,8 @@ import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerResponses } from '../db/schema/provider-responses';
 import { providers } from '../db/schema/providers';
 import { suppressionList } from '../db/schema/suppression-list';
+import { bookings } from '../db/schema/bookings';
+import { bookingMessages } from '../db/schema/booking-messages';
 import { buildWebhookToken } from '../services/outreach/web';
 import { processProviderSpeech, getConversation, loadConversationFromDb } from '../services/outreach/voice-conversation';
 import { processSmsReply } from '../services/outreach/sms-conversation';
@@ -630,6 +632,35 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
   // Handle HELP keyword
   if (Body.trim().toLowerCase() === 'help') {
     twiml.message("HomiePro connects you with real homeowners who need your services. It's 100% free for pros — no referral fees, no commissions, just real jobs. Reply STOP to unsubscribe. For support, visit homiepro.ai or email yo@homiepro.ai");
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  // ── Post-booking direct messaging ────────────────────────────────────────
+  // If this provider has a confirmed booking via SMS, route their reply to
+  // booking_messages so the property manager can see it in the portal.
+  const [activeBooking] = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .innerJoin(providerResponses, eq(bookings.responseId, providerResponses.id))
+    .where(
+      and(
+        eq(bookings.providerId, provider.id),
+        eq(bookings.status, 'confirmed'),
+        eq(providerResponses.channel, 'sms'),
+      ),
+    )
+    .orderBy(desc(bookings.confirmedAt))
+    .limit(1);
+
+  if (activeBooking) {
+    await db.insert(bookingMessages).values({
+      bookingId: activeBooking.id,
+      senderType: 'provider',
+      senderName: provider.name,
+      content: Body,
+    }).catch(err => logger.warn({ err, bookingId: activeBooking.id }, '[sms-webhook] Failed to save booking message'));
+    twiml.message("Got it! Your message has been forwarded to the property manager.");
     res.type('text/xml').send(twiml.toString());
     return;
   }

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, or, desc, ne, sql, gte, lte, count } from 'drizzle-orm';
+import { eq, and, or, desc, ne, sql, gte, lte, count, isNull } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
+import twilio from 'twilio';
 import logger from '../logger';
 import { db } from '../db';
 import { getPricingConfig } from '../services/pricing';
@@ -8,6 +9,7 @@ import { workspaces } from '../db/schema/workspaces';
 import { jobs } from '../db/schema/jobs';
 import { providerResponses } from '../db/schema/provider-responses';
 import { bookings } from '../db/schema/bookings';
+import { bookingMessages } from '../db/schema/booking-messages';
 import { workspaceMembers } from '../db/schema/workspace-members';
 import { properties } from '../db/schema/properties';
 import { homeowners } from '../db/schema/homeowners';
@@ -1380,6 +1382,7 @@ router.get('/:workspaceId/bookings', requireWorkspace, async (req: Request, res:
         jobCreatedAt: jobs.createdAt,
         quotedPrice: providerResponses.quotedPrice,
         availability: providerResponses.availability,
+        channel: providerResponses.channel,
       })
       .from(bookings)
       .innerJoin(jobs, eq(bookings.jobId, jobs.id))
@@ -2867,6 +2870,138 @@ router.post('/:workspaceId/dashboard/seasonal-suggestions', requireWorkspace, as
   } catch (err) {
     logger.error({ err }, '[POST /business/:id/dashboard/seasonal-suggestions]');
     res.status(500).json({ data: null, error: 'Failed to generate seasonal suggestions', meta: {} });
+  }
+});
+
+// ── Booking Messages ─────────────────────────────────────────────────────────
+// GET /:workspaceId/bookings/:bookingId/messages
+// List all messages for a booking (team member must belong to workspace)
+
+router.get('/:workspaceId/bookings/:bookingId/messages', requireWorkspace, async (req: Request, res: Response) => {
+  const { bookingId } = req.params;
+  try {
+    // Verify booking belongs to this workspace
+    const [booking] = await db
+      .select({ id: bookings.id, providerId: bookings.providerId })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .where(and(eq(bookings.id, bookingId), eq(jobs.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!booking) {
+      res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
+      return;
+    }
+
+    const messages = await db
+      .select()
+      .from(bookingMessages)
+      .where(eq(bookingMessages.bookingId, bookingId))
+      .orderBy(bookingMessages.createdAt);
+
+    res.json({ data: messages, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/bookings/:bid/messages]');
+    res.status(500).json({ data: null, error: 'Failed to fetch messages', meta: {} });
+  }
+});
+
+// POST /:workspaceId/bookings/:bookingId/messages
+// Send a message from the property manager to the provider via SMS
+
+router.post('/:workspaceId/bookings/:bookingId/messages', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { bookingId } = req.params;
+  const { content } = req.body as { content?: string };
+
+  if (!content || !content.trim()) {
+    res.status(400).json({ data: null, error: 'content is required', meta: {} });
+    return;
+  }
+
+  try {
+    // Verify booking belongs to workspace, get provider phone
+    const [booking] = await db
+      .select({
+        id: bookings.id,
+        providerId: bookings.providerId,
+        providerPhone: providers.phone,
+        providerName: providers.name,
+      })
+      .from(bookings)
+      .innerJoin(jobs, eq(bookings.jobId, jobs.id))
+      .innerJoin(providers, eq(bookings.providerId, providers.id))
+      .where(and(eq(bookings.id, bookingId), eq(jobs.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!booking) {
+      res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
+      return;
+    }
+
+    // Get sender name
+    const [member] = await db
+      .select({ firstName: homeowners.firstName, lastName: homeowners.lastName })
+      .from(homeowners)
+      .where(eq(homeowners.id, req.homeownerId))
+      .limit(1);
+
+    const senderName = [member?.firstName, member?.lastName].filter(Boolean).join(' ') || 'Property Manager';
+
+    // Save message
+    const [msg] = await db
+      .insert(bookingMessages)
+      .values({
+        bookingId,
+        senderType: 'team',
+        senderId: req.homeownerId,
+        senderName,
+        content: content.trim(),
+      })
+      .returning();
+
+    // Send SMS via Twilio if provider has a phone number
+    if (booking.providerPhone) {
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+      if (accountSid && authToken && fromNumber) {
+        const client = twilio(accountSid, authToken);
+        await client.messages.create({
+          body: `HomiePro - ${senderName}: ${content.trim()}`,
+          from: fromNumber,
+          to: booking.providerPhone,
+        }).catch(err => logger.warn({ err, bookingId }, '[booking-messages] Twilio send failed'));
+      }
+    }
+
+    res.status(201).json({ data: msg, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/bookings/:bid/messages]');
+    res.status(500).json({ data: null, error: 'Failed to send message', meta: {} });
+  }
+});
+
+// POST /:workspaceId/bookings/:bookingId/messages/read
+// Mark all unread provider messages as read
+
+router.post('/:workspaceId/bookings/:bookingId/messages/read', requireWorkspace, async (req: Request, res: Response) => {
+  const { bookingId } = req.params;
+  try {
+    await db
+      .update(bookingMessages)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(bookingMessages.bookingId, bookingId),
+          eq(bookingMessages.senderType, 'provider'),
+          isNull(bookingMessages.readAt),
+        ),
+      );
+
+    res.json({ data: { ok: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/bookings/:bid/messages/read]');
+    res.status(500).json({ data: null, error: 'Failed to mark read', meta: {} });
   }
 });
 

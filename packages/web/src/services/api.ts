@@ -833,6 +833,20 @@ export interface WorkspaceBooking {
   jobCreatedAt: string;
   quotedPrice: string | null;
   availability: string | null;
+  /** Channel through which the provider responded (sms/voice/web) */
+  channel: string | null;
+}
+
+export interface BookingMessage {
+  id: string;
+  bookingId: string;
+  /** 'team' | 'provider' | 'system' */
+  senderType: string;
+  senderId: string | null;
+  senderName: string | null;
+  content: string;
+  readAt: string | null;
+  createdAt: string;
 }
 
 export interface VendorSchedule {
@@ -1113,6 +1127,17 @@ export const businessService = {
     fetchAPI<{ bookings: WorkspaceBooking[] }>(`/api/v1/business/${workspaceId}/bookings`),
   cancelBooking: (workspaceId: string, bookingId: string) =>
     fetchAPI<{ cancelled: boolean; provider_notified: string }>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/cancel`, { method: 'POST' }),
+
+  // Booking Messages
+  listMessages: (workspaceId: string, bookingId: string) =>
+    fetchAPI<BookingMessage[]>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/messages`),
+  sendMessage: (workspaceId: string, bookingId: string, content: string) =>
+    fetchAPI<BookingMessage>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+  markMessagesRead: (workspaceId: string, bookingId: string) =>
+    fetchAPI<{ ok: boolean }>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/messages/read`, { method: 'POST' }),
 
   // Dashboard
   getDashboard: (workspaceId: string) => fetchAPI<DashboardData>(`/api/v1/business/${workspaceId}/dashboard`),

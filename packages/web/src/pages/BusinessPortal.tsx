@@ -7,6 +7,7 @@ import { businessService, jobService, slackService, templateService, estimateSer
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
+import BookingChat from '@/components/BookingChat';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -4619,6 +4620,7 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
   const [addingProvider, setAddingProvider] = useState<string | null>(null);
   const [cancellingBooking, setCancellingBooking] = useState<string | null>(null);
   const [showCancelBooking, setShowCancelBooking] = useState<string | null>(null);
+  const [chatBooking, setChatBooking] = useState<WorkspaceBooking | null>(null);
 
   useEffect(() => {
     businessService.listBookings(workspaceId).then(res => {
@@ -4734,10 +4736,10 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
                   </div>
 
                   {/* Provider contact */}
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                     {b.providerPhone && (
                       <a href={`tel:${b.providerPhone}`} style={{
-                        flex: 1, padding: '10px 0', borderRadius: 100, border: 'none',
+                        flex: 1, minWidth: 0, padding: '10px 0', borderRadius: 100, border: 'none',
                         background: O, color: 'white', fontSize: 14, fontWeight: 600,
                         textAlign: 'center', textDecoration: 'none', display: 'block',
                         boxShadow: `0 4px 16px ${O}40`,
@@ -4745,10 +4747,21 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
                     )}
                     {b.providerEmail && (
                       <a href={`mailto:${b.providerEmail}`} style={{
-                        flex: 1, padding: '10px 0', borderRadius: 100,
+                        flex: 1, minWidth: 0, padding: '10px 0', borderRadius: 100,
                         border: `2px solid ${O}`, background: 'white', color: O,
                         fontSize: 14, fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'block',
                       }}>✉️ Email</a>
+                    )}
+                    {/* Message button — only available when provider responded via SMS */}
+                    {b.channel === 'sms' && b.providerPhone && b.status !== 'cancelled' && (
+                      <button onClick={e => { e.stopPropagation(); setChatBooking(b); }} style={{
+                        flex: 1, minWidth: 0, padding: '10px 0', borderRadius: 100,
+                        border: `2px solid ${G}`, background: 'white', color: G,
+                        fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      }}>
+                        💬 Message
+                      </button>
                     )}
                   </div>
 
@@ -4846,6 +4859,15 @@ function BusinessBookingsTab({ workspaceId, focusJobId, onFocusHandled }: { work
           </div>
         );
       })()}
+
+      {/* Booking Chat panel */}
+      {chatBooking && (
+        <BookingChat
+          booking={chatBooking}
+          workspaceId={workspaceId}
+          onClose={() => setChatBooking(null)}
+        />
+      )}
     </div>
   );
 }
