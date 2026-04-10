@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, or, desc, ne, sql, gte, lte, count, isNull } from 'drizzle-orm';
+import { eq, and, or, desc, ne, sql, gte, lte, count, isNull, ilike } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import twilio from 'twilio';
 import logger from '../logger';
@@ -17,6 +17,7 @@ import { providers } from '../db/schema/providers';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { preferredVendors } from '../db/schema/preferred-vendors';
 import { reservations } from '../db/schema/reservations';
+import { notifications } from '../db/schema/notifications';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 import { generateEstimatePDF } from '../services/estimate-pdf';
 
@@ -248,6 +249,44 @@ router.get('/:workspaceId/properties', requireWorkspace, async (req: Request, re
   }
 });
 
+// NOTE: export/import routes must come BEFORE /:propertyId to avoid matching "export" as a propertyId
+// They are defined below the helper functions but registered here via forward references
+// (Actual route handlers moved inline)
+
+// GET /:workspaceId/properties/export — CSV download
+router.get('/:workspaceId/properties/export', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.workspaceId, req.workspaceId))
+      .orderBy(desc(properties.createdAt));
+
+    const allColumns = [...CSV_COLUMNS, ...DETAIL_COLUMNS];
+    const headerRow = allColumns.map(c => escapeCsvField(c)).join(',');
+
+    const dataRows = rows.map(row => {
+      const vals: string[] = [];
+      for (const col of CSV_COLUMNS) {
+        vals.push(escapeCsvField(row[col as keyof typeof row] as string | number | boolean | null));
+      }
+      const details = row.details as Record<string, unknown> | null;
+      for (const col of DETAIL_COLUMNS) {
+        vals.push(escapeCsvField(getDetailValue(details, col)));
+      }
+      return vals.join(',');
+    });
+
+    const csv = [headerRow, ...dataRows].join('\r\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="properties.csv"');
+    res.send(csv);
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/export]');
+    res.status(500).json({ data: null, error: 'Failed to export properties', meta: {} });
+  }
+});
+
 // GET /:workspaceId/properties/:propertyId
 router.get('/:workspaceId/properties/:propertyId', requireWorkspace, async (req: Request, res: Response) => {
   try {
@@ -325,6 +364,264 @@ router.delete('/:workspaceId/properties/:propertyId', requireWorkspace, requireW
     res.status(500).json({ data: null, error: 'Failed to deactivate property', meta: {} });
   }
 });
+
+// ── CSV Export / Import ────────────────────────────────────────────────────
+
+const CSV_COLUMNS = [
+  'id', 'name', 'address', 'city', 'state', 'zipCode', 'propertyType',
+  'bedrooms', 'bathrooms', 'sqft', 'unitCount', 'active', 'notes',
+  'pmsSource', 'pmsExternalId',
+] as const;
+
+const DETAIL_COLUMNS = [
+  'hvac_acType', 'hvac_acBrand', 'hvac_acModel', 'hvac_heatingType',
+  'hvac_thermostatBrand', 'hvac_filterSize',
+  'waterHeater_type', 'waterHeater_brand', 'waterHeater_fuel',
+  'waterHeater_capacity', 'waterHeater_location',
+  'appliances_refrigerator_brand', 'appliances_washer_brand',
+  'appliances_dryer_brand', 'appliances_dishwasher_brand',
+  'appliances_oven_brand',
+  'plumbing_kitchenFaucetBrand', 'plumbing_toiletBrand',
+  'plumbing_mainShutoffLocation',
+  'electrical_breakerBoxLocation', 'electrical_panelAmperage',
+  'access_lockboxCode', 'access_gateCode', 'access_alarmBrand',
+  'access_alarmCode', 'access_wifiNetwork', 'access_wifiPassword',
+] as const;
+
+function escapeCsvField(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function getDetailValue(details: Record<string, unknown> | null | undefined, column: string): string {
+  if (!details) return '';
+  const parts = column.split('_');
+  // e.g. 'hvac_acType' -> details.hvac.acType
+  // e.g. 'appliances_refrigerator_brand' -> details.appliances.refrigerator.brand
+  // e.g. 'waterHeater_type' -> details.waterHeater.type
+  const section = parts[0];
+  const sectionData = details[section] as Record<string, unknown> | undefined;
+  if (!sectionData) return '';
+
+  if (section === 'appliances') {
+    // appliances_refrigerator_brand -> appliances.refrigerator.brand
+    const appliance = parts[1];
+    const field = parts[2];
+    const appData = sectionData[appliance] as Record<string, unknown> | undefined;
+    return appData?.[field] != null ? String(appData[field]) : '';
+  }
+
+  // For all others: section_fieldName -> details[section][fieldName]
+  const fieldName = parts.slice(1).join('_');
+  // Convert back: acType stays acType (camelCase)
+  return sectionData[fieldName] != null ? String(sectionData[fieldName]) : '';
+}
+
+function setDetailValue(details: Record<string, unknown>, column: string, value: string): void {
+  const parts = column.split('_');
+  const section = parts[0];
+
+  if (!details[section]) details[section] = {};
+  const sectionData = details[section] as Record<string, unknown>;
+
+  if (section === 'appliances') {
+    const appliance = parts[1];
+    const field = parts[2];
+    if (!sectionData[appliance]) sectionData[appliance] = {};
+    (sectionData[appliance] as Record<string, unknown>)[field] = value;
+  } else {
+    const fieldName = parts.slice(1).join('_');
+    sectionData[fieldName] = value;
+  }
+}
+
+// (export route moved above /:propertyId to avoid route conflict)
+
+// POST /:workspaceId/properties/import
+router.post('/:workspaceId/properties/import', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  try {
+    let csvText: string;
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('text/csv')) {
+      csvText = typeof req.body === 'string' ? req.body : String(req.body);
+    } else {
+      const body = req.body as { csv?: string };
+      if (!body.csv || typeof body.csv !== 'string') {
+        res.status(400).json({ data: null, error: 'Missing csv field in request body', meta: {} });
+        return;
+      }
+      csvText = body.csv;
+    }
+
+    // Parse CSV
+    const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) {
+      res.status(400).json({ data: null, error: 'CSV must have a header row and at least one data row', meta: {} });
+      return;
+    }
+
+    const headers = parseCsvLine(lines[0]);
+    const errors: string[] = [];
+    let imported = 0;
+    let updated = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      try {
+        const values = parseCsvLine(lines[i]);
+        const row: Record<string, string> = {};
+        for (let j = 0; j < headers.length; j++) {
+          row[headers[j]] = values[j] ?? '';
+        }
+
+        const id = row['id']?.trim() || '';
+        const name = row['name']?.trim() || '';
+
+        if (!id && !name) {
+          errors.push(`Row ${i + 1}: skipped (no id or name)`);
+          continue;
+        }
+
+        // Build base fields (skip PMS fields)
+        const baseFields: Record<string, unknown> = {};
+        if (row['name'] !== undefined && row['name'].trim()) baseFields.name = row['name'].trim();
+        if (row['address'] !== undefined) baseFields.address = row['address'] || null;
+        if (row['city'] !== undefined) baseFields.city = row['city'] || null;
+        if (row['state'] !== undefined) baseFields.state = row['state'] || null;
+        if (row['zipCode'] !== undefined) baseFields.zipCode = row['zipCode'] || null;
+        if (row['propertyType'] !== undefined && row['propertyType'].trim()) baseFields.propertyType = row['propertyType'].trim();
+        if (row['bedrooms'] !== undefined && row['bedrooms'].trim()) baseFields.bedrooms = parseInt(row['bedrooms'], 10) || null;
+        if (row['bathrooms'] !== undefined && row['bathrooms'].trim()) baseFields.bathrooms = row['bathrooms'].trim();
+        if (row['sqft'] !== undefined && row['sqft'].trim()) baseFields.sqft = parseInt(row['sqft'], 10) || null;
+        if (row['unitCount'] !== undefined && row['unitCount'].trim()) baseFields.unitCount = parseInt(row['unitCount'], 10) || 1;
+        if (row['active'] !== undefined && row['active'].trim()) baseFields.active = row['active'].trim().toLowerCase() === 'true';
+        if (row['notes'] !== undefined) baseFields.notes = row['notes'] || null;
+
+        // Build details from detail columns (merge)
+        const detailUpdates: Record<string, string> = {};
+        for (const col of DETAIL_COLUMNS) {
+          if (row[col] !== undefined && row[col].trim()) {
+            detailUpdates[col] = row[col].trim();
+          }
+        }
+
+        if (id) {
+          // UPDATE existing property
+          const [existing] = await db
+            .select()
+            .from(properties)
+            .where(and(eq(properties.id, id), eq(properties.workspaceId, req.workspaceId)))
+            .limit(1);
+
+          if (!existing) {
+            errors.push(`Row ${i + 1}: property id "${id}" not found in workspace`);
+            continue;
+          }
+
+          // For PMS-synced properties, only update non-empty CSV fields
+          const isPms = !!existing.pmsSource;
+          const updateFields: Record<string, unknown> = {};
+
+          for (const [key, val] of Object.entries(baseFields)) {
+            if (isPms && (val === null || val === '')) continue;
+            updateFields[key] = val;
+          }
+
+          // Merge details
+          if (Object.keys(detailUpdates).length > 0) {
+            const existingDetails = (existing.details as Record<string, unknown>) ?? {};
+            const merged = JSON.parse(JSON.stringify(existingDetails));
+            for (const [col, val] of Object.entries(detailUpdates)) {
+              setDetailValue(merged, col, val);
+            }
+            updateFields.details = merged;
+          }
+
+          if (Object.keys(updateFields).length > 0) {
+            updateFields.updatedAt = new Date();
+            await db
+              .update(properties)
+              .set(updateFields)
+              .where(and(eq(properties.id, id), eq(properties.workspaceId, req.workspaceId)));
+          }
+          updated++;
+        } else {
+          // CREATE new property
+          if (!baseFields.name) {
+            errors.push(`Row ${i + 1}: name is required for new properties`);
+            continue;
+          }
+
+          const newDetails: Record<string, unknown> = {};
+          for (const [col, val] of Object.entries(detailUpdates)) {
+            setDetailValue(newDetails, col, val);
+          }
+
+          await db.insert(properties).values({
+            workspaceId: req.workspaceId,
+            name: baseFields.name as string,
+            address: (baseFields.address as string) ?? null,
+            city: (baseFields.city as string) ?? null,
+            state: (baseFields.state as string) ?? null,
+            zipCode: (baseFields.zipCode as string) ?? null,
+            propertyType: (baseFields.propertyType as string) ?? 'residential',
+            unitCount: (baseFields.unitCount as number) ?? 1,
+            bedrooms: (baseFields.bedrooms as number) ?? null,
+            bathrooms: (baseFields.bathrooms as string) ?? null,
+            sqft: (baseFields.sqft as number) ?? null,
+            notes: (baseFields.notes as string) ?? null,
+            active: (baseFields.active as boolean) ?? true,
+            details: Object.keys(newDetails).length > 0 ? newDetails : null,
+          });
+          imported++;
+        }
+      } catch (rowErr) {
+        errors.push(`Row ${i + 1}: ${rowErr instanceof Error ? rowErr.message : 'unknown error'}`);
+      }
+    }
+
+    res.json({ data: { imported, updated, errors }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/properties/import]');
+    res.status(500).json({ data: null, error: 'Failed to import properties', meta: {} });
+  }
+});
+
+/** Parse a single CSV line respecting quoted fields */
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        result.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+  }
+  result.push(current);
+  return result;
+}
 
 // ── Team Members ────────────────────────────────────────────────────────────
 
@@ -1223,6 +1520,36 @@ router.post('/:workspaceId/dispatches/:jobId/cancel', requireWorkspace, requireW
   }
 });
 
+// POST /:workspaceId/dispatches/:jobId/archive
+router.post('/:workspaceId/dispatches/:jobId/archive', requireWorkspace, async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+
+  try {
+    const [job] = await db
+      .select({ id: jobs.id, status: jobs.status, workspaceId: jobs.workspaceId })
+      .from(jobs)
+      .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Dispatch not found', meta: {} });
+      return;
+    }
+
+    if (job.status !== 'completed' && job.status !== 'expired') {
+      res.status(400).json({ data: null, error: 'Only completed or expired dispatches can be archived', meta: {} });
+      return;
+    }
+
+    await db.update(jobs).set({ status: 'archived' } as Record<string, unknown>).where(eq(jobs.id, jobId));
+
+    res.json({ data: { archived: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/dispatches/:jobId/archive]');
+    res.status(500).json({ data: null, error: 'Failed to archive dispatch', meta: {} });
+  }
+});
+
 // GET /:workspaceId/dispatches
 router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, res: Response) => {
   try {
@@ -1492,6 +1819,15 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
 
   const domain = body.track_domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const authHeader = 'Basic ' + Buffer.from(`${body.api_key}:${body.api_secret}`).toString('base64');
+
+  // Persist Track credentials for auto-sync
+  await db.update(workspaces).set({
+    trackDomain: domain,
+    trackApiKey: body.api_key,
+    trackApiSecret: body.api_secret,
+    trackSyncEnabled: 1,
+    updatedAt: new Date(),
+  }).where(eq(workspaces.id, req.workspaceId));
 
   try {
     // Fetch units from Track PMS API with pagination
@@ -1839,6 +2175,15 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
   const domain = body.track_domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const authHeader = 'Basic ' + Buffer.from(`${body.api_key}:${body.api_secret}`).toString('base64');
   const base = domain.includes('/api') ? `https://${domain}` : `https://${domain}/api`;
+
+  // Persist Track credentials for auto-sync
+  await db.update(workspaces).set({
+    trackDomain: domain,
+    trackApiKey: body.api_key,
+    trackApiSecret: body.api_secret,
+    trackSyncEnabled: 1,
+    updatedAt: new Date(),
+  }).where(eq(workspaces.id, req.workspaceId));
 
   try {
     // Find all Track-linked properties in this workspace
@@ -2678,12 +3023,13 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .select({
         type: sql<string>`'dispatch'`,
         title: sql<string>`COALESCE(${jobs.diagnosis}->>'category', 'Job')`,
-        propertyName: sql<string | null>`NULL`,
+        propertyName: properties.name,
         providerName: sql<string | null>`NULL`,
         jobId: jobs.id,
         createdAt: jobs.createdAt,
       })
       .from(jobs)
+      .leftJoin(properties, eq(jobs.propertyId, properties.id))
       .where(eq(jobs.workspaceId, req.workspaceId))
       .orderBy(desc(jobs.createdAt))
       .limit(10);
@@ -2692,7 +3038,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .select({
         type: sql<string>`'quote'`,
         title: sql<string>`'Quote received'`,
-        propertyName: sql<string | null>`NULL`,
+        propertyName: properties.name,
         providerName: providers.name,
         jobId: providerResponses.jobId,
         createdAt: providerResponses.createdAt,
@@ -2700,6 +3046,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .from(providerResponses)
       .innerJoin(jobs, eq(providerResponses.jobId, jobs.id))
       .innerJoin(providers, eq(providerResponses.providerId, providers.id))
+      .leftJoin(properties, eq(jobs.propertyId, properties.id))
       .where(eq(jobs.workspaceId, req.workspaceId))
       .orderBy(desc(providerResponses.createdAt))
       .limit(10);
@@ -2708,7 +3055,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .select({
         type: sql<string>`'booking'`,
         title: sql<string>`'Booking confirmed'`,
-        propertyName: sql<string | null>`NULL`,
+        propertyName: properties.name,
         providerName: providers.name,
         jobId: bookings.jobId,
         createdAt: bookings.confirmedAt,
@@ -2716,6 +3063,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .from(bookings)
       .innerJoin(jobs, eq(bookings.jobId, jobs.id))
       .innerJoin(providers, eq(bookings.providerId, providers.id))
+      .leftJoin(properties, eq(jobs.propertyId, properties.id))
       .where(eq(jobs.workspaceId, req.workspaceId))
       .orderBy(desc(bookings.confirmedAt))
       .limit(10);
@@ -3002,6 +3350,235 @@ router.post('/:workspaceId/bookings/:bookingId/messages/read', requireWorkspace,
   } catch (err) {
     logger.error({ err }, '[POST /business/:id/bookings/:bid/messages/read]');
     res.status(500).json({ data: null, error: 'Failed to mark read', meta: {} });
+  }
+});
+
+// ── GET /:workspaceId/search — Site-wide search ────────────────────────────
+
+router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: Response) => {
+  const q = (req.query.q as string || '').trim();
+  if (!q || q.length < 2) {
+    res.json({ data: { properties: [], providers: [], dispatches: [] }, error: null, meta: {} });
+    return;
+  }
+
+  const escaped = q.replace(/[%_\\]/g, '\\$&');
+  const pattern = `%${escaped}%`;
+
+  try {
+    // 1. Properties
+    const propertyRows = await db
+      .select({
+        id: properties.id,
+        name: properties.name,
+        address: properties.address,
+      })
+      .from(properties)
+      .where(
+        and(
+          eq(properties.workspaceId, req.workspaceId),
+          or(
+            ilike(properties.name, pattern),
+            sql`${properties.address} ILIKE ${pattern}`,
+            sql`${properties.city} ILIKE ${pattern}`,
+            sql`${properties.state} ILIKE ${pattern}`,
+            sql`${properties.zipCode} ILIKE ${pattern}`,
+          ),
+        ),
+      )
+      .limit(5);
+
+    // 2. Providers — all providers associated with this workspace (preferred, booked, or quoted)
+    const providerRows = await db.execute(sql`
+      SELECT DISTINCT p.id, p.name, p.phone,
+        EXISTS(SELECT 1 FROM preferred_vendors pv WHERE pv.provider_id = p.id AND pv.workspace_id = ${req.workspaceId}) AS is_preferred,
+        (SELECT COUNT(*)::int FROM provider_responses pr WHERE pr.provider_id = p.id AND pr.job_id IN (SELECT id FROM jobs WHERE workspace_id = ${req.workspaceId})) AS quote_count,
+        (SELECT COUNT(*)::int FROM bookings b WHERE b.provider_id = p.id AND b.job_id IN (SELECT id FROM jobs WHERE workspace_id = ${req.workspaceId})) AS booking_count
+      FROM providers p
+      WHERE (
+        p.id IN (SELECT provider_id FROM preferred_vendors WHERE workspace_id = ${req.workspaceId})
+        OR p.id IN (SELECT provider_id FROM bookings WHERE job_id IN (SELECT id FROM jobs WHERE workspace_id = ${req.workspaceId}))
+        OR p.id IN (SELECT provider_id FROM provider_responses WHERE job_id IN (SELECT id FROM jobs WHERE workspace_id = ${req.workspaceId}))
+      )
+      AND (
+        p.name ILIKE ${pattern}
+        OR p.phone ILIKE ${pattern}
+        OR p.email ILIKE ${pattern}
+      )
+      LIMIT 5
+    `) as unknown as Array<{ id: string; name: string; phone: string | null; is_preferred: boolean; quote_count: number; booking_count: number }>;
+
+    // 2b. For matched providers, fetch their related jobs (quotes + bookings)
+    const providerIds = providerRows.map(p => p.id);
+    let providerJobs: Array<{ provider_id: string; job_id: string; summary: string; category: string; status: string; property_name: string | null; created_at: Date | null; relation: string }> = [];
+    if (providerIds.length > 0) {
+      try {
+        const idList = sql.join(providerIds.map(id => sql`${id}::uuid`), sql`, `);
+        providerJobs = await db.execute(sql`
+          (
+            SELECT pr.provider_id, j.id AS job_id, COALESCE(j.diagnosis->>'summary','') AS summary,
+              COALESCE(j.diagnosis->>'category','') AS category, j.status, p.name AS property_name, j.created_at, 'quote' AS relation
+            FROM provider_responses pr
+            JOIN jobs j ON j.id = pr.job_id
+            LEFT JOIN properties p ON p.id = j.property_id
+            WHERE pr.provider_id IN (${idList}) AND j.workspace_id = ${req.workspaceId}
+            ORDER BY j.created_at DESC LIMIT 10
+          )
+          UNION ALL
+          (
+            SELECT b.provider_id, j.id AS job_id, COALESCE(j.diagnosis->>'summary','') AS summary,
+              COALESCE(j.diagnosis->>'category','') AS category, j.status, p.name AS property_name, j.created_at, 'booking' AS relation
+            FROM bookings b
+            JOIN jobs j ON j.id = b.job_id
+            LEFT JOIN properties p ON p.id = j.property_id
+            WHERE b.provider_id IN (${idList}) AND j.workspace_id = ${req.workspaceId}
+            ORDER BY j.created_at DESC LIMIT 10
+          )
+        `) as unknown as typeof providerJobs;
+      } catch (jobsErr) {
+        logger.warn({ err: jobsErr }, '[search] failed to fetch provider jobs');
+      }
+    }
+
+    // Group jobs by provider
+    const jobsByProvider = new Map<string, typeof providerJobs>();
+    for (const pj of providerJobs) {
+      const list = jobsByProvider.get(pj.provider_id) || [];
+      // Deduplicate by job_id — keep booking over quote
+      if (!list.some(x => x.job_id === pj.job_id)) list.push(pj);
+      jobsByProvider.set(pj.provider_id, list);
+    }
+
+    // 3. Dispatches (jobs for this workspace)
+    const dispatchRows = await db
+      .select({
+        id: jobs.id,
+        diagnosis: jobs.diagnosis,
+        status: jobs.status,
+        createdAt: jobs.createdAt,
+        propertyName: properties.name,
+      })
+      .from(jobs)
+      .leftJoin(properties, eq(jobs.propertyId, properties.id))
+      .where(
+        and(
+          eq(jobs.workspaceId, req.workspaceId),
+          or(
+            sql`${jobs.diagnosis}->>'summary' ILIKE ${pattern}`,
+            sql`${jobs.diagnosis}->>'category' ILIKE ${pattern}`,
+          ),
+        ),
+      )
+      .orderBy(desc(jobs.createdAt))
+      .limit(5);
+
+    res.json({
+      data: {
+        properties: propertyRows.map(p => ({
+          id: p.id,
+          name: p.name,
+          address: p.address || '',
+          tab: 'properties',
+        })),
+        providers: providerRows.map(p => ({
+          id: p.id,
+          name: p.name,
+          phone: p.phone || '',
+          isPreferred: p.is_preferred,
+          quoteCount: p.quote_count,
+          bookingCount: p.booking_count,
+          relatedJobs: (jobsByProvider.get(p.id) || []).slice(0, 5).map(j => ({
+            jobId: j.job_id,
+            summary: j.summary,
+            category: (j.category || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            status: j.status,
+            propertyName: j.property_name || '',
+            relation: j.relation,
+            date: j.created_at,
+          })),
+          tab: 'vendors',
+        })),
+        dispatches: dispatchRows.map(d => {
+          const diag = d.diagnosis as Record<string, string> | null;
+          const cat = (diag?.category || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          return {
+            id: d.id,
+            category: cat,
+            summary: diag?.summary || '',
+            status: d.status,
+            propertyName: d.propertyName || '',
+            date: d.createdAt,
+            tab: 'dispatches',
+          };
+        }),
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/search]');
+    res.status(500).json({ data: null, error: 'Failed to search', meta: {} });
+  }
+});
+
+// ── GET /:workspaceId/notifications — List notifications ───────────────────
+
+router.get('/:workspaceId/notifications', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt((req.query.limit as string) || '30', 10), 100);
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.workspaceId, req.workspaceId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+
+    const [{ unread }] = await db
+      .select({ unread: count() })
+      .from(notifications)
+      .where(and(eq(notifications.workspaceId, req.workspaceId), eq(notifications.read, false)));
+
+    res.json({
+      data: {
+        items: rows.map(n => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          body: n.body,
+          jobId: n.jobId,
+          propertyId: n.propertyId,
+          guestIssueId: n.guestIssueId,
+          link: n.link,
+          read: n.read,
+          createdAt: n.createdAt,
+        })),
+        unreadCount: unread,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/notifications]');
+    res.status(500).json({ data: null, error: 'Failed to load notifications', meta: {} });
+  }
+});
+
+// POST /:workspaceId/notifications/mark-read — Mark notifications as read
+router.post('/:workspaceId/notifications/mark-read', requireWorkspace, async (req: Request, res: Response) => {
+  const body = req.body as { ids?: string[]; all?: boolean };
+  try {
+    if (body.all) {
+      await db.update(notifications)
+        .set({ read: true })
+        .where(and(eq(notifications.workspaceId, req.workspaceId), eq(notifications.read, false)));
+    } else if (body.ids && body.ids.length > 0) {
+      const idList = sql.join(body.ids.map(id => sql`${id}::uuid`), sql`, `);
+      await db.execute(sql`UPDATE notifications SET read = true WHERE workspace_id = ${req.workspaceId} AND id IN (${idList})`);
+    }
+    res.json({ data: { ok: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/notifications/mark-read]');
+    res.status(500).json({ data: null, error: 'Failed to mark as read', meta: {} });
   }
 });
 

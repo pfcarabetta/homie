@@ -127,6 +127,34 @@
       "when": 1775583678917,
       "tag": "0017_wealthy_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1775614401618,
+      "tag": "0018_icy_cloak",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1775628165068,
+      "tag": "0019_cuddly_night_nurse",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1775783075458,
+      "tag": "0020_lush_leech",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1775793925809,
+      "tag": "0021_big_falcon",
+      "breakpoints": true
     }
   ]
 }

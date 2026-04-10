@@ -12,6 +12,9 @@ import { providerResponses } from '../db/schema/provider-responses';
 import { jobTrackingEvents, jobTrackingLinks, type TrackingEventType } from '../db/schema/job-tracking';
 import { reservations } from '../db/schema/reservations';
 import { properties } from '../db/schema/properties';
+import { workspaces } from '../db/schema/workspaces';
+import { guestIssues } from '../db/schema/guest-issues';
+import { guestIssueTimeline } from '../db/schema/guest-issue-timeline';
 import { discoverProviders } from './providers/discovery';
 import { generateScripts } from './scripts/generation';
 import { VoiceAdapter } from './outreach/voice';
@@ -103,6 +106,7 @@ async function sendOutreachToProvider(
   provider: DiscoveredProvider,
   adapters: Record<OutreachChannel, ChannelAdapter>,
   skipQuote = false,
+  workspaceName?: string,
 ): Promise<void> {
   logger.info(`[orchestration] Sending outreach to ${provider.name} (channels: ${provider.channels_available.join(',')}${skipQuote ? ', skip-quote' : ''})`);
 
@@ -181,7 +185,7 @@ async function sendOutreachToProvider(
           const script = scriptByChannel.voice;
           const [attempt] = await db.insert(outreachAttempts).values({ jobId: job.id, providerId: provider.id, channel: 'voice', scriptUsed: script, status: 'pending' }).returning({ id: outreachAttempts.id });
           const voicePhone = TEST_MODE && TEST_PHONE ? TEST_PHONE : (provider.phone ?? null);
-          const result = await adapters.voice.send({ attemptId: attempt.id, jobId: job.id, providerId: provider.id, providerName: provider.name, phone: voicePhone, email: null, website: null, script, channel: 'voice' });
+          const result = await adapters.voice.send({ attemptId: attempt.id, jobId: job.id, providerId: provider.id, providerName: provider.name, phone: voicePhone, email: null, website: null, script, channel: 'voice', workspaceName });
           if (result.status === 'failed') {
             logger.warn(`[orchestration] Voice follow-up failed for ${provider.name}: ${result.error}`);
             await db.update(outreachAttempts).set({ status: 'failed', responseRaw: result.error ?? null }).where(eq(outreachAttempts.id, attempt.id));
@@ -238,6 +242,7 @@ async function sendOutreachToProvider(
         website: TEST_MODE ? null : (provider.website ?? null),
         script,
         channel,
+        workspaceName,
       });
 
       if (result.status === 'failed') {
@@ -295,6 +300,15 @@ export async function dispatchJob(jobId: string): Promise<void> {
   const tier = (job.tier as JobTier) in TIER_PROVIDER_LIMITS ? (job.tier as JobTier) : 'standard';
   const limit = TIER_PROVIDER_LIMITS[tier];
 
+  // Look up workspace name for outreach branding
+  let workspaceName: string | undefined;
+  if (job.workspaceId) {
+    try {
+      const [ws] = await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.id, job.workspaceId)).limit(1);
+      workspaceName = ws?.name ?? undefined;
+    } catch { /* silent */ }
+  }
+
   // ── Preferred vendor cascade (B2B jobs only) ──────────────────────────
   const preferredProviderIds: string[] = [];
   const skipQuoteProviderIds = new Set<string>();
@@ -333,8 +347,26 @@ export async function dispatchJob(jobId: string): Promise<void> {
         logger.info(`[orchestration] dispatchJob: ${pvRows.length - availableRows.length} preferred vendors filtered out (outside operating hours)`);
       }
 
-      preferredProviderIds.push(...availableRows.map(r => r.providerId));
-      for (const r of availableRows) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
+      // If specific preferred vendors were requested (e.g. from guest issue approval), filter to those
+      const diagExtra = diagnosis as unknown as Record<string, unknown>;
+      const requestedVendorIds = (diagExtra.preferredVendorIds as string[] | undefined) ?? (diagExtra.preferredVendorId ? [diagExtra.preferredVendorId as string] : undefined);
+      if (requestedVendorIds?.length) {
+        const requestedSet = new Set(requestedVendorIds);
+        const matchedVendors = availableRows.filter(r => requestedSet.has(r.providerId));
+        if (matchedVendors.length > 0) {
+          preferredProviderIds.push(...matchedVendors.map(r => r.providerId));
+          for (const r of matchedVendors) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
+          logger.info(`[orchestration] dispatchJob: PM selected ${matchedVendors.length} vendor(s) for job ${jobId}`);
+        } else {
+          // None of the requested vendors available, fall back to all preferred
+          preferredProviderIds.push(...availableRows.map(r => r.providerId));
+          for (const r of availableRows) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
+          logger.warn(`[orchestration] dispatchJob: requested vendors not available, using ${availableRows.length} preferred vendors`);
+        }
+      } else {
+        preferredProviderIds.push(...availableRows.map(r => r.providerId));
+        for (const r of availableRows) { if (r.skipQuote) skipQuoteProviderIds.add(r.providerId); }
+      }
       if (preferredProviderIds.length > 0) {
         logger.info(`[orchestration] dispatchJob: found ${preferredProviderIds.length} preferred vendors for job ${jobId}`);
       }
@@ -382,8 +414,8 @@ export async function dispatchJob(jobId: string): Promise<void> {
   }
 
   // Categories that should only use preferred vendors — no marketplace discovery
-  const INTERNAL_ONLY_CATEGORIES = new Set(['inspection', 'restocking', 'concierge', 'trash']);
-  const isInternalOnly = INTERNAL_ONLY_CATEGORIES.has(diagnosis.category.toLowerCase());
+  const INTERNAL_ONLY_CATEGORIES = new Set(['inspection', 'restocking', 'concierge', 'trash', 'guest_wifi', 'guest_lockout', 'guest_safety', 'guest_noise']);
+  const isInternalOnly = INTERNAL_ONLY_CATEGORIES.has(diagnosis.category.toLowerCase()) || diagnosis.category.toLowerCase().startsWith('guest_');
 
   if (isInternalOnly && eligible.length === 0) {
     logger.warn(`[orchestration] dispatchJob: internal-only category '${diagnosis.category}' has no preferred vendors for job ${jobId}`);
@@ -534,6 +566,21 @@ export async function dispatchJob(jobId: string): Promise<void> {
         providerCount: eligible.length,
       });
     } catch (err) { logger.warn({ err, jobId }, '[orchestration] Slack notification failed during dispatch'); }
+
+    // In-app notification feed — fire-and-forget
+    try {
+      const { recordNotification } = await import('./notification-feed');
+      const cat = (diagnosis.category || 'job').replace(/_/g, ' ');
+      void recordNotification({
+        workspaceId: job.workspaceId,
+        type: 'dispatch_created',
+        title: `New dispatch: ${cat}`,
+        body: diagnosis.summary || `Dispatched to ${eligible.length} provider${eligible.length !== 1 ? 's' : ''}`,
+        jobId,
+        propertyId: job.propertyId,
+        link: `/business?tab=dispatches&job=${jobId}`,
+      });
+    } catch (err) { logger.warn({ err, jobId }, '[orchestration] notification feed failed'); }
   }
 
   const adapters = createAdapters();
@@ -553,7 +600,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
     logger.info(`[orchestration] dispatchJob: Phase 1 — contacting ${preferredEligible.length} preferred vendors for job ${jobId}`);
 
     const preferredResults = await Promise.allSettled(
-      preferredEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters, skipQuoteProviderIds.has(provider.id))),
+      preferredEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters, skipQuoteProviderIds.has(provider.id), workspaceName)),
     );
     const preferredFailed = preferredResults.filter((r) => r.status === 'rejected');
     if (preferredFailed.length > 0) {
@@ -593,7 +640,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
 
           const marketplaceAdapters = createAdapters();
           const marketplaceResults = await Promise.allSettled(
-            marketplaceEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, marketplaceAdapters)),
+            marketplaceEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, marketplaceAdapters, false, workspaceName)),
           );
           const marketplaceFailed = marketplaceResults.filter((r) => r.status === 'rejected');
           if (marketplaceFailed.length > 0) {
@@ -609,7 +656,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
   } else {
     // No preferred vendors — contact all eligible providers immediately (consumer flow)
     const results = await Promise.allSettled(
-      eligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters)),
+      eligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, adapters, false, workspaceName)),
     );
 
     const failed = results.filter((r) => r.status === 'rejected');
@@ -710,6 +757,22 @@ export async function sendBookingNotifications(
         category: bookingDiagnosis?.category ?? 'maintenance',
       });
     } catch (err) { logger.warn({ err, jobId }, '[orchestration] Slack notification failed during booking'); }
+
+    // In-app notification feed
+    try {
+      const { recordNotification } = await import('./notification-feed');
+      const bookingDiagnosis = job.diagnosis as DiagnosisPayload | null;
+      const cat = (bookingDiagnosis?.category || 'job').replace(/_/g, ' ');
+      void recordNotification({
+        workspaceId: job.workspaceId,
+        type: 'booking_confirmed',
+        title: `Booking confirmed: ${displayName}`,
+        body: `${displayName} is booked for ${cat}${availability ? ` — ${availability}` : ''}.`,
+        jobId,
+        propertyId: job.propertyId,
+        link: `/business?tab=bookings&job=${jobId}`,
+      });
+    } catch (err) { logger.warn({ err, jobId }, '[orchestration] notification feed failed'); }
   }
 
   const category = ((job.diagnosis as DiagnosisPayload | null)?.category ?? 'home maintenance').replace(/_/g, ' ');
@@ -802,5 +865,60 @@ export async function sendBookingNotifications(
     } catch (err) {
       logger.error({ err }, '[orchestration] provider booking email failed');
     }
+  }
+}
+
+// ─── Sync guest issue status when linked dispatch job progresses ────────────
+
+export async function syncGuestIssueFromJob(jobId: string, event: 'quote_received' | 'provider_booked' | 'resolved', metadata?: Record<string, unknown>): Promise<void> {
+  try {
+    // Find guest issue linked to this job
+    const [issue] = await db
+      .select({ id: guestIssues.id, status: guestIssues.status })
+      .from(guestIssues)
+      .where(eq(guestIssues.dispatchedJobId, jobId))
+      .limit(1);
+
+    if (!issue) return; // Not a guest reporter job
+
+    const now = new Date();
+
+    if (event === 'quote_received' && !['provider_responding', 'provider_booked', 'resolved'].includes(issue.status)) {
+      await db.update(guestIssues).set({ status: 'provider_responding', updatedAt: now }).where(eq(guestIssues.id, issue.id));
+      await db.insert(guestIssueTimeline).values({
+        issueId: issue.id,
+        eventType: 'provider_responded',
+        title: 'Provider responded',
+        description: metadata?.providerName ? `${metadata.providerName} sent a quote` : 'A provider responded with a quote',
+        metadata: metadata ?? null,
+      });
+      logger.info({ jobId, issueId: issue.id }, '[guest-issue-sync] Updated to provider_responding');
+    }
+
+    if (event === 'provider_booked' && !['provider_booked', 'resolved'].includes(issue.status)) {
+      await db.update(guestIssues).set({ status: 'provider_booked', updatedAt: now }).where(eq(guestIssues.id, issue.id));
+      await db.insert(guestIssueTimeline).values({
+        issueId: issue.id,
+        eventType: 'provider_booked',
+        title: 'Provider booked',
+        description: metadata?.providerName ? `${metadata.providerName} has been assigned` : 'A provider has been booked',
+        metadata: metadata ?? null,
+      });
+      logger.info({ jobId, issueId: issue.id }, '[guest-issue-sync] Updated to provider_booked');
+    }
+
+    if (event === 'resolved' && issue.status !== 'resolved') {
+      await db.update(guestIssues).set({ status: 'resolved', resolvedAt: now, updatedAt: now }).where(eq(guestIssues.id, issue.id));
+      await db.insert(guestIssueTimeline).values({
+        issueId: issue.id,
+        eventType: 'resolved',
+        title: 'Issue resolved',
+        description: 'The issue has been fixed',
+        metadata: metadata ?? null,
+      });
+      logger.info({ jobId, issueId: issue.id }, '[guest-issue-sync] Updated to resolved');
+    }
+  } catch (err) {
+    logger.warn({ err, jobId, event }, '[guest-issue-sync] Failed to sync guest issue status');
   }
 }

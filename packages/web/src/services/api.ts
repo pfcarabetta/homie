@@ -752,6 +752,19 @@ export interface PropertyDetails {
   };
 }
 
+export interface BusinessNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  jobId: string | null;
+  propertyId: string | null;
+  guestIssueId: string | null;
+  link: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
 export interface Property {
   id: string;
   workspaceId: string;
@@ -904,6 +917,60 @@ export interface SeasonalSuggestion {
   reason: string;
 }
 
+export interface GuestIssue {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  categoryName: string;
+  categoryIcon: string;
+  guestName: string | null;
+  severity: string;
+  status: string;
+  isRecurring: boolean;
+  autoDispatched: boolean;
+  createdAt: string;
+}
+
+export interface GuestIssueDetail extends GuestIssue {
+  description: string;
+  guestEmail: string | null;
+  guestPhone: string | null;
+  troubleshootLog: Array<{ question: string; answer: string }> | null;
+  photos: Array<{ id: string; storageUrl: string; thumbnailUrl: string | null }>;
+  timeline: Array<{ eventType: string; title: string; description: string | null; createdAt: string }>;
+  dispatchedJobId: string | null;
+  selfResolved: boolean;
+  resolvedAt: string | null;
+  guestSatisfactionRating: string | null;
+  guestSatisfactionComment: string | null;
+}
+
+export interface GuestReporterSettings {
+  isEnabled: boolean;
+  whitelabelLogoUrl: string | null;
+  whitelabelCompanyName: string | null;
+  showPoweredByHomie: boolean;
+  defaultLanguage: string;
+  supportedLanguages: string[];
+  slaUrgentMinutes: number;
+  slaHighMinutes: number;
+  slaMediumMinutes: number;
+  slaLowMinutes: number;
+  requirePmApproval: boolean;
+  supportEmail: string | null;
+  supportPhone: string | null;
+}
+
+export interface AutoDispatchRule {
+  id: string;
+  categoryId: string;
+  categoryName?: string;
+  minSeverity: string;
+  preferredVendorId: string | null;
+  preferredVendorName?: string;
+  isEnabled: boolean;
+}
+
 export const businessChatService = {
   sendMessage(
     message: string,
@@ -981,6 +1048,12 @@ export const businessService = {
   updateWorkspace: (id: string, data: { name?: string; slug?: string; company_address?: string | null; company_phone?: string | null; company_email?: string | null }) =>
     fetchAPI<Workspace>(`/api/v1/business/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
+  // Notifications
+  listNotifications: (workspaceId: string, limit?: number) =>
+    fetchAPI<{ items: BusinessNotification[]; unreadCount: number }>(`/api/v1/business/${workspaceId}/notifications${limit ? `?limit=${limit}` : ''}`),
+  markNotificationsRead: (workspaceId: string, body: { ids?: string[]; all?: boolean }) =>
+    fetchAPI<{ ok: boolean }>(`/api/v1/business/${workspaceId}/notifications/mark-read`, { method: 'POST', body: JSON.stringify(body) }),
+
   // Properties
   listProperties: (workspaceId: string) =>
     fetchAPI<Property[]>(`/api/v1/business/${workspaceId}/properties`),
@@ -1000,6 +1073,12 @@ export const businessService = {
     fetchAPI<{ deactivated: boolean }>(`/api/v1/business/${workspaceId}/properties/${propertyId}`, {
       method: 'DELETE',
     }),
+
+  // CSV Export/Import
+  exportPropertiesCsv: (workspaceId: string) =>
+    fetch(`${API_BASE}/api/v1/business/${workspaceId}/properties/export`, { headers: authHeaders() }).then(r => r.text()),
+  importPropertiesCsv: (workspaceId: string, csv: string) =>
+    fetchAPI<{ imported: number; updated: number; errors: string[] }>(`/api/v1/business/${workspaceId}/properties/import`, { method: 'POST', body: JSON.stringify({ csv }) }),
 
   // Track PMS Import
   importFromTrack: (workspaceId: string, data: { track_domain: string; api_key: string; api_secret: string; update_existing?: boolean }) =>
@@ -1121,6 +1200,8 @@ export const businessService = {
   cancelDispatch: (workspaceId: string, jobId: string) =>
     fetchAPI<{ cancelled: boolean; credit_refunded: boolean; providers_notified: number }>(
       `/api/v1/business/${workspaceId}/dispatches/${jobId}/cancel`, { method: 'POST' }),
+  archiveDispatch: (workspaceId: string, jobId: string) =>
+    fetchAPI<{ archived: boolean }>(`/api/v1/business/${workspaceId}/dispatches/${jobId}/archive`, { method: 'POST' }),
 
   // Bookings
   listBookings: (workspaceId: string) =>
@@ -1163,7 +1244,61 @@ export const businessService = {
     fetchAPI<{ archived: boolean }>(`/api/v1/business/${workspaceId}/schedules/${id}`, { method: 'DELETE' }),
   getScheduleRuns: (workspaceId: string, id: string) =>
     fetchAPI<ScheduleRun[]>(`/api/v1/business/${workspaceId}/schedules/${id}/runs`),
+
+  // Guest Reporter
+  listGuestIssues: (workspaceId: string, params?: { status?: string; property_id?: string; severity?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.property_id) qs.set('property_id', params.property_id);
+    if (params?.severity) qs.set('severity', params.severity);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const q = qs.toString();
+    return fetchAPI<{ issues: GuestIssue[]; total: number }>(`/api/v1/business/${workspaceId}/guest-issues${q ? `?${q}` : ''}`);
+  },
+  getGuestIssue: (workspaceId: string, issueId: string) =>
+    fetchAPI<GuestIssueDetail>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}`),
+  approveGuestIssue: (workspaceId: string, issueId: string, options?: { preferredOnly?: boolean; preferredVendorIds?: string[] }) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    }),
+  rejectGuestIssue: (workspaceId: string, issueId: string, reason: string) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  selfResolveGuestIssue: (workspaceId: string, issueId: string) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/self-resolve`, { method: 'POST' }),
+  cancelGuestIssue: (workspaceId: string, issueId: string) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/cancel`, { method: 'POST' }),
+  resolveGuestIssue: (workspaceId: string, issueId: string) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/resolve`, { method: 'POST' }),
+  archiveGuestIssue: (workspaceId: string, issueId: string) =>
+    fetchAPI<{ status: string }>(`/api/v1/business/${workspaceId}/guest-issues/${issueId}/archive`, { method: 'POST' }),
+  getGuestReporterSettings: (workspaceId: string) =>
+    fetchAPI<GuestReporterSettings>(`/api/v1/business/${workspaceId}/guest-reporter/settings`),
+  updateGuestReporterSettings: (workspaceId: string, data: Partial<GuestReporterSettings>) =>
+    fetchAPI<GuestReporterSettings>(`/api/v1/business/${workspaceId}/guest-reporter/settings`, { method: 'PUT', body: JSON.stringify(data) }),
+  listAutoDispatchRules: (workspaceId: string) =>
+    fetchAPI<{ rules: AutoDispatchRule[] }>(`/api/v1/business/${workspaceId}/guest-reporter/auto-dispatch-rules`),
+  createAutoDispatchRule: (workspaceId: string, data: { category_id: string; min_severity: string; preferred_vendor_id?: string }) =>
+    fetchAPI<AutoDispatchRule>(`/api/v1/business/${workspaceId}/guest-reporter/auto-dispatch-rules`, { method: 'POST', body: JSON.stringify(data) }),
+  updateAutoDispatchRule: (workspaceId: string, ruleId: string, data: Partial<{ category_id: string; min_severity: string; preferred_vendor_id: string; is_enabled: boolean }>) =>
+    fetchAPI<AutoDispatchRule>(`/api/v1/business/${workspaceId}/guest-reporter/auto-dispatch-rules/${ruleId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAutoDispatchRule: (workspaceId: string, ruleId: string) =>
+    fetchAPI<void>(`/api/v1/business/${workspaceId}/guest-reporter/auto-dispatch-rules/${ruleId}`, { method: 'DELETE' }),
+
+  // Search
+  search: (workspaceId: string, query: string) =>
+    fetchAPI<{ properties: SearchResult[]; providers: SearchResult[]; dispatches: SearchResult[] }>(
+      `/api/v1/business/${workspaceId}/search?q=${encodeURIComponent(query)}`),
 };
+
+export interface SearchResult {
+  id: string;
+  type: 'property' | 'provider' | 'dispatch';
+  name: string;
+  detail: string;
+  tab: string;
+}
 
 export interface SlackSettings {
   connected: boolean;

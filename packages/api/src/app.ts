@@ -21,6 +21,7 @@ import { trackingPublicRouter, trackingAuthRouter } from './routes/tracking';
 import { slackAuthRouter, slackPublicRouter } from './routes/slack-integration';
 import estimatesRouter from './routes/estimates';
 import { scheduleRouter, templateRouter } from './routes/schedules';
+import { guestPublicRouter, guestPmRouter } from './routes/guest-reporter';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
 import { requireProviderAuth } from './middleware/provider-auth';
@@ -85,6 +86,8 @@ app.use('/api/v1/slack', slackPublicRouter);
 app.use('/api/v1/estimates', apiLimiter, estimatesRouter);
 app.use('/api/v1/schedule-templates', apiLimiter, templateRouter);
 app.use('/api/v1/business/:workspaceId/schedules', apiLimiter, requireAuth, scheduleRouter);
+app.use('/api/v1/guest', apiLimiter, guestPublicRouter);
+app.use('/api/v1/business', apiLimiter, requireAuth, guestPmRouter);
 
 // Sentry error handler — must be after all routes
 Sentry.setupExpressErrorHandler(app);

@@ -20,6 +20,11 @@ export const workspaces = pgTable('workspaces', {
   slackChannelId: text('slack_channel_id'),
   slackConnectedAt: timestamp('slack_connected_at', { withTimezone: true }),
   slackConnectedBy: uuid('slack_connected_by'),
+  trackDomain: text('track_domain'),
+  trackApiKey: text('track_api_key'),
+  trackApiSecret: text('track_api_secret'),
+  trackSyncEnabled: integer('track_sync_enabled').notNull().default(0),
+  trackLastSyncAt: timestamp('track_last_sync_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

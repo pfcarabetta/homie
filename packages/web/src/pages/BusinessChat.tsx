@@ -443,7 +443,7 @@ function PropertySelector({ properties, workspaces, selectedWorkspace, onSelectW
                   <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, color: '#9B9490', pointerEvents: 'none' }}>🔍</span>
                 </div>
               )}
-              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+              <div style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
                 {filtered.map(p => (
                   <button key={p.id} onClick={() => onSelect(p)} style={{
                     display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: 'pointer',
@@ -541,7 +541,7 @@ function StreamingMsg({ text }: { text: string }) {
 
 /* ── Main component ─────────────────────────────────────────────────────── */
 
-type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'budget' | 'generating' | 'summary' | 'outreach' | 'results';
+type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'anything_else' | 'budget' | 'timing' | 'generating' | 'summary' | 'outreach' | 'results';
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -578,6 +578,13 @@ export default function BusinessChat() {
   const [showQ1Input, setShowQ1Input] = useState(false);
   const [q1InputVal, setQ1InputVal] = useState('');
   const [budget, setBudget] = useState('flexible');
+  const [anythingElseText, setAnythingElseText] = useState('');
+  const [anythingElseImage, setAnythingElseImage] = useState<string | null>(null);
+  const anythingElseFileRef = useRef<HTMLInputElement>(null);
+
+  const [timing, setTiming] = useState('asap');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
 
   // Outreach state
   const [jobId, setJobId] = useState<string | null>(null);
@@ -623,24 +630,31 @@ export default function BusinessChat() {
         const activeProps = res.data.filter(p => p.active);
         setProperties(activeProps);
 
-        // Auto-select property and category from seasonal suggestion prefill
-        if (prefillPropertyId && prefillCategory && !prefillHandledRef.current) {
+        // Auto-select property (and optionally category) from URL params
+        if (prefillPropertyId && !prefillHandledRef.current) {
           prefillHandledRef.current = true;
           const prop = activeProps.find(p => p.id === prefillPropertyId);
           if (prop) {
             setSelectedProperty(prop);
-            // Find matching category
-            const cat = B2B_CATEGORIES.find(c => c.id === prefillCategory);
-            if (cat) {
-              setCategory(cat);
-              const propName = prop.name;
-              const title = prefillTitle || cat.label;
-              const desc = prefillDescription || '';
-              setMessages([
-                { role: 'assistant', content: `${cat.icon} **${title}** at ${propName}${desc ? ` — ${desc}` : ''}. ${cat.q1.text}` },
-              ]);
-              setStep('q1');
+            if (prefillCategory) {
+              // Find matching category
+              const cat = B2B_CATEGORIES.find(c => c.id === prefillCategory);
+              if (cat) {
+                setCategory(cat);
+                const propName = prop.name;
+                const title = prefillTitle || cat.label;
+                const desc = prefillDescription || '';
+                setMessages([
+                  { role: 'assistant', content: `${cat.icon} **${title}** at ${propName}${desc ? ` — ${desc}` : ''}. ${cat.q1.text}` },
+                ]);
+                setStep('q1');
+              } else {
+                setMessages([{ role: 'assistant', content: `Selected **${prop.name}**. What do you need help with?` }]);
+                setStep('category');
+              }
             } else {
+              // Property only — skip property selection, go to category
+              setMessages([{ role: 'assistant', content: `Selected **${prop.name}**. What do you need help with?` }]);
               setStep('category');
             }
           }
@@ -959,11 +973,11 @@ export default function BusinessChat() {
     setImgPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    // If we've had enough exchanges, skip the AI call and go to budget
+    // If we've had enough exchanges, ask if there's anything else before budget
     if (exchangeCount >= 2) {
       setTimeout(() => {
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Got it. Would you like to set a budget for this dispatch?' }]);
-        setStep('budget');
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Got it. Is there anything else you\'d like to add before we dispatch? You can also upload a photo if it helps.' }]);
+        setStep('anything_else');
       }, 300);
       return;
     }
@@ -978,8 +992,15 @@ export default function BusinessChat() {
   function handleBudget(selected: string) {
     setBudget(selected);
     setMessages(prev => [...prev, { role: 'user', content: selected === 'flexible' ? 'No budget preference' : selected }]);
+    setMessages(prev => [...prev, { role: 'assistant', content: 'When do you need this done?' }]);
+    setStep('timing');
+  }
 
-    // Generate the scope after budget is selected
+  function handleTiming(selected: string) {
+    setTiming(selected);
+    setMessages(prev => [...prev, { role: 'user', content: selected }]);
+
+    // Generate the scope after timing is selected (same logic as original handleBudget)
     const promptText = category?.group === 'service'
       ? 'Please generate a final scope summary so I can dispatch a provider.'
       : 'Please generate your diagnosis so I can dispatch a pro.';
@@ -1170,7 +1191,7 @@ export default function BusinessChat() {
 
 
   return (
-    <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ height: '100%', background: 'white', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <style>{`
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin { to { transform:rotate(360deg); } }
@@ -1188,28 +1209,30 @@ export default function BusinessChat() {
         }
       `}</style>
 
+      {/* After hours notice — sits above the header */}
+      {(() => {
+        const hour = new Date().getHours();
+        return (hour < 8 || hour >= 18) ? (
+          <div style={{
+            background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
+            padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center', flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>🌙</span>
+            <span>Some providers may not be reachable outside business hours (8 AM – 6 PM). Responses may be limited and take longer.</span>
+          </div>
+        ) : null;
+      })()}
+
       {/* Header */}
       <nav style={{
-        position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
+        zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
         padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid rgba(0,0,0,0.05)',
+        borderBottom: '1px solid rgba(0,0,0,0.05)', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-          <button onClick={() => navigate('/business')} style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
-            fontSize: 18, color: '#9B9490', display: 'flex', alignItems: 'center', flexShrink: 0,
-          }} title="Back to portal">←</button>
-          <span onClick={() => navigate('/business')} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'baseline', flexShrink: 0 }}>
-            <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O }}>homie</span>
-            <span className="b2b-chat-badge" style={{
-              fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 800,
-              color: '#fff', background: G, padding: '2px 6px',
-              borderRadius: 4, marginLeft: 7, letterSpacing: '0.08em',
-              textTransform: 'uppercase', position: 'relative', top: -1,
-            }}>Business</span>
-          </span>
           {selectedProperty && (
-            <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+            <span style={{ fontSize: 14, color: '#9B9490', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
               {selectedProperty.name}
             </span>
           )}
@@ -1247,6 +1270,9 @@ export default function BusinessChat() {
             setShowQ1Input(false);
             setQ1InputVal('');
             setBudget('flexible');
+            setTiming('asap');
+            setShowDatePicker(false);
+            setSelectedDate('');
             setJobId(null);
             setOutreachStatus(null);
             setResponses([]);
@@ -1259,27 +1285,12 @@ export default function BusinessChat() {
             padding: '5px 12px', fontSize: 13, fontWeight: 600, color: '#6B6560',
             cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
           }}>+ New</button>
-          <AvatarDropdown />
         </div>
       </nav>
 
-      {/* After hours notice */}
-      {(() => {
-        const hour = new Date().getHours();
-        return (hour < 8 || hour >= 18) ? (
-          <div style={{
-            background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
-            padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center',
-          }}>
-            <span style={{ fontSize: 16, flexShrink: 0 }}>🌙</span>
-            <span>Some providers may not be reachable outside business hours (8 AM – 6 PM). Responses may be limited and take longer.</span>
-          </div>
-        ) : null;
-      })()}
-
       {/* Chat area */}
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+      <div style={{ maxWidth: 700, margin: '0 auto', padding: '16px 16px 120px' }}>
 
           {/* Step: Property selection */}
           {step === 'property' && (
@@ -1497,6 +1508,65 @@ export default function BusinessChat() {
             </div>
           )}
 
+          {/* Anything else before dispatch */}
+          {step === 'anything_else' && !streaming && (
+            <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease', marginBottom: 16 }}>
+              <div style={{ background: '#fff', borderRadius: 14, border: '2px solid rgba(0,0,0,0.06)', padding: 16, marginBottom: 10 }}>
+                <textarea
+                  value={anythingElseText}
+                  onChange={e => setAnythingElseText(e.target.value)}
+                  placeholder="Add any extra notes, access instructions, or details for the provider..."
+                  rows={3}
+                  style={{
+                    width: '100%', border: '1.5px solid rgba(0,0,0,0.08)', borderRadius: 10,
+                    padding: '10px 12px', fontSize: 14, fontFamily: "'DM Sans', sans-serif",
+                    resize: 'none', outline: 'none', color: D, boxSizing: 'border-box',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = O; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'; }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <button onClick={() => anythingElseFileRef.current?.click()} style={{
+                    padding: '6px 12px', borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.08)', background: '#fff',
+                    fontSize: 13, color: '#9B9490', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                    {'\uD83D\uDCF7'} {anythingElseImage ? 'Change photo' : 'Add photo'}
+                  </button>
+                  {anythingElseImage && (
+                    <div style={{ position: 'relative', width: 40, height: 40, borderRadius: 8, overflow: 'hidden', border: '2px solid rgba(0,0,0,0.08)' }}>
+                      <img src={anythingElseImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <button onClick={() => setAnythingElseImage(null)} style={{
+                        position: 'absolute', top: 1, right: 1, width: 16, height: 16, borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', fontSize: 9, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>{'\u00D7'}</button>
+                    </div>
+                  )}
+                  <input ref={anythingElseFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) { const r = new FileReader(); r.onload = ev => setAnythingElseImage(ev.target?.result as string); r.readAsDataURL(f); }
+                    e.target.value = '';
+                  }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => {
+                  if (anythingElseText.trim() || anythingElseImage) {
+                    const content = anythingElseImage ? `\uD83D\uDCF7 ${anythingElseText.trim() || 'Photo attached'}` : anythingElseText.trim();
+                    setMessages(prev => [...prev, { role: 'user', content }]);
+                  }
+                  setMessages(prev => [...prev, { role: 'assistant', content: 'Great. Would you like to set a budget for this dispatch?' }]);
+                  setStep('budget');
+                }} style={{
+                  flex: 1, padding: '12px 20px', borderRadius: 12, border: 'none', background: O, color: '#fff',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                }}>
+                  {anythingElseText.trim() || anythingElseImage ? 'Continue' : 'Nothing else — continue'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Budget selection */}
           {step === 'budget' && !streaming && (
             <div style={{ marginLeft: 42, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
@@ -1518,6 +1588,64 @@ export default function BusinessChat() {
                 onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#9B9490'; }}
               >Skip</button>
+            </div>
+          )}
+
+          {/* Timing selection */}
+          {step === 'timing' && !streaming && (
+            <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease', marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginBottom: showDatePicker ? 10 : 0 }}>
+                {['Today', 'Tomorrow', 'This week', 'Flexible'].map(t => (
+                  <button key={t} onClick={() => handleTiming(t)} style={{
+                    padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
+                    background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                  >{t}</button>
+                ))}
+                <button onClick={() => setShowDatePicker(!showDatePicker)} style={{
+                  padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: `2px ${showDatePicker ? 'solid' : 'dashed'} ${showDatePicker ? O : 'rgba(0,0,0,0.12)'}`,
+                  background: showDatePicker ? 'rgba(232,99,43,0.03)' : 'white', fontSize: 14,
+                  color: showDatePicker ? O : '#9B9490', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
+                  onMouseLeave={e => { if (!showDatePicker) { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#9B9490'; } }}
+                >{'\uD83D\uDCC5'} Pick a date</button>
+              </div>
+              {showDatePicker && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', animation: 'fadeSlide 0.2s ease' }}>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={e => setSelectedDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    style={{
+                      flex: 1, padding: '10px 14px', borderRadius: 10, border: '2px solid rgba(0,0,0,0.08)',
+                      fontSize: 14, color: D, fontFamily: "'DM Sans', sans-serif", outline: 'none',
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = O; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'; }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (selectedDate) {
+                        const formatted = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                        handleTiming(formatted);
+                      }
+                    }}
+                    disabled={!selectedDate}
+                    style={{
+                      padding: '10px 20px', borderRadius: 10, border: 'none',
+                      background: selectedDate ? O : '#E0DAD4', color: selectedDate ? '#fff' : '#9B9490',
+                      fontSize: 14, fontWeight: 600, cursor: selectedDate ? 'pointer' : 'default',
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >Confirm</button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1748,6 +1876,7 @@ export default function BusinessChat() {
 
           <div ref={chatEndRef} />
         </div>
+      </div>
     </div>
   );
 }

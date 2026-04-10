@@ -10,6 +10,12 @@ function cleanPrice(price: string): string {
   if (rm) return `$${rm[1]}-$${rm[2]}`;
   const nm = p.match(/^(\d+(?:\.\d+)?)$/);
   if (nm) return `$${nm[1]}`;
+  const em = p.match(/(?:is|are|be|charge|cost|runs?|pay)\s+(?:about|around)?\s*\$?(\d+(?:\.\d+)?)/i);
+  if (em) return `$${em[1]}`;
+  const lp = p.match(/^\$(\d+(?:\.\d+)?)\s+\w/);
+  if (lp) return `$${lp[1]}`;
+  const ln = p.match(/^(\d+(?:\.\d+)?)\s+(?:service|for|per|flat|call|visit|fee|charge|total)/i);
+  if (ln) return `$${ln[1]}`;
   return p;
 }
 
