@@ -94,6 +94,7 @@ export default function BusinessPortal() {
     return localStorage.getItem('bp_sidebar_collapsed') === 'true';
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [chatSessionId, setChatSessionId] = useState(0);
 
   function handleSidebarCollapse(v: boolean) {
     setSidebarCollapsed(v);
@@ -156,6 +157,8 @@ export default function BusinessPortal() {
   function startNewDispatch() {
     setSelectedProperty(null);
     setTab('dispatch-chat');
+    // Bump the session ID so BusinessChat fully remounts and clears all in-memory state
+    setChatSessionId(c => c + 1);
     // Clear any prefill params (property, category, etc.) from URL so the chat
     // starts fresh and prompts for property selection
     if (workspace) {
@@ -282,7 +285,7 @@ export default function BusinessPortal() {
           url.searchParams.set('workspace', workspace.id);
           window.history.replaceState({}, '', url.toString());
         }
-        return <BusinessChat key={`chat-${workspace.id}`} />;
+        return <BusinessChat key={`chat-${workspace.id}-${chatSessionId}`} />;
       })() : undefined}
       sidebar={
         <BusinessSidebar
