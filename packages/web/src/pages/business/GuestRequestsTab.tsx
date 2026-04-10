@@ -28,7 +28,7 @@ const LANGUAGES = [
   { value: 'it', label: 'Italian' },
 ];
 
-export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, initialSubTab }: { workspaceId: string; plan: string; onViewDispatch?: (jobId: string) => void; initialSubTab?: GuestSubTab }) {
+export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, initialSubTab, focusIssueId, onFocusHandled }: { workspaceId: string; plan: string; onViewDispatch?: (jobId: string) => void; initialSubTab?: GuestSubTab; focusIssueId?: string | null; onFocusHandled?: () => void }) {
   const [subTab, setSubTab] = useState<GuestSubTab>(initialSubTab ?? 'issues');
   const isPro = ['professional', 'business', 'enterprise'].includes(plan);
   const isBizPlus = ['business', 'enterprise'].includes(plan);
@@ -36,6 +36,11 @@ export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, in
   useEffect(() => {
     if (initialSubTab) setSubTab(initialSubTab);
   }, [initialSubTab]);
+
+  // If we're being asked to focus a specific issue, force the issues sub-tab
+  useEffect(() => {
+    if (focusIssueId) setSubTab('issues');
+  }, [focusIssueId]);
 
   if (!isPro) {
     return (
@@ -61,7 +66,7 @@ export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, in
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>{SUB_TAB_TITLES[subTab]}</h3>
       </div>
-      {subTab === 'issues' && <GuestIssuesSubTab workspaceId={workspaceId} onViewDispatch={onViewDispatch} />}
+      {subTab === 'issues' && <GuestIssuesSubTab workspaceId={workspaceId} onViewDispatch={onViewDispatch} focusIssueId={focusIssueId} onFocusHandled={onFocusHandled} />}
       {subTab === 'settings' && <GuestSettingsSubTab workspaceId={workspaceId} isBizPlus={isBizPlus} />}
       {subTab === 'auto-dispatch' && <GuestAutoDispatchSubTab workspaceId={workspaceId} />}
       {subTab === 'qr-codes' && <GuestQRCodesSubTab workspaceId={workspaceId} />}
@@ -71,7 +76,7 @@ export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, in
 
 /* ── Issues sub-tab ── */
 
-function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: string; onViewDispatch?: (jobId: string) => void }) {
+function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusHandled }: { workspaceId: string; onViewDispatch?: (jobId: string) => void; focusIssueId?: string | null; onFocusHandled?: () => void }) {
   const [issues, setIssues] = useState<GuestIssue[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -121,6 +126,24 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [workspaceId, filterStatus, filterSeverity, filterProperty, page, showArchived]);
+
+  // Auto-expand a focused issue (e.g. from a notification deep link)
+  useEffect(() => {
+    if (!focusIssueId || loading) return;
+    if (!issues.some(i => i.id === focusIssueId)) return;
+    setExpandedId(focusIssueId);
+    setDetailLoading(true);
+    businessService.getGuestIssue(workspaceId, focusIssueId).then(res => {
+      if (res.data) setDetail(res.data);
+    }).catch(() => {}).finally(() => {
+      setDetailLoading(false);
+      onFocusHandled?.();
+      setTimeout(() => {
+        const el = document.getElementById(`guest-issue-${focusIssueId}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    });
+  }, [focusIssueId, loading, issues, workspaceId, onFocusHandled]);
 
   async function toggleExpand(issueId: string) {
     if (expandedId === issueId) { setExpandedId(null); setDetail(null); return; }
@@ -298,11 +321,12 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch }: { workspaceId: strin
             const isReviewing = issue.status === 'pm_reviewing';
 
             return (
-              <div key={issue.id} onClick={() => toggleExpand(issue.id)} style={{
+              <div key={issue.id} id={`guest-issue-${issue.id}`} onClick={() => toggleExpand(issue.id)} style={{
                 background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
                 border: isReviewing ? `2px solid ${O}` : isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
                 transition: 'all 0.2s',
                 boxShadow: isReviewing ? `0 2px 12px ${O}15` : isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
+                scrollMarginTop: 80,
               }}>
                 {/* Collapsed header */}
                 <div style={{ padding: '12px 14px' }}>

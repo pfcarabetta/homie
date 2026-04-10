@@ -85,6 +85,7 @@ export default function BusinessPortal() {
   const [workspace, setWorkspace] = useState<WorkspaceDetail | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
   const [focusJobId, setFocusJobId] = useState<string | null>(null);
+  const [focusIssueId, setFocusIssueId] = useState<string | null>(null);
   const [showReportsUpgrade, setShowReportsUpgrade] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -128,6 +129,12 @@ export default function BusinessPortal() {
       // Leaving the property detail view when URL navigates to a top-level tab
       setSelectedProperty(null);
     }
+    // Notification deep-linking — focus a specific job or issue
+    const jobParam = params.get('job');
+    if (jobParam) setFocusJobId(jobParam);
+    const issueParam = params.get('issue');
+    if (issueParam) setFocusIssueId(issueParam);
+
     const focus = params.get('focus');
     if (focus && urlTab === 'settings') {
       const targetId = focus === 'profile' ? 'my-profile-section' : focus === 'workspace' ? 'workspace-settings-section' : null;
@@ -354,6 +361,8 @@ export default function BusinessPortal() {
           plan={workspace.plan}
           onViewDispatch={(jobId) => { setFocusJobId(jobId); setTab('dispatches'); }}
           initialSubTab={tab === 'guest-settings' ? 'settings' : tab === 'guest-auto-dispatch' ? 'auto-dispatch' : tab === 'guest-qr-codes' ? 'qr-codes' : 'issues'}
+          focusIssueId={focusIssueId}
+          onFocusHandled={() => setFocusIssueId(null)}
         />
       )}
       {workspace && tab === 'schedules' && (
