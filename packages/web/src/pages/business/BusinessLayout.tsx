@@ -30,6 +30,7 @@ interface SearchResultItem {
   isPreferred?: boolean;
   quoteCount?: number;
   bookingCount?: number;
+  relatedJobs?: Array<{ jobId: string; summary: string; category: string; status: string; propertyName: string; relation: string; date: string }>;
   tab: string;
 }
 
@@ -337,28 +338,48 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
                           Providers
                         </div>
                         {searchResults.providers.map(p => (
-                          <div
-                            key={p.id}
-                            className="bp-search-row"
-                            onClick={() => handleResultClick(p.tab, p.id)}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px',
-                              minHeight: 40, cursor: 'pointer', transition: 'background 0.1s',
-                            }}
-                          >
-                            <span style={{ fontSize: 14, flexShrink: 0 }}>&#128100;</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                                {p.isPreferred && <span style={{ fontSize: 9, fontWeight: 700, color: '#E8632B', background: '#FFF3E8', padding: '1px 5px', borderRadius: 4, whiteSpace: 'nowrap' }}>PREFERRED</span>}
+                          <div key={p.id}>
+                            <div
+                              className="bp-search-row"
+                              onClick={() => handleResultClick(p.tab, p.id)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px',
+                                minHeight: 40, cursor: 'pointer', transition: 'background 0.1s',
+                              }}
+                            >
+                              <span style={{ fontSize: 14, flexShrink: 0 }}>&#128100;</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                                  {p.isPreferred && <span style={{ fontSize: 9, fontWeight: 700, color: '#E8632B', background: '#FFF3E8', padding: '1px 5px', borderRadius: 4, whiteSpace: 'nowrap' }}>PREFERRED</span>}
+                                </div>
+                                <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--bp-subtle)', marginTop: 1 }}>
+                                  {(p.quoteCount ?? 0) > 0 && <span>{p.quoteCount} quote{p.quoteCount !== 1 ? 's' : ''}</span>}
+                                  {(p.bookingCount ?? 0) > 0 && <span>{p.bookingCount} booking{p.bookingCount !== 1 ? 's' : ''}</span>}
+                                  {!(p.quoteCount || p.bookingCount) && p.phone && <span>{p.phone}</span>}
+                                </div>
                               </div>
-                              <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--bp-subtle)', marginTop: 1 }}>
-                                {(p.quoteCount ?? 0) > 0 && <span>{p.quoteCount} quote{p.quoteCount !== 1 ? 's' : ''}</span>}
-                                {(p.bookingCount ?? 0) > 0 && <span>{p.bookingCount} booking{p.bookingCount !== 1 ? 's' : ''}</span>}
-                                {!(p.quoteCount || p.bookingCount) && p.phone && <span>{p.phone}</span>}
-                              </div>
+                              {(p.quoteCount || p.bookingCount) ? <span style={{ fontSize: 11, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', flexShrink: 0 }}>{p.phone}</span> : null}
                             </div>
-                            {(p.quoteCount || p.bookingCount) ? <span style={{ fontSize: 11, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', flexShrink: 0 }}>{p.phone}</span> : null}
+                            {p.relatedJobs && p.relatedJobs.length > 0 && (
+                              <div style={{ paddingLeft: 38, paddingRight: 14, paddingBottom: 4 }}>
+                                {p.relatedJobs.map(j => (
+                                  <div
+                                    key={j.jobId}
+                                    className="bp-search-row"
+                                    onClick={() => handleResultClick('dispatches', j.jobId)}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px',
+                                      borderRadius: 6, cursor: 'pointer', transition: 'background 0.1s',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: 9, fontWeight: 700, color: j.relation === 'booking' ? '#1B9E77' : '#1565C0', background: j.relation === 'booking' ? '#E8F5E9' : '#E3F2FD', padding: '1px 5px', borderRadius: 3, textTransform: 'uppercase', flexShrink: 0 }}>{j.relation}</span>
+                                    <span style={{ fontSize: 12, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{j.category || j.summary}</span>
+                                    {j.propertyName && <span style={{ fontSize: 11, color: 'var(--bp-subtle)', marginLeft: 'auto', whiteSpace: 'nowrap', flexShrink: 0 }}>{j.propertyName}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
