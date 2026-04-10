@@ -27,6 +27,9 @@ interface SearchResultItem {
   status?: string;
   propertyName?: string;
   date?: string;
+  isPreferred?: boolean;
+  quoteCount?: number;
+  bookingCount?: number;
   tab: string;
 }
 
@@ -339,13 +342,23 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
                             className="bp-search-row"
                             onClick={() => handleResultClick(p.tab, p.id)}
                             style={{
-                              display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px',
-                              height: 40, cursor: 'pointer', transition: 'background 0.1s',
+                              display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px',
+                              minHeight: 40, cursor: 'pointer', transition: 'background 0.1s',
                             }}
                           >
                             <span style={{ fontSize: 14, flexShrink: 0 }}>&#128100;</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                            <span style={{ fontSize: 12, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginLeft: 'auto' }}>{p.phone}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                                {p.isPreferred && <span style={{ fontSize: 9, fontWeight: 700, color: '#E8632B', background: '#FFF3E8', padding: '1px 5px', borderRadius: 4, whiteSpace: 'nowrap' }}>PREFERRED</span>}
+                              </div>
+                              <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--bp-subtle)', marginTop: 1 }}>
+                                {(p.quoteCount ?? 0) > 0 && <span>{p.quoteCount} quote{p.quoteCount !== 1 ? 's' : ''}</span>}
+                                {(p.bookingCount ?? 0) > 0 && <span>{p.bookingCount} booking{p.bookingCount !== 1 ? 's' : ''}</span>}
+                                {!(p.quoteCount || p.bookingCount) && p.phone && <span>{p.phone}</span>}
+                              </div>
+                            </div>
+                            {(p.quoteCount || p.bookingCount) ? <span style={{ fontSize: 11, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', flexShrink: 0 }}>{p.phone}</span> : null}
                           </div>
                         ))}
                       </div>

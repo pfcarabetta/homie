@@ -3233,7 +3233,10 @@ router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: R
 
     // 2. Providers — all providers associated with this workspace (preferred, booked, or quoted)
     const providerRows = await db.execute(sql`
-      SELECT DISTINCT p.id, p.name, p.phone
+      SELECT DISTINCT p.id, p.name, p.phone,
+        EXISTS(SELECT 1 FROM preferred_vendors pv WHERE pv.provider_id = p.id AND pv.workspace_id = ${req.workspaceId}) AS is_preferred,
+        (SELECT COUNT(*)::int FROM provider_responses pr WHERE pr.provider_id = p.id AND pr.job_id IN (SELECT id FROM jobs WHERE workspace_id = ${req.workspaceId})) AS quote_count,
+        (SELECT COUNT(*)::int FROM bookings b WHERE b.provider_id = p.id AND b.job_id IN (SELECT id FROM jobs WHERE workspace_id = ${req.workspaceId})) AS booking_count
       FROM providers p
       WHERE (
         p.id IN (SELECT provider_id FROM preferred_vendors WHERE workspace_id = ${req.workspaceId})
@@ -3246,7 +3249,7 @@ router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: R
         OR p.email ILIKE ${pattern}
       )
       LIMIT 5
-    `) as unknown as Array<{ id: string; name: string; phone: string | null }>;
+    `) as unknown as Array<{ id: string; name: string; phone: string | null; is_preferred: boolean; quote_count: number; booking_count: number }>;
 
     // 3. Dispatches (jobs for this workspace)
     const dispatchRows = await db
@@ -3283,6 +3286,9 @@ router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: R
           id: p.id,
           name: p.name,
           phone: p.phone || '',
+          isPreferred: p.is_preferred,
+          quoteCount: p.quote_count,
+          bookingCount: p.booking_count,
           tab: 'vendors',
         })),
         dispatches: dispatchRows.map(d => {
