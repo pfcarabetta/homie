@@ -133,9 +133,12 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (searchQuery.length < 2) {
       setSearchResults(null);
+      setSearchLoading(false);
       setSearchOpen(false);
       return;
     }
+    // Show loading state immediately so the dropdown is never empty
+    setSearchLoading(true);
     setSearchOpen(true);
     debounceRef.current = setTimeout(() => {
       doSearch(searchQuery);
