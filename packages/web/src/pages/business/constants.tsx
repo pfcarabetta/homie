@@ -111,6 +111,7 @@ export const TEMPLATE_CATEGORIES = [
 ];
 
 export const CADENCE_OPTIONS = [
+  { value: 'one_time', label: 'One-time', desc: 'A single dispatch on a specific date' },
   { value: 'weekly', label: 'Weekly', desc: 'Once per week' },
   { value: 'biweekly', label: 'Biweekly', desc: 'Every 2 weeks' },
   { value: 'monthly', label: 'Monthly', desc: 'Once per month' },
@@ -192,6 +193,13 @@ export function formatCadence(type: string, config: Record<string, unknown> | nu
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   if (!config) return type.replace(/_/g, ' ');
   switch (type) {
+    case 'one_time': {
+      const dateStr = config.date as string | undefined;
+      const time = (config.time as string | undefined) ?? '10:00';
+      if (!dateStr) return 'One-time dispatch';
+      const dt = new Date(`${dateStr}T${time}`);
+      return `One-time on ${dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${time}`;
+    }
     case 'weekly': return `Every ${days[(config.day_of_week as number) ?? 1]} at ${config.time ?? '10:00'}`;
     case 'biweekly': return `Every other ${days[(config.day_of_week as number) ?? 1]} at ${config.time ?? '10:00'}`;
     case 'monthly': return `${ordinal((config.day_of_month as number) ?? 1)} of every month at ${config.time ?? '10:00'}`;

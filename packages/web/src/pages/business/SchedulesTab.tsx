@@ -29,6 +29,11 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [dayOfMonth, setDayOfMonth] = useState(1);
   const [timeVal, setTimeVal] = useState('10:00');
+  const [oneTimeDate, setOneTimeDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
   const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
   const [agreedRate, setAgreedRate] = useState('');
   const [autoBookPreferred, setAutoBookPreferred] = useState(true);
@@ -69,10 +74,21 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
       setError('Select at least one preferred provider when marketplace is disabled.');
       return;
     }
+    if (cadenceType === 'one_time') {
+      if (!oneTimeDate) { setError('Pick a date for the one-time dispatch.'); return; }
+      const when = new Date(`${oneTimeDate}T${timeVal}`);
+      if (isNaN(when.getTime()) || when.getTime() < Date.now()) {
+        setError('One-time dispatch date must be in the future.');
+        return;
+      }
+    }
     setSaving(true);
     setError('');
     const cadenceConfig: Record<string, unknown> = {};
-    if (['weekly', 'biweekly'].includes(cadenceType)) {
+    if (cadenceType === 'one_time') {
+      cadenceConfig.date = oneTimeDate;
+      cadenceConfig.time = timeVal;
+    } else if (['weekly', 'biweekly'].includes(cadenceType)) {
       cadenceConfig.day_of_week = dayOfWeek;
       cadenceConfig.time = timeVal;
     } else if (['monthly', 'quarterly'].includes(cadenceType)) {
@@ -265,6 +281,20 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             </div>
 
             {/* Day & Time pickers */}
+            {cadenceType === 'one_time' && (
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Date</label>
+                  <input type="date" value={oneTimeDate} min={new Date().toISOString().split('T')[0]} onChange={e => setOneTimeDate(e.target.value)}
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Time</label>
+                  <input type="time" value={timeVal} onChange={e => setTimeVal(e.target.value)}
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+              </div>
+            )}
             {['weekly', 'biweekly'].includes(cadenceType) && (
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
                 <div style={{ flex: 1 }}>

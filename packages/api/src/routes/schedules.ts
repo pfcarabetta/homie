@@ -25,6 +25,17 @@ export function calculateNextDispatch(
   const next = new Date(from);
 
   switch (cadenceType) {
+    case 'one_time': {
+      const dateStr = (cadenceConfig?.date as string | undefined) ?? null;
+      const timeStr = (cadenceConfig?.time as string | undefined) ?? '10:00';
+      if (dateStr) {
+        const dt = new Date(`${dateStr}T${timeStr}`);
+        if (!isNaN(dt.getTime())) return dt;
+      }
+      // No valid date — fall through to far future so the cron doesn't pick it up
+      next.setFullYear(next.getFullYear() + 100);
+      return next;
+    }
     case 'daily':
       next.setDate(next.getDate() + 1);
       break;
