@@ -3020,12 +3020,13 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .select({
         type: sql<string>`'dispatch'`,
         title: sql<string>`COALESCE(${jobs.diagnosis}->>'category', 'Job')`,
-        propertyName: sql<string | null>`NULL`,
+        propertyName: properties.name,
         providerName: sql<string | null>`NULL`,
         jobId: jobs.id,
         createdAt: jobs.createdAt,
       })
       .from(jobs)
+      .leftJoin(properties, eq(jobs.propertyId, properties.id))
       .where(eq(jobs.workspaceId, req.workspaceId))
       .orderBy(desc(jobs.createdAt))
       .limit(10);
@@ -3034,7 +3035,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .select({
         type: sql<string>`'quote'`,
         title: sql<string>`'Quote received'`,
-        propertyName: sql<string | null>`NULL`,
+        propertyName: properties.name,
         providerName: providers.name,
         jobId: providerResponses.jobId,
         createdAt: providerResponses.createdAt,
@@ -3042,6 +3043,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .from(providerResponses)
       .innerJoin(jobs, eq(providerResponses.jobId, jobs.id))
       .innerJoin(providers, eq(providerResponses.providerId, providers.id))
+      .leftJoin(properties, eq(jobs.propertyId, properties.id))
       .where(eq(jobs.workspaceId, req.workspaceId))
       .orderBy(desc(providerResponses.createdAt))
       .limit(10);
@@ -3050,7 +3052,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .select({
         type: sql<string>`'booking'`,
         title: sql<string>`'Booking confirmed'`,
-        propertyName: sql<string | null>`NULL`,
+        propertyName: properties.name,
         providerName: providers.name,
         jobId: bookings.jobId,
         createdAt: bookings.confirmedAt,
@@ -3058,6 +3060,7 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .from(bookings)
       .innerJoin(jobs, eq(bookings.jobId, jobs.id))
       .innerJoin(providers, eq(bookings.providerId, providers.id))
+      .leftJoin(properties, eq(jobs.propertyId, properties.id))
       .where(eq(jobs.workspaceId, req.workspaceId))
       .orderBy(desc(bookings.confirmedAt))
       .limit(10);
