@@ -246,7 +246,16 @@ export default function BusinessPortal() {
       workspaceLogo={workspace?.logoUrl}
       workspaceName={workspace?.name}
       workspaceId={selectedId || undefined}
-      onNavigate={(t, focusId) => { setFocusJobId(focusId ?? null); setTab(t as Tab); }}
+      onNavigate={(t, focusId) => {
+        if (t === 'properties' && focusId && workspace) {
+          businessService.getProperty(workspace.id, focusId).then(res => {
+            if (res.data) setSelectedProperty(res.data);
+            else { setTab('properties' as Tab); }
+          }).catch(() => { setTab('properties' as Tab); });
+        } else {
+          setFocusJobId(focusId ?? null); setTab(t as Tab);
+        }
+      }}
       mobileOpen={mobileMenuOpen}
       setMobileOpen={setMobileMenuOpen}
       fullWidthContent={tab === 'dispatch-chat' && workspace ? (() => {
