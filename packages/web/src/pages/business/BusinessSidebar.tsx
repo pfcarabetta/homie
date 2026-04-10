@@ -375,7 +375,6 @@ export default function BusinessSidebar({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 600, color: '#2D2926', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName || homeowner.email}</div>
                     <div style={{ fontSize: 13, color: '#9B9490', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{homeowner.email}</div>
-                    {homeowner.membership_tier && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 1 }}>{homeowner.membership_tier} plan</div>}
                   </div>
                 </div>
               )}
@@ -444,7 +443,6 @@ export default function BusinessSidebar({
               <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#2D2926' }}>{userName || homeowner.email}</div>
                 <div style={{ fontSize: 12, color: '#9B9490' }}>{homeowner.email}</div>
-                {homeowner.membership_tier && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{homeowner.membership_tier} plan</div>}
               </div>
             )}
             <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={accountMenuItemStyle}
