@@ -256,9 +256,9 @@ async function createProviderResponse(
     void syncGuestIssueFromJob(jobId, 'quote_received', { providerName: prov2?.name });
   } catch (err) { logger.warn({ err, jobId }, '[webhooks] Failed to sync guest issue from provider response'); }
 
-  // Slack notification — fire-and-forget
+  // Slack notification + in-app feed — fire-and-forget
   try {
-    const [job] = await db.select({ workspaceId: jobs.workspaceId, diagnosis: jobs.diagnosis }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
+    const [job] = await db.select({ workspaceId: jobs.workspaceId, diagnosis: jobs.diagnosis, propertyId: jobs.propertyId }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
     if (job?.workspaceId) {
       const [prov] = await db.select({ name: providers.name }).from(providers).where(eq(providers.id, providerId)).limit(1);
       const diagnosis = job.diagnosis as { category?: string } | null;
@@ -270,8 +270,23 @@ async function createProviderResponse(
         message,
         category: diagnosis?.category ?? 'maintenance',
       });
+
+      const { recordNotification } = await import('../services/notification-feed');
+      const cat = (diagnosis?.category || 'job').replace(/_/g, ' ');
+      const provName = prov?.name ?? 'A provider';
+      const safeMsg = message ?? '';
+      const trimmedMsg = safeMsg.length > 120 ? safeMsg.slice(0, 117) + '...' : safeMsg;
+      void recordNotification({
+        workspaceId: job.workspaceId,
+        type: 'provider_response',
+        title: `New quote from ${provName}`,
+        body: `${cat}: ${trimmedMsg}`,
+        jobId,
+        propertyId: job.propertyId,
+        link: `/business?tab=dispatches&job=${jobId}`,
+      });
     }
-  } catch (err) { logger.warn({ err, jobId }, '[webhooks] Slack notification failed during response handling'); }
+  } catch (err) { logger.warn({ err, jobId }, '[webhooks] notification failed during response handling'); }
 
   // Record quote in repair_cost_data for cost estimation — fire-and-forget
   try {

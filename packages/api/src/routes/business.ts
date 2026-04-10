@@ -15,6 +15,7 @@ import { providers } from '../db/schema/providers';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { preferredVendors } from '../db/schema/preferred-vendors';
 import { reservations } from '../db/schema/reservations';
+import { notifications } from '../db/schema/notifications';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 import { generateEstimatePDF } from '../services/estimate-pdf';
 
@@ -3379,6 +3380,67 @@ router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: R
   } catch (err) {
     logger.error({ err }, '[GET /business/:id/search]');
     res.status(500).json({ data: null, error: 'Failed to search', meta: {} });
+  }
+});
+
+// ── GET /:workspaceId/notifications — List notifications ───────────────────
+
+router.get('/:workspaceId/notifications', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt((req.query.limit as string) || '30', 10), 100);
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.workspaceId, req.workspaceId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+
+    const [{ unread }] = await db
+      .select({ unread: count() })
+      .from(notifications)
+      .where(and(eq(notifications.workspaceId, req.workspaceId), eq(notifications.read, false)));
+
+    res.json({
+      data: {
+        items: rows.map(n => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          body: n.body,
+          jobId: n.jobId,
+          propertyId: n.propertyId,
+          guestIssueId: n.guestIssueId,
+          link: n.link,
+          read: n.read,
+          createdAt: n.createdAt,
+        })),
+        unreadCount: unread,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/notifications]');
+    res.status(500).json({ data: null, error: 'Failed to load notifications', meta: {} });
+  }
+});
+
+// POST /:workspaceId/notifications/mark-read — Mark notifications as read
+router.post('/:workspaceId/notifications/mark-read', requireWorkspace, async (req: Request, res: Response) => {
+  const body = req.body as { ids?: string[]; all?: boolean };
+  try {
+    if (body.all) {
+      await db.update(notifications)
+        .set({ read: true })
+        .where(and(eq(notifications.workspaceId, req.workspaceId), eq(notifications.read, false)));
+    } else if (body.ids && body.ids.length > 0) {
+      const idList = sql.join(body.ids.map(id => sql`${id}::uuid`), sql`, `);
+      await db.execute(sql`UPDATE notifications SET read = true WHERE workspace_id = ${req.workspaceId} AND id IN (${idList})`);
+    }
+    res.json({ data: { ok: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/notifications/mark-read]');
+    res.status(500).json({ data: null, error: 'Failed to mark as read', meta: {} });
   }
 });
 

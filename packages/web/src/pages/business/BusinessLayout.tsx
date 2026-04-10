@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { W, D } from './constants';
 import { businessService } from '@/services/api';
+import NotificationsBell from './NotificationsBell';
 
 interface BusinessLayoutProps {
   children: ReactNode;
@@ -38,14 +39,6 @@ function SearchIcon() {
   return (
     <svg width={16} height={16} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
       <circle cx="9" cy="9" r="5.5" /><path d="M13.5 13.5L17 17" />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg width={20} height={20} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-      <path d="M5 8a5 5 0 0110 0c0 4 2 6 2 6H3s2-2 2-6" /><path d="M8.5 17a2 2 0 003 0" />
     </svg>
   );
 }
@@ -468,13 +461,7 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
                 <div style={{ width: 1, height: 24, background: 'var(--bp-border)' }} />
               </>
             )}
-            <div style={{ position: 'relative', cursor: 'pointer', color: 'var(--bp-subtle)' }}>
-              <BellIcon />
-              <div style={{
-                position: 'absolute', top: -2, right: -2, width: 8, height: 8,
-                borderRadius: '50%', background: '#E04343', border: '2px solid var(--bp-header)',
-              }} />
-            </div>
+            <NotificationsBell workspaceId={workspaceId} />
           </div>
         </div>
 

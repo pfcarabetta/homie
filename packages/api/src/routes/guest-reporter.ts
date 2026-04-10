@@ -872,6 +872,22 @@ guestPublicRouter.post('/:workspaceId/:propertyId/issues', async (req: Request, 
       insertedTimeline.push(entry);
     }
 
+    // Notify the property manager — fire-and-forget
+    if (!self_resolved) {
+      try {
+        const { recordNotification } = await import('../services/notification-feed');
+        void recordNotification({
+          workspaceId,
+          type: 'guest_issue_submitted',
+          title: `Guest issue: ${guest_name || 'Guest'}`,
+          body: description.length > 120 ? description.slice(0, 117) + '...' : description,
+          propertyId,
+          guestIssueId: issue.id,
+          link: `/business?tab=guest-issues&issue=${issue.id}`,
+        });
+      } catch (err) { logger.warn({ err, issueId: issue.id }, '[guest-reporter] notification feed failed'); }
+    }
+
     res.status(201).json({
       data: {
         issueId: issue.id,

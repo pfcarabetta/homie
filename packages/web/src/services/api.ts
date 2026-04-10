@@ -752,6 +752,19 @@ export interface PropertyDetails {
   };
 }
 
+export interface BusinessNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  jobId: string | null;
+  propertyId: string | null;
+  guestIssueId: string | null;
+  link: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
 export interface Property {
   id: string;
   workspaceId: string;
@@ -1020,6 +1033,12 @@ export const businessService = {
     fetchAPI<Workspace>('/api/v1/business', { method: 'POST', body: JSON.stringify(data) }),
   updateWorkspace: (id: string, data: { name?: string; slug?: string; company_address?: string | null; company_phone?: string | null; company_email?: string | null }) =>
     fetchAPI<Workspace>(`/api/v1/business/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Notifications
+  listNotifications: (workspaceId: string, limit?: number) =>
+    fetchAPI<{ items: BusinessNotification[]; unreadCount: number }>(`/api/v1/business/${workspaceId}/notifications${limit ? `?limit=${limit}` : ''}`),
+  markNotificationsRead: (workspaceId: string, body: { ids?: string[]; all?: boolean }) =>
+    fetchAPI<{ ok: boolean }>(`/api/v1/business/${workspaceId}/notifications/mark-read`, { method: 'POST', body: JSON.stringify(body) }),
 
   // Properties
   listProperties: (workspaceId: string) =>

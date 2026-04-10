@@ -566,6 +566,21 @@ export async function dispatchJob(jobId: string): Promise<void> {
         providerCount: eligible.length,
       });
     } catch (err) { logger.warn({ err, jobId }, '[orchestration] Slack notification failed during dispatch'); }
+
+    // In-app notification feed — fire-and-forget
+    try {
+      const { recordNotification } = await import('./notification-feed');
+      const cat = (diagnosis.category || 'job').replace(/_/g, ' ');
+      void recordNotification({
+        workspaceId: job.workspaceId,
+        type: 'dispatch_created',
+        title: `New dispatch: ${cat}`,
+        body: diagnosis.summary || `Dispatched to ${eligible.length} provider${eligible.length !== 1 ? 's' : ''}`,
+        jobId,
+        propertyId: job.propertyId,
+        link: `/business?tab=dispatches&job=${jobId}`,
+      });
+    } catch (err) { logger.warn({ err, jobId }, '[orchestration] notification feed failed'); }
   }
 
   const adapters = createAdapters();
@@ -742,6 +757,22 @@ export async function sendBookingNotifications(
         category: bookingDiagnosis?.category ?? 'maintenance',
       });
     } catch (err) { logger.warn({ err, jobId }, '[orchestration] Slack notification failed during booking'); }
+
+    // In-app notification feed
+    try {
+      const { recordNotification } = await import('./notification-feed');
+      const bookingDiagnosis = job.diagnosis as DiagnosisPayload | null;
+      const cat = (bookingDiagnosis?.category || 'job').replace(/_/g, ' ');
+      void recordNotification({
+        workspaceId: job.workspaceId,
+        type: 'booking_confirmed',
+        title: `Booking confirmed: ${displayName}`,
+        body: `${displayName} is booked for ${cat}${availability ? ` — ${availability}` : ''}.`,
+        jobId,
+        propertyId: job.propertyId,
+        link: `/business?tab=bookings&job=${jobId}`,
+      });
+    } catch (err) { logger.warn({ err, jobId }, '[orchestration] notification feed failed'); }
   }
 
   const category = ((job.diagnosis as DiagnosisPayload | null)?.category ?? 'home maintenance').replace(/_/g, ' ');
