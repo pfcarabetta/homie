@@ -379,11 +379,46 @@ export default function BusinessSidebar({
                   </div>
                 </div>
               )}
-              <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={mobileMenuItemStyle}>My Profile</button>
-              <button onClick={() => { setAccountOpen(false); navigate('/account'); }} style={mobileMenuItemStyle}>My Account</button>
-              <button onClick={() => { setAccountOpen(false); navigate('/account?tab=quotes'); }} style={mobileMenuItemStyle}>My Quotes</button>
-              <button onClick={() => { setAccountOpen(false); navigate('/account?tab=bookings'); }} style={mobileMenuItemStyle}>My Bookings</button>
-              <div style={{ borderTop: '1px solid #F5F0EB' }}>
+              <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={mobileMenuItemStyle}>Workspace Profile</button>
+              <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings'); }} style={mobileMenuItemStyle}>Workspace Settings</button>
+              <button onClick={() => { setAccountOpen(false); navigate('/business?tab=billing'); }} style={mobileMenuItemStyle}>Billing</button>
+              <button onClick={() => { setAccountOpen(false); navigate('/business?tab=team'); }} style={mobileMenuItemStyle}>Team</button>
+
+              {/* Highlighted: Personal Homie service */}
+              <div style={{ padding: '14px 16px 4px' }}>
+                <button
+                  onClick={() => { setAccountOpen(false); navigate('/account'); }}
+                  style={{
+                    width: '100%',
+                    background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
+                    border: '1px solid #F5C9A8',
+                    borderRadius: 12,
+                    padding: '14px 16px',
+                    cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif",
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10, background: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 20, flexShrink: 0,
+                  }}>{'\uD83C\uDFE0'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2926', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, color: '#E8632B' }}>homie</span>
+                      <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Personal</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#6B6560', marginTop: 2 }}>Home services for your own home</div>
+                  </div>
+                  <span style={{ color: '#E8632B', fontSize: 18, flexShrink: 0 }}>{'\u2192'}</span>
+                </button>
+              </div>
+
+              <div style={{ borderTop: '1px solid #F5F0EB', marginTop: 8 }}>
                 <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...mobileMenuItemStyle, color: '#E24B4A' }}>Sign out</button>
               </div>
             </div>
@@ -414,17 +449,55 @@ export default function BusinessSidebar({
             )}
             <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={accountMenuItemStyle}
               onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Profile</button>
-            <button onClick={() => { setAccountOpen(false); navigate('/account'); }} style={accountMenuItemStyle}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>Workspace Profile</button>
+            <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings'); }} style={accountMenuItemStyle}
               onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Account</button>
-            <button onClick={() => { setAccountOpen(false); navigate('/account?tab=quotes'); }} style={accountMenuItemStyle}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>Workspace Settings</button>
+            <button onClick={() => { setAccountOpen(false); navigate('/business?tab=billing'); }} style={accountMenuItemStyle}
               onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Quotes</button>
-            <button onClick={() => { setAccountOpen(false); navigate('/account?tab=bookings'); }} style={accountMenuItemStyle}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>Billing</button>
+            <button onClick={() => { setAccountOpen(false); navigate('/business?tab=team'); }} style={accountMenuItemStyle}
               onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Bookings</button>
-            <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>Team</button>
+
+            {/* Highlighted: Personal Homie service */}
+            <div style={{ padding: '12px 12px 4px' }}>
+              <button
+                onClick={() => { setAccountOpen(false); navigate('/account'); }}
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
+                  border: '1px solid #F5C9A8',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif",
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  transition: 'transform 0.1s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8, background: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, flexShrink: 0,
+                }}>{'\uD83C\uDFE0'}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#2D2926', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontFamily: 'Fraunces, serif', fontSize: 13, color: '#E8632B' }}>homie</span>
+                    <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Personal</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: '#6B6560', marginTop: 1 }}>Home services for your own home</div>
+                </div>
+                <span style={{ color: '#E8632B', fontSize: 15, flexShrink: 0 }}>{'\u2192'}</span>
+              </button>
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 6 }}>
               <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...accountMenuItemStyle, color: '#E24B4A' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#FFF5F5'}
                 onMouseLeave={e => e.currentTarget.style.background = 'none'}>Sign out</button>
