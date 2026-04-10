@@ -52,6 +52,7 @@ const T: Record<LangCode, Record<string, string>> = {
     describeIssue: 'Describe the issue...',
     submitReport: 'Submit report',
     addMore: 'Add more',
+    whatElseToAdd: 'What else would you like to add to your report?',
     reviewReport: 'Review your report and submit',
     willBeSent: 'will be sent for review.',
     description: 'Description',
@@ -124,7 +125,8 @@ const T: Record<LangCode, Record<string, string>> = {
     skipTroubleshoot: 'Omitir \u2014 solo reportar',
     describeIssue: 'Describe el problema...',
     submitReport: 'Enviar reporte',
-    addMore: 'Agregar m\u00e1s',
+    addMore: 'Agregar más',
+    whatElseToAdd: '¿Qué más te gustaría agregar a tu reporte?',
     reviewReport: 'Revisa tu reporte y env\u00eda',
     willBeSent: 'ser\u00e1 enviado para revisi\u00f3n.',
     description: 'Descripci\u00f3n',
@@ -198,6 +200,7 @@ const T: Record<LangCode, Record<string, string>> = {
     describeIssue: 'D\u00e9crivez le probl\u00e8me...',
     submitReport: 'Envoyer',
     addMore: 'Ajouter',
+    whatElseToAdd: 'Que souhaitez-vous ajouter à votre rapport ?',
     reviewReport: 'V\u00e9rifiez et envoyez votre rapport',
     willBeSent: 'sera envoy\u00e9 pour examen.',
     description: 'Description',
@@ -1413,7 +1416,11 @@ export default function GuestReporterPage() {
                         {tx(lang, 'submitReport')} {'\u2192'}
                       </button>
                       <button
-                        onClick={() => inpRef.current?.focus()}
+                        onClick={() => {
+                          setMessages(p => p.map(msg => msg === m ? { ...msg, showActions: false } : msg));
+                          botMsg(tx(lang, 'whatElseToAdd'), {}, 600);
+                          setTimeout(() => inpRef.current?.focus(), 700);
+                        }}
                         style={{ padding: '9px 13px', borderRadius: 9, border: `1.5px solid ${BRAND.grayLight}`, background: BRAND.white, color: BRAND.darkMid, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
                       >
                         {tx(lang, 'addMore')}
