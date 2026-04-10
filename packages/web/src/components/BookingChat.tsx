@@ -221,6 +221,33 @@ interface BookingChatProps {
   onClose: () => void;
 }
 
+// Play a short notification beep using the Web Audio API. Uses a small,
+// pleasant two-note chime so we don't need to ship an audio file.
+function playNewMessageSound() {
+  try {
+    const win = window as Window & { webkitAudioContext?: typeof AudioContext };
+    const AudioCtx = window.AudioContext || win.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const playTone = (freq: number, start: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + duration);
+    };
+    playTone(880, 0, 0.15);
+    playTone(1175, 0.12, 0.18);
+    setTimeout(() => ctx.close().catch(() => {}), 600);
+  } catch { /* silent — sound is best-effort */ }
+}
+
 export default function BookingChat({ booking, workspaceId, onClose }: BookingChatProps) {
   const [messages, setMessages] = useState<BookingMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -228,9 +255,15 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [minimized, setMinimized] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const knownMessageIdsRef = useRef<Set<string>>(new Set());
+  const initialLoadDoneRef = useRef(false);
+  const minimizedRef = useRef(false);
+  useEffect(() => { minimizedRef.current = minimized; }, [minimized]);
 
   function handlePickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -274,13 +307,34 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
   async function loadMessages() {
     try {
       const res = await businessService.listMessages(workspaceId, booking.id);
-      if (res.data) setMessages(res.data);
+      if (!res.data) return;
+      const newProviderMsgs = res.data.filter(m =>
+        m.senderType === 'provider' && !knownMessageIdsRef.current.has(m.id),
+      );
+      // Track every message id we've now seen
+      for (const m of res.data) knownMessageIdsRef.current.add(m.id);
+
+      // Trigger notification only after the initial load (so we don't beep
+      // for existing messages when the chat first opens)
+      if (initialLoadDoneRef.current && newProviderMsgs.length > 0) {
+        playNewMessageSound();
+        if (minimizedRef.current) {
+          setUnreadCount(c => c + newProviderMsgs.length);
+        }
+      }
+
+      setMessages(res.data);
     } catch { /* silent */ }
   }
 
   useEffect(() => {
     setLoading(true);
-    loadMessages().finally(() => setLoading(false));
+    knownMessageIdsRef.current = new Set();
+    initialLoadDoneRef.current = false;
+    loadMessages().finally(() => {
+      setLoading(false);
+      initialLoadDoneRef.current = true;
+    });
 
     // Mark provider messages as read
     businessService.markMessagesRead(workspaceId, booking.id).catch(() => null);
@@ -288,13 +342,24 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
     // Poll every 5 seconds for new messages
     pollRef.current = setInterval(() => {
       loadMessages();
-      businessService.markMessagesRead(workspaceId, booking.id).catch(() => null);
+      // Only mark-read when expanded — keep unread badge while minimized
+      if (!minimizedRef.current) {
+        businessService.markMessagesRead(workspaceId, booking.id).catch(() => null);
+      }
     }, 5000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [booking.id, workspaceId]);
+
+  // Clear unread count when re-expanding
+  useEffect(() => {
+    if (!minimized) {
+      setUnreadCount(0);
+      businessService.markMessagesRead(workspaceId, booking.id).catch(() => null);
+    }
+  }, [minimized, workspaceId, booking.id]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -359,6 +424,72 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
   const groups = groupByDate(messages);
   const providerFirstName = booking.providerName.split(' ')[0];
 
+  // Minimized floating bubble — pinned to bottom-right of the viewport
+  if (minimized) {
+    return (
+      <div style={{
+        position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
+        display: 'flex', alignItems: 'stretch',
+        background: 'white', borderRadius: 100,
+        boxShadow: '0 10px 32px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08)',
+        border: '1px solid rgba(0,0,0,0.06)',
+        overflow: 'hidden',
+        fontFamily: "'DM Sans', sans-serif",
+        animation: 'bookingChatPop 0.2s ease',
+      }}>
+        <style>{`@keyframes bookingChatPop { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }`}</style>
+        <button
+          onClick={() => setMinimized(false)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px 10px 12px', border: 'none', background: 'none',
+            cursor: 'pointer', position: 'relative',
+          }}
+        >
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: `${G}15`, border: `2px solid ${G}30`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 700, color: G, flexShrink: 0,
+          }}>
+            {initials(booking.providerName)}
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: D, lineHeight: 1.2 }}>
+              {providerFirstName}
+            </div>
+            <div style={{ fontSize: 10, color: '#9B9490', marginTop: 1 }}>
+              {unreadCount > 0 ? `${unreadCount} new message${unreadCount === 1 ? '' : 's'}` : 'Click to open'}
+            </div>
+          </div>
+          {unreadCount > 0 && (
+            <div style={{
+              position: 'absolute', top: 6, left: 36,
+              minWidth: 18, height: 18, padding: '0 5px',
+              borderRadius: 9, background: '#E04343',
+              border: '2px solid white',
+              color: 'white', fontSize: 10, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </div>
+          )}
+        </button>
+        <button
+          onClick={onClose}
+          aria-label="Close chat"
+          style={{
+            border: 'none', background: 'rgba(0,0,0,0.04)',
+            padding: '0 14px', cursor: 'pointer',
+            color: '#9B9490', fontSize: 16,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderLeft: '1px solid rgba(0,0,0,0.06)',
+          }}
+        >×</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       position: 'fixed', top: 0, right: 0, bottom: 0,
@@ -401,6 +532,21 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
             fontSize: 15, textDecoration: 'none', flexShrink: 0,
           }}>📞</a>
         )}
+        <button
+          onClick={() => setMinimized(true)}
+          aria-label="Minimize chat"
+          title="Minimize"
+          style={{
+            width: 32, height: 32, borderRadius: '50%', border: 'none',
+            background: 'rgba(0,0,0,0.05)', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: D, flexShrink: 0,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
       </div>
 
       {/* Booking card */}
