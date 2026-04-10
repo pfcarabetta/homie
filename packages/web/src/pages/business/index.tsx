@@ -124,6 +124,8 @@ export default function BusinessPortal() {
     const urlTab = params.get('tab');
     if (urlTab && (TABS as readonly string[]).includes(urlTab)) {
       setTab(urlTab as Tab);
+      // Leaving the property detail view when URL navigates to a top-level tab
+      setSelectedProperty(null);
     }
     const focus = params.get('focus');
     if (focus && urlTab === 'settings') {
