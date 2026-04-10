@@ -33,6 +33,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
   const [agreedRate, setAgreedRate] = useState('');
   const [autoBookPreferred, setAutoBookPreferred] = useState(true);
   const [autoBookMarketplace, setAutoBookMarketplace] = useState(false);
+  const [preferredOnly, setPreferredOnly] = useState(false);
   const [category, setCategory] = useState('general');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -64,6 +65,10 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
 
   const handleSave = async () => {
     if (!title.trim()) { setError('Title is required'); return; }
+    if (preferredOnly && selectedVendorIds.length === 0) {
+      setError('Select at least one preferred provider when marketplace is disabled.');
+      return;
+    }
     setSaving(true);
     setError('');
     const cadenceConfig: Record<string, unknown> = {};
@@ -91,6 +96,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
           agreed_rate_cents: agreedRate ? Math.round(parseFloat(agreedRate) * 100) : null,
           auto_book_preferred: autoBookPreferred,
           auto_book_marketplace: autoBookMarketplace,
+          fallback_to_marketplace: !preferredOnly,
         });
       }
       onCreated();
@@ -344,14 +350,16 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                   <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm when a preferred provider accepts</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button onClick={() => setAutoBookMarketplace(!autoBookMarketplace)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, opacity: preferredOnly ? 0.5 : 1 }}>
+                <button
+                  disabled={preferredOnly}
+                  onClick={() => !preferredOnly && setAutoBookMarketplace(!autoBookMarketplace)}
                   style={{
-                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative',
-                    background: autoBookMarketplace ? G : '#D0CBC6', transition: 'background 0.2s', flexShrink: 0,
+                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: preferredOnly ? 'not-allowed' : 'pointer', position: 'relative',
+                    background: autoBookMarketplace && !preferredOnly ? G : '#D0CBC6', transition: 'background 0.2s', flexShrink: 0,
                   }}>
                   <span style={{
-                    position: 'absolute', top: 2, left: autoBookMarketplace ? 22 : 2,
+                    position: 'absolute', top: 2, left: autoBookMarketplace && !preferredOnly ? 22 : 2,
                     width: 20, height: 20, borderRadius: '50%', background: '#fff',
                     transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                   }} />
@@ -359,6 +367,34 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book marketplace providers</div>
                   <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm marketplace responses (if no preferred provider available)</div>
+                </div>
+              </div>
+
+              {/* Preferred-only / disable marketplace */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                marginTop: 4, padding: '12px 14px', borderRadius: 10,
+                background: preferredOnly ? `${O}08` : '#FAFAF8',
+                border: `1px solid ${preferredOnly ? `${O}40` : '#E0DAD4'}`,
+              }}>
+                <button onClick={() => {
+                  const next = !preferredOnly;
+                  setPreferredOnly(next);
+                  if (next) setAutoBookMarketplace(false);
+                }}
+                  style={{
+                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative',
+                    background: preferredOnly ? O : '#D0CBC6', transition: 'background 0.2s', flexShrink: 0,
+                  }}>
+                  <span style={{
+                    position: 'absolute', top: 2, left: preferredOnly ? 22 : 2,
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </button>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Preferred providers only</div>
+                  <div style={{ fontSize: 12, color: '#9B9490' }}>Skip the Homie marketplace and only reach out to your selected preferred providers. Requires at least one preferred provider above.</div>
                 </div>
               </div>
             </div>
