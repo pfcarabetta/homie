@@ -72,29 +72,82 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
 
   const maxCatCount = Math.max(...data.dispatches_by_category.map(c => c.count), 1);
 
+  const iconStyle = { width: 22, height: 22, display: 'block' as const };
+  const dispatchIcon = (
+    <svg style={iconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h13l3 4v6h-3" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /><path d="M5 18H4V6" /><path d="M9 18h6" />
+    </svg>
+  );
+  const checkIcon = (
+    <svg style={iconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" />
+    </svg>
+  );
+  const calendarIcon = (
+    <svg style={iconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18" /><path d="M8 3v4M16 3v4" />
+    </svg>
+  );
+  const boltIcon = (
+    <svg style={iconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
+    </svg>
+  );
+
+  const kpis: { label: string; value: number | string; icon: JSX.Element; color: string; sub: { text: string; color: string } | null; onClick?: () => void }[] = [
+    { label: 'Active Dispatches', value: data.active_dispatches, icon: dispatchIcon, color: O, sub: null, onClick: () => onNavigate('dispatches') },
+    { label: 'Completed This Month', value: data.completed_this_month, icon: checkIcon, color: G, sub: dispatchTrend },
+    { label: 'Total Bookings', value: data.total_bookings, icon: calendarIcon, color: '#3B82F6', sub: bookingTrend, onClick: () => onNavigate('bookings') },
+    { label: 'Avg Response Time', value: data.avg_response_minutes != null ? `${data.avg_response_minutes}m` : '—', icon: boltIcon, color: '#8B5CF6', sub: null },
+  ];
+
   return (
     <div>
       {/* ── KPI Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 24 }}>
-        {[
-          { label: 'Active Dispatches', value: data.active_dispatches, icon: '📡', color: O, sub: null },
-          { label: 'Completed This Month', value: data.completed_this_month, icon: '✅', color: G, sub: dispatchTrend },
-          { label: 'Total Bookings', value: data.total_bookings, icon: '📋', color: '#3B82F6', sub: bookingTrend },
-          { label: 'Avg Response Time', value: data.avg_response_minutes != null ? `${data.avg_response_minutes}m` : '—', icon: '⚡', color: '#8B5CF6', sub: null },
-        ].map(kpi => (
-          <div key={kpi.label} style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: '18px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>{kpi.label}</span>
-              <span style={{ fontSize: 20 }}>{kpi.icon}</span>
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: D }}>{kpi.value}</div>
-            {kpi.sub && (
-              <div style={{ fontSize: 12, fontWeight: 600, color: kpi.sub.color, marginTop: 4 }}>
-                {kpi.sub.text} vs last month
+        {kpis.map(kpi => {
+          const Tag: 'button' | 'div' = kpi.onClick ? 'button' : 'div';
+          return (
+            <Tag
+              key={kpi.label}
+              onClick={kpi.onClick}
+              style={{
+                background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: '18px 20px',
+                fontFamily: "'DM Sans', sans-serif", textAlign: 'left',
+                cursor: kpi.onClick ? 'pointer' : 'default',
+                transition: 'border-color 0.15s, transform 0.15s, box-shadow 0.15s',
+                width: '100%',
+              }}
+              onMouseEnter={kpi.onClick ? (e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = kpi.color;
+                (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+                (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 16px ${kpi.color}1A`;
+              } : undefined}
+              onMouseLeave={kpi.onClick ? (e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = '#E0DAD4';
+                (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+              } : undefined}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>{kpi.label}</span>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: `${kpi.color}15`, color: kpi.color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  {kpi.icon}
+                </div>
               </div>
-            )}
-          </div>
-        ))}
+              <div style={{ fontSize: 28, fontWeight: 700, color: D }}>{kpi.value}</div>
+              {kpi.sub && (
+                <div style={{ fontSize: 12, fontWeight: 600, color: kpi.sub.color, marginTop: 4 }}>
+                  {kpi.sub.text} vs last month
+                </div>
+              )}
+            </Tag>
+          );
+        })}
       </div>
 
       {/* ── Middle row: Category breakdown + Top vendors ── */}
