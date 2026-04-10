@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Tab } from './constants';
@@ -112,10 +113,17 @@ export default function BusinessSidebar({
   const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountMenuPos, setAccountMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const accountBtnRef = useRef<HTMLButtonElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { homeowner, logout } = useAuth();
+
+  useEffect(() => {
+    function onResize() { setIsMobile(window.innerWidth < 768); }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -139,6 +147,13 @@ export default function BusinessSidebar({
     width: '100%', padding: '12px 16px', background: 'none', border: 'none',
     fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
     fontFamily: "'DM Sans', sans-serif",
+  };
+
+  const mobileMenuItemStyle: React.CSSProperties = {
+    width: '100%', padding: '16px 20px', background: 'none', border: 'none',
+    fontSize: 16, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
+    fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
+    borderBottom: '1px solid #F5F0EB',
   };
 
   function showTooltip(e: React.MouseEvent, label: string) {
@@ -319,49 +334,104 @@ export default function BusinessSidebar({
         )}
       </button>
 
-      {/* Account menu — fixed positioned above the avatar */}
-      {accountOpen && accountMenuPos && (
-        <div
-          ref={accountMenuRef}
-          style={{
-            position: 'fixed',
-            bottom: `calc(100vh - ${accountMenuPos.top}px)`,
-            left: accountMenuPos.left,
-            background: '#ffffff',
-            borderRadius: 12,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-            border: '1px solid rgba(0,0,0,0.06)',
-            minWidth: 220,
-            overflow: 'hidden',
-            zIndex: 99999,
-            fontFamily: "'DM Sans', sans-serif",
-          }}
-        >
-          {homeowner && (
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#2D2926' }}>{userName || homeowner.email}</div>
-              <div style={{ fontSize: 12, color: '#9B9490' }}>{homeowner.email}</div>
-              {homeowner.membership_tier && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{homeowner.membership_tier} plan</div>}
+      {/* Account menu — bottom sheet on mobile, popover on desktop, portaled to body */}
+      {accountOpen && accountMenuPos && createPortal(
+        isMobile ? (
+          <>
+            <style>{`@keyframes bp-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } } @keyframes bp-sheet-fade { from { opacity: 0; } to { opacity: 1; } }`}</style>
+            {/* Backdrop */}
+            <div
+              onClick={() => setAccountOpen(false)}
+              style={{
+                position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+                zIndex: 99998, animation: 'bp-sheet-fade 0.2s ease',
+              }}
+            />
+            {/* Bottom sheet */}
+            <div
+              ref={accountMenuRef}
+              style={{
+                position: 'fixed', bottom: 0, left: 0, right: 0,
+                background: '#ffffff',
+                borderTopLeftRadius: 18, borderTopRightRadius: 18,
+                boxShadow: '0 -8px 32px rgba(0,0,0,0.18)',
+                zIndex: 99999,
+                fontFamily: "'DM Sans', sans-serif",
+                paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+                animation: 'bp-sheet-up 0.25s ease',
+              }}
+            >
+              {/* Drag handle */}
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px' }}>
+                <div style={{ width: 40, height: 4, borderRadius: 2, background: '#E0DAD4' }} />
+              </div>
+              {homeowner && (
+                <div style={{ padding: '8px 20px 16px', borderBottom: '1px solid #F5F0EB', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: '50%', background: '#E8632B',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 16, fontWeight: 700, color: '#fff', flexShrink: 0,
+                  }}>{userInitials || 'U'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#2D2926', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName || homeowner.email}</div>
+                    <div style={{ fontSize: 13, color: '#9B9490', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{homeowner.email}</div>
+                    {homeowner.membership_tier && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 1 }}>{homeowner.membership_tier} plan</div>}
+                  </div>
+                </div>
+              )}
+              <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={mobileMenuItemStyle}>My Profile</button>
+              <button onClick={() => { setAccountOpen(false); navigate('/account'); }} style={mobileMenuItemStyle}>My Account</button>
+              <button onClick={() => { setAccountOpen(false); navigate('/account?tab=quotes'); }} style={mobileMenuItemStyle}>My Quotes</button>
+              <button onClick={() => { setAccountOpen(false); navigate('/account?tab=bookings'); }} style={mobileMenuItemStyle}>My Bookings</button>
+              <div style={{ borderTop: '1px solid #F5F0EB' }}>
+                <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...mobileMenuItemStyle, color: '#E24B4A' }}>Sign out</button>
+              </div>
             </div>
-          )}
-          <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={accountMenuItemStyle}
-            onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Profile</button>
-          <button onClick={() => { setAccountOpen(false); navigate('/account'); }} style={accountMenuItemStyle}
-            onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Account</button>
-          <button onClick={() => { setAccountOpen(false); navigate('/account?tab=quotes'); }} style={accountMenuItemStyle}
-            onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Quotes</button>
-          <button onClick={() => { setAccountOpen(false); navigate('/account?tab=bookings'); }} style={accountMenuItemStyle}
-            onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Bookings</button>
-          <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-            <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...accountMenuItemStyle, color: '#E24B4A' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#FFF5F5'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}>Sign out</button>
+          </>
+        ) : (
+          <div
+            ref={accountMenuRef}
+            style={{
+              position: 'fixed',
+              bottom: `calc(100vh - ${accountMenuPos.top}px)`,
+              left: accountMenuPos.left,
+              background: '#ffffff',
+              borderRadius: 12,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              border: '1px solid rgba(0,0,0,0.06)',
+              minWidth: 220,
+              overflow: 'hidden',
+              zIndex: 99999,
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            {homeowner && (
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#2D2926' }}>{userName || homeowner.email}</div>
+                <div style={{ fontSize: 12, color: '#9B9490' }}>{homeowner.email}</div>
+                {homeowner.membership_tier && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{homeowner.membership_tier} plan</div>}
+              </div>
+            )}
+            <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={accountMenuItemStyle}
+              onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Profile</button>
+            <button onClick={() => { setAccountOpen(false); navigate('/account'); }} style={accountMenuItemStyle}
+              onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Account</button>
+            <button onClick={() => { setAccountOpen(false); navigate('/account?tab=quotes'); }} style={accountMenuItemStyle}
+              onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Quotes</button>
+            <button onClick={() => { setAccountOpen(false); navigate('/account?tab=bookings'); }} style={accountMenuItemStyle}
+              onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Bookings</button>
+            <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...accountMenuItemStyle, color: '#E24B4A' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#FFF5F5'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}>Sign out</button>
+            </div>
           </div>
-        </div>
+        ),
+        document.body
       )}
 
       {/* Expand button when collapsed */}
