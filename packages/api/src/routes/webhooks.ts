@@ -539,17 +539,20 @@ router.post('/twilio/voice/status', async (req: Request, res: Response) => {
 
   const { CallStatus, CallDuration } = req.body as { CallStatus?: string; CallDuration?: string };
 
-  // Only update for terminal non-answer statuses — gather already handles 'completed' calls
+  // Map Twilio terminal statuses to our internal status. For 'completed' calls
+  // where we never captured a real response (still 'pending'), treat as no_answer
+  // — typically this means voicemail or the provider hung up without speaking.
   const terminalStatuses: Record<string, string> = {
     'no-answer': 'no_answer',
     busy: 'no_answer',
     failed: 'failed',
     canceled: 'failed',
+    completed: 'no_answer',
   };
 
   const newStatus = CallStatus ? terminalStatuses[CallStatus] : undefined;
   if (newStatus) {
-    await db
+    const updated = await db
       .update(outreachAttempts)
       .set({
         status: newStatus,
@@ -558,7 +561,11 @@ router.post('/twilio/voice/status', async (req: Request, res: Response) => {
       })
       .where(
         and(eq(outreachAttempts.id, attemptId), eq(outreachAttempts.status, 'pending')),
-      );
+      )
+      .returning({ id: outreachAttempts.id });
+    if (updated.length > 0) {
+      logger.info({ attemptId, callStatus: CallStatus, newStatus }, '[voice-status] outreach attempt finalized');
+    }
   }
 
   res.status(204).send();
