@@ -89,27 +89,17 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
   }
 
   function handleItemClick(n: BusinessNotification, e?: React.MouseEvent) {
-    console.log('[notif] click', { id: n.id, link: n.link });
     if (e) e.preventDefault();
     setOpen(false);
-    // Navigate first so it happens immediately, regardless of mark-read
-    if (n.link) {
-      if (n.link.startsWith('/')) {
-        navigate(n.link);
-      } else {
-        window.location.href = n.link;
-        return;
-      }
-    }
-    // Mark as read in the background
+    // Mark as read in the background (fire-and-forget) before navigating
     if (workspaceId && !n.read) {
-      businessService.markNotificationsRead(workspaceId, { ids: [n.id] })
-        .then(() => {
-          setUnreadCount(c => Math.max(0, c - 1));
-          setItems(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
-        })
-        .catch(() => { /* ignore */ });
+      businessService.markNotificationsRead(workspaceId, { ids: [n.id] }).catch(() => { /* ignore */ });
     }
+    if (!n.link) return;
+    // Hard navigate to guarantee the URL effect re-runs on the destination.
+    // React Router's in-place navigation was unreliable here (likely a portal/
+    // context interaction with the dropdown).
+    window.location.href = n.link;
   }
 
   async function handleMarkAllRead() {
