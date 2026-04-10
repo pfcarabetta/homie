@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { businessService, type Workspace, type WorkspaceDetail, type Property } from '@/services/api';
@@ -77,6 +77,7 @@ export default function BusinessPortal() {
   useDocumentTitle('Business Portal');
   const { homeowner } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { mode: themeMode, resolvedTheme, setTheme } = useThemeMode();
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -117,20 +118,24 @@ export default function BusinessPortal() {
     });
   }, [selectedId]);
 
-  // Handle URL params for tab navigation and profile focus
+  // Handle URL params for tab navigation and section focus — re-runs on URL changes
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     const urlTab = params.get('tab');
     if (urlTab && (TABS as readonly string[]).includes(urlTab)) {
       setTab(urlTab as Tab);
     }
-    if (params.get('focus') === 'profile' && urlTab === 'settings') {
-      setTimeout(() => {
-        const el = document.getElementById('my-profile-section');
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-      }, 300);
+    const focus = params.get('focus');
+    if (focus && urlTab === 'settings') {
+      const targetId = focus === 'profile' ? 'my-profile-section' : focus === 'workspace' ? 'workspace-settings-section' : null;
+      if (targetId) {
+        setTimeout(() => {
+          const el = document.getElementById(targetId);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 300);
+      }
     }
-  }, []);
+  }, [location.search]);
 
   if (!homeowner) return null;
 

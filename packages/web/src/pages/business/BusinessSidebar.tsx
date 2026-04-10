@@ -380,7 +380,7 @@ export default function BusinessSidebar({
                 </div>
               )}
               <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={mobileMenuItemStyle}>Workspace Profile</button>
-              <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings'); }} style={mobileMenuItemStyle}>Workspace Settings</button>
+              <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=workspace'); }} style={mobileMenuItemStyle}>Workspace Settings</button>
               <button onClick={() => { setAccountOpen(false); navigate('/business?tab=billing'); }} style={mobileMenuItemStyle}>Billing</button>
               <button onClick={() => { setAccountOpen(false); navigate('/business?tab=team'); }} style={mobileMenuItemStyle}>Team</button>
 
@@ -450,7 +450,7 @@ export default function BusinessSidebar({
             <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={accountMenuItemStyle}
               onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>Workspace Profile</button>
-            <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings'); }} style={accountMenuItemStyle}
+            <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=workspace'); }} style={accountMenuItemStyle}
               onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>Workspace Settings</button>
             <button onClick={() => { setAccountOpen(false); navigate('/business?tab=billing'); }} style={accountMenuItemStyle}

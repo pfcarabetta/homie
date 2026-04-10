@@ -450,7 +450,7 @@ export default function SettingsTab({ workspace, onUpdated, themeMode, onThemeCh
   return (
     <div style={{ maxWidth: 480 }}>
       {/* My Profile */}
-      <div ref={profileSectionRef} id="my-profile-section">
+      <div ref={profileSectionRef} id="my-profile-section" style={{ scrollMarginTop: 80 }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: 'var(--bp-text)', margin: '0 0 20px' }}>My Profile</h3>
         <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24, marginBottom: 32 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
@@ -510,7 +510,7 @@ export default function SettingsTab({ workspace, onUpdated, themeMode, onThemeCh
         </div>
       </div>
 
-      <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: 'var(--bp-text)', margin: '0 0 20px' }}>Workspace Settings</h3>
+      <h3 id="workspace-settings-section" style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: 'var(--bp-text)', margin: '0 0 20px', scrollMarginTop: 80 }}>Workspace Settings</h3>
 
       <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24 }}>
         <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Workspace Name</label>
