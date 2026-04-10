@@ -220,8 +220,8 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
                         fontSize: 14, fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'block',
                       }}>✉️ Email</a>
                     )}
-                    {/* Message button — only for SMS bookings with a phone number */}
-                    {b.channel === 'sms' && b.providerPhone && b.status !== 'cancelled' && (
+                    {/* Message button — any booking with a provider phone (sent via SMS) */}
+                    {b.providerPhone && b.status !== 'cancelled' && (
                       <button onClick={e => { e.stopPropagation(); setChatBooking(b); }} style={{
                         flex: 1, minWidth: 0, padding: '10px 0', borderRadius: 100,
                         border: `2px solid ${G}`, background: 'white', color: G,
