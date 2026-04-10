@@ -17,6 +17,7 @@ import { db } from './db';
 import app from './app';
 import { handleJobsWebSocket } from './ws/jobs';
 import { startJobExpiryWorker } from './services/job-expiry';
+import { startReservationSync } from './services/reservation-sync';
 import type { JwtPayload } from './middleware/auth';
 
 const PORT = process.env.PORT ?? 3001;
@@ -105,6 +106,7 @@ async function start() {
   server.listen(PORT, () => {
     logger.info(`API server running on http://localhost:${PORT}`);
     startJobExpiryWorker();
+    startReservationSync();
   });
 }
 

@@ -1816,6 +1816,15 @@ router.post('/:workspaceId/import/track', requireWorkspace, requireWorkspaceRole
   const domain = body.track_domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const authHeader = 'Basic ' + Buffer.from(`${body.api_key}:${body.api_secret}`).toString('base64');
 
+  // Persist Track credentials for auto-sync
+  await db.update(workspaces).set({
+    trackDomain: domain,
+    trackApiKey: body.api_key,
+    trackApiSecret: body.api_secret,
+    trackSyncEnabled: 1,
+    updatedAt: new Date(),
+  }).where(eq(workspaces.id, req.workspaceId));
+
   try {
     // Fetch units from Track PMS API with pagination
     // Track API base is typically https://company.trackhs.com/api — endpoint is /pms/units
@@ -2162,6 +2171,15 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
   const domain = body.track_domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const authHeader = 'Basic ' + Buffer.from(`${body.api_key}:${body.api_secret}`).toString('base64');
   const base = domain.includes('/api') ? `https://${domain}` : `https://${domain}/api`;
+
+  // Persist Track credentials for auto-sync
+  await db.update(workspaces).set({
+    trackDomain: domain,
+    trackApiKey: body.api_key,
+    trackApiSecret: body.api_secret,
+    trackSyncEnabled: 1,
+    updatedAt: new Date(),
+  }).where(eq(workspaces.id, req.workspaceId));
 
   try {
     // Find all Track-linked properties in this workspace
