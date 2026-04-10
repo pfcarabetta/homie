@@ -52,7 +52,7 @@ const T: Record<LangCode, Record<string, string>> = {
     describeIssue: 'Describe the issue...',
     submitReport: 'Submit report',
     addMore: 'Add more',
-    reviewReport: 'Review your report',
+    reviewReport: 'Review your report and submit',
     willBeSent: 'will be sent for review.',
     description: 'Description',
     photos: 'Photos',
@@ -125,7 +125,7 @@ const T: Record<LangCode, Record<string, string>> = {
     describeIssue: 'Describe el problema...',
     submitReport: 'Enviar reporte',
     addMore: 'Agregar m\u00e1s',
-    reviewReport: 'Revisa tu reporte',
+    reviewReport: 'Revisa tu reporte y env\u00eda',
     willBeSent: 'ser\u00e1 enviado para revisi\u00f3n.',
     description: 'Descripci\u00f3n',
     photos: 'Fotos',
@@ -198,7 +198,7 @@ const T: Record<LangCode, Record<string, string>> = {
     describeIssue: 'D\u00e9crivez le probl\u00e8me...',
     submitReport: 'Envoyer',
     addMore: 'Ajouter',
-    reviewReport: 'V\u00e9rifiez votre rapport',
+    reviewReport: 'V\u00e9rifiez et envoyez votre rapport',
     willBeSent: 'sera envoy\u00e9 pour examen.',
     description: 'Description',
     photos: 'Photos',
@@ -1494,7 +1494,8 @@ export default function GuestReporterPage() {
 
         {/* SUMMARY */}
         {screen === 'summary' && (
-          <div style={{ padding: '18px 16px', animation: 'slideUp 0.5s ease' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', animation: 'slideUp 0.5s ease' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '18px 16px', minHeight: 0 }}>
             <h2 style={{ fontFamily: 'Fraunces,serif', fontSize: 20, fontWeight: 700, color: BRAND.dark, margin: '0 0 3px' }}>{tx(lang, 'reviewReport')}</h2>
             <p style={{ fontSize: 12, color: BRAND.gray, margin: '0 0 16px' }}>{companyName} {tx(lang, 'willBeSent')}</p>
 
@@ -1615,6 +1616,9 @@ export default function GuestReporterPage() {
               )}
             </div>
 
+          </div>
+          {/* Buttons — fixed at bottom */}
+          <div style={{ flexShrink: 0, padding: '12px 16px', borderTop: `1px solid ${BRAND.warm}`, background: BRAND.white }}>
             <button
               onClick={submitIssue}
               disabled={!accessPermission || summaryLoading || (accessPermission === 'schedule' && !scheduleAvailability.trim())}
@@ -1623,7 +1627,7 @@ export default function GuestReporterPage() {
                 background: (!accessPermission || summaryLoading || (accessPermission === 'schedule' && !scheduleAvailability.trim())) ? BRAND.grayLight : BRAND.orange,
                 color: (!accessPermission || summaryLoading || (accessPermission === 'schedule' && !scheduleAvailability.trim())) ? BRAND.gray : '#fff',
                 fontSize: 14, fontWeight: 600, cursor: (!accessPermission || summaryLoading) ? 'default' : 'pointer',
-                transition: 'all 0.2s', marginTop: 14, boxShadow: accessPermission ? '0 4px 18px rgba(232,99,43,0.25)' : 'none',
+                transition: 'all 0.2s', boxShadow: accessPermission ? '0 4px 18px rgba(232,99,43,0.25)' : 'none',
               }}
               onMouseEnter={e => { if (accessPermission) { const el = e.currentTarget as HTMLButtonElement; el.style.background = BRAND.orangeDark; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={e => { if (accessPermission) { const el = e.currentTarget as HTMLButtonElement; el.style.background = BRAND.orange; el.style.transform = 'translateY(0)'; } }}
@@ -1636,6 +1640,7 @@ export default function GuestReporterPage() {
             >
               {tx(lang, 'editReport')}
             </button>
+          </div>
           </div>
         )}
 
