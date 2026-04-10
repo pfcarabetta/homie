@@ -224,10 +224,25 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
                     {b.providerPhone && b.status !== 'cancelled' && (
                       <button onClick={e => { e.stopPropagation(); setChatBooking(b); }} style={{
                         flex: 1, minWidth: 0, padding: '10px 0', borderRadius: 100,
-                        border: `2px solid ${G}`, background: 'white', color: G,
+                        position: 'relative',
+                        border: `2px solid ${b.unreadMessageCount > 0 ? '#E04343' : G}`,
+                        background: b.unreadMessageCount > 0 ? '#FEF2F2' : 'white',
+                        color: b.unreadMessageCount > 0 ? '#E04343' : G,
                         fontSize: 14, fontWeight: 600, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      }}>💬 Message</button>
+                      }}>
+                        💬 {b.unreadMessageCount > 0 ? `${b.unreadMessageCount} New` : 'Message'}
+                        {b.unreadMessageCount > 0 && (
+                          <span style={{
+                            position: 'absolute', top: -6, right: -6,
+                            minWidth: 18, height: 18, padding: '0 5px',
+                            borderRadius: 9, background: '#E04343',
+                            border: '2px solid white',
+                            color: 'white', fontSize: 10, fontWeight: 700,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>{b.unreadMessageCount > 99 ? '99+' : b.unreadMessageCount}</span>
+                        )}
+                      </button>
                     )}
                   </div>
 

@@ -850,6 +850,8 @@ export interface WorkspaceBooking {
   availability: string | null;
   /** Channel through which the provider responded (sms/voice/web) */
   channel: string | null;
+  /** Number of unread provider messages on this booking */
+  unreadMessageCount: number;
 }
 
 export interface BookingMessage {

@@ -676,9 +676,16 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
   // If this provider has a confirmed booking via SMS, route their reply to
   // booking_messages so the property manager can see it in the portal.
   const [activeBooking] = await db
-    .select({ id: bookings.id })
+    .select({
+      id: bookings.id,
+      jobId: bookings.jobId,
+      homeownerId: bookings.homeownerId,
+      workspaceId: jobs.workspaceId,
+      propertyId: jobs.propertyId,
+    })
     .from(bookings)
     .innerJoin(providerResponses, eq(bookings.responseId, providerResponses.id))
+    .innerJoin(jobs, eq(bookings.jobId, jobs.id))
     .where(
       and(
         eq(bookings.providerId, provider.id),
@@ -696,6 +703,63 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
       senderName: provider.name,
       content: Body,
     }).catch(err => logger.warn({ err, bookingId: activeBooking.id }, '[sms-webhook] Failed to save booking message'));
+
+    // Notification feed + email — fire-and-forget
+    if (activeBooking.workspaceId) {
+      try {
+        const { recordNotification } = await import('../services/notification-feed');
+        const trimmed = Body.length > 120 ? Body.slice(0, 117) + '...' : Body;
+        void recordNotification({
+          workspaceId: activeBooking.workspaceId,
+          type: 'provider_response',
+          title: `New message from ${provider.name}`,
+          body: trimmed,
+          jobId: activeBooking.jobId,
+          propertyId: activeBooking.propertyId,
+          link: `/business?tab=bookings&job=${activeBooking.jobId}`,
+        });
+      } catch (err) { logger.warn({ err, bookingId: activeBooking.id }, '[sms-webhook] notification feed failed'); }
+
+      // Email the team member who created the booking, if they opted in
+      try {
+        const [member] = await db
+          .select({
+            email: homeowners.email,
+            firstName: homeowners.firstName,
+            notifyEmailBookings: homeowners.notifyEmailBookings,
+          })
+          .from(homeowners)
+          .where(eq(homeowners.id, activeBooking.homeownerId))
+          .limit(1);
+        if (member?.email && member.notifyEmailBookings !== false) {
+          const safeBody = Body.replace(/[<>]/g, c => c === '<' ? '&lt;' : '&gt;');
+          const portalLink = `${process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'https://homiepro.ai'}/business?tab=bookings&job=${activeBooking.jobId}`;
+          const html = `
+            <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
+              <div style="background:#2D2926;padding:20px 32px;text-align:center">
+                <span style="color:#E8632B;font-size:24px;font-weight:bold;font-family:Georgia,serif">homie</span>
+                <span style="background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-size:10px;font-weight:bold;padding:2px 8px;border-radius:4px;margin-left:8px;vertical-align:super">PRO</span>
+              </div>
+              <div style="background:white;padding:32px">
+                <h1 style="color:#2D2926;font-size:20px;font-weight:bold;margin:0 0 8px">New message from ${provider.name}</h1>
+                <p style="color:#9B9490;font-size:13px;margin:0 0 18px">A provider replied to one of your bookings.</p>
+                <div style="background:#F9F5F2;border-radius:12px;padding:14px 16px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
+                  <div style="font-size:14px;color:#2D2926;line-height:1.5;white-space:pre-wrap">${safeBody}</div>
+                </div>
+                <div style="text-align:center">
+                  <a href="${portalLink}" style="display:inline-block;background:#E8632B;color:white;padding:12px 28px;border-radius:100px;text-decoration:none;font-weight:bold;font-size:14px">Open Conversation</a>
+                </div>
+              </div>
+              <div style="padding:18px 32px;text-align:center">
+                <p style="color:#9B9490;font-size:11px;margin:0">You're receiving this because booking notifications are enabled in your Homie profile.</p>
+              </div>
+            </div>`;
+          const { sendEmail } = await import('../services/notifications');
+          void sendEmail(member.email, `Message from ${provider.name} via Homie`, html);
+        }
+      } catch (err) { logger.warn({ err, bookingId: activeBooking.id }, '[sms-webhook] member email failed'); }
+    }
+
     twiml.message("Got it! Your message has been forwarded to the property manager.");
     res.type('text/xml').send(twiml.toString());
     return;

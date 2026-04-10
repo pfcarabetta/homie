@@ -1735,9 +1735,26 @@ router.get('/:workspaceId/bookings', requireWorkspace, async (req: Request, res:
       propertyMap = Object.fromEntries(propRows.map(p => [p.id, p.name]));
     }
 
+    // Unread message counts per booking (provider messages with read_at IS NULL)
+    const bookingIds = rows.map(r => r.id);
+    let unreadMap: Record<string, number> = {};
+    if (bookingIds.length > 0) {
+      const unreadRows = await db
+        .select({ bookingId: bookingMessages.bookingId, c: sql<number>`count(*)::int` })
+        .from(bookingMessages)
+        .where(and(
+          sql`${bookingMessages.bookingId} IN (${sql.join(bookingIds.map(id => sql`${id}`), sql`, `)})`,
+          eq(bookingMessages.senderType, 'provider'),
+          isNull(bookingMessages.readAt),
+        ))
+        .groupBy(bookingMessages.bookingId);
+      unreadMap = Object.fromEntries(unreadRows.map(r => [r.bookingId, r.c]));
+    }
+
     const enriched = rows.map(r => ({
       ...r,
       propertyName: r.propertyId ? propertyMap[r.propertyId] || null : null,
+      unreadMessageCount: unreadMap[r.id] || 0,
     }));
 
     res.json({ data: { bookings: enriched }, error: null, meta: {} });
