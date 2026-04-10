@@ -935,10 +935,60 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
 
 /* ── QR Codes sub-tab ── */
 
+function PropertyQRCard({ workspaceId, property }: { workspaceId: string; property: Property }) {
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
+  const url = `https://homiepro.ai/guest/${workspaceId}/${property.id}`;
+
+  useEffect(() => {
+    import('qrcode').then(QRCode => {
+      QRCode.toDataURL(url, { width: 300, margin: 2, color: { dark: D, light: '#FFFFFF' } })
+        .then(dataUrl => setQrDataUrl(dataUrl))
+        .catch(() => {});
+    });
+  }, [url]);
+
+  function copyLink() {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    }).catch(() => { alert('Failed to copy'); });
+  }
+
+  function downloadQR() {
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrDataUrl;
+    const safeName = property.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    a.download = `qr_${safeName}.png`;
+    a.click();
+  }
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, marginBottom: 4, textAlign: 'center' }}>{property.name}</div>
+      {property.address && <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 10, textAlign: 'center' }}>{property.address}</div>}
+      <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10, background: '#fff', borderRadius: 8, border: '1px solid #F0EBE6' }}>
+        {qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${property.name}`} style={{ width: 160, height: 160 }} /> : <div style={{ color: '#9B9490', fontSize: 12 }}>Generating...</div>}
+      </div>
+      <div style={{ fontSize: 11, color: '#9B9490', wordBreak: 'break-all', marginBottom: 10, background: W, padding: '6px 8px', borderRadius: 6, width: '100%', textAlign: 'center' }}>{url}</div>
+      <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+        <button onClick={copyLink}
+          style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: copiedId ? `1px solid ${G}` : '1px solid #E0DAD4', background: copiedId ? `${G}10` : '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: copiedId ? G : D, transition: 'all 0.2s' }}>
+          {copiedId ? 'Copied!' : 'Copy Link'}
+        </button>
+        <button onClick={downloadQR} disabled={!qrDataUrl}
+          style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', background: qrDataUrl ? O : '#E0DAD4', cursor: qrDataUrl ? 'pointer' : 'default', fontSize: 13, fontWeight: 600, color: '#fff', transition: 'all 0.2s' }}>
+          Download QR
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function GuestQRCodesSubTab({ workspaceId }: { workspaceId: string }) {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     businessService.listProperties(workspaceId).then(res => {
@@ -946,14 +996,6 @@ function GuestQRCodesSubTab({ workspaceId }: { workspaceId: string }) {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [workspaceId]);
-
-  function copyLink(propertyId: string) {
-    const url = `https://homiepro.ai/guest/${workspaceId}/${propertyId}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedId(propertyId);
-      setTimeout(() => setCopiedId(null), 2000);
-    }).catch(() => { alert('Failed to copy'); });
-  }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading properties...</div>;
 
@@ -968,24 +1010,10 @@ function GuestQRCodesSubTab({ workspaceId }: { workspaceId: string }) {
   return (
     <div>
       <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 16 }}>
-        Share these links with guests so they can report maintenance issues. QR code images coming soon.
+        Share these QR codes with guests so they can report maintenance issues. Print or download to place in your properties.
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-        {properties.map(p => {
-          const url = `https://homiepro.ai/guest/${workspaceId}/${p.id}`;
-          const isCopied = copiedId === p.id;
-          return (
-            <div key={p.id} style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
-              <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, marginBottom: 4 }}>{p.name}</div>
-              {p.address && <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 10 }}>{p.address}</div>}
-              <div style={{ fontSize: 11, color: '#9B9490', wordBreak: 'break-all', marginBottom: 10, background: W, padding: '6px 8px', borderRadius: 6 }}>{url}</div>
-              <button onClick={() => copyLink(p.id)}
-                style={{ padding: '8px 16px', borderRadius: 8, border: isCopied ? `1px solid ${G}` : '1px solid #E0DAD4', background: isCopied ? `${G}10` : '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: isCopied ? G : D, width: '100%', transition: 'all 0.2s' }}>
-                {isCopied ? 'Copied!' : 'Copy Link'}
-              </button>
-            </div>
-          );
-        })}
+        {properties.map(p => <PropertyQRCard key={p.id} workspaceId={workspaceId} property={p} />)}
       </div>
     </div>
   );
