@@ -6,6 +6,7 @@ import { jobs } from '../db/schema/jobs';
 import { homeowners } from '../db/schema/homeowners';
 import { providers } from '../db/schema/providers';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
+import { suppressionList } from '../db/schema/suppression-list';
 import { providerScores } from '../db/schema/provider-scores';
 import { preferredVendors } from '../db/schema/preferred-vendors';
 import { providerResponses } from '../db/schema/provider-responses';
@@ -753,9 +754,104 @@ export async function expandJobOutreach(jobId: string): Promise<{ expanded: numb
     return null;
   }
 
-  const newProviders = discovered
+  let newProviders = discovered
     .filter(p => !p.suppressed && !p.rate_limited && !alreadyContacted.has(p.id))
     .slice(0, EXPANSION_BATCH_SIZE);
+
+  // Fallback: if external discovery didn't fill the batch, pull additional
+  // providers directly from our DB. Google/Yelp searches are non-deterministic
+  // and often miss providers we already know about.
+  if (newProviders.length < EXPANSION_BATCH_SIZE) {
+    try {
+      const { lat: jobLat, lng: jobLng } = await import('./providers/google-maps').then(m => m.geocodeZip(job.zipCode));
+      const { haversineDistanceMiles } = await import('./providers/ranking');
+
+      // Pull all DB providers with coordinates and a sufficient rating that
+      // we haven't already contacted on this job and aren't already in the
+      // discovered set.
+      const discoveredIds = new Set(newProviders.map(p => p.id));
+      const excludeIds = new Set([...alreadyContacted, ...discoveredIds]);
+
+      const dbProviders = await db
+        .select()
+        .from(providers)
+        .where(and(
+          sql`${providers.lat} IS NOT NULL AND ${providers.lng} IS NOT NULL`,
+          sql`CAST(${providers.googleRating} AS float) >= ${minRating}`,
+          excludeIds.size > 0 ? sql`${providers.id} NOT IN (${sql.join(Array.from(excludeIds).map(id => sql`${id}::uuid`), sql`, `)})` : sql`TRUE`,
+        ))
+        .limit(200);
+
+      // Compute distance and filter by radius
+      const candidates = dbProviders
+        .map(p => ({
+          row: p,
+          distance: haversineDistanceMiles(jobLat, jobLng, parseFloat(p.lat!), parseFloat(p.lng!)),
+        }))
+        .filter(c => c.distance <= radius)
+        .sort((a, b) => a.distance - b.distance);
+
+      // Check rate-limit (per-workspace, 2-day window) for these candidates
+      let eligibleCandidates = candidates;
+      if (candidates.length > 0 && job.workspaceId) {
+        const candidateIds = candidates.map(c => c.row.id);
+        const rateLimitCutoff = new Date(Date.now() - 2 * 86_400_000);
+        const recentRows = await db
+          .select({ providerId: outreachAttempts.providerId })
+          .from(outreachAttempts)
+          .innerJoin(jobs, eq(outreachAttempts.jobId, jobs.id))
+          .where(and(
+            inArray(outreachAttempts.providerId, candidateIds),
+            gte(outreachAttempts.attemptedAt, rateLimitCutoff),
+            eq(jobs.workspaceId, job.workspaceId),
+          ));
+        const rateLimited = new Set(recentRows.map(r => r.providerId));
+        eligibleCandidates = candidates.filter(c => !rateLimited.has(c.row.id));
+      }
+
+      // Check suppression
+      if (eligibleCandidates.length > 0) {
+        const ids = eligibleCandidates.map(c => c.row.id);
+        const supRows = await db
+          .select({ providerId: suppressionList.providerId })
+          .from(suppressionList)
+          .where(inArray(suppressionList.providerId, ids));
+        const suppressed = new Set(supRows.map(r => r.providerId));
+        eligibleCandidates = eligibleCandidates.filter(c => !suppressed.has(c.row.id));
+      }
+
+      const slotsLeft = EXPANSION_BATCH_SIZE - newProviders.length;
+      const fallbackProviders = eligibleCandidates.slice(0, slotsLeft).map(c => {
+        const p = c.row;
+        return {
+          id: p.id,
+          name: p.name,
+          phone: p.phone,
+          email: p.email,
+          website: p.website,
+          google_place_id: p.googlePlaceId,
+          google_rating: p.googleRating,
+          review_count: p.reviewCount ?? 0,
+          categories: p.categories,
+          distance_miles: c.distance,
+          rank_score: 50,
+          homie_score: { acceptance_rate: 0, completion_rate: 0, avg_homeowner_rating: 0, avg_response_sec: 0, total_jobs: 0 },
+          channels_available: ['sms', 'web', ...(p.phone ? ['voice'] : [])],
+          open_now: null,
+          last_contacted: null,
+          suppressed: false,
+          rate_limited: false,
+        } as DiscoveredProvider;
+      });
+
+      if (fallbackProviders.length > 0) {
+        logger.info(`[expansion] discovery returned ${newProviders.length}, adding ${fallbackProviders.length} from local DB fallback`);
+        newProviders = [...newProviders, ...fallbackProviders];
+      }
+    } catch (err) {
+      logger.warn({ err }, `[expansion] DB fallback failed for job ${jobId}`);
+    }
+  }
 
   if (newProviders.length === 0) {
     logger.info(`[expansion] no new providers found for job ${jobId} wave ${wave} — bumping counter so we don't retry forever`);
