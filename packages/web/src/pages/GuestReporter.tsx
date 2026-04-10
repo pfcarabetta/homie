@@ -1428,8 +1428,8 @@ export default function GuestReporterPage() {
               {typing && <TypingDots />}
               <div ref={chatEnd} />
             </div>
-            {/* Input bar */}
-            <div style={{ padding: '9px 12px', borderTop: `1px solid ${BRAND.warm}`, background: BRAND.white, position: 'sticky', bottom: 0 }}>
+            {/* Input bar — fixed at bottom */}
+            <div style={{ padding: '9px 12px', borderTop: `1px solid ${BRAND.warm}`, background: BRAND.white, flexShrink: 0 }}>
               {photos.length > 0 && (
                 <PhotoUpload
                   photos={photos}
