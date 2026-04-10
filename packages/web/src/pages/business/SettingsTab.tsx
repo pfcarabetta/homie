@@ -345,6 +345,7 @@ export default function SettingsTab({ workspace, onUpdated, themeMode, onThemeCh
   const [companyAddress, setCompanyAddress] = useState(workspace.companyAddress ?? '');
   const [companyPhone, setCompanyPhone] = useState(workspace.companyPhone ?? '');
   const [companyEmail, setCompanyEmail] = useState(workspace.companyEmail ?? '');
+  const [contactTitle, setContactTitle] = useState(workspace.contactTitle ?? 'Property Manager');
   const [savingDetails, setSavingDetails] = useState(false);
   const [detailsMsg, setDetailsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -412,9 +413,10 @@ export default function SettingsTab({ workspace, onUpdated, themeMode, onThemeCh
         company_address: companyAddress || null,
         company_phone: companyPhone || null,
         company_email: companyEmail || null,
+        contact_title: contactTitle.trim() || 'Property Manager',
       });
       if (res.data) {
-        onUpdated({ ...workspace, ...res.data, companyAddress: companyAddress || null, companyPhone: companyPhone || null, companyEmail: companyEmail || null });
+        onUpdated({ ...workspace, ...res.data, companyAddress: companyAddress || null, companyPhone: companyPhone || null, companyEmail: companyEmail || null, contactTitle: contactTitle.trim() || 'Property Manager' });
         setDetailsMsg({ type: 'success', text: 'Company details saved' });
       }
     } catch (err: unknown) {
@@ -652,6 +654,17 @@ export default function SettingsTab({ workspace, onUpdated, themeMode, onThemeCh
           placeholder="info@yourcompany.com"
           type="email"
         />
+
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Contact Title</label>
+        <input
+          value={contactTitle}
+          onChange={e => setContactTitle(e.target.value)}
+          style={inputStyle}
+          placeholder="Property Manager"
+        />
+        <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginBottom: 16, lineHeight: 1.5 }}>
+          This title is shown to providers in booking confirmation emails (e.g. <em>{contactTitle.trim() || 'Property Manager'} Contact</em>).
+        </div>
 
         <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginBottom: 16, lineHeight: 1.5 }}>
           These details appear on estimate summary PDFs.

@@ -690,6 +690,7 @@ export interface WorkspaceDetail extends Workspace {
   companyAddress: string | null;
   companyPhone: string | null;
   companyEmail: string | null;
+  contactTitle: string | null;
   slackChannelId: string | null;
   slackTeamId: string | null;
   updatedAt: string;
@@ -821,6 +822,7 @@ export interface WorkspaceDispatch {
   preferredTiming: string | null;
   propertyId: string | null;
   propertyName: string | null;
+  propertyAddress: string | null;
   responseCount: number;
   createdAt: string;
   expiresAt: string | null;
@@ -1046,7 +1048,7 @@ export const businessService = {
   getWorkspace: (id: string) => fetchAPI<WorkspaceDetail>(`/api/v1/business/${id}`),
   createWorkspace: (data: { name: string; slug?: string }) =>
     fetchAPI<Workspace>('/api/v1/business', { method: 'POST', body: JSON.stringify(data) }),
-  updateWorkspace: (id: string, data: { name?: string; slug?: string; company_address?: string | null; company_phone?: string | null; company_email?: string | null }) =>
+  updateWorkspace: (id: string, data: { name?: string; slug?: string; company_address?: string | null; company_phone?: string | null; company_email?: string | null; contact_title?: string | null }) =>
     fetchAPI<Workspace>(`/api/v1/business/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Notifications

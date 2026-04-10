@@ -169,6 +169,13 @@
       "when": 1775863399419,
       "tag": "0023_past_alex_power",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1775863943116,
+      "tag": "0024_sudden_king_cobra",
+      "breakpoints": true
     }
   ]
 }

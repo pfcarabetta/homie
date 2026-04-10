@@ -146,9 +146,10 @@ router.get('/:workspaceId', requireWorkspace, async (req: Request, res: Response
 // ── PATCH /:workspaceId — Update workspace ───────────────────────────────────
 
 router.patch('/:workspaceId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
-  const { name, slug, logo_url, company_address, company_phone, company_email, plan } = req.body as {
+  const { name, slug, logo_url, company_address, company_phone, company_email, contact_title, plan } = req.body as {
     name?: string; slug?: string; logo_url?: string | null;
     company_address?: string | null; company_phone?: string | null; company_email?: string | null;
+    contact_title?: string | null;
     plan?: string;
   };
   const updates: Record<string, unknown> = {};
@@ -159,6 +160,7 @@ router.patch('/:workspaceId', requireWorkspace, requireWorkspaceRole('admin'), a
   if (company_address !== undefined) updates.companyAddress = company_address;
   if (company_phone !== undefined) updates.companyPhone = company_phone;
   if (company_email !== undefined) updates.companyEmail = company_email;
+  if (contact_title !== undefined) updates.contactTitle = (contact_title?.trim() || 'Property Manager');
   if (plan !== undefined && ['starter', 'professional', 'business', 'enterprise'].includes(plan)) updates.plan = plan;
   if (Object.keys(updates).length > 0) updates.updatedAt = new Date();
 
@@ -1583,15 +1585,18 @@ router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, re
       .orderBy(desc(jobs.createdAt))
       .limit(100);
 
-    // Enrich with property names
+    // Enrich with property names + addresses
     const propertyIds = [...new Set(rows.filter(r => r.propertyId).map(r => r.propertyId!))];
-    let propertyMap: Record<string, string> = {};
+    let propertyMap: Record<string, { name: string; address: string | null }> = {};
     if (propertyIds.length > 0) {
       const propRows = await db
-        .select({ id: properties.id, name: properties.name })
+        .select({ id: properties.id, name: properties.name, address: properties.address, city: properties.city, state: properties.state, zipCode: properties.zipCode })
         .from(properties)
         .where(sql`${properties.id} IN (${sql.join(propertyIds.map(id => sql`${id}`), sql`, `)})`);
-      propertyMap = Object.fromEntries(propRows.map(p => [p.id, p.name]));
+      propertyMap = Object.fromEntries(propRows.map(p => {
+        const fullAddress = [p.address, p.city, p.state, p.zipCode].filter(Boolean).join(', ');
+        return [p.id, { name: p.name, address: fullAddress || null }];
+      }));
     }
 
     // Get response counts per job
@@ -1608,7 +1613,8 @@ router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, re
 
     const enriched = rows.map(r => ({
       ...r,
-      propertyName: r.propertyId ? propertyMap[r.propertyId] || null : null,
+      propertyName: r.propertyId ? propertyMap[r.propertyId]?.name || null : null,
+      propertyAddress: r.propertyId ? propertyMap[r.propertyId]?.address || null : null,
       responseCount: responseCountMap[r.id] || 0,
     }));
 

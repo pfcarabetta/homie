@@ -976,6 +976,21 @@ export async function sendBookingNotifications(
 
   if (!homeowner || !provider) return;
 
+  // For B2B jobs, fetch the workspace contact title to label the contact card
+  // (e.g. "Property Manager Contact" instead of "Homeowner Contact")
+  let workspaceContactTitle: string | null = null;
+  if (job.workspaceId) {
+    try {
+      const [ws] = await db
+        .select({ contactTitle: workspaces.contactTitle })
+        .from(workspaces)
+        .where(eq(workspaces.id, job.workspaceId))
+        .limit(1);
+      workspaceContactTitle = ws?.contactTitle ?? null;
+    } catch { /* silent */ }
+  }
+  const contactCardTitle = workspaceContactTitle ? `${workspaceContactTitle} Contact` : 'Homeowner Contact';
+
   // Emit tracking event for booking — include provider's availability from their response
   const providerFirstName = provider.name.split(' ')[0];
   const providerInitial = provider.name.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ');
@@ -1091,7 +1106,7 @@ export async function sendBookingNotifications(
           </div>
 
           <div style="background:#F9F5F2;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
-            <div style="font-size:14px;font-weight:bold;color:#2D2926;margin-bottom:4px">Homeowner Contact</div>
+            <div style="font-size:14px;font-weight:bold;color:#2D2926;margin-bottom:4px">${contactCardTitle}</div>
             <div style="font-size:14px;color:#6B6560"><b>${homeowner.firstName ? homeowner.firstName + (homeowner.lastName ? ' ' + homeowner.lastName : '') : 'Homeowner'}</b></div>
             ${homeowner.phone ? `<div style="margin-top:4px"><a href="tel:${homeowner.phone}" style="font-size:14px;color:#E8632B;text-decoration:none;font-weight:bold">${homeowner.phone}</a></div>` : ''}
             ${homeowner.email ? `<div style="font-size:13px;color:#6B6560;margin-top:4px">${homeowner.email}</div>` : ''}

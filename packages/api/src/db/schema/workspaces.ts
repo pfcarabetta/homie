@@ -14,6 +14,8 @@ export const workspaces = pgTable('workspaces', {
   companyAddress: text('company_address'),
   companyPhone: text('company_phone'),
   companyEmail: text('company_email'),
+  /** Contact title used in provider-facing emails (e.g. "Property Manager") */
+  contactTitle: text('contact_title').notNull().default('Property Manager'),
   ownerId: uuid('owner_id').notNull().references(() => homeowners.id),
   slackTeamId: text('slack_team_id'),
   slackAccessToken: text('slack_access_token'),

@@ -633,7 +633,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                                 <button onClick={async (e) => {
                                   e.stopPropagation();
                                   try {
-                                    const propertyAddr = j.propertyName || undefined;
+                                    const propertyAddr = j.propertyAddress || j.propertyName || undefined;
                                     await jobService.bookProvider(j.id, r.id, r.provider.id, propertyAddr);
                                     setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'completed' } : d));
                                     if (onTabChange) onTabChange('bookings');

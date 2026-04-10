@@ -1,0 +1,1 @@
+ALTER TABLE "workspaces" ADD COLUMN "contact_title" text DEFAULT 'Property Manager' NOT NULL;

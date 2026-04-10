@@ -247,7 +247,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
                       <button onClick={async (e) => {
                         e.stopPropagation();
                         try {
-                          const propertyAddr = j.propertyName || undefined;
+                          const propertyAddr = j.propertyAddress || j.propertyName || undefined;
                           await jobService.bookProvider(j.id, r.id, r.provider.id, propertyAddr);
                           // Note: parent state will refresh on next data load
                           alert(`Booked ${r.provider.name}!`);
