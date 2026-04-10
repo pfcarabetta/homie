@@ -90,20 +90,25 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
 
   // Recompute dropdown position when opening or on scroll/resize
   useEffect(() => {
+    console.log('[search] effect run, searchOpen=', searchOpen);
     if (!searchOpen) return;
     const update = () => {
       if (!searchRef.current) return;
       const rect = searchRef.current.getBoundingClientRect();
+      console.log('[search] update position', { top: rect.bottom + 4, left: rect.left });
       setSearchDropdownPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 480) });
     };
     update();
     window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
     return () => {
+      console.log('[search] effect cleanup');
       window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
     };
   }, [searchOpen]);
+
+  useEffect(() => {
+    console.log('[search] state', { searchOpen, searchLoading, hasResults: !!searchResults });
+  }, [searchOpen, searchLoading, searchResults]);
 
   const doSearch = useCallback(async (query: string) => {
     if (!workspaceId || query.length < 2) {
