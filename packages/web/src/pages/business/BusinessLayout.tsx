@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { W, D } from './constants';
 import { businessService } from '@/services/api';
-import AvatarDropdown from '@/components/AvatarDropdown';
 
 interface BusinessLayoutProps {
   children: ReactNode;
@@ -476,7 +475,6 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
                 borderRadius: '50%', background: '#E04343', border: '2px solid var(--bp-header)',
               }} />
             </div>
-            <AvatarDropdown />
           </div>
         </div>
 

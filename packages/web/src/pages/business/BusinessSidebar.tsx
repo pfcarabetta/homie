@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Tab } from './constants';
 
 interface NavItem {
@@ -108,6 +110,36 @@ export default function BusinessSidebar({
 }: BusinessSidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ 'dispatch-group': true });
   const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountMenuPos, setAccountMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const accountBtnRef = useRef<HTMLButtonElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const { homeowner, logout } = useAuth();
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      const inBtn = accountBtnRef.current && accountBtnRef.current.contains(target);
+      const inMenu = accountMenuRef.current && accountMenuRef.current.contains(target);
+      if (!inBtn && !inMenu) setAccountOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  function toggleAccountMenu() {
+    if (!accountBtnRef.current) return;
+    const rect = accountBtnRef.current.getBoundingClientRect();
+    setAccountMenuPos({ top: rect.top - 8, left: rect.right + 8 });
+    setAccountOpen(o => !o);
+  }
+
+  const accountMenuItemStyle: React.CSSProperties = {
+    width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+    fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
+    fontFamily: "'DM Sans', sans-serif",
+  };
 
   function showTooltip(e: React.MouseEvent, label: string) {
     if (!collapsed) return;
@@ -259,24 +291,78 @@ export default function BusinessSidebar({
         })}
       </div>
 
-      {/* Bottom user */}
-      <div style={{
-        borderTop: '1px solid var(--bp-border)', padding: collapsed ? '12px 8px' : '12px 16px',
-        display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
-        justifyContent: collapsed ? 'center' : 'flex-start',
-      }}>
+      {/* Bottom user — opens account menu */}
+      <button
+        ref={accountBtnRef}
+        onClick={toggleAccountMenu}
+        onMouseEnter={(e) => collapsed && showTooltip(e, userName || 'Account')}
+        onMouseLeave={hideTooltip}
+        style={{
+          borderTop: '1px solid var(--bp-border)', padding: collapsed ? '12px 8px' : '12px 16px',
+          display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          background: accountOpen ? 'var(--bp-hover)' : 'none', border: 'none',
+          width: '100%', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          textAlign: 'left',
+        }}
+      >
         <div style={{
           width: 36, height: 36, borderRadius: '50%', background: '#E8632B', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: '#fff',
         }}>{userInitials || 'U'}</div>
         {!collapsed && (
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap' }}>{userName || 'User'}</div>
+          <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName || 'User'}</div>
             {userTitle && <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)', whiteSpace: 'nowrap' }}>{userTitle}</div>}
           </div>
         )}
-      </div>
+      </button>
+
+      {/* Account menu — fixed positioned above the avatar */}
+      {accountOpen && accountMenuPos && (
+        <div
+          ref={accountMenuRef}
+          style={{
+            position: 'fixed',
+            bottom: `calc(100vh - ${accountMenuPos.top}px)`,
+            left: accountMenuPos.left,
+            background: '#ffffff',
+            borderRadius: 12,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+            border: '1px solid rgba(0,0,0,0.06)',
+            minWidth: 220,
+            overflow: 'hidden',
+            zIndex: 99999,
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          {homeowner && (
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#2D2926' }}>{userName || homeowner.email}</div>
+              <div style={{ fontSize: 12, color: '#9B9490' }}>{homeowner.email}</div>
+              {homeowner.membership_tier && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{homeowner.membership_tier} plan</div>}
+            </div>
+          )}
+          <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={accountMenuItemStyle}
+            onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Profile</button>
+          <button onClick={() => { setAccountOpen(false); navigate('/account'); }} style={accountMenuItemStyle}
+            onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Account</button>
+          <button onClick={() => { setAccountOpen(false); navigate('/account?tab=quotes'); }} style={accountMenuItemStyle}
+            onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Quotes</button>
+          <button onClick={() => { setAccountOpen(false); navigate('/account?tab=bookings'); }} style={accountMenuItemStyle}
+            onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}>My Bookings</button>
+          <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+            <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...accountMenuItemStyle, color: '#E24B4A' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#FFF5F5'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>Sign out</button>
+          </div>
+        </div>
+      )}
 
       {/* Expand button when collapsed */}
       {collapsed && (
