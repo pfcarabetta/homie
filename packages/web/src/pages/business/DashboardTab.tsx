@@ -341,6 +341,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                   return (
                     <button key={p.id} onClick={() => {
                       const params = new URLSearchParams({
+                        tab: 'dispatch-chat',
                         workspace: workspace.id,
                         property: p.id,
                         category: dispatchSuggestion!.category,
@@ -348,7 +349,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                         description: dispatchSuggestion!.description,
                       });
                       setDispatchSuggestion(null);
-                      navigate(`/business/chat?${params.toString()}`);
+                      navigate(`/business?${params.toString()}`);
                     }} style={{
                       display: 'flex', alignItems: 'center', padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
                       border: isRecommended ? `2px solid ${O}` : '1px solid #E0DAD4',

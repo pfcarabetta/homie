@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { businessService, jobService, estimateService, type Property, type WorkspaceDispatch, type WorkspaceBooking, type PreferredVendor, type Reservation, type ProviderResponseItem, type CostEstimate } from '@/services/api';
 import { O, G, D, W, PROPERTY_TYPES, VENDOR_CATEGORIES, MiniCalendar, cleanPrice, renderBold, timeAgo } from './constants';
 import { EditPropertyModal } from './PropertiesTab';
@@ -521,10 +522,15 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId }: { dispa
 /* ── Sub-page: Jobs (expandable dispatch cards) ────────────────────────── */
 
 function JobsSubPage({ dispatches, loading, workspaceId, propertyId }: { dispatches: WorkspaceDispatch[]; loading: boolean; workspaceId: string; propertyId: string }) {
+  const navigate = useNavigate();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
   const [estimates, setEstimates] = useState<Record<string, CostEstimate>>({});
+
+  function goToNewDispatch() {
+    navigate(`/business?tab=dispatch-chat&workspace=${workspaceId}&property=${propertyId}`);
+  }
 
   async function fetchEstimate(job: WorkspaceDispatch) {
     if (estimates[job.id] || !job.diagnosis?.category || !job.zipCode) return;
@@ -553,17 +559,15 @@ function JobsSubPage({ dispatches, loading, workspaceId, propertyId }: { dispatc
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9B9490', fontSize: 13 }}>Loading jobs...</div>;
 
-  const newDispatchUrl = `/business/chat?workspace=${workspaceId}&property=${propertyId}`;
-
   if (dispatches.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCCB'}</div>
         <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No jobs</div>
         <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 16 }}>No dispatches have been created for this property yet.</div>
-        <a href={newDispatchUrl} style={{ display: 'inline-block', padding: '10px 24px', borderRadius: 100, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
+        <button onClick={goToNewDispatch} style={{ display: 'inline-block', padding: '10px 24px', borderRadius: 100, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
           + New Dispatch
-        </a>
+        </button>
       </div>
     );
   }
@@ -572,9 +576,9 @@ function JobsSubPage({ dispatches, loading, workspaceId, propertyId }: { dispatc
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <a href={newDispatchUrl} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+        <button onClick={goToNewDispatch} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
           + New Dispatch
-        </a>
+        </button>
       </div>
       <style dangerouslySetInnerHTML={{ __html: PDV_CARD_STYLES }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

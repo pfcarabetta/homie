@@ -299,7 +299,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
       <div style={{ fontSize: 40, marginBottom: 12 }}>🚀</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No dispatches yet</div>
       <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 20 }}>Dispatch requests from the chat will appear here.</div>
-      <button onClick={() => navigate(`/business/chat?workspace=${workspaceId}`)}
+      <button onClick={() => navigate(`/business?tab=dispatch-chat&workspace=${workspaceId}`)}
         style={{ padding: '10px 24px', borderRadius: 100, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
         New Dispatch
       </button>
@@ -321,7 +321,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
               color: isPro ? D : '#ccc', cursor: isPro ? 'pointer' : 'default', opacity: isPro ? 1 : 0.6 }}>
             🔄 Auto-Dispatch{!isPro && ' (Pro+)'}
           </button>
-          <button onClick={() => navigate(`/business/chat?workspace=${workspaceId}`)}
+          <button onClick={() => navigate(`/business?tab=dispatch-chat&workspace=${workspaceId}`)}
             style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
             + New Dispatch
           </button>
