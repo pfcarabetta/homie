@@ -88,27 +88,18 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
   const searchDropdownRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Recompute dropdown position when opening or on scroll/resize
+  // Recompute dropdown position when opening or on resize
   useEffect(() => {
-    console.log('[search] effect run, searchOpen=', searchOpen);
     if (!searchOpen) return;
     const update = () => {
       if (!searchRef.current) return;
       const rect = searchRef.current.getBoundingClientRect();
-      console.log('[search] update position', { top: rect.bottom + 4, left: rect.left });
       setSearchDropdownPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 480) });
     };
     update();
     window.addEventListener('resize', update);
-    return () => {
-      console.log('[search] effect cleanup');
-      window.removeEventListener('resize', update);
-    };
+    return () => window.removeEventListener('resize', update);
   }, [searchOpen]);
-
-  useEffect(() => {
-    console.log('[search] state', { searchOpen, searchLoading, hasResults: !!searchResults });
-  }, [searchOpen, searchLoading, searchResults]);
 
   const doSearch = useCallback(async (query: string) => {
     if (!workspaceId || query.length < 2) {
@@ -323,20 +314,19 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
 
             {/* Search dropdown — rendered via portal to escape parent containment */}
             {searchOpen && createPortal(
-              <div ref={searchDropdownRef} className="bp-search-portal" data-search-dropdown="true" style={{
+              <div ref={searchDropdownRef} className="bp-search-portal" style={{
                 position: 'fixed',
                 top: searchDropdownPos.top,
                 left: searchDropdownPos.left,
                 width: searchDropdownPos.width,
                 background: '#ffffff',
-                border: '2px solid #E8632B',
+                border: '1px solid #E0DAD4',
                 borderRadius: 12,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
                 maxHeight: 400,
                 overflowY: 'auto',
-                zIndex: 2147483647,
+                zIndex: 99999,
                 fontFamily: "'DM Sans', sans-serif",
-                isolation: 'isolate',
               }}>
                 {searchLoading && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 8 }}>

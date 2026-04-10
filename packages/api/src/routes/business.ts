@@ -3273,27 +3273,32 @@ router.get('/:workspaceId/search', requireWorkspace, async (req: Request, res: R
     const providerIds = providerRows.map(p => p.id);
     let providerJobs: Array<{ provider_id: string; job_id: string; summary: string; category: string; status: string; property_name: string | null; created_at: Date | null; relation: string }> = [];
     if (providerIds.length > 0) {
-      providerJobs = await db.execute(sql`
-        (
-          SELECT pr.provider_id, j.id AS job_id, COALESCE(j.diagnosis->>'summary','') AS summary,
-            COALESCE(j.diagnosis->>'category','') AS category, j.status, p.name AS property_name, j.created_at, 'quote' AS relation
-          FROM provider_responses pr
-          JOIN jobs j ON j.id = pr.job_id
-          LEFT JOIN properties p ON p.id = j.property_id
-          WHERE pr.provider_id = ANY(${providerIds}::uuid[]) AND j.workspace_id = ${req.workspaceId}
-          ORDER BY j.created_at DESC LIMIT 10
-        )
-        UNION ALL
-        (
-          SELECT b.provider_id, j.id AS job_id, COALESCE(j.diagnosis->>'summary','') AS summary,
-            COALESCE(j.diagnosis->>'category','') AS category, j.status, p.name AS property_name, j.created_at, 'booking' AS relation
-          FROM bookings b
-          JOIN jobs j ON j.id = b.job_id
-          LEFT JOIN properties p ON p.id = j.property_id
-          WHERE b.provider_id = ANY(${providerIds}::uuid[]) AND j.workspace_id = ${req.workspaceId}
-          ORDER BY j.created_at DESC LIMIT 10
-        )
-      `) as unknown as typeof providerJobs;
+      try {
+        const idList = sql.join(providerIds.map(id => sql`${id}::uuid`), sql`, `);
+        providerJobs = await db.execute(sql`
+          (
+            SELECT pr.provider_id, j.id AS job_id, COALESCE(j.diagnosis->>'summary','') AS summary,
+              COALESCE(j.diagnosis->>'category','') AS category, j.status, p.name AS property_name, j.created_at, 'quote' AS relation
+            FROM provider_responses pr
+            JOIN jobs j ON j.id = pr.job_id
+            LEFT JOIN properties p ON p.id = j.property_id
+            WHERE pr.provider_id IN (${idList}) AND j.workspace_id = ${req.workspaceId}
+            ORDER BY j.created_at DESC LIMIT 10
+          )
+          UNION ALL
+          (
+            SELECT b.provider_id, j.id AS job_id, COALESCE(j.diagnosis->>'summary','') AS summary,
+              COALESCE(j.diagnosis->>'category','') AS category, j.status, p.name AS property_name, j.created_at, 'booking' AS relation
+            FROM bookings b
+            JOIN jobs j ON j.id = b.job_id
+            LEFT JOIN properties p ON p.id = j.property_id
+            WHERE b.provider_id IN (${idList}) AND j.workspace_id = ${req.workspaceId}
+            ORDER BY j.created_at DESC LIMIT 10
+          )
+        `) as unknown as typeof providerJobs;
+      } catch (jobsErr) {
+        logger.warn({ err: jobsErr }, '[search] failed to fetch provider jobs');
+      }
     }
 
     // Group jobs by provider
