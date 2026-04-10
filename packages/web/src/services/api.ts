@@ -858,6 +858,7 @@ export interface BookingMessage {
   senderId: string | null;
   senderName: string | null;
   content: string;
+  photoUrl: string | null;
   readAt: string | null;
   createdAt: string;
 }
@@ -1212,10 +1213,10 @@ export const businessService = {
   // Booking Messages
   listMessages: (workspaceId: string, bookingId: string) =>
     fetchAPI<BookingMessage[]>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/messages`),
-  sendMessage: (workspaceId: string, bookingId: string, content: string) =>
+  sendMessage: (workspaceId: string, bookingId: string, content: string, photoUrl?: string) =>
     fetchAPI<BookingMessage>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, photo_url: photoUrl }),
     }),
   markMessagesRead: (workspaceId: string, bookingId: string) =>
     fetchAPI<{ ok: boolean }>(`/api/v1/business/${workspaceId}/bookings/${bookingId}/messages/read`, { method: 'POST' }),

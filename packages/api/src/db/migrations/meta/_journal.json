@@ -162,6 +162,13 @@
       "when": 1775846765399,
       "tag": "0022_slow_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1775863399419,
+      "tag": "0023_past_alex_power",
+      "breakpoints": true
     }
   ]
 }

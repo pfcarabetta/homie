@@ -3259,10 +3259,17 @@ router.get('/:workspaceId/bookings/:bookingId/messages', requireWorkspace, async
 
 router.post('/:workspaceId/bookings/:bookingId/messages', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
   const { bookingId } = req.params;
-  const { content } = req.body as { content?: string };
+  const { content, photo_url: photoUrl } = req.body as { content?: string; photo_url?: string };
 
-  if (!content || !content.trim()) {
-    res.status(400).json({ data: null, error: 'content is required', meta: {} });
+  const trimmedContent = (content ?? '').trim();
+  if (!trimmedContent && !photoUrl) {
+    res.status(400).json({ data: null, error: 'content or photo_url is required', meta: {} });
+    return;
+  }
+
+  // Reject overly large data URLs (~7MB after base64 → ~5MB binary)
+  if (photoUrl && photoUrl.length > 7_500_000) {
+    res.status(413).json({ data: null, error: 'Photo too large (max ~5MB)', meta: {} });
     return;
   }
 
@@ -3303,21 +3310,30 @@ router.post('/:workspaceId/bookings/:bookingId/messages', requireWorkspace, requ
         senderType: 'team',
         senderId: req.homeownerId,
         senderName,
-        content: content.trim(),
+        content: trimmedContent,
+        photoUrl: photoUrl ?? null,
       })
       .returning();
 
-    // Send SMS via Twilio if provider has a phone number
+    // Send SMS/MMS via Twilio if provider has a phone number
     if (booking.providerPhone) {
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
       const authToken = process.env.TWILIO_AUTH_TOKEN;
       const fromNumber = process.env.TWILIO_PHONE_NUMBER;
       if (accountSid && authToken && fromNumber) {
         const client = twilio(accountSid, authToken);
+        const apiBase = process.env.API_BASE_URL ?? '';
+        const mediaUrl = photoUrl && apiBase
+          ? [`${apiBase}/api/v1/booking-messages/${msg.id}/photo`]
+          : undefined;
+        const body = trimmedContent
+          ? `HomiePro - ${senderName}: ${trimmedContent}`
+          : `HomiePro - ${senderName} sent a photo`;
         await client.messages.create({
-          body: `HomiePro - ${senderName}: ${content.trim()}`,
+          body,
           from: fromNumber,
           to: booking.providerPhone,
+          ...(mediaUrl ? { mediaUrl } : {}),
         }).catch(err => logger.warn({ err, bookingId }, '[booking-messages] Twilio send failed'));
       }
     }

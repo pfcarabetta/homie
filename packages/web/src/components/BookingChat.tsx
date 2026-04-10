@@ -168,13 +168,28 @@ function MessageBubble({ msg }: { msg: BookingMessage }) {
           background: isTeam ? O : 'white',
           color: isTeam ? 'white' : D,
           borderRadius: isTeam ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
-          padding: '9px 13px',
+          padding: msg.photoUrl && !msg.content ? 4 : '9px 13px',
           fontSize: 13, lineHeight: 1.5,
           border: isTeam ? 'none' : '1px solid rgba(0,0,0,0.07)',
           boxShadow: isTeam ? `0 2px 8px ${O}30` : '0 1px 3px rgba(0,0,0,0.05)',
           wordBreak: 'break-word',
+          overflow: 'hidden',
         }}>
-          {msg.content}
+          {msg.photoUrl && (
+            <img
+              src={msg.photoUrl}
+              alt="attachment"
+              onClick={() => window.open(msg.photoUrl!, '_blank')}
+              style={{
+                display: 'block', maxWidth: '100%', maxHeight: 280,
+                borderRadius: msg.content ? 8 : 12, marginBottom: msg.content ? 6 : 0,
+                cursor: 'pointer', objectFit: 'cover',
+              }}
+            />
+          )}
+          {msg.content && (
+            <div style={msg.photoUrl ? { padding: '4px 9px 5px' } : undefined}>{msg.content}</div>
+          )}
         </div>
       </div>
     </div>
@@ -191,10 +206,51 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
   const [messages, setMessages] = useState<BookingMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function handlePickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Only image files are supported.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Photo too large (max 5MB).');
+      return;
+    }
+    setError(null);
+    // Downscale large images to keep payload reasonable
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1600;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { setPhotoDataUrl(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        setPhotoDataUrl(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => setPhotoDataUrl(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  }
 
   async function loadMessages() {
     try {
@@ -228,8 +284,10 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
 
   async function handleSend() {
     const text = input.trim();
-    if (!text || sending) return;
+    const photo = photoDataUrl;
+    if ((!text && !photo) || sending) return;
     setInput('');
+    setPhotoDataUrl(null);
     setSending(true);
     setError(null);
 
@@ -241,13 +299,14 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
       senderId: null,
       senderName: 'You',
       content: text,
+      photoUrl: photo,
       readAt: null,
       createdAt: new Date().toISOString(),
     };
     setMessages(prev => [...prev, optimistic]);
 
     try {
-      const res = await businessService.sendMessage(workspaceId, booking.id, text);
+      const res = await businessService.sendMessage(workspaceId, booking.id, text, photo ?? undefined);
       if (res.data) {
         setMessages(prev => prev.map(m => m.id === optimistic.id ? res.data! : m));
       }
@@ -388,12 +447,64 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
         <div style={{ fontSize: 10, color: '#B0AAA4', marginBottom: 6, textAlign: 'center' }}>
           Message will be sent via SMS as <strong>HomiePro</strong>
         </div>
+
+        {/* Photo preview */}
+        {photoDataUrl && (
+          <div style={{
+            position: 'relative', display: 'inline-block', marginBottom: 8,
+            borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.08)',
+          }}>
+            <img src={photoDataUrl} alt="preview" style={{ display: 'block', maxHeight: 120, maxWidth: 200 }} />
+            <button
+              onClick={() => setPhotoDataUrl(null)}
+              style={{
+                position: 'absolute', top: 4, right: 4,
+                width: 22, height: 22, borderRadius: '50%', border: 'none',
+                background: 'rgba(0,0,0,0.65)', color: 'white',
+                cursor: 'pointer', fontSize: 13, lineHeight: 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+              aria-label="Remove photo"
+            >×</button>
+          </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handlePickPhoto}
+        />
+
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          {/* Photo upload button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending || !!photoDataUrl}
+            title="Attach photo"
+            style={{
+              width: 38, height: 38, borderRadius: '50%',
+              border: '1.5px solid rgba(0,0,0,0.12)',
+              background: 'white', color: '#6B6560',
+              cursor: sending || photoDataUrl ? 'default' : 'pointer',
+              opacity: sending || photoDataUrl ? 0.4 : 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          </button>
+
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Message ${providerFirstName}...`}
+            placeholder={photoDataUrl ? 'Add a caption (optional)…' : `Message ${providerFirstName}...`}
             rows={1}
             style={{
               flex: 1, resize: 'none', border: `1.5px solid ${input ? O : 'rgba(0,0,0,0.12)'}`,
@@ -411,15 +522,15 @@ export default function BookingChat({ booking, workspaceId, onClose }: BookingCh
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || sending}
+            disabled={(!input.trim() && !photoDataUrl) || sending}
             style={{
               width: 38, height: 38, borderRadius: '50%', border: 'none',
-              background: input.trim() && !sending ? O : 'rgba(0,0,0,0.08)',
-              color: input.trim() && !sending ? 'white' : '#9B9490',
-              cursor: input.trim() && !sending ? 'pointer' : 'default',
+              background: (input.trim() || photoDataUrl) && !sending ? O : 'rgba(0,0,0,0.08)',
+              color: (input.trim() || photoDataUrl) && !sending ? 'white' : '#9B9490',
+              cursor: (input.trim() || photoDataUrl) && !sending ? 'pointer' : 'default',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 16, transition: 'all 0.15s', flexShrink: 0,
-              boxShadow: input.trim() && !sending ? `0 2px 8px ${O}40` : 'none',
+              boxShadow: (input.trim() || photoDataUrl) && !sending ? `0 2px 8px ${O}40` : 'none',
             }}
           >
             {sending ? '…' : '↑'}

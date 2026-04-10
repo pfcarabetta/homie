@@ -10,7 +10,10 @@ export const bookingMessages = pgTable('booking_messages', {
   senderId: text('sender_id'),
   /** Display name of sender */
   senderName: text('sender_name'),
-  content: text('content').notNull(),
+  /** Allow empty content when there's a photo attachment */
+  content: text('content').notNull().default(''),
+  /** Optional photo attachment, stored as a data URL (data:image/...;base64,...) */
+  photoUrl: text('photo_url'),
   readAt: timestamp('read_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
