@@ -772,12 +772,17 @@ export async function expandJobOutreach(jobId: string): Promise<{ expanded: numb
       const discoveredIds = new Set(newProviders.map(p => p.id));
       const excludeIds = new Set([...alreadyContacted, ...discoveredIds]);
 
+      // Strict category match — only providers tagged with this job's category.
+      // Without this filter the fallback will pick up EV chargers, plumbers,
+      // pest control, etc. when the job is general handyman.
+      const jobCategory = diagnosis.category.toLowerCase();
       const dbProviders = await db
         .select()
         .from(providers)
         .where(and(
           sql`${providers.lat} IS NOT NULL AND ${providers.lng} IS NOT NULL`,
           sql`CAST(${providers.googleRating} AS float) >= ${minRating}`,
+          sql`${jobCategory} = ANY(${providers.categories})`,
           excludeIds.size > 0 ? sql`${providers.id} NOT IN (${sql.join(Array.from(excludeIds).map(id => sql`${id}::uuid`), sql`, `)})` : sql`TRUE`,
         ))
         .limit(200);
