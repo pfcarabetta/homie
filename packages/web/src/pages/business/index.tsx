@@ -153,6 +153,17 @@ export default function BusinessPortal() {
     setTab(t);
   }
 
+  function startNewDispatch() {
+    setSelectedProperty(null);
+    setTab('dispatch-chat');
+    // Clear any prefill params (property, category, etc.) from URL so the chat
+    // starts fresh and prompts for property selection
+    if (workspace) {
+      const params = new URLSearchParams({ tab: 'dispatch-chat', workspace: workspace.id });
+      navigate(`/business?${params.toString()}`, { replace: true });
+    }
+  }
+
   // No workspaces: show full-page empty state (no sidebar)
   if (!loading && workspaces.length === 0) {
     return (
@@ -210,7 +221,7 @@ export default function BusinessPortal() {
             setCollapsed={handleSidebarCollapse}
             activeTab={tab}
             onNavigate={(t) => { setSelectedProperty(null); setTab(t); }}
-            onNewDispatch={() => { setSelectedProperty(null); setTab('dispatch-chat'); }}
+            onNewDispatch={startNewDispatch}
             onLockedTab={() => setShowReportsUpgrade(true)}
             workspacePlan={workspace?.plan ?? 'trial'}
             userRole={workspace?.user_role ?? 'viewer'}
@@ -224,7 +235,7 @@ export default function BusinessPortal() {
             setCollapsed={() => {}}
             activeTab={tab}
             onNavigate={(t) => { setSelectedProperty(null); setMobileMenuOpen(false); setTab(t); }}
-            onNewDispatch={() => { setSelectedProperty(null); setMobileMenuOpen(false); setTab('dispatch-chat'); }}
+            onNewDispatch={() => { setMobileMenuOpen(false); startNewDispatch(); }}
             onLockedTab={() => setShowReportsUpgrade(true)}
             workspacePlan={workspace?.plan ?? 'trial'}
             userRole={workspace?.user_role ?? 'viewer'}
@@ -279,7 +290,7 @@ export default function BusinessPortal() {
           setCollapsed={handleSidebarCollapse}
           activeTab={tab}
           onNavigate={handleSidebarNavigate}
-          onNewDispatch={() => setTab('dispatch-chat')}
+          onNewDispatch={startNewDispatch}
           onLockedTab={() => setShowReportsUpgrade(true)}
           workspacePlan={workspace?.plan ?? 'trial'}
           userRole={workspace?.user_role ?? 'viewer'}
@@ -293,7 +304,7 @@ export default function BusinessPortal() {
           setCollapsed={() => {}}
           activeTab={tab}
           onNavigate={handleSidebarNavigate}
-          onNewDispatch={() => setTab('dispatch-chat')}
+          onNewDispatch={startNewDispatch}
           onLockedTab={() => setShowReportsUpgrade(true)}
           workspacePlan={workspace?.plan ?? 'trial'}
           userRole={workspace?.user_role ?? 'viewer'}
