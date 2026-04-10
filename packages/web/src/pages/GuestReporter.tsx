@@ -1094,7 +1094,7 @@ export default function GuestReporterPage() {
   }
 
   return (
-    <div style={{ fontFamily: "'DM Sans',sans-serif", maxWidth: 420, margin: '0 auto', minHeight: '100vh', background: BRAND.white, display: 'flex', flexDirection: 'column', position: 'relative', boxShadow: '0 0 60px rgba(0,0,0,0.08)' }}>
+    <div style={{ fontFamily: "'DM Sans',sans-serif", maxWidth: 420, margin: '0 auto', height: '100vh', background: BRAND.white, display: 'flex', flexDirection: 'column', position: 'relative', boxShadow: '0 0 60px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <style>{`
         @keyframes typDot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
@@ -1106,7 +1106,7 @@ export default function GuestReporterPage() {
       `}</style>
 
       {/* Header */}
-      <div style={{ background: BRAND.white, borderBottom: `1px solid ${BRAND.warm}`, padding: '11px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ background: BRAND.white, borderBottom: `1px solid ${BRAND.warm}`, padding: '11px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
           {!['welcome', 'identify', 'escalated', 'tracking'].includes(screen) && (
             <button
@@ -1137,7 +1137,7 @@ export default function GuestReporterPage() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto' }} onClick={() => langOpen && setLangOpen(false)}>
+      <div style={{ flex: 1, overflowY: screen === 'chat' ? 'hidden' : 'auto', minHeight: 0 }} onClick={() => langOpen && setLangOpen(false)}>
 
         {/* WELCOME */}
         {screen === 'welcome' && (
@@ -1373,7 +1373,7 @@ export default function GuestReporterPage() {
 
         {/* CHAT */}
         {screen === 'chat' && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 55px)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 6px' }}>
               {category && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
