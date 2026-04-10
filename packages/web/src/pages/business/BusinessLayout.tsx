@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { W, D } from './constants';
 import { businessService } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
@@ -82,13 +83,14 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchDropdownPos, setSearchDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [searchDropdownPos, setSearchDropdownPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 480 });
   const searchRef = useRef<HTMLDivElement>(null);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Recompute dropdown position when opening or on scroll/resize
   useEffect(() => {
-    if (!searchOpen) { setSearchDropdownPos(null); return; }
+    if (!searchOpen) return;
     const update = () => {
       if (!searchRef.current) return;
       const rect = searchRef.current.getBoundingClientRect();
@@ -101,7 +103,7 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [searchOpen, searchResults]);
+  }, [searchOpen]);
 
   const doSearch = useCallback(async (query: string) => {
     if (!workspaceId || query.length < 2) {
@@ -141,7 +143,10 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
   // Close dropdown on click outside or Escape
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inSearchInput = searchRef.current && searchRef.current.contains(target);
+      const inDropdown = searchDropdownRef.current && searchDropdownRef.current.contains(target);
+      if (!inSearchInput && !inDropdown) {
         setSearchOpen(false);
       }
     }
@@ -209,6 +214,18 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
           transition: background 0.15s, color 0.15s;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .bp-search-portal {
+          --bp-bg: ${W};
+          --bp-card: #ffffff;
+          --bp-text: ${D};
+          --bp-muted: #6B6560;
+          --bp-subtle: #9B9490;
+          --bp-border: #E0DAD4;
+          --bp-hover: #FAFAF8;
+          color: var(--bp-text);
+          font-family: 'DM Sans', sans-serif;
+        }
+        .bp-search-portal .bp-search-row:hover { background: #FAFAF8; }
         @media (max-width: 640px) {
           .bp-prop-inner { flex-direction: column !important; }
           .bp-prop-img { width: 100% !important; height: 140px !important; min-height: auto !important; }
@@ -296,20 +313,21 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
               />
             </div>
 
-            {/* Search dropdown */}
-            {searchOpen && searchDropdownPos && (
-              <div style={{
+            {/* Search dropdown — rendered via portal to escape parent containment */}
+            {searchOpen && createPortal(
+              <div ref={searchDropdownRef} className="bp-search-portal" style={{
                 position: 'fixed',
                 top: searchDropdownPos.top,
                 left: searchDropdownPos.left,
                 width: searchDropdownPos.width,
-                background: 'var(--bp-card)',
-                border: '1px solid var(--bp-border)',
+                background: '#ffffff',
+                border: '1px solid #E0DAD4',
                 borderRadius: 12,
                 boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
                 maxHeight: 400,
                 overflowY: 'auto',
-                zIndex: 1000,
+                zIndex: 99999,
+                fontFamily: "'DM Sans', sans-serif",
               }}>
                 {searchLoading && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 8 }}>
@@ -441,7 +459,8 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
                     )}
                   </>
                 )}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
