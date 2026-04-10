@@ -53,7 +53,7 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Cost Reports</h3>
+        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Reports</h3>
       </div>
 
       {/* Summary cards */}
