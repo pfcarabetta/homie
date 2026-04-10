@@ -86,6 +86,12 @@ if (TEST_MODE) {
   logger.info(`[orchestration] TEST MODE ENABLED — all outreach routed to ${TEST_PHONE}`);
 }
 
+// Categories that should only use preferred vendors — no marketplace discovery
+const INTERNAL_ONLY_CATEGORIES = new Set(['inspection', 'restocking', 'concierge', 'trash', 'guest_wifi', 'guest_lockout', 'guest_safety', 'guest_noise']);
+function isInternalOnlyCategory(category: string): boolean {
+  return INTERNAL_ONLY_CATEGORIES.has(category.toLowerCase()) || category.toLowerCase().startsWith('guest_');
+}
+
 // ── Adapters ──────────────────────────────────────────────────────────────────
 
 // Instantiated per-dispatch so that tests can override via jest.mock beforeEach.
@@ -414,8 +420,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
   }
 
   // Categories that should only use preferred vendors — no marketplace discovery
-  const INTERNAL_ONLY_CATEGORIES = new Set(['inspection', 'restocking', 'concierge', 'trash', 'guest_wifi', 'guest_lockout', 'guest_safety', 'guest_noise']);
-  const isInternalOnly = INTERNAL_ONLY_CATEGORIES.has(diagnosis.category.toLowerCase()) || diagnosis.category.toLowerCase().startsWith('guest_');
+  const isInternalOnly = isInternalOnlyCategory(diagnosis.category);
 
   if (isInternalOnly && eligible.length === 0) {
     logger.warn(`[orchestration] dispatchJob: internal-only category '${diagnosis.category}' has no preferred vendors for job ${jobId}`);
@@ -497,8 +502,8 @@ export async function dispatchJob(jobId: string): Promise<void> {
     }
   }
 
-  // Transition job status to collecting
-  await db.update(jobs).set({ status: 'collecting' }).where(eq(jobs.id, jobId));
+  // Transition job status to collecting and stamp last outreach time
+  await db.update(jobs).set({ status: 'collecting', lastOutreachAt: new Date() }).where(eq(jobs.id, jobId));
 
   // Emit tracking events
   void emitTrackingEvent(jobId, 'reported', 'Issue Reported', diagnosis.summary?.slice(0, 200));
@@ -672,6 +677,148 @@ export async function dispatchJob(jobId: string): Promise<void> {
   logger.info(
     `[orchestration] dispatchJob: initial outreach complete for job ${jobId} (${eligible.length} total eligible)`,
   );
+}
+
+// ── B2B outreach expansion ──────────────────────────────────────────────────
+// If a B2B job hasn't received a quote within 30 minutes, expand outreach to
+// 10 additional providers in a wider radius. Repeats up to 3 times.
+
+const EXPANSION_BATCH_SIZE = 10;
+const MAX_EXPANSIONS = 3;
+const EXPANSION_RADIUS_BY_WAVE: Record<number, { radius: number; minRating: number }> = {
+  1: { radius: 25, minRating: 4.0 },
+  2: { radius: 35, minRating: 3.5 },
+  3: { radius: 50, minRating: 3.0 },
+};
+
+export async function expandJobOutreach(jobId: string): Promise<{ expanded: number; wave: number } | null> {
+  const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
+  if (!job) {
+    logger.warn(`[expansion] job ${jobId} not found`);
+    return null;
+  }
+  if (!job.workspaceId) {
+    logger.info(`[expansion] job ${jobId} is not a B2B job, skipping`);
+    return null;
+  }
+  if (!['collecting', 'dispatching'].includes(job.status)) {
+    logger.info(`[expansion] job ${jobId} no longer active (${job.status}), skipping`);
+    return null;
+  }
+  if ((job.outreachExpansions ?? 0) >= MAX_EXPANSIONS) {
+    logger.info(`[expansion] job ${jobId} has reached max expansions (${MAX_EXPANSIONS})`);
+    return null;
+  }
+  if (!job.diagnosis) {
+    logger.warn(`[expansion] job ${jobId} has no diagnosis`);
+    return null;
+  }
+
+  const diagnosis = job.diagnosis as DiagnosisPayload;
+  const wave = (job.outreachExpansions ?? 0) + 1;
+  const { radius, minRating } = EXPANSION_RADIUS_BY_WAVE[wave] ?? EXPANSION_RADIUS_BY_WAVE[3];
+
+  // Internal-only categories (e.g. guest_*) shouldn't go to marketplace
+  if (isInternalOnlyCategory(diagnosis.category)) {
+    logger.info(`[expansion] job ${jobId} is internal-only category, skipping marketplace expansion`);
+    return null;
+  }
+
+  // Get providers we've already contacted for this job
+  const previousAttempts = await db
+    .select({ providerId: outreachAttempts.providerId })
+    .from(outreachAttempts)
+    .where(eq(outreachAttempts.jobId, jobId));
+  const alreadyContacted = new Set(previousAttempts.map(r => r.providerId));
+
+  logger.info(`[expansion] wave ${wave} for job ${jobId} — radius ${radius}mi, minRating ${minRating}, ${alreadyContacted.size} already contacted`);
+
+  // Discover providers in the expanded radius. Pull more than we need so we
+  // can filter out already-contacted ones and still get a full batch.
+  let discovered: DiscoveredProvider[];
+  try {
+    const result = await discoverProviders({
+      category: diagnosis.category,
+      zipCode: job.zipCode,
+      radiusMiles: radius,
+      minRating,
+      limit: EXPANSION_BATCH_SIZE + alreadyContacted.size + 10,
+    });
+    discovered = result.providers;
+  } catch (err) {
+    logger.error({ err }, `[expansion] discovery failed for job ${jobId} wave ${wave}`);
+    return null;
+  }
+
+  const newProviders = discovered
+    .filter(p => !p.suppressed && !p.rate_limited && !alreadyContacted.has(p.id))
+    .slice(0, EXPANSION_BATCH_SIZE);
+
+  if (newProviders.length === 0) {
+    logger.info(`[expansion] no new providers found for job ${jobId} wave ${wave} — bumping counter so we don't retry forever`);
+    await db.update(jobs)
+      .set({ outreachExpansions: wave, lastOutreachAt: new Date() })
+      .where(eq(jobs.id, jobId));
+    return { expanded: 0, wave };
+  }
+
+  // Look up workspace name for outreach branding
+  let workspaceName: string | undefined;
+  try {
+    const [ws] = await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.id, job.workspaceId)).limit(1);
+    workspaceName = ws?.name ?? undefined;
+  } catch { /* silent */ }
+
+  // Enrich providers without email — try scraping their website
+  try {
+    const { scrapeEmailFromWebsite } = await import('./providers/email-scraper');
+    for (const p of newProviders) {
+      if (!p.email && p.website) {
+        try {
+          const email = await scrapeEmailFromWebsite(p.website);
+          if (email) {
+            p.email = email;
+            await db.update(providers).set({ email }).where(eq(providers.id, p.id));
+          }
+        } catch { /* silent */ }
+      }
+    }
+  } catch { /* silent */ }
+
+  const adapters = createAdapters();
+  const results = await Promise.allSettled(
+    newProviders.map(provider => sendOutreachToProvider(job, diagnosis, provider, adapters, false, workspaceName)),
+  );
+  const failed = results.filter(r => r.status === 'rejected').length;
+  if (failed > 0) {
+    logger.error(`[expansion] ${failed}/${newProviders.length} outreach failures for job ${jobId} wave ${wave}`);
+  }
+  await incrementOutreachCounts(newProviders.map(p => p.id));
+
+  // Bump the expansion counter and update last outreach timestamp
+  await db.update(jobs)
+    .set({ outreachExpansions: wave, lastOutreachAt: new Date() })
+    .where(eq(jobs.id, jobId));
+
+  // Tracking + notification feed
+  void emitTrackingEvent(jobId, 'dispatched', 'Reaching More Pros',
+    `Expanded outreach to ${newProviders.length} additional providers (wave ${wave}/${MAX_EXPANSIONS}).`);
+
+  try {
+    const { recordNotification } = await import('./notification-feed');
+    void recordNotification({
+      workspaceId: job.workspaceId,
+      type: 'dispatch_created',
+      title: `Outreach expanded (wave ${wave})`,
+      body: `No quotes yet — reached out to ${newProviders.length} more providers.`,
+      jobId,
+      propertyId: job.propertyId,
+      link: `/business?tab=dispatches&job=${jobId}`,
+    });
+  } catch { /* silent */ }
+
+  logger.info(`[expansion] wave ${wave} complete for job ${jobId} — contacted ${newProviders.length} new providers`);
+  return { expanded: newProviders.length, wave };
 }
 
 /**

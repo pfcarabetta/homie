@@ -155,6 +155,13 @@
       "when": 1775793925809,
       "tag": "0021_big_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1775846765399,
+      "tag": "0022_slow_big_bertha",
+      "breakpoints": true
     }
   ]
 }

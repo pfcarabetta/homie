@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, jsonb, boolean, integer, index } from 'drizzle-orm/pg-core';
 import { homeowners } from './homeowners';
 import { workspaces } from './workspaces';
 import { properties } from './properties';
@@ -35,6 +35,8 @@ export const jobs = pgTable(
     consentIp: text('consent_ip'),
     consentAt: timestamp('consent_at', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
+    outreachExpansions: integer('outreach_expansions').notNull().default(0),
+    lastOutreachAt: timestamp('last_outreach_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
