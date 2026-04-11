@@ -206,12 +206,12 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
   const [error, setError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Open the device camera
+  // Step 1: request camera access on mount
   useEffect(() => {
     let cancelled = false;
     async function openCamera() {
@@ -220,28 +220,52 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
         return;
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const s = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false,
         });
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => {});
-        }
-        setCameraReady(true);
+        if (cancelled) { s.getTracks().forEach(t => t.stop()); return; }
+        setStream(s);
       } catch (err) {
         setCameraError(err instanceof Error ? err.message : 'Camera access denied');
       }
     }
     openCamera();
-    return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    };
+    return () => { cancelled = true; };
   }, []);
+
+  // Step 2: when both the stream and video element are ready, attach + play
+  useEffect(() => {
+    if (!stream || !videoRef.current) return;
+    const v = videoRef.current;
+    v.srcObject = stream;
+    // iOS Safari requires explicit play() and may require muted+playsinline
+    const tryPlay = () => {
+      v.play().then(() => setCameraReady(true)).catch((err: Error) => {
+        // Some browsers throw if play() is interrupted — try once more
+        setTimeout(() => {
+          v.play().then(() => setCameraReady(true)).catch(() => {
+            setCameraError(err.message || 'Could not start video playback');
+          });
+        }, 200);
+      });
+    };
+    if (v.readyState >= 2) {
+      tryPlay();
+    } else {
+      v.onloadedmetadata = tryPlay;
+    }
+    return () => {
+      v.onloadedmetadata = null;
+    };
+  }, [stream]);
+
+  // Stop the stream on unmount
+  useEffect(() => {
+    return () => {
+      stream?.getTracks().forEach(t => t.stop());
+    };
+  }, [stream]);
 
   function showToast(text: string) {
     setToast(text);
@@ -347,14 +371,18 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
     <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif", color: '#fff' }}>
       {/* Camera viewfinder */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
-        {cameraReady && (
-          <video
-            ref={videoRef}
-            playsInline
-            muted
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        )}
+        {/* Render unconditionally so the ref is set before we attach the stream */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          {...({ 'webkit-playsinline': 'true' } as Record<string, string>)}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+            opacity: cameraReady ? 1 : 0,
+          }}
+        />
         {!cameraReady && !cameraError && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9B9490', fontSize: 13 }}>
             Requesting camera access...
