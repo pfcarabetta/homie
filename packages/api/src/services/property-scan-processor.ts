@@ -43,6 +43,20 @@ function targetsForRoom(roomType: string): string[] {
   return ROOM_TARGETS[roomType] ?? [];
 }
 
+/**
+ * Item types where the model number / serial label is genuinely useful
+ * (warranty lookups, replacement parts, age decoding). For these, the
+ * coaching loop will ask the PM to grab a close-up of the nameplate after
+ * the wide shot, until we have a model number on file.
+ */
+export const NEEDS_LABEL = new Set<string>([
+  'refrigerator', 'range', 'dishwasher', 'microwave',
+  'washer', 'dryer', 'garbage_disposal',
+  'water_heater', 'hvac_condenser', 'hvac_air_handler',
+  'water_softener', 'pool_heater', 'pool_pump',
+  'generator', 'solar_system', 'ev_charger',
+]);
+
 function prettify(itemType: string): string {
   return itemType.replace(/_/g, ' ');
 }
@@ -578,13 +592,13 @@ export async function generateCoachingMessage(args: {
   totalItemsSoFar: number;
   roomsScanned: string[];
 }): Promise<CoachingResult> {
-  // Look up which target items have already been captured in this room for this scan.
+  // Look up which target items have already been captured in this room for this scan,
+  // and which captured items are still missing model numbers (so we can ask for labels).
   const expected = targetsForRoom(args.currentRoom);
   let captured: string[] = [];
+  // List of {itemType, brand} that need a label close-up to get the model number
+  const needsLabelItems: Array<{ itemType: string; brand: string | null }> = [];
   try {
-    // Find rooms for this scan whose type matches the current room.
-    // Without the roomType filter, items from a different room (e.g. dining)
-    // would incorrectly count toward the current room's checklist (e.g. living).
     const matchingRooms = await db
       .select({ id: propertyRooms.id })
       .from(propertyRooms)
@@ -595,21 +609,30 @@ export async function generateCoachingMessage(args: {
     const matchingRoomIds = new Set(matchingRooms.map(r => r.id));
 
     const seen = new Set<string>();
+    const labelSeen = new Set<string>();
 
     if (matchingRoomIds.size > 0) {
       const items = await db
-        .select({ itemType: propertyInventoryItems.itemType, roomId: propertyInventoryItems.roomId })
+        .select({
+          itemType: propertyInventoryItems.itemType,
+          roomId: propertyInventoryItems.roomId,
+          brand: propertyInventoryItems.brand,
+          modelNumber: propertyInventoryItems.modelNumber,
+        })
         .from(propertyInventoryItems)
         .where(eq(propertyInventoryItems.scanId, args.scanId));
       for (const it of items) {
-        if (it.roomId && matchingRoomIds.has(it.roomId) && expected.includes(it.itemType)) {
-          seen.add(it.itemType);
+        if (!it.roomId || !matchingRoomIds.has(it.roomId)) continue;
+        if (expected.includes(it.itemType)) seen.add(it.itemType);
+        // If this item needs a label and we don't have a model number, queue it
+        if (NEEDS_LABEL.has(it.itemType) && !it.modelNumber && !labelSeen.has(it.itemType)) {
+          needsLabelItems.push({ itemType: it.itemType, brand: it.brand });
+          labelSeen.add(it.itemType);
         }
       }
     }
 
-    // Also include items from the just-detected batch (they belong to the
-    // current room by definition, even if not persisted yet).
+    // Items from the just-detected batch belong to the current room by definition
     for (const d of args.lastDetectedItems) {
       if (expected.includes(d.itemType)) seen.add(d.itemType);
     }
@@ -628,36 +651,43 @@ export async function generateCoachingMessage(args: {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { message: defaultCoaching(args, roomProgress), roomProgress };
+    return { message: defaultCoaching(args, roomProgress, needsLabelItems), roomProgress };
   }
 
   try {
     const client = new Anthropic({ apiKey });
     const lastItemsLine = args.lastDetectedItems.length > 0
-      ? args.lastDetectedItems.map(i => `${i.brand ? i.brand + ' ' : ''}${prettify(i.itemType)}${i.confidence < 0.85 ? ' (needs label)' : ''}`).join(', ')
+      ? args.lastDetectedItems.map(i => `${i.brand ? i.brand + ' ' : ''}${prettify(i.itemType)}${i.confidence < 0.85 ? ' (low confidence)' : ''}`).join(', ')
       : 'nothing yet';
 
     const checklistLine = expected.length > 0
       ? `\n- Expected items in this room: ${expected.map(prettify).join(', ')}\n- Captured so far: ${captured.length > 0 ? captured.map(prettify).join(', ') : 'none'}\n- Still missing: ${remaining.length > 0 ? remaining.map(prettify).join(', ') : 'none — room is complete!'}`
       : '';
 
+    const needsLabelLine = needsLabelItems.length > 0
+      ? `\n- Captured but still need a label/nameplate close-up to read the model number: ${needsLabelItems.map(i => `${i.brand ? i.brand + ' ' : ''}${prettify(i.itemType)}`).join(', ')}`
+      : '';
+
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 160,
-      system: `You are a friendly AI property inspector coaching a property manager through a phone-camera walkthrough. Keep responses to 1-2 short sentences, conversational, encouraging, and actionable. Never use technical jargon. Refer to yourself as "I" and the user informally. When you have a checklist of expected items, prioritize asking for the next missing one.`,
+      max_tokens: 180,
+      system: `You are a friendly AI property inspector coaching a property manager through a phone-camera walkthrough. Keep responses to 1-2 short sentences, conversational, encouraging, and actionable. Never use technical jargon. Refer to yourself as "I" and the user informally. When you ask for a label close-up, be specific about WHERE the label usually is (e.g. "inside the fridge door near the top", "behind the lower kick plate on the dishwasher", "on the side of the water heater near the bottom").`,
       messages: [{
         role: 'user',
         content: `Walkthrough state:
 - Currently in: ${prettify(args.currentRoom)}
 - Just detected in this photo: ${lastItemsLine}
 - Total items found so far: ${args.totalItemsSoFar}
-- Rooms scanned: ${args.roomsScanned.join(', ') || 'none'}${checklistLine}
+- Rooms scanned: ${args.roomsScanned.join(', ') || 'none'}${checklistLine}${needsLabelLine}
 
-What's the next ONE specific thing I should ask them to capture?
-- If something I just detected has low confidence, ask for a close-up of the label.
-- Otherwise, if there are still missing items in the checklist, ask for the most important one (water heater > electrical panel > major appliances > fixtures > safety devices).
-- If the room is complete, congratulate briefly and suggest moving on.
-Keep it to 1-2 sentences max, conversational.`,
+What's the next ONE specific thing I should ask them to capture? Apply this priority order:
+
+1. If something I just detected has low confidence, ask for a close-up of its label.
+2. If any item in the "still need a label" list is missing its model number, ask for a close-up of THAT item's nameplate. Tell them where the nameplate is usually located. Pick the most important one if multiple are listed (water heater > major appliances > smaller appliances).
+3. Otherwise, if there are still missing items in the checklist, ask for the most important one (water heater > electrical panel > major appliances > fixtures > safety devices).
+4. If the room is complete and all labels are captured, congratulate briefly and suggest moving on.
+
+Keep it to 1-2 sentences max, conversational. Acknowledge what was just found before asking for the next thing.`,
       }],
     });
 
@@ -669,25 +699,73 @@ Keep it to 1-2 sentences max, conversational.`,
     logger.warn({ err }, '[scan-processor] coaching generation failed');
   }
 
-  return { message: defaultCoaching(args, roomProgress), roomProgress };
+  return { message: defaultCoaching(args, roomProgress, needsLabelItems), roomProgress };
+}
+
+/** Where the model/serial nameplate is typically found on each appliance. */
+const LABEL_LOCATIONS: Record<string, string> = {
+  refrigerator: 'inside the fresh food compartment, usually on the left wall or ceiling',
+  range: 'on the back panel behind the burner control area, or inside the warming drawer',
+  dishwasher: 'on the inside edge of the door near the top, or on the tub frame',
+  microwave: 'on the back panel, or inside the door frame',
+  washer: 'on the inside lid for top-loaders, or behind the door on front-loaders',
+  dryer: 'on the inside of the door, or on the back panel',
+  garbage_disposal: 'on the side or bottom of the unit under the sink',
+  water_heater: 'on a sticker or plate on the side of the tank, usually about waist height',
+  hvac_condenser: 'on the metal data plate on the side of the outdoor unit',
+  hvac_air_handler: 'on the front panel of the indoor unit',
+  water_softener: 'on the front cover near the controls',
+  pool_heater: 'on the side panel of the unit',
+  pool_pump: 'on the motor housing',
+  generator: 'on the side of the unit near the controls',
+  solar_system: 'on the inverter, usually mounted on a wall',
+  ev_charger: 'on the back of the charger or inside the cable holder area',
+};
+
+function labelHint(itemType: string): string {
+  return LABEL_LOCATIONS[itemType] || 'on the equipment nameplate';
 }
 
 function defaultCoaching(
   args: { currentRoom: string; lastDetectedItems: Array<{ itemType: string; brand: string | null; confidence: number }>; totalItemsSoFar: number },
   progress: RoomProgress,
+  needsLabelItems: Array<{ itemType: string; brand: string | null }>,
 ): string {
+  // 1. Low confidence — ask for a label close-up
   const lowConf = args.lastDetectedItems.find(i => i.confidence < 0.85);
   if (lowConf) {
-    return `I spotted a ${prettify(lowConf.itemType)} but I can't quite read the label. Can you get a close-up of the brand/model sticker?`;
+    return `I spotted a ${prettify(lowConf.itemType)} but I can't quite read the label. Can you get a close-up of the nameplate? It's usually ${labelHint(lowConf.itemType)}.`;
   }
-  // If there's a checklist with remaining items, prompt for the next one
+
+  // 2. Captured items still missing model numbers — ask for the nameplate
+  if (needsLabelItems.length > 0) {
+    // Prioritize: water_heater first, then major appliances
+    const priority = ['water_heater', 'hvac_condenser', 'hvac_air_handler', 'electrical_panel',
+      'refrigerator', 'range', 'dishwasher', 'washer', 'dryer', 'microwave',
+      'garbage_disposal', 'water_softener', 'generator', 'solar_system', 'ev_charger',
+      'pool_heater', 'pool_pump'];
+    const sorted = [...needsLabelItems].sort((a, b) => {
+      const ai = priority.indexOf(a.itemType);
+      const bi = priority.indexOf(b.itemType);
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    });
+    const target = sorted[0];
+    const brandPrefix = target.brand ? `${target.brand} ` : '';
+    return `Now grab a close-up of the ${brandPrefix}${prettify(target.itemType)}'s nameplate so I can read the model number — it's ${labelHint(target.itemType)}.`;
+  }
+
+  // 3. Checklist items still missing — ask for the next one
   if (progress.remaining.length > 0) {
     const next = progress.remaining[0];
     return `Nice. Next in the ${prettify(args.currentRoom)}: try to capture the ${prettify(next)}.`;
   }
+
+  // 4. Room complete
   if (progress.expected.length > 0 && progress.remaining.length === 0) {
     return `${prettify(args.currentRoom)} looks complete. Tap "Next" to move on when you're ready.`;
   }
+
+  // 5. Generic fallback
   if (args.lastDetectedItems.length > 0) {
     const last = args.lastDetectedItems[args.lastDetectedItems.length - 1];
     return `Got it — ${last.brand || ''} ${prettify(last.itemType)}. Keep going, or move to the next room when you're ready.`;
