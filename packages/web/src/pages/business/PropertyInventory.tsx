@@ -183,11 +183,17 @@ export function PropertyScanCard({ workspaceId, property, plan, onScanStart, onV
 
 /* ── ScanCaptureModal ───────────────────────────────────────────────────── */
 
+// Ordered as a natural property walkthrough: main living spaces → bedrooms
+// → bathrooms → utility → other interior → exterior. Default starts at
+// kitchen since that's typically where PMs begin a scan.
 const ROOM_OPTIONS = [
-  'kitchen', 'living_room', 'dining_room', 'master_bedroom', 'bedroom',
-  'master_bathroom', 'bathroom', 'half_bathroom', 'laundry', 'garage',
-  'office', 'hallway', 'pool_area', 'patio', 'exterior_front', 'exterior_back',
-  'mechanical_room', 'other',
+  'kitchen', 'dining_room', 'living_room',
+  'master_bedroom', 'bedroom',
+  'master_bathroom', 'bathroom', 'half_bathroom',
+  'laundry', 'mechanical_room', 'garage',
+  'office', 'hallway',
+  'patio', 'pool_area', 'exterior_front', 'exterior_back',
+  'other',
 ];
 
 export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, onComplete }: {
@@ -361,12 +367,13 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
     setCompleting(false);
   }
 
+  // Compute the next room in the walkthrough sequence (wraps at end)
+  const currentRoomIdx = ROOM_OPTIONS.indexOf(currentRoom);
+  const nextRoom = ROOM_OPTIONS[currentRoomIdx >= 0 ? (currentRoomIdx + 1) % ROOM_OPTIONS.length : 0];
+
   function handleNextRoom() {
-    const idx = ROOM_OPTIONS.indexOf(currentRoom);
-    const nextIdx = idx >= 0 ? (idx + 1) % ROOM_OPTIONS.length : 0;
-    const next = ROOM_OPTIONS[nextIdx];
-    setCurrentRoom(next);
-    showToast(`Now scanning: ${prettifyItemType(next)}`);
+    setCurrentRoom(nextRoom);
+    showToast(`Now scanning: ${prettifyItemType(nextRoom)}`);
   }
 
   return (
@@ -480,10 +487,16 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-          <button onClick={handleNextRoom} style={{
-            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff',
-            padding: '10px 16px', borderRadius: 100, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-          }}>Next room</button>
+          <button
+            onClick={handleNextRoom}
+            title={`Advance to ${prettifyItemType(nextRoom)}`}
+            style={{
+              background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff',
+              padding: '10px 14px', borderRadius: 100, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >Next: {prettifyItemType(nextRoom)} ›</button>
 
           {/* Capture button */}
           <button
