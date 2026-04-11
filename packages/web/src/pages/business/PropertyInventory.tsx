@@ -213,6 +213,8 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [flash, setFlash] = useState<{ items: string[]; key: number } | null>(null);
+  const flashTimerRef = useRef<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -277,6 +279,17 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
     window.setTimeout(() => setToast(null), 2400);
   }
 
+  function showFlash(items: string[]) {
+    if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+    setFlash({ items, key: Date.now() });
+    flashTimerRef.current = window.setTimeout(() => setFlash(null), 1800);
+  }
+
+  // Cleanup flash timer on unmount
+  useEffect(() => () => {
+    if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+  }, []);
+
   async function captureAndProcess() {
     if (uploading) return;
     setError(null);
@@ -318,10 +331,10 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
           setDetected(prev => [...prev, { ...item, roomType: res.data!.roomType }]);
         }
         if (newItems.length > 0) {
-          const summary = newItems.slice(0, 2).map(i => `${i.brand || ''} ${prettifyItemType(i.itemType)}`.trim()).join(', ');
-          showToast(`Found: ${summary}${newItems.length > 2 ? ` +${newItems.length - 2} more` : ''} ✓`);
+          const labels = newItems.map(i => `${i.brand || ''} ${prettifyItemType(i.itemType)}`.trim());
+          showFlash(labels);
         } else {
-          showToast('No items found in that frame');
+          showToast('No new items in that frame');
         }
 
         // Refresh coaching based on what we just found
@@ -424,12 +437,18 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
                 {detected.length} item{detected.length === 1 ? '' : 's'} found · {prettifyItemType(currentRoom)}
               </div>
             </div>
-            <button onClick={handleComplete} disabled={completing || detected.length === 0} style={{
-              background: detected.length === 0 ? 'rgba(255,255,255,0.15)' : G,
-              border: 'none', color: '#fff', padding: '8px 14px', borderRadius: 100,
-              fontSize: 12, fontWeight: 600, cursor: detected.length === 0 ? 'default' : 'pointer',
-              opacity: completing ? 0.5 : 1,
-            }}>End scan</button>
+            <button
+              onClick={handleComplete}
+              disabled={completing}
+              style={{
+                background: G, border: 'none', color: '#fff',
+                padding: '8px 14px', borderRadius: 100,
+                fontSize: 12, fontWeight: 600,
+                cursor: completing ? 'default' : 'pointer',
+                opacity: completing ? 0.5 : 1,
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >{completing ? 'Ending…' : 'End scan'}</button>
           </div>
           {/* AI coaching text */}
           <div style={{
@@ -442,19 +461,69 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
           </div>
         </div>
 
-        {/* Toast */}
+        {/* Center flash — checkmark + detected item names when items are found */}
+        {flash && (
+          <div
+            key={flash.key}
+            style={{
+              position: 'absolute', top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
+              pointerEvents: 'none', zIndex: 5,
+              animation: 'scanFlash 1.8s ease forwards',
+            }}
+          >
+            <div style={{
+              width: 96, height: 96, borderRadius: '50%',
+              background: 'rgba(27,158,119,0.78)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              border: '3px solid rgba(255,255,255,0.55)',
+            }}>
+              <svg width={52} height={52} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <div style={{
+              background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)',
+              padding: '10px 18px', borderRadius: 14,
+              fontSize: 13, fontWeight: 700, color: '#fff',
+              maxWidth: 280, textAlign: 'center', lineHeight: 1.4,
+              border: '1px solid rgba(255,255,255,0.18)',
+            }}>
+              {flash.items.slice(0, 3).join(', ')}
+              {flash.items.length > 3 && ` +${flash.items.length - 3} more`}
+            </div>
+          </div>
+        )}
+
+        {/* Toast — used for non-detection messages (room change, no items, etc.) */}
         {toast && (
           <div style={{
             position: 'absolute', top: 140, left: '50%', transform: 'translateX(-50%)',
-            background: 'rgba(27,158,119,0.95)', color: '#fff',
+            background: 'rgba(0,0,0,0.78)', color: '#fff',
             padding: '8px 16px', borderRadius: 100, fontSize: 12, fontWeight: 600,
             boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-            animation: 'scanToast 2.4s ease',
+            border: '1px solid rgba(255,255,255,0.12)',
+            animation: 'scanToast 2.4s ease', zIndex: 5,
           }}>
             {toast}
           </div>
         )}
-        <style>{`@keyframes scanToast { 0% { opacity: 0; transform: translate(-50%, -8px); } 10%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -8px); } }`}</style>
+        <style>{`
+          @keyframes scanToast {
+            0% { opacity: 0; transform: translate(-50%, -8px); }
+            10%, 85% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -8px); }
+          }
+          @keyframes scanFlash {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
+            18% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+            30% { transform: translate(-50%, -50%) scale(1); }
+            78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+          }
+        `}</style>
 
         {error && (
           <div style={{
