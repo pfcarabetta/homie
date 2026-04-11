@@ -910,9 +910,17 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
             if (roomItems.length === 0) return null;
             return (
               <div key={room.id} style={{ marginBottom: 22 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 15, fontWeight: 700, color: D, margin: 0 }}>{room.roomLabel}</h4>
                   {room.flooringType && <span style={{ fontSize: 11, color: '#9B9490' }}>{room.flooringType}</span>}
+                  {room.roomCount && room.roomCount > 1 && (
+                    <span title={`Merged from ${room.roomCount} scan rooms`} style={{
+                      fontSize: 10, fontWeight: 700, color: O, background: `${O}15`,
+                      padding: '2px 8px', borderRadius: 100,
+                    }}>
+                      MERGED · {room.roomCount}
+                    </span>
+                  )}
                   <span style={{ fontSize: 11, color: '#9B9490', marginLeft: 'auto' }}>{roomItems.length} items</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

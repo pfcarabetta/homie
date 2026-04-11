@@ -4324,6 +4324,8 @@ router.post('/:workspaceId/scans/:scanId/complete', requireWorkspace, requireWor
 });
 
 // GET /:workspaceId/properties/:propertyId/inventory — full inventory grouped by room
+// Rooms with the same type are merged into a single group, and duplicate items
+// within each merged group are collapsed (keeping the one with the most fields).
 router.get('/:workspaceId/properties/:propertyId/inventory', requireWorkspace, async (req: Request, res: Response) => {
   const { propertyId } = req.params;
   try {
@@ -4342,17 +4344,65 @@ router.get('/:workspaceId/properties/:propertyId/inventory', requireWorkspace, a
       ))
       .orderBy(desc(propertyInventoryItems.confidenceScore));
 
-    // Compute summary stats
-    const itemsByRoom = new Map<string | null, typeof items>();
+    const { mergeDuplicateInventoryItems } = await import('../services/property-scan-processor');
+
+    // Bucket items by their roomId
+    const itemsByRoomId = new Map<string | null, typeof items>();
+    for (const it of items) {
+      const list = itemsByRoomId.get(it.roomId) || [];
+      list.push(it);
+      itemsByRoomId.set(it.roomId, list);
+    }
+
+    // Merge rooms by roomType — multiple "kitchen" rows collapse into one
+    type MergedRoom = (typeof rooms)[number] & {
+      items: typeof items;
+      roomCount: number;
+      mergedRoomIds: string[];
+    };
+    const mergedByType = new Map<string, MergedRoom>();
+    for (const room of rooms) {
+      const roomItems = itemsByRoomId.get(room.id) ?? [];
+      const existing = mergedByType.get(room.roomType);
+      if (existing) {
+        existing.items.push(...roomItems);
+        existing.roomCount += 1;
+        existing.mergedRoomIds.push(room.id);
+        // Prefer the earliest createdAt (already sorted) for stable display order
+      } else {
+        mergedByType.set(room.roomType, {
+          ...room,
+          items: [...roomItems],
+          roomCount: 1,
+          mergedRoomIds: [room.id],
+        });
+      }
+    }
+
+    // Dedupe items within each merged group
+    const mergedRooms: MergedRoom[] = [];
+    for (const merged of mergedByType.values()) {
+      merged.items = mergeDuplicateInventoryItems(merged.items);
+      mergedRooms.push(merged);
+    }
+    // Maintain original sortOrder/createdAt order
+    mergedRooms.sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+
+    // Dedupe unassigned items too
+    const unassignedItems = mergeDuplicateInventoryItems(itemsByRoomId.get(null) ?? []);
+
+    // Recompute summary stats from the deduped + merged result
+    let totalItems = unassignedItems.length;
     let totalAge = 0;
     let agedCount = 0;
     let agingItems = 0;
     let safetyFlags = 0;
-    for (const it of items) {
-      const key = it.roomId;
-      const list = itemsByRoom.get(key) || [];
-      list.push(it);
-      itemsByRoom.set(key, list);
+    const allDedupedItems = [...mergedRooms.flatMap(r => r.items), ...unassignedItems];
+    for (const it of allDedupedItems) {
+      if (it.roomId !== null) totalItems++;
       const age = it.estimatedAgeYears ? parseFloat(it.estimatedAgeYears) : null;
       if (age !== null) { totalAge += age; agedCount++; }
       if (it.maintenanceFlags && it.maintenanceFlags.length > 0) {
@@ -4360,16 +4410,15 @@ router.get('/:workspaceId/properties/:propertyId/inventory', requireWorkspace, a
         if (it.maintenanceFlags.some(f => /end_of_life|aging/i.test(f))) agingItems++;
       }
     }
+    // Override: totalItems should just be allDedupedItems.length
+    totalItems = allDedupedItems.length;
 
     res.json({
       data: {
-        rooms: rooms.map(r => ({
-          ...r,
-          items: itemsByRoom.get(r.id) ?? [],
-        })),
-        unassignedItems: itemsByRoom.get(null) ?? [],
+        rooms: mergedRooms,
+        unassignedItems,
         summary: {
-          totalItems: items.length,
+          totalItems,
           averageAge: agedCount > 0 ? Math.round((totalAge / agedCount) * 10) / 10 : null,
           agingItems,
           safetyFlags,

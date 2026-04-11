@@ -893,6 +893,10 @@ export interface PropertyRoomWithItems {
   createdAt: string;
   updatedAt: string;
   items: PropertyInventoryItem[];
+  /** Number of physical room rows merged into this group (>=1) */
+  roomCount?: number;
+  /** All underlying room ids that were collapsed into this group */
+  mergedRoomIds?: string[];
 }
 
 export interface PropertyInventoryResponse {

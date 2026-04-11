@@ -73,6 +73,81 @@ function norm(s: string | null | undefined): string {
  *  2. Same type + same brand in the same room
  *  3. Unique-per-room types: same type in the same room (no brand needed)
  */
+/**
+ * Score how "rich" an inventory item is. Used by mergeDuplicateInventoryItems
+ * to pick the best representative when collapsing duplicates.
+ */
+export function inventoryItemRichness(i: PropertyInventoryItem): number {
+  let score = 0;
+  if (i.brand) score += 2;
+  if (i.modelNumber) score += 3;
+  if (i.serialNumber) score += 2;
+  if (i.estimatedAgeYears) score += 1;
+  if (i.manufactureDate) score += 1;
+  if (i.fuelType) score += 1;
+  if (i.capacity) score += 1;
+  if (i.condition) score += 1;
+  if (i.identificationMethod === 'label_ocr') score += 1;
+  if (i.status === 'pm_confirmed' || i.status === 'pm_corrected') score += 5;
+  return score;
+}
+
+/**
+ * Returns true if two inventory items are likely the same physical item.
+ * Same itemType, with brand/model fields that are either equal or one-side-empty
+ * (so a partial detection can merge with a complete one). For unique-per-room
+ * types, same itemType in the same logical room is enough.
+ */
+export function areInventoryItemsDuplicate(a: PropertyInventoryItem, b: PropertyInventoryItem): boolean {
+  if (a.itemType !== b.itemType) return false;
+
+  const aBrand = norm(a.brand);
+  const bBrand = norm(b.brand);
+  const aModel = norm(a.modelNumber);
+  const bModel = norm(b.modelNumber);
+
+  // If both sides have brand and they differ → different items
+  if (aBrand && bBrand && aBrand !== bBrand) return false;
+  // If both sides have model and they differ → different items
+  if (aModel && bModel && aModel !== bModel) return false;
+
+  // For unique-per-room types, same type is enough (caller handles room scoping)
+  if (UNIQUE_PER_ROOM.has(a.itemType)) return true;
+
+  // For non-unique types, require some explicit overlap to merge
+  if (aBrand && bBrand && aBrand === bBrand) return true;
+  if (aModel && bModel && aModel === bModel) return true;
+
+  // If neither side has brand or model and the type isn't unique-per-room,
+  // treat them as distinct items (could be e.g. two ceiling fans).
+  return false;
+}
+
+/**
+ * Merge a flat list of inventory items, collapsing duplicates and keeping the
+ * one with the most fields populated. Used by the inventory view to clean up
+ * legacy duplicates when displaying merged-room groups.
+ */
+export function mergeDuplicateInventoryItems(items: PropertyInventoryItem[]): PropertyInventoryItem[] {
+  const buckets: PropertyInventoryItem[][] = [];
+  for (const item of items) {
+    let placed = false;
+    for (const bucket of buckets) {
+      // Compare against the bucket's current best representative
+      if (areInventoryItemsDuplicate(item, bucket[0])) {
+        bucket.push(item);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) buckets.push([item]);
+  }
+  // Keep the richest item from each bucket
+  return buckets.map(bucket =>
+    bucket.slice().sort((a, b) => inventoryItemRichness(b) - inventoryItemRichness(a))[0]
+  );
+}
+
 function findDuplicate(
   detected: { itemType: string; brand: string | null | undefined; modelNumber: string | null | undefined },
   existing: PropertyInventoryItem[],
