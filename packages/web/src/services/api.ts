@@ -836,6 +836,10 @@ export interface Property {
   photoUrls: string[] | null;
   notes: string | null;
   active: boolean;
+  /** PMS source tag (e.g. 'track') if this property is linked to a PMS */
+  pmsSource: string | null;
+  /** External ID in the PMS (e.g. Track unit ID) */
+  pmsExternalId: string | null;
   createdAt: string;
   updatedAt: string;
 }

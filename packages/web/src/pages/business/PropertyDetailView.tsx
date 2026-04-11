@@ -423,10 +423,12 @@ function getDateLabel(dateStr: string): string {
 
 /* ── Reservation Timeline ───────────────────────────────────────────────── */
 
-function ReservationTimeline({ workspaceId, propertyId }: { workspaceId: string; propertyId: string }) {
+function ReservationTimeline({ workspaceId, property }: { workspaceId: string; property: Property }) {
+  const propertyId = property.id;
+  const hasPmsLink = !!(property.pmsSource && property.pmsExternalId);
   const [items, setItems] = useState<import('@/services/api').ReservationTimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasSource, setHasSource] = useState<boolean | null>(null);
+  const [hasIcalSource, setHasIcalSource] = useState<boolean | null>(null);
   const [showMore, setShowMore] = useState(false);
 
   useEffect(() => {
@@ -436,34 +438,51 @@ function ReservationTimeline({ workspaceId, propertyId }: { workspaceId: string;
       businessService.getCalendarSource(workspaceId, propertyId),
     ]).then(([timelineRes, sourceRes]) => {
       if (timelineRes.data) setItems(timelineRes.data.items);
-      setHasSource(sourceRes.data !== null);
+      setHasIcalSource(sourceRes.data !== null);
     }).catch(() => { /* silent */ }).finally(() => setLoading(false));
   }, [workspaceId, propertyId]);
 
   if (loading) return null;
 
-  // No calendar source connected → soft prompt
-  if (!hasSource && items.length === 0) {
+  // Determine if any reservation source is connected (iCal feed OR PMS sync at the property level)
+  const anySourceConnected = hasIcalSource || hasPmsLink;
+
+  // Empty state — varies based on what's connected
+  if (items.length === 0) {
+    if (!anySourceConnected) {
+      return (
+        <div style={{
+          background: 'var(--bp-card)', border: '1px dashed var(--bp-border)',
+          borderRadius: 12, padding: 24, marginBottom: 20, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCC5'}</div>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 6 }}>
+            Connect a booking calendar
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--bp-subtle)', maxWidth: 400, margin: '0 auto 14px', lineHeight: 1.5 }}>
+            See upcoming stays and auto-dispatch turnovers based on guest check-in and check-out dates.
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--bp-muted)' }}>
+            Open Property Settings → Booking calendar to add an iCal feed, or connect your PMS at the workspace level.
+          </div>
+        </div>
+      );
+    }
+    // PMS or iCal connected but no upcoming reservations
     return (
       <div style={{
-        background: 'var(--bp-card)', border: '1px dashed var(--bp-border)',
-        borderRadius: 12, padding: 24, marginBottom: 20, textAlign: 'center',
+        background: 'var(--bp-card)', border: '1px solid var(--bp-border)',
+        borderRadius: 12, padding: 18, marginBottom: 20, textAlign: 'center',
       }}>
-        <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCC5'}</div>
-        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 6 }}>
-          Connect your booking calendar
+        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 14, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 4 }}>
+          No upcoming stays
         </div>
-        <div style={{ fontSize: 13, color: 'var(--bp-subtle)', maxWidth: 400, margin: '0 auto 14px', lineHeight: 1.5 }}>
-          See upcoming stays and auto-dispatch turnovers based on guest check-in and check-out dates.
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--bp-muted)' }}>
-          Open Property Settings → Booking calendar to add your iCal feed.
+        <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>
+          {hasPmsLink ? `Synced via ${property.pmsSource ?? 'PMS'} — no reservations in the next 30 days.` : 'No reservations in the next 30 days.'}
         </div>
       </div>
     );
   }
-
-  if (items.length === 0) return null;
 
   const visible = showMore ? items : items.slice(0, 6);
 
@@ -521,7 +540,7 @@ function ReservationTimeline({ workspaceId, propertyId }: { workspaceId: string;
                 padding: '14px 16px',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ fontFamily: 'Fraunces, serif', fontSize: 17, fontWeight: 700, color: 'var(--bp-text)' }}>
                       {fmtDateRange(r.checkIn, r.checkOut)}
                     </div>
@@ -531,6 +550,16 @@ function ReservationTimeline({ workspaceId, propertyId }: { workspaceId: string;
                     {r.status === 'tentative' && (
                       <span style={{ fontSize: 9, fontWeight: 700, color: '#6B6560', background: 'rgba(0,0,0,0.06)', padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase' }}>
                         Blocked
+                      </span>
+                    )}
+                    {r.source && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700,
+                        color: r.source === 'track' || r.source === 'pms_sync' ? '#1565C0' : r.source === 'ical_import' ? '#7B1FA2' : '#6B6560',
+                        background: r.source === 'track' || r.source === 'pms_sync' ? '#E3F2FD' : r.source === 'ical_import' ? '#F3E5F5' : 'rgba(0,0,0,0.06)',
+                        padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase', letterSpacing: '0.03em',
+                      }}>
+                        {r.source === 'track' ? 'Track' : r.source === 'pms_sync' ? 'PMS' : r.source === 'ical_import' ? 'iCal' : r.source === 'manual_csv' ? 'CSV' : r.source}
                       </span>
                     )}
                   </div>
@@ -590,7 +619,8 @@ function ReservationTimeline({ workspaceId, propertyId }: { workspaceId: string;
   );
 }
 
-function ActivitySubPage({ dispatches, bookings, loading, workspaceId, propertyId }: { dispatches: WorkspaceDispatch[]; bookings: WorkspaceBooking[]; loading: boolean; workspaceId: string; propertyId: string }) {
+function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property }: { dispatches: WorkspaceDispatch[]; bookings: WorkspaceBooking[]; loading: boolean; workspaceId: string; property: Property }) {
+  const propertyId = property.id;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
@@ -634,7 +664,7 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId, propertyI
   if (items.length === 0) {
     return (
       <div>
-        <ReservationTimeline workspaceId={workspaceId} propertyId={propertyId} />
+        <ReservationTimeline workspaceId={workspaceId} property={property} />
         <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCCB'}</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No activity yet</div>
@@ -647,7 +677,7 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId, propertyI
   let lastDateLabel = '';
   return (
     <div>
-      <ReservationTimeline workspaceId={workspaceId} propertyId={propertyId} />
+      <ReservationTimeline workspaceId={workspaceId} property={property} />
       <style dangerouslySetInnerHTML={{ __html: PDV_CARD_STYLES }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {items.map(item => {
@@ -1420,7 +1450,7 @@ export default function PropertyDetailView({ workspaceId, property, plan: _plan,
   function renderContent() {
     switch (activePage) {
       case 'activity':
-        return <ActivitySubPage dispatches={dispatches} bookings={bookings} loading={loadingDispatches || loadingBookings} workspaceId={workspaceId} propertyId={currentProperty.id} />;
+        return <ActivitySubPage dispatches={dispatches} bookings={bookings} loading={loadingDispatches || loadingBookings} workspaceId={workspaceId} property={currentProperty} />;
       case 'jobs':
         return <JobsSubPage dispatches={dispatches} loading={loadingDispatches} workspaceId={workspaceId} propertyId={currentProperty.id} />;
       case 'bookings':
