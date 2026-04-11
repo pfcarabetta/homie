@@ -56,13 +56,34 @@ export async function fetchAPI<T>(
     },
   });
 
-  const body = (await res.json()) as ApiResponse<T>;
+  // Read the response body once as text, then try to parse as JSON.
+  // This way, HTML error pages (Railway 502, proxy 504, etc.) surface
+  // a meaningful HTTP-status error instead of a JSON parse error.
+  const rawText = await res.text();
+  let body: ApiResponse<T> | null = null;
+  let parseError: Error | null = null;
+  if (rawText) {
+    try {
+      body = JSON.parse(rawText) as ApiResponse<T>;
+    } catch (err) {
+      parseError = err instanceof Error ? err : new Error('Failed to parse response');
+    }
+  }
 
   if (!res.ok) {
+    const fallbackMsg = `Request failed with status ${res.status} ${res.statusText}`.trim();
     throw new ApiError(
-      body.error ?? `Request failed with status ${res.status}`,
+      body?.error ?? fallbackMsg,
       res.status,
-      body as ApiResponse<null>,
+      (body ?? { data: null, error: fallbackMsg, meta: {} }) as ApiResponse<null>,
+    );
+  }
+
+  if (!body) {
+    throw new ApiError(
+      parseError ? `Server returned a non-JSON response (${res.status}). ${parseError.message}` : `Empty response from server (${res.status})`,
+      res.status,
+      { data: null, error: 'invalid_response', meta: {} },
     );
   }
 
