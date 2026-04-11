@@ -4256,7 +4256,7 @@ router.post('/:workspaceId/scans/:scanId/coaching', requireWorkspace, requireWor
       .where(eq(propertyRooms.scanId, scanId));
 
     const { generateCoachingMessage } = await import('../services/property-scan-processor');
-    const message = await generateCoachingMessage({
+    const result = await generateCoachingMessage({
       scanId,
       currentRoom: current_room || 'kitchen',
       lastDetectedItems: last_detected_items || [],
@@ -4264,7 +4264,7 @@ router.post('/:workspaceId/scans/:scanId/coaching', requireWorkspace, requireWor
       roomsScanned: rooms.map(r => r.roomType.replace(/_/g, ' ')),
     });
 
-    res.json({ data: { message }, error: null, meta: {} });
+    res.json({ data: { message: result.message, roomProgress: result.roomProgress }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[POST /business/:id/scans/:scanId/coaching]');
     res.status(500).json({ data: null, error: 'Failed to generate coaching message', meta: {} });

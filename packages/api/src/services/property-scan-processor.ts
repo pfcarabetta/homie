@@ -11,6 +11,42 @@ import {
 import { decodeSerial, ageFromDate } from './serial-decoder';
 import logger from '../logger';
 
+/* ── Per-room target lists ────────────────────────────────────────────── */
+
+/**
+ * Item types we expect to find in each room. Used by the AI coach to guide
+ * PMs through a thorough walkthrough and to compute per-room capture progress.
+ * Only types from the vision schema are referenced.
+ */
+export const ROOM_TARGETS: Record<string, string[]> = {
+  kitchen: ['refrigerator', 'range', 'dishwasher', 'microwave', 'faucet', 'garbage_disposal'],
+  dining_room: ['light_fixture', 'ceiling_fan'],
+  living_room: ['ceiling_fan', 'light_fixture', 'fireplace', 'thermostat', 'smoke_detector'],
+  master_bedroom: ['ceiling_fan', 'light_fixture', 'smoke_detector'],
+  bedroom: ['ceiling_fan', 'light_fixture', 'smoke_detector'],
+  master_bathroom: ['toilet', 'shower', 'faucet', 'light_fixture'],
+  bathroom: ['toilet', 'shower', 'faucet', 'light_fixture'],
+  half_bathroom: ['toilet', 'faucet'],
+  laundry: ['washer', 'dryer'],
+  mechanical_room: ['water_heater', 'hvac_air_handler', 'electrical_panel', 'water_softener'],
+  garage: ['garage_door', 'ev_charger', 'water_meter', 'water_heater'],
+  office: ['ceiling_fan', 'light_fixture', 'smoke_detector'],
+  hallway: ['smoke_detector', 'co_detector', 'thermostat', 'fire_extinguisher'],
+  patio: ['ceiling_fan', 'gas_grill', 'fireplace'],
+  pool_area: ['pool', 'pool_heater', 'pool_pump', 'hot_tub'],
+  exterior_front: ['hvac_condenser', 'gas_meter', 'irrigation_controller'],
+  exterior_back: ['hvac_condenser', 'gas_meter'],
+  other: [],
+};
+
+function targetsForRoom(roomType: string): string[] {
+  return ROOM_TARGETS[roomType] ?? [];
+}
+
+function prettify(itemType: string): string {
+  return itemType.replace(/_/g, ' ');
+}
+
 /* ── Dedup helpers ─────────────────────────────────────────────────────── */
 
 /** Item types that are typically unique within a single room.
@@ -443,10 +479,22 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
   };
 }
 
+export interface RoomProgress {
+  roomType: string;
+  expected: string[];
+  captured: string[];
+  remaining: string[];
+}
+
+export interface CoachingResult {
+  message: string;
+  roomProgress: RoomProgress;
+}
+
 /**
  * Generate a short coaching message for the PM during a live walkthrough,
- * based on what the AI just found and what's still missing. Falls back to
- * a static prompt if Claude isn't available.
+ * based on what the AI just found and what's still missing. Uses per-room
+ * target lists to give specific guidance on what to capture next.
  */
 export async function generateCoachingMessage(args: {
   scanId: string;
@@ -454,53 +502,119 @@ export async function generateCoachingMessage(args: {
   lastDetectedItems: Array<{ itemType: string; brand: string | null; confidence: number }>;
   totalItemsSoFar: number;
   roomsScanned: string[];
-}): Promise<string> {
+}): Promise<CoachingResult> {
+  // Look up which target items have already been captured in this room for this scan.
+  const expected = targetsForRoom(args.currentRoom);
+  let captured: string[] = [];
+  try {
+    // Find the room rows for this scan with the matching room type
+    const roomRows = await db
+      .select({ id: propertyRooms.id })
+      .from(propertyRooms)
+      .where(eq(propertyRooms.scanId, args.scanId));
+    const matchingRoomIds = roomRows.map(r => r.id);
+
+    if (matchingRoomIds.length > 0) {
+      const items = await db
+        .select({ itemType: propertyInventoryItems.itemType, roomId: propertyInventoryItems.roomId })
+        .from(propertyInventoryItems)
+        .where(eq(propertyInventoryItems.scanId, args.scanId));
+      // Only count items in rooms that share the current room's type
+      const inRoom = items.filter(it => it.roomId && matchingRoomIds.includes(it.roomId));
+      const seen = new Set<string>();
+      for (const it of inRoom) {
+        if (expected.includes(it.itemType)) seen.add(it.itemType);
+      }
+      // Also include items from the just-detected batch (they may not be persisted yet)
+      for (const d of args.lastDetectedItems) {
+        if (expected.includes(d.itemType)) seen.add(d.itemType);
+      }
+      captured = Array.from(seen);
+    } else {
+      // No room row yet — fall back to last-detected only
+      captured = args.lastDetectedItems
+        .map(d => d.itemType)
+        .filter(t => expected.includes(t));
+    }
+  } catch (err) {
+    logger.warn({ err }, '[scan-processor] failed to compute room progress');
+  }
+
+  const remaining = expected.filter(t => !captured.includes(t));
+  const roomProgress: RoomProgress = {
+    roomType: args.currentRoom,
+    expected,
+    captured,
+    remaining,
+  };
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return defaultCoaching(args);
+    return { message: defaultCoaching(args, roomProgress), roomProgress };
   }
 
   try {
     const client = new Anthropic({ apiKey });
     const lastItemsLine = args.lastDetectedItems.length > 0
-      ? args.lastDetectedItems.map(i => `${i.brand ? i.brand + ' ' : ''}${i.itemType.replace(/_/g, ' ')}${i.confidence < 0.85 ? ' (needs label)' : ''}`).join(', ')
+      ? args.lastDetectedItems.map(i => `${i.brand ? i.brand + ' ' : ''}${prettify(i.itemType)}${i.confidence < 0.85 ? ' (needs label)' : ''}`).join(', ')
       : 'nothing yet';
+
+    const checklistLine = expected.length > 0
+      ? `\n- Expected items in this room: ${expected.map(prettify).join(', ')}\n- Captured so far: ${captured.length > 0 ? captured.map(prettify).join(', ') : 'none'}\n- Still missing: ${remaining.length > 0 ? remaining.map(prettify).join(', ') : 'none — room is complete!'}`
+      : '';
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 150,
-      system: `You are a friendly AI property inspector coaching a property manager through a phone-camera walkthrough. Keep responses to 1-2 short sentences, conversational, encouraging, and actionable. Never use technical jargon. Refer to yourself as "I" and the user informally.`,
+      max_tokens: 160,
+      system: `You are a friendly AI property inspector coaching a property manager through a phone-camera walkthrough. Keep responses to 1-2 short sentences, conversational, encouraging, and actionable. Never use technical jargon. Refer to yourself as "I" and the user informally. When you have a checklist of expected items, prioritize asking for the next missing one.`,
       messages: [{
         role: 'user',
         content: `Walkthrough state:
-- Currently in: ${args.currentRoom.replace(/_/g, ' ')}
+- Currently in: ${prettify(args.currentRoom)}
 - Just detected in this photo: ${lastItemsLine}
 - Total items found so far: ${args.totalItemsSoFar}
-- Rooms scanned: ${args.roomsScanned.join(', ') || 'none'}
+- Rooms scanned: ${args.roomsScanned.join(', ') || 'none'}${checklistLine}
 
-What's the next ONE specific thing I should ask them to capture? If I detected an appliance without a model number (low confidence), ask them to grab a close-up of the label. If the room looks scanned, suggest the next logical room. Keep it to 1-2 sentences max, conversational.`,
+What's the next ONE specific thing I should ask them to capture?
+- If something I just detected has low confidence, ask for a close-up of the label.
+- Otherwise, if there are still missing items in the checklist, ask for the most important one (water heater > electrical panel > major appliances > fixtures > safety devices).
+- If the room is complete, congratulate briefly and suggest moving on.
+Keep it to 1-2 sentences max, conversational.`,
       }],
     });
 
     const block = response.content.find(b => b.type === 'text');
-    if (block && block.type === 'text') return block.text.trim();
+    if (block && block.type === 'text') {
+      return { message: block.text.trim(), roomProgress };
+    }
   } catch (err) {
     logger.warn({ err }, '[scan-processor] coaching generation failed');
   }
 
-  return defaultCoaching(args);
+  return { message: defaultCoaching(args, roomProgress), roomProgress };
 }
 
-function defaultCoaching(args: { currentRoom: string; lastDetectedItems: Array<{ itemType: string; brand: string | null; confidence: number }>; totalItemsSoFar: number }): string {
+function defaultCoaching(
+  args: { currentRoom: string; lastDetectedItems: Array<{ itemType: string; brand: string | null; confidence: number }>; totalItemsSoFar: number },
+  progress: RoomProgress,
+): string {
   const lowConf = args.lastDetectedItems.find(i => i.confidence < 0.85);
   if (lowConf) {
-    return `I spotted a ${lowConf.itemType.replace(/_/g, ' ')} but I can't quite read the label. Can you get a close-up of the brand/model sticker?`;
+    return `I spotted a ${prettify(lowConf.itemType)} but I can't quite read the label. Can you get a close-up of the brand/model sticker?`;
+  }
+  // If there's a checklist with remaining items, prompt for the next one
+  if (progress.remaining.length > 0) {
+    const next = progress.remaining[0];
+    return `Nice. Next in the ${prettify(args.currentRoom)}: try to capture the ${prettify(next)}.`;
+  }
+  if (progress.expected.length > 0 && progress.remaining.length === 0) {
+    return `${prettify(args.currentRoom)} looks complete. Tap "Next" to move on when you're ready.`;
   }
   if (args.lastDetectedItems.length > 0) {
     const last = args.lastDetectedItems[args.lastDetectedItems.length - 1];
-    return `Got it — ${last.brand || ''} ${last.itemType.replace(/_/g, ' ')}. Keep going, or move to the next room when you're ready.`;
+    return `Got it — ${last.brand || ''} ${prettify(last.itemType)}. Keep going, or move to the next room when you're ready.`;
   }
-  return `I'm ready when you are. Walk me through the ${args.currentRoom.replace(/_/g, ' ')} and capture any appliances, fixtures, or systems you see.`;
+  return `I'm ready when you are. Walk me through the ${prettify(args.currentRoom)} and capture any appliances, fixtures, or systems you see.`;
 }
 
 /**

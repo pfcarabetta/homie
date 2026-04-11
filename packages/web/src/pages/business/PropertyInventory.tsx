@@ -215,6 +215,7 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
   const [toast, setToast] = useState<string | null>(null);
   const [flash, setFlash] = useState<{ items: string[]; key: number } | null>(null);
   const flashTimerRef = useRef<number | null>(null);
+  const [roomProgress, setRoomProgress] = useState<{ expected: string[]; captured: string[]; remaining: string[] } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -344,6 +345,13 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
             last_detected_items: newItems.map(i => ({ itemType: i.itemType, brand: i.brand, confidence: i.confidence })),
           });
           if (coachRes.data?.message) setCoaching(coachRes.data.message);
+          if (coachRes.data?.roomProgress) {
+            setRoomProgress({
+              expected: coachRes.data.roomProgress.expected,
+              captured: coachRes.data.roomProgress.captured,
+              remaining: coachRes.data.roomProgress.remaining,
+            });
+          }
         } catch { /* ignore */ }
       }
     } catch (err) {
@@ -386,8 +394,32 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
 
   function handleNextRoom() {
     setCurrentRoom(nextRoom);
+    setRoomProgress(null);
     showToast(`Now scanning: ${prettifyItemType(nextRoom)}`);
   }
+
+  // Whenever the current room changes, fetch fresh coaching + progress so the
+  // PM immediately sees the checklist for the new room without having to capture first.
+  useEffect(() => {
+    let cancelled = false;
+    businessService.generateScanCoaching(workspaceId, scanId, {
+      current_room: currentRoom,
+      last_detected_items: [],
+    })
+      .then(res => {
+        if (cancelled) return;
+        if (res.data?.message) setCoaching(res.data.message);
+        if (res.data?.roomProgress) {
+          setRoomProgress({
+            expected: res.data.roomProgress.expected,
+            captured: res.data.roomProgress.captured,
+            remaining: res.data.roomProgress.remaining,
+          });
+        }
+      })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [workspaceId, scanId, currentRoom]);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif", color: '#fff' }}>
@@ -459,6 +491,46 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
             <span style={{ fontSize: 16, marginRight: 6 }}>{'\uD83E\uDD16'}</span>
             {coaching}
           </div>
+
+          {/* Per-room checklist progress */}
+          {roomProgress && roomProgress.expected.length > 0 && (
+            <div style={{
+              marginTop: 8,
+              background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+              borderRadius: 12, padding: '10px 14px',
+              border: '1px solid rgba(255,255,255,0.1)',
+            }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: 8, gap: 8,
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Checklist
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: roomProgress.remaining.length === 0 ? '#5DDB9D' : '#fff' }}>
+                  {roomProgress.captured.length} of {roomProgress.expected.length}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {roomProgress.expected.map(t => {
+                  const done = roomProgress.captured.includes(t);
+                  return (
+                    <span key={t} style={{
+                      fontSize: 10, fontWeight: 600,
+                      padding: '3px 9px', borderRadius: 100,
+                      background: done ? 'rgba(93,219,157,0.22)' : 'rgba(255,255,255,0.08)',
+                      color: done ? '#5DDB9D' : 'rgba(255,255,255,0.7)',
+                      border: `1px solid ${done ? 'rgba(93,219,157,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                      textTransform: 'capitalize',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {done ? '✓ ' : ''}{prettifyItemType(t)}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Center flash — checkmark + detected item names when items are found */}

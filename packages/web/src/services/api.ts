@@ -1326,7 +1326,15 @@ export const businessService = {
   getMaintenanceFlags: (workspaceId: string, propertyId: string) =>
     fetchAPI<MaintenanceFlag[]>(`/api/v1/business/${workspaceId}/properties/${propertyId}/maintenance-flags`),
   generateScanCoaching: (workspaceId: string, scanId: string, body: { current_room: string; last_detected_items: Array<{ itemType: string; brand: string | null; confidence: number }> }) =>
-    fetchAPI<{ message: string }>(`/api/v1/business/${workspaceId}/scans/${scanId}/coaching`, {
+    fetchAPI<{
+      message: string;
+      roomProgress: {
+        roomType: string;
+        expected: string[];
+        captured: string[];
+        remaining: string[];
+      };
+    }>(`/api/v1/business/${workspaceId}/scans/${scanId}/coaching`, {
       method: 'POST', body: JSON.stringify(body),
     }),
   getScanChanges: (workspaceId: string, scanId: string) =>
