@@ -524,7 +524,7 @@ export function EditPropertyModal({ workspaceId, property, onClose, onUpdated, o
 
 /* ── Properties Tab ─────────────────────────────────────────────────────── */
 
-export default function PropertiesTab({ workspaceId, role, plan, onSelectProperty, editPropertyId, onEditHandled }: { workspaceId: string; role: string; plan: string; onSelectProperty?: (p: Property) => void; editPropertyId?: string | null; onEditHandled?: () => void }) {
+export default function PropertiesTab({ workspaceId, role, plan, onSelectProperty, onEditProperty, editPropertyId, onEditHandled }: { workspaceId: string; role: string; plan: string; onSelectProperty?: (p: Property) => void; onEditProperty?: (p: Property) => void; editPropertyId?: string | null; onEditHandled?: () => void }) {
   const { pricing } = usePricing();
   const PLAN_TIERS_ORDERED = getPlanTiersOrdered(pricing);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -581,10 +581,14 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
   useEffect(() => {
     if (editPropertyId && properties.length > 0) {
       const p = properties.find(pr => pr.id === editPropertyId);
-      if (p) setEditingProperty(p);
+      if (p) {
+        if (onEditProperty) onEditProperty(p);
+        else if (onSelectProperty) onSelectProperty(p);
+        else setEditingProperty(p);
+      }
       onEditHandled?.();
     }
-  }, [editPropertyId, properties, onEditHandled]);
+  }, [editPropertyId, properties, onEditHandled, onEditProperty, onSelectProperty]);
 
   const canEdit = role === 'admin' || role === 'coordinator';
   const propertyLimit = getPlanPropertyLimit(plan, pricing);
@@ -764,7 +768,12 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                 </div>
                 <div className="bp-prop-actions" style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
                   {canEdit && (
-                    <button onClick={(e) => { e.stopPropagation(); setEditingProperty(p); }} style={{
+                    <button onClick={(e) => {
+                      e.stopPropagation();
+                      if (onEditProperty) onEditProperty(p);
+                      else if (onSelectProperty) onSelectProperty(p);
+                      else setEditingProperty(p);
+                    }} style={{
                       padding: '4px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff',
                       fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 500,
                     }}>Edit</button>

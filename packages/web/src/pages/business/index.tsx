@@ -90,6 +90,7 @@ export default function BusinessPortal() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [selectedPropertyInitialPage, setSelectedPropertyInitialPage] = useState<'activity' | 'jobs' | 'bookings' | 'calendar' | 'providers' | 'property' | undefined>(undefined);
   const [editPropertyId, setEditPropertyId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('bp_sidebar_collapsed') === 'true';
@@ -261,7 +262,9 @@ export default function BusinessPortal() {
             workspaceId={workspace.id}
             property={selectedProperty}
             plan={workspace.plan}
-            onBack={() => { setSelectedProperty(null); setTab('properties'); }}
+            initialPage={selectedPropertyInitialPage}
+            onBack={() => { setSelectedProperty(null); setSelectedPropertyInitialPage(undefined); setTab('properties'); }}
+            onPropertyDeleted={() => { setSelectedProperty(null); setSelectedPropertyInitialPage(undefined); setTab('properties'); }}
           />
         </div>
       </BusinessLayout>
@@ -375,7 +378,15 @@ export default function BusinessPortal() {
         <ScorecardsTab workspaceId={workspace.id} plan={workspace.plan} />
       )}
       {workspace && tab === 'properties' && (
-        <PropertiesTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} onSelectProperty={setSelectedProperty} editPropertyId={editPropertyId} onEditHandled={() => setEditPropertyId(null)} />
+        <PropertiesTab
+          workspaceId={workspace.id}
+          role={workspace.user_role}
+          plan={workspace.plan}
+          onSelectProperty={(p) => { setSelectedPropertyInitialPage(undefined); setSelectedProperty(p); }}
+          onEditProperty={(p) => { setSelectedPropertyInitialPage('property'); setSelectedProperty(p); }}
+          editPropertyId={editPropertyId}
+          onEditHandled={() => setEditPropertyId(null)}
+        />
       )}
       {workspace && tab === 'vendors' && (
         <VendorsTab workspaceId={workspace.id} role={workspace.user_role} plan={workspace.plan} />

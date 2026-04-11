@@ -1308,6 +1308,13 @@ export const businessService = {
     fetchAPI<Array<{ id: string; changeType: string; description: string; severity: string; createdAt: string }>>(
       `/api/v1/business/${workspaceId}/scans/${scanId}/changes`,
     ),
+  getScanSourcePaths: (workspaceId: string, propertyId: string) =>
+    fetchAPI<{ paths: string[] }>(`/api/v1/business/${workspaceId}/properties/${propertyId}/scan-sources`),
+  applyInventoryToSettings: (workspaceId: string, propertyId: string) =>
+    fetchAPI<{ updatedPaths: string[]; count: number }>(
+      `/api/v1/business/${workspaceId}/properties/${propertyId}/inventory/apply-to-settings`,
+      { method: 'POST' },
+    ),
 
   // CSV Export/Import
   exportPropertiesCsv: (workspaceId: string) =>

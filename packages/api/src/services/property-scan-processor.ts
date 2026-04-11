@@ -75,7 +75,7 @@ Rules:
   * 0.65-0.80 if you can identify the item type but not the brand
   * 0.40-0.65 if you're guessing
 - If you can read a model number or serial number from a label, include it verbatim. Do NOT make up model numbers.
-- Categories: appliance (refrigerator, range, dishwasher, microwave, washer, dryer), fixture (faucet, toilet, shower, sink, ceiling fan, light fixture), system (water heater, HVAC, electrical panel, thermostat), safety (smoke detector, CO detector, fire extinguisher), amenity (pool, hot tub, grill, fireplace), infrastructure (gas meter, water meter, irrigation controller).
+- Categories: appliance (refrigerator, range, dishwasher, microwave, washer, dryer), fixture (faucet, toilet, shower, sink, ceiling fan, light fixture), system (water heater, HVAC, electrical panel, thermostat, generator, solar system, EV charger, water softener), safety (smoke detector, CO detector, fire extinguisher), amenity (pool, pool heater, pool pump, hot tub, grill, fireplace), infrastructure (gas meter, water meter, irrigation controller, garage door).
 - Return ONLY valid JSON. No markdown code fences, no commentary.`;
 
 function buildUserPrompt(roomHint?: string, isLabelPhoto?: boolean): string {
@@ -95,7 +95,7 @@ function buildUserPrompt(roomHint?: string, isLabelPhoto?: boolean): string {
   "items": [
     {
       "category": "appliance | fixture | system | safety | amenity | infrastructure",
-      "item_type": "refrigerator | range | dishwasher | microwave | washer | dryer | water_heater | hvac_condenser | hvac_air_handler | electrical_panel | thermostat | faucet | toilet | shower | sink | ceiling_fan | light_fixture | smoke_detector | co_detector | fire_extinguisher | pool | hot_tub | gas_grill | fireplace | gas_meter | water_meter | irrigation_controller | garbage_disposal | other",
+      "item_type": "refrigerator | range | dishwasher | microwave | washer | dryer | water_heater | hvac_condenser | hvac_air_handler | electrical_panel | thermostat | generator | solar_system | ev_charger | water_softener | faucet | toilet | shower | sink | ceiling_fan | light_fixture | smoke_detector | co_detector | fire_extinguisher | pool | pool_heater | pool_pump | hot_tub | gas_grill | fireplace | gas_meter | water_meter | irrigation_controller | garage_door | garbage_disposal | other",
       "brand": "Samsung | null",
       "brand_source": "label_ocr | visual_classification",
       "model_number": "RF28R7351SR | null",
@@ -241,8 +241,24 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
       item.brand_source === 'label_ocr' || decoded ? 'label_ocr' : 'visual_classification';
 
     const maintenanceFlags: string[] = [];
-    if (ageYears !== null && ageYears >= 9 && /water[ _-]?heater/i.test(item.item_type)) {
-      maintenanceFlags.push('approaching_end_of_life');
+    if (ageYears !== null) {
+      // Rough end-of-life thresholds by category
+      const eolByType: Record<string, number> = {
+        water_heater: 10,
+        hvac_condenser: 15,
+        hvac_air_handler: 15,
+        dishwasher: 9,
+        refrigerator: 13,
+        washer: 11,
+        dryer: 13,
+        garbage_disposal: 12,
+        pool_heater: 10,
+        pool_pump: 10,
+      };
+      const threshold = eolByType[item.item_type];
+      if (threshold && ageYears >= threshold - 1) {
+        maintenanceFlags.push('approaching_end_of_life');
+      }
     }
 
     const newItem: NewPropertyInventoryItem = {
@@ -403,9 +419,11 @@ export async function detectChanges(args: {
 }
 
 /**
- * Mark a scan as complete and compute final summary stats.
+ * Mark a scan as complete and compute final summary stats. Also pushes
+ * scan-derived equipment data into the property settings JSONB (filling
+ * empty fields only).
  */
-export async function completeScan(scanId: string): Promise<void> {
+export async function completeScan(scanId: string): Promise<{ settingsUpdatedPaths: string[] }> {
   const [scan] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
   if (!scan) throw new Error('Scan not found');
 
@@ -420,4 +438,11 @@ export async function completeScan(scanId: string): Promise<void> {
       durationSeconds: scan.createdAt ? Math.round((Date.now() - scan.createdAt.getTime()) / 1000) : null,
     })
     .where(eq(propertyScans.id, scanId));
+
+  // Push scan results into property.details (Equipment & Systems settings).
+  // This is best-effort — failures are logged but won't break scan completion.
+  const { applyScanToPropertySettings } = await import('./scan-to-settings-mapper');
+  const settingsUpdatedPaths = await applyScanToPropertySettings(scan.propertyId);
+
+  return { settingsUpdatedPaths };
 }

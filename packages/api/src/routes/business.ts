@@ -4301,9 +4301,9 @@ router.post('/:workspaceId/scans/:scanId/complete', requireWorkspace, requireWor
       return;
     }
     const { completeScan } = await import('../services/property-scan-processor');
-    await completeScan(scanId);
+    const { settingsUpdatedPaths } = await completeScan(scanId);
     const [updated] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
-    res.json({ data: updated, error: null, meta: {} });
+    res.json({ data: updated, error: null, meta: { settingsUpdatedPaths } });
   } catch (err) {
     logger.error({ err }, '[POST /business/:id/scans/:scanId/complete]');
     res.status(500).json({ data: null, error: 'Failed to complete scan', meta: {} });
@@ -4368,6 +4368,70 @@ router.get('/:workspaceId/properties/:propertyId/inventory', requireWorkspace, a
   } catch (err) {
     logger.error({ err }, '[GET /business/:id/properties/:propertyId/inventory]');
     res.status(500).json({ data: null, error: 'Failed to load inventory', meta: {} });
+  }
+});
+
+// GET /:workspaceId/properties/:propertyId/scan-sources —
+// Returns a map of dotted-path settings fields that the property's scan
+// inventory could fill (i.e. fields whose values came from or could come
+// from a scan). Used by the Equipment & Systems panel to show "scanned"
+// badges next to fields. The map only lists paths the scan has data for.
+router.get('/:workspaceId/properties/:propertyId/scan-sources', requireWorkspace, async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const items = await db.select().from(propertyInventoryItems)
+      .where(eq(propertyInventoryItems.propertyId, propertyId));
+    const rooms = await db.select().from(propertyRooms)
+      .where(eq(propertyRooms.propertyId, propertyId));
+
+    const { buildSettingsPatchFromInventory } = await import('../services/scan-to-settings-mapper');
+    const patch = buildSettingsPatchFromInventory(items, rooms);
+
+    // Flatten the patch into a list of dotted paths
+    const paths: string[] = [];
+    for (const [section, sectionVal] of Object.entries(patch)) {
+      if (!sectionVal || typeof sectionVal !== 'object') continue;
+      for (const [field, fieldVal] of Object.entries(sectionVal)) {
+        if (fieldVal === undefined || fieldVal === null || fieldVal === '') continue;
+        if (section === 'appliances' && typeof fieldVal === 'object') {
+          for (const [subField, subVal] of Object.entries(fieldVal as Record<string, unknown>)) {
+            if (subVal !== undefined && subVal !== null && subVal !== '') {
+              paths.push(`appliances.${field}.${subField}`);
+            }
+          }
+        } else {
+          paths.push(`${section}.${field}`);
+        }
+      }
+    }
+
+    res.json({ data: { paths }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/:propertyId/scan-sources]');
+    res.status(500).json({ data: null, error: 'Failed to load scan sources', meta: {} });
+  }
+});
+
+// POST /:workspaceId/properties/:propertyId/inventory/apply-to-settings —
+// re-merge the property's confirmed inventory into the property settings
+// (Equipment & Systems). Useful after the PM confirms flagged items late.
+router.post('/:workspaceId/properties/:propertyId/inventory/apply-to-settings', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const { applyScanToPropertySettings } = await import('../services/scan-to-settings-mapper');
+    const updatedPaths = await applyScanToPropertySettings(propertyId);
+    res.json({ data: { updatedPaths, count: updatedPaths.length }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/properties/:propertyId/inventory/apply-to-settings]');
+    res.status(500).json({ data: null, error: 'Failed to apply scan results to settings', meta: {} });
   }
 });
 

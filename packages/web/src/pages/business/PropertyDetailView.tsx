@@ -3,20 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { businessService, jobService, estimateService, type Property, type WorkspaceDispatch, type WorkspaceBooking, type PreferredVendor, type Reservation, type ProviderResponseItem, type CostEstimate, type CalendarSource } from '@/services/api';
 import { PropertyScanCard, ScanCaptureModal, PropertyInventoryView } from './PropertyInventory';
 import { O, G, D, W, PROPERTY_TYPES, VENDOR_CATEGORIES, MiniCalendar, cleanPrice, renderBold, timeAgo } from './constants';
-import { EditPropertyModal } from './PropertiesTab';
+import PropertySubPage from './PropertySubPage';
 import { AddVendorModal, EditVendorModal, groupVendors, type GroupedVendor } from './VendorsTab';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
-type SubPage = 'activity' | 'jobs' | 'bookings' | 'calendar' | 'providers' | 'settings';
+type SubPage = 'activity' | 'jobs' | 'bookings' | 'calendar' | 'providers' | 'property';
 
 interface PropertyDetailViewProps {
   workspaceId: string;
   property: Property;
   plan: string;
   onBack: () => void;
+  onPropertyDeleted?: (id: string) => void;
+  initialPage?: SubPage;
 }
 
 /* ── Icons ──────────────────────────────────────────────────────────────── */
@@ -37,7 +39,7 @@ function NavIcon({ name }: { name: SubPage }) {
     bookings: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="7" /><path d="M7 10l2 2 4-4" /></svg>,
     calendar: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="3" y="4" width="14" height="14" rx="2" /><path d="M3 8h14M7 2v4M13 2v4" /></svg>,
     providers: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="7" cy="7" r="3" /><path d="M2 17c0-3 2.5-5 5-5s5 2 5 5" /><circle cx="14.5" cy="6" r="2" /><path d="M18 15c0-2-1.5-3.5-3.5-3.5" /></svg>,
-    settings: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="3" /><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4" /></svg>,
+    property: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l7-6 7 6v9a1 1 0 0 1-1 1h-3v-6h-6v6H4a1 1 0 0 1-1-1V9z" /></svg>,
   };
   return icons[name] || null;
 }
@@ -50,7 +52,7 @@ const NAV_ITEMS: { id: SubPage; label: string }[] = [
   { id: 'bookings', label: 'Bookings' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'providers', label: 'Providers' },
-  { id: 'settings', label: 'Property Settings' },
+  { id: 'property', label: 'Property' },
 ];
 
 /* ── Status badge helper ────────────────────────────────────────────────── */
@@ -926,6 +928,7 @@ function CalendarSubPage({ workspaceId, propertyId }: { workspaceId: string; pro
 
   return (
     <div>
+      <CalendarSourceCard workspaceId={workspaceId} propertyId={propertyId} />
       <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 16 }}>
         Reservations
       </div>
@@ -1238,208 +1241,10 @@ function CalendarSourceCard({ workspaceId, propertyId }: { workspaceId: string; 
   );
 }
 
-function SettingsSubPage({ property, workspaceId, onPropertyUpdated }: { property: Property; workspaceId: string; onPropertyUpdated?: (p: Property) => void }) {
-  const [editing, setEditing] = useState(false);
-  const infoRow = (label: string, value: string | number | null | undefined) => {
-    if (value == null || value === '' || value === 0) return null;
-    return (
-      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--bp-border)' }}>
-        <span style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>{label}</span>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--bp-text)', textAlign: 'right', maxWidth: '60%' }}>{value}</span>
-      </div>
-    );
-  };
-
-  const sectionHeader = (title: string, icon: string) => (
-    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 10, marginTop: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span>{icon}</span> {title}
-    </div>
-  );
-
-  const card = (children: React.ReactNode) => (
-    <div style={{ background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10, padding: '4px 16px' }}>
-      {children}
-    </div>
-  );
-
-  const d = property.details;
-  const dx = d as Record<string, unknown> | null;
-
-  return (
-    <div>
-      <CalendarSourceCard workspaceId={workspaceId} propertyId={property.id} />
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 600, color: 'var(--bp-text)' }}>
-          Property Details
-        </div>
-        <button onClick={() => setEditing(true)} style={{
-          padding: '6px 16px', borderRadius: 8, border: '1px solid var(--bp-border)',
-          background: 'var(--bp-card)', color: 'var(--bp-text)', cursor: 'pointer',
-          fontSize: 13, fontWeight: 500,
-        }}>
-          Edit
-        </button>
-      </div>
-
-      {/* General */}
-      {card(<>
-        {infoRow('Property Type', PROPERTY_TYPES[property.propertyType] || property.propertyType)}
-        {infoRow('Address', [property.address, property.city, property.state, property.zipCode].filter(Boolean).join(', '))}
-        {infoRow('Bedrooms', property.bedrooms)}
-        {infoRow('Bathrooms', property.bathrooms)}
-        {infoRow('Square Feet', property.sqft ? property.sqft.toLocaleString() : null)}
-        {infoRow('Unit Count', property.unitCount > 1 ? property.unitCount : null)}
-        {infoRow('Status', property.active ? 'Active' : 'Inactive')}
-      </>)}
-
-      {/* Bed Configuration */}
-      {property.beds && property.beds.length > 0 && (<>
-        {sectionHeader('Bed Configuration', '🛏️')}
-        {card(<>
-          {property.beds.map((b, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < property.beds!.length - 1 ? '1px solid var(--bp-border)' : 'none' }}>
-              <span style={{ fontSize: 13, color: 'var(--bp-subtle)', textTransform: 'capitalize' }}>{b.type.replace('_', ' ')}</span>
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--bp-text)' }}>x{b.count}</span>
-            </div>
-          ))}
-        </>)}
-      </>)}
-
-      {/* HVAC */}
-      {d?.hvac && Object.values(d.hvac).some(Boolean) && (<>
-        {sectionHeader('HVAC / Climate', '🌡️')}
-        {card(<>
-          {infoRow('AC Type', d.hvac.acType)}
-          {infoRow('AC Brand', d.hvac.acBrand)}
-          {infoRow('AC Model', d.hvac.acModel)}
-          {infoRow('AC Age', d.hvac.acAge)}
-          {infoRow('Heating Type', d.hvac.heatingType)}
-          {infoRow('Heating Brand', d.hvac.heatingBrand)}
-          {infoRow('Heating Model', d.hvac.heatingModel)}
-          {infoRow('Thermostat Brand', d.hvac.thermostatBrand)}
-          {infoRow('Thermostat Model', d.hvac.thermostatModel)}
-          {infoRow('Filter Size', d.hvac.filterSize)}
-        </>)}
-      </>)}
-
-      {/* Water Heater */}
-      {d?.waterHeater && Object.values(d.waterHeater).some(v => !!v) && (<>
-        {sectionHeader('Water Heater', '🔥')}
-        {card(<>
-          {infoRow('Type', d.waterHeater.type)}
-          {infoRow('Brand', d.waterHeater.brand)}
-          {infoRow('Model', d.waterHeater.model)}
-          {infoRow('Age', d.waterHeater.age)}
-          {infoRow('Fuel', d.waterHeater.fuel)}
-          {infoRow('Capacity', d.waterHeater.capacity)}
-          {infoRow('Location', d.waterHeater.location)}
-        </>)}
-      </>)}
-
-      {/* Appliances */}
-      {d?.appliances && Object.values(d.appliances).some(Boolean) && (<>
-        {sectionHeader('Appliances', '🍳')}
-        {card(<>
-          {d.appliances.refrigerator && (d.appliances.refrigerator.brand || d.appliances.refrigerator.model) && infoRow('Refrigerator', [d.appliances.refrigerator.brand, d.appliances.refrigerator.model].filter(Boolean).join(' — '))}
-          {d.appliances.washer && (d.appliances.washer.brand || d.appliances.washer.model) && infoRow('Washer', [d.appliances.washer.brand, d.appliances.washer.model].filter(Boolean).join(' — '))}
-          {d.appliances.dryer && (d.appliances.dryer.brand || d.appliances.dryer.model) && infoRow('Dryer', [d.appliances.dryer.brand, d.appliances.dryer.model, d.appliances.dryer.fuel].filter(Boolean).join(' — '))}
-          {d.appliances.dishwasher && (d.appliances.dishwasher.brand || d.appliances.dishwasher.model) && infoRow('Dishwasher', [d.appliances.dishwasher.brand, d.appliances.dishwasher.model].filter(Boolean).join(' — '))}
-          {d.appliances.oven && (d.appliances.oven.brand || d.appliances.oven.model) && infoRow('Oven', [d.appliances.oven.brand, d.appliances.oven.model, d.appliances.oven.fuel].filter(Boolean).join(' — '))}
-          {d.appliances.disposal?.brand && infoRow('Disposal', d.appliances.disposal.brand)}
-          {d.appliances.microwave && (d.appliances.microwave.brand || d.appliances.microwave.type) && infoRow('Microwave', [d.appliances.microwave.brand, d.appliances.microwave.type].filter(Boolean).join(' — '))}
-        </>)}
-      </>)}
-
-      {/* Plumbing */}
-      {d?.plumbing && Object.values(d.plumbing).some(Boolean) && (<>
-        {sectionHeader('Plumbing', '🚿')}
-        {card(<>
-          {infoRow('Kitchen Faucet', d.plumbing.kitchenFaucetBrand)}
-          {infoRow('Bathroom Faucet', d.plumbing.bathroomFaucetBrand)}
-          {infoRow('Toilet Brand', d.plumbing.toiletBrand)}
-          {infoRow('Water Softener', d.plumbing.waterSoftener)}
-          {infoRow('Septic / Sewer', d.plumbing.septicOrSewer)}
-          {infoRow('Main Shutoff', d.plumbing.mainShutoffLocation)}
-        </>)}
-      </>)}
-
-      {/* Electrical */}
-      {d?.electrical && Object.values(d.electrical).some(Boolean) && (<>
-        {sectionHeader('Electrical', '💡')}
-        {card(<>
-          {infoRow('Breaker Box', d.electrical.breakerBoxLocation)}
-          {infoRow('Panel Amperage', d.electrical.panelAmperage)}
-          {infoRow('Generator', d.electrical.hasGenerator ? (d.electrical.generatorType || 'Yes') : null)}
-          {infoRow('Solar', d.electrical.hasSolar ? (d.electrical.solarSystem || 'Yes') : null)}
-          {infoRow('EV Charger', d.electrical.hasEvCharger ? (d.electrical.evChargerBrand || 'Yes') : null)}
-        </>)}
-      </>)}
-
-      {/* Pool / Spa */}
-      {(() => { const pool = (dx?.poolSpa ?? dx?.pool) as Record<string, string> | undefined; return pool && Object.values(pool).some(Boolean) ? (<>
-        {sectionHeader('Pool / Spa', '🏊')}
-        {card(<>
-          {infoRow('Pool Type', pool.poolType || pool.type)}
-          {infoRow('Heating', pool.heatingType || pool.heating)}
-          {infoRow('Equipment', pool.equipment)}
-          {infoRow('Hot Tub', pool.hotTubBrand)}
-        </>)}
-      </>) : null; })()}
-
-      {/* Exterior */}
-      {(() => { const ext = dx?.exterior as Record<string, string> | undefined; return ext && Object.values(ext).some(Boolean) ? (<>
-        {sectionHeader('Exterior', '🏡')}
-        {card(<>
-          {infoRow('Roof Type', ext.roofType)}
-          {infoRow('Roof Age', ext.roofAge)}
-          {infoRow('Siding', ext.sidingMaterial || ext.siding)}
-          {infoRow('Fence', ext.fenceMaterial || ext.fence)}
-          {infoRow('Garage Door', ext.garageDoorBrand || ext.garageDoor)}
-          {infoRow('Irrigation', ext.irrigationBrand || ext.irrigation)}
-        </>)}
-      </>) : null; })()}
-
-      {/* Access */}
-      {(() => { const acc = dx?.access as Record<string, string> | undefined; return acc && Object.values(acc).some(Boolean) ? (<>
-        {sectionHeader('Access', '🔑')}
-        {card(<>
-          {infoRow('Lockbox Code', acc.lockboxCode || acc.lockbox)}
-          {infoRow('Gate Code', acc.gateCode || acc.gate)}
-          {infoRow('Alarm', [acc.alarmBrand, acc.alarmCode || acc.alarm].filter(Boolean).join(' — ') || null)}
-          {infoRow('WiFi Network', acc.wifiNetwork || acc.wifi)}
-          {infoRow('WiFi Password', acc.wifiPassword)}
-        </>)}
-      </>) : null; })()}
-
-      {/* Notes */}
-      {property.notes && (<>
-        {sectionHeader('Notes', '📝')}
-        <div style={{
-          background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 10,
-          padding: 16, fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
-        }}>
-          {property.notes}
-        </div>
-      </>)}
-
-      {editing && (
-        <EditPropertyModal
-          workspaceId={workspaceId}
-          property={property}
-          onClose={() => setEditing(false)}
-          onUpdated={(updated) => { setEditing(false); onPropertyUpdated?.(updated); }}
-          onDeleted={() => { setEditing(false); }}
-        />
-      )}
-    </div>
-  );
-}
-
 /* ── Main Component ─────────────────────────────────────────────────────── */
 
-export default function PropertyDetailView({ workspaceId, property, plan, onBack }: PropertyDetailViewProps) {
-  const [activePage, setActivePage] = useState<SubPage>('activity');
+export default function PropertyDetailView({ workspaceId, property, plan, onBack, onPropertyDeleted, initialPage }: PropertyDetailViewProps) {
+  const [activePage, setActivePage] = useState<SubPage>(initialPage ?? 'activity');
   const [currentProperty, setCurrentProperty] = useState<Property>(property);
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
   const [bookings, setBookings] = useState<WorkspaceBooking[]>([]);
@@ -1507,8 +1312,14 @@ export default function PropertyDetailView({ workspaceId, property, plan, onBack
             if (res.data) setVendors(res.data.filter(v => v.propertyId === currentProperty.id || v.propertyId === null));
           }).catch(() => {});
         }} />;
-      case 'settings':
-        return <SettingsSubPage property={currentProperty} workspaceId={workspaceId} onPropertyUpdated={(updated) => { setCurrentProperty(updated); }} />;
+      case 'property':
+        return <PropertySubPage
+          workspaceId={workspaceId}
+          property={currentProperty}
+          plan={plan}
+          onPropertyUpdated={(updated) => { setCurrentProperty(updated); }}
+          onDeleted={() => { onPropertyDeleted?.(currentProperty.id); onBack(); }}
+        />;
     }
   }
 
