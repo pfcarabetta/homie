@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { db } from '../db';
 import {
   propertyScans,
@@ -507,35 +507,38 @@ export async function generateCoachingMessage(args: {
   const expected = targetsForRoom(args.currentRoom);
   let captured: string[] = [];
   try {
-    // Find the room rows for this scan with the matching room type
-    const roomRows = await db
+    // Find rooms for this scan whose type matches the current room.
+    // Without the roomType filter, items from a different room (e.g. dining)
+    // would incorrectly count toward the current room's checklist (e.g. living).
+    const matchingRooms = await db
       .select({ id: propertyRooms.id })
       .from(propertyRooms)
-      .where(eq(propertyRooms.scanId, args.scanId));
-    const matchingRoomIds = roomRows.map(r => r.id);
+      .where(and(
+        eq(propertyRooms.scanId, args.scanId),
+        eq(propertyRooms.roomType, args.currentRoom),
+      ));
+    const matchingRoomIds = new Set(matchingRooms.map(r => r.id));
 
-    if (matchingRoomIds.length > 0) {
+    const seen = new Set<string>();
+
+    if (matchingRoomIds.size > 0) {
       const items = await db
         .select({ itemType: propertyInventoryItems.itemType, roomId: propertyInventoryItems.roomId })
         .from(propertyInventoryItems)
         .where(eq(propertyInventoryItems.scanId, args.scanId));
-      // Only count items in rooms that share the current room's type
-      const inRoom = items.filter(it => it.roomId && matchingRoomIds.includes(it.roomId));
-      const seen = new Set<string>();
-      for (const it of inRoom) {
-        if (expected.includes(it.itemType)) seen.add(it.itemType);
+      for (const it of items) {
+        if (it.roomId && matchingRoomIds.has(it.roomId) && expected.includes(it.itemType)) {
+          seen.add(it.itemType);
+        }
       }
-      // Also include items from the just-detected batch (they may not be persisted yet)
-      for (const d of args.lastDetectedItems) {
-        if (expected.includes(d.itemType)) seen.add(d.itemType);
-      }
-      captured = Array.from(seen);
-    } else {
-      // No room row yet — fall back to last-detected only
-      captured = args.lastDetectedItems
-        .map(d => d.itemType)
-        .filter(t => expected.includes(t));
     }
+
+    // Also include items from the just-detected batch (they belong to the
+    // current room by definition, even if not persisted yet).
+    for (const d of args.lastDetectedItems) {
+      if (expected.includes(d.itemType)) seen.add(d.itemType);
+    }
+    captured = Array.from(seen);
   } catch (err) {
     logger.warn({ err }, '[scan-processor] failed to compute room progress');
   }
