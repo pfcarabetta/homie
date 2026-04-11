@@ -1,80 +1,153 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { businessService, type WorkspaceDetail, type DashboardData, type SeasonalSuggestion, type Property, type TurnoverItem } from '@/services/api';
+import { businessService, type WorkspaceDetail, type DashboardData, type SeasonalSuggestion, type Property, type DashboardReservation, type DashboardReservationRun } from '@/services/api';
 import { trendArrow, renderBold, O, G, D, W, type Tab } from './constants';
 
-function TurnoversWidget({ workspaceId }: { workspaceId: string }) {
-  const [items, setItems] = useState<TurnoverItem[]>([]);
+function ReservationsWidget({ workspaceId }: { workspaceId: string }) {
+  const [data, setData] = useState<{ occupied: DashboardReservation[]; checkouts: DashboardReservation[]; checkins: DashboardReservation[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    businessService.getDashboardTurnovers(workspaceId).then(res => {
-      if (res.data) setItems(res.data.items);
+    businessService.getDashboardReservations(workspaceId).then(res => {
+      if (res.data) setData(res.data);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [workspaceId]);
 
-  if (loading || items.length === 0) return null;
+  if (loading) return null;
+  if (!data) return null;
 
-  function fmtCheckout(iso: string) {
+  const totalCount = data.occupied.length + data.checkouts.length + data.checkins.length;
+  if (totalCount === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: 0 }}>Reservations this week</h4>
+        <span style={{ fontSize: 11, color: '#9B9490' }}>{totalCount} active</span>
+      </div>
+      <div className="bp-res-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <style>{`@media (max-width: 1100px) { .bp-res-grid { grid-template-columns: 1fr !important; } }`}</style>
+        <ReservationCard title="Currently occupied" icon={'\uD83C\uDFE0'} accent={G} items={data.occupied} variant="occupied" />
+        <ReservationCard title="Check-outs" icon={'\u27A1\uFE0F'} accent="#3B82F6" items={data.checkouts} variant="checkout" />
+        <ReservationCard title="Check-ins" icon={'\u2B05\uFE0F'} accent={O} items={data.checkins} variant="checkin" />
+      </div>
+    </div>
+  );
+}
+
+function ReservationCard({ title, icon, accent, items, variant }: {
+  title: string; icon: string; accent: string; items: DashboardReservation[];
+  variant: 'occupied' | 'checkout' | 'checkin';
+}) {
+  function fmtDate(iso: string) {
     const d = new Date(iso);
     const now = new Date();
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const isToday = d.toDateString() === now.toDateString();
-    const isTomorrow = d.toDateString() === tomorrow.toDateString();
-    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    if (isToday) return `Today, ${time}`;
-    if (isTomorrow) return `Tomorrow, ${time}`;
+    if (d.toDateString() === now.toDateString()) {
+      return `Today ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    }
+    if (d.toDateString() === tomorrow.toDateString()) {
+      return `Tmrw ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    }
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
-  function statusInfo(item: TurnoverItem): { color: string; label: string } {
-    if (item.dispatchStatus === 'attention') return { color: '#DC2626', label: 'Needs attention' };
-    if (item.dispatchStatus === 'confirmed') return { color: G, label: 'Dispatches confirmed' };
-    if (item.dispatchStatus === 'pending') return { color: '#D4A437', label: `${item.runCount} pending` };
-    return { color: '#9B9490', label: 'No auto-dispatch' };
+  function fmtGuestName(name: string | null): string {
+    if (!name) return 'Guest';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+  }
+
+  function runHref(run: DashboardReservationRun): string {
+    if (run.jobId) return `/business?tab=dispatches&job=${run.jobId}`;
+    return `/business?tab=schedules`;
+  }
+
+  function runColor(status: string): string {
+    if (status === 'completed' || status === 'dispatched') return G;
+    if (status === 'failed') return '#DC2626';
+    return '#9B9490';
+  }
+
+  function relevantDateLabel(item: DashboardReservation): string {
+    if (variant === 'occupied') return `Until ${fmtDate(item.checkOut)}`;
+    if (variant === 'checkout') return fmtDate(item.checkOut);
+    return fmtDate(item.checkIn);
   }
 
   return (
-    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20, marginBottom: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
-        <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: 0 }}>This week's turnovers</h4>
-        <span style={{ fontSize: 11, color: '#9B9490' }}>{items.length} upcoming checkout{items.length === 1 ? '' : 's'}</span>
+    <div style={{
+      background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4',
+      borderTop: `3px solid ${accent}`,
+      padding: 18, display: 'flex', flexDirection: 'column', minHeight: 200,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 16 }}>{icon}</span>
+        <h5 style={{ fontSize: 13, fontWeight: 700, color: D, margin: 0, flex: 1 }}>{title}</h5>
+        <span style={{
+          fontSize: 11, fontWeight: 700, color: accent,
+          background: `${accent}15`, padding: '2px 8px', borderRadius: 100,
+        }}>{items.length}</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {items.slice(0, 8).map(item => {
-          const s = statusInfo(item);
-          return (
+
+      {items.length === 0 ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#B0AAA4', fontSize: 12, padding: '20px 0' }}>
+          None
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+          {items.slice(0, 6).map(item => (
             <div key={item.reservationId} style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '12px 14px', borderRadius: 10,
-              background: item.tightTurnover ? '#FFF8F0' : '#FAFAF8',
-              border: `1px solid ${item.tightTurnover ? '#F5C9A8' : 'rgba(0,0,0,0.04)'}`,
+              padding: '10px 12px', borderRadius: 10,
+              background: '#FAFAF8', border: '1px solid rgba(0,0,0,0.04)',
             }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0, boxShadow: `0 0 0 3px ${s.color}25` }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.propertyName}
-                </div>
-                <div style={{ fontSize: 11, color: '#9B9490', marginTop: 1, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span>Checkout {fmtCheckout(item.checkOut)}</span>
-                  {item.turnoverGapHours !== null && (
-                    <>
-                      <span>·</span>
-                      <span style={{ color: item.tightTurnover ? '#D4A437' : '#9B9490', fontWeight: item.tightTurnover ? 600 : 400 }}>
-                        {item.tightTurnover && '⚠️ '}{Math.round(item.turnoverGapHours)}hr turnover
-                      </span>
-                    </>
-                  )}
-                </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {item.propertyName}
               </div>
-              <span style={{ fontSize: 10, fontWeight: 600, color: s.color, textTransform: 'uppercase', flexShrink: 0, letterSpacing: '0.03em' }}>
-                {s.label}
-              </span>
+              <div style={{ fontSize: 11, color: '#6B6560', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span>{fmtGuestName(item.guestName)}</span>
+                {item.guestCount && (
+                  <>
+                    <span>·</span>
+                    <span>{item.guestCount} guest{item.guestCount === 1 ? '' : 's'}</span>
+                  </>
+                )}
+                <span>·</span>
+                <span style={{ color: accent, fontWeight: 600 }}>{relevantDateLabel(item)}</span>
+              </div>
+              {item.runs.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                  {item.runs.map(run => (
+                    <a
+                      key={run.id}
+                      href={runHref(run)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        background: '#fff', borderRadius: 100,
+                        padding: '3px 9px', fontSize: 10, color: D,
+                        textDecoration: 'none',
+                        border: '1px solid rgba(0,0,0,0.06)',
+                        width: 'fit-content',
+                      }}
+                    >
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: runColor(run.status), flexShrink: 0 }} />
+                      <span style={{ fontWeight: 600 }}>{run.scheduleTitle}</span>
+                      <span style={{ color: '#9B9490' }}>· {run.jobId ? 'View dispatch' : 'View schedule'}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
-          );
-        })}
-      </div>
+          ))}
+          {items.length > 6 && (
+            <div style={{ fontSize: 11, color: '#9B9490', textAlign: 'center', paddingTop: 4 }}>
+              + {items.length - 6} more
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -226,8 +299,8 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
         })}
       </div>
 
-      {/* ── This week's turnovers ── */}
-      <TurnoversWidget workspaceId={workspace.id} />
+      {/* ── Reservations this week ── */}
+      <ReservationsWidget workspaceId={workspace.id} />
 
       {/* ── Middle row: Category breakdown + Top vendors ── */}
       <div className="bp-dashboard-mid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>

@@ -3234,6 +3234,111 @@ router.get('/:workspaceId/dashboard/turnovers', requireWorkspace, async (req: Re
   }
 });
 
+// GET /:workspaceId/dashboard/reservations
+// Returns three buckets — currently occupied, upcoming check-outs, upcoming check-ins —
+// with per-property details and any attached dispatch schedule runs.
+router.get('/:workspaceId/dashboard/reservations', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const horizon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const propRows = await db
+      .select({ id: properties.id, name: properties.name })
+      .from(properties)
+      .where(and(eq(properties.workspaceId, req.workspaceId), eq(properties.active, true)));
+
+    if (propRows.length === 0) {
+      res.json({ data: { occupied: [], checkouts: [], checkins: [] }, error: null, meta: {} });
+      return;
+    }
+
+    const propIds = propRows.map(p => p.id);
+    const propNameById = new Map(propRows.map(p => [p.id, p.name] as const));
+
+    // Pull all relevant reservations in one query: anything that's currently
+    // happening or starting/ending within the next 7 days.
+    const allRes = await db
+      .select()
+      .from(reservations)
+      .where(and(
+        inArray(reservations.propertyId, propIds),
+        ne(reservations.status, 'cancelled'),
+        ne(reservations.status, 'Cancelled'),
+        ne(reservations.status, 'canceled'),
+        sql`${reservations.checkOut} >= ${now}`,
+        sql`${reservations.checkIn} <= ${horizon}`,
+      ))
+      .orderBy(reservations.checkIn);
+
+    // Bucket them
+    const occupied = allRes.filter(r => r.checkIn <= now && r.checkOut > now);
+    const checkouts = allRes.filter(r => r.checkOut > now && r.checkOut <= horizon);
+    const checkins = allRes.filter(r => r.checkIn > now && r.checkIn <= horizon);
+
+    // Pull dispatch schedule runs for any of these reservations (joined with schedule for title)
+    const reservationIds = allRes.map(r => r.id);
+    let runRows: Array<{ id: string; reservationId: string | null; scheduledFor: Date; status: string; jobId: string | null; scheduleId: string; scheduleTitle: string; scheduleCategory: string }> = [];
+    if (reservationIds.length > 0) {
+      runRows = await db
+        .select({
+          id: dispatchScheduleRuns.id,
+          reservationId: dispatchScheduleRuns.reservationId,
+          scheduledFor: dispatchScheduleRuns.scheduledFor,
+          status: dispatchScheduleRuns.status,
+          jobId: dispatchScheduleRuns.jobId,
+          scheduleId: dispatchScheduleRuns.scheduleId,
+          scheduleTitle: dispatchSchedules.title,
+          scheduleCategory: dispatchSchedules.category,
+        })
+        .from(dispatchScheduleRuns)
+        .innerJoin(dispatchSchedules, eq(dispatchScheduleRuns.scheduleId, dispatchSchedules.id))
+        .where(inArray(dispatchScheduleRuns.reservationId, reservationIds));
+    }
+    const runsByReservation = new Map<string, typeof runRows>();
+    for (const r of runRows) {
+      if (!r.reservationId) continue;
+      const list = runsByReservation.get(r.reservationId) || [];
+      list.push(r);
+      runsByReservation.set(r.reservationId, list);
+    }
+
+    function shape(r: typeof allRes[number]) {
+      return {
+        reservationId: r.id,
+        propertyId: r.propertyId,
+        propertyName: propNameById.get(r.propertyId) ?? '',
+        guestName: r.guestName,
+        guestCount: r.guests,
+        checkIn: r.checkIn,
+        checkOut: r.checkOut,
+        source: r.source,
+        runs: (runsByReservation.get(r.id) || []).map(run => ({
+          id: run.id,
+          scheduleId: run.scheduleId,
+          scheduleTitle: run.scheduleTitle,
+          scheduleCategory: run.scheduleCategory,
+          scheduledFor: run.scheduledFor,
+          status: run.status,
+          jobId: run.jobId,
+        })),
+      };
+    }
+
+    res.json({
+      data: {
+        occupied: occupied.map(shape),
+        checkouts: checkouts.map(shape),
+        checkins: checkins.map(shape),
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/dashboard/reservations]');
+    res.status(500).json({ data: null, error: 'Failed to load dashboard reservations', meta: {} });
+  }
+});
+
 // ── Estimate Summary PDF ────────────────────────────────────────────────────
 
 // GET /:workspaceId/jobs/:jobId/estimate-pdf

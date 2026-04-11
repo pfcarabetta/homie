@@ -776,6 +776,28 @@ export interface ReservationTimelineItem {
   runs: ReservationTimelineRun[];
 }
 
+export interface DashboardReservationRun {
+  id: string;
+  scheduleId: string;
+  scheduleTitle: string;
+  scheduleCategory: string;
+  scheduledFor: string;
+  status: string;
+  jobId: string | null;
+}
+
+export interface DashboardReservation {
+  reservationId: string;
+  propertyId: string;
+  propertyName: string;
+  guestName: string | null;
+  guestCount: number | null;
+  checkIn: string;
+  checkOut: string;
+  source: string | null;
+  runs: DashboardReservationRun[];
+}
+
 export interface TurnoverItem {
   reservationId: string;
   propertyId: string;
@@ -1161,6 +1183,10 @@ export const businessService = {
     ),
   getDashboardTurnovers: (workspaceId: string) =>
     fetchAPI<{ items: TurnoverItem[] }>(`/api/v1/business/${workspaceId}/dashboard/turnovers`),
+  getDashboardReservations: (workspaceId: string) =>
+    fetchAPI<{ occupied: DashboardReservation[]; checkouts: DashboardReservation[]; checkins: DashboardReservation[] }>(
+      `/api/v1/business/${workspaceId}/dashboard/reservations`,
+    ),
 
   // CSV Export/Import
   exportPropertiesCsv: (workspaceId: string) =>
