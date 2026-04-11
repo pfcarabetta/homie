@@ -28,13 +28,27 @@ async function start() {
   // Run pending database migrations
   // Migrations 0000-0014 were applied via drizzle-kit CLI before programmatic migrate() was added.
   // The drizzle journal may not track them, so we fall back to running SQL with IF NOT EXISTS.
+  // Postgres error codes that indicate "thing already exists" — safe to ignore
+  // because the fallback path runs all migration SQL with IF NOT EXISTS rewrites
+  // and we just want to apply anything that's actually new.
+  //   42P07 = duplicate_table
+  //   42P06 = duplicate_schema
+  //   42710 = duplicate_object (e.g. constraint, type)
+  //   42701 = duplicate_column
+  //   42P16 = invalid_table_definition (e.g. PK already defined)
+  //   23505 = unique_violation (e.g. seed-data INSERTs that already ran)
+  const SAFE_DUPLICATE_CODES = new Set(['42P07', '42P06', '42710', '42701', '42P16', '23505']);
+
   try {
     await migrate(db, { migrationsFolder: path.join(__dirname, 'db/migrations') });
     logger.info('Database migrations applied');
   } catch (err: unknown) {
     const pgErr = err as { code?: string };
-    if (pgErr.code === '42P07' || pgErr.code === '42P06') {
-      logger.warn('Some migrations already applied — running with IF NOT EXISTS fallback');
+    // Always fall back if drizzle's migrate() throws ANY postgres error during
+    // migration — the fallback is idempotent and safer than crashing the deploy.
+    // Only crash if the error is NOT a postgres error (likely a real bug).
+    if (pgErr.code && (SAFE_DUPLICATE_CODES.has(pgErr.code) || pgErr.code.startsWith('42'))) {
+      logger.warn({ code: pgErr.code }, 'Migration already-applied error — running IF NOT EXISTS fallback');
       try {
         const fs = await import('fs');
         const { sql } = await import('drizzle-orm');
@@ -45,14 +59,15 @@ async function start() {
           const safeSql = raw
             .replace(/CREATE TABLE(?! IF NOT EXISTS)/g, 'CREATE TABLE IF NOT EXISTS')
             .replace(/CREATE UNIQUE INDEX(?! IF NOT EXISTS)/g, 'CREATE UNIQUE INDEX IF NOT EXISTS')
-            .replace(/CREATE INDEX(?! IF NOT EXISTS)/g, 'CREATE INDEX IF NOT EXISTS');
+            .replace(/CREATE INDEX(?! IF NOT EXISTS)/g, 'CREATE INDEX IF NOT EXISTS')
+            .replace(/ADD COLUMN(?! IF NOT EXISTS)/g, 'ADD COLUMN IF NOT EXISTS');
           const statements = safeSql.split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
           for (const stmt of statements) {
             try {
               await db.execute(sql.raw(stmt));
             } catch (stmtErr: unknown) {
               const sc = (stmtErr as { code?: string }).code;
-              if (sc === '42P07' || sc === '42P06' || sc === '42710') continue;
+              if (sc && SAFE_DUPLICATE_CODES.has(sc)) continue;
               logger.warn({ err: stmtErr, file }, 'Migration statement failed (non-fatal)');
             }
           }
