@@ -202,42 +202,130 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
   const [uploading, setUploading] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [detected, setDetected] = useState<Array<{ id: string; itemType: string; brand: string | null; modelNumber: string | null; confidence: number; roomType: string }>>([]);
+  const [coaching, setCoaching] = useState<string>("Let's start in the kitchen. Slowly pan your camera and capture the appliances. I'll handle the rest.");
   const [error, setError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Open the device camera
+  useEffect(() => {
+    let cancelled = false;
+    async function openCamera() {
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+        setCameraError('Camera not available — falling back to file upload.');
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
+        });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+        setCameraReady(true);
+      } catch (err) {
+        setCameraError(err instanceof Error ? err.message : 'Camera access denied');
+      }
+    }
+    openCamera();
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    };
+  }, []);
+
+  function showToast(text: string) {
+    setToast(text);
+    window.setTimeout(() => setToast(null), 2400);
+  }
+
+  async function captureAndProcess() {
+    if (uploading) return;
+    setError(null);
+
+    let dataUrl: string | null = null;
+    if (cameraReady && videoRef.current) {
+      const v = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = v.videoWidth;
+      canvas.height = v.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(v, 0, 0);
+      dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      // Downscale if huge
+      if (dataUrl.length > 4_000_000) {
+        dataUrl = await compressImage(dataUrl, 1600, 0.85);
+      }
+    }
+
+    if (!dataUrl) {
+      setError('Could not capture frame from camera.');
+      return;
+    }
+
+    await processOne(dataUrl);
+  }
+
+  async function processOne(dataUrl: string) {
+    setUploading(true);
+    try {
+      const res = await businessService.uploadScanPhoto(workspaceId, scanId, {
+        image_data_url: dataUrl,
+        room_hint: currentRoom,
+        is_label_photo: isLabel,
+      });
+      if (res.data) {
+        const newItems = res.data.itemsDetected;
+        for (const item of newItems) {
+          setDetected(prev => [...prev, { ...item, roomType: res.data!.roomType }]);
+        }
+        if (newItems.length > 0) {
+          const summary = newItems.slice(0, 2).map(i => `${i.brand || ''} ${prettifyItemType(i.itemType)}`.trim()).join(', ');
+          showToast(`Found: ${summary}${newItems.length > 2 ? ` +${newItems.length - 2} more` : ''} ✓`);
+        } else {
+          showToast('No items found in that frame');
+        }
+
+        // Refresh coaching based on what we just found
+        try {
+          const coachRes = await businessService.generateScanCoaching(workspaceId, scanId, {
+            current_room: currentRoom,
+            last_detected_items: newItems.map(i => ({ itemType: i.itemType, brand: i.brand, confidence: i.confidence })),
+          });
+          if (coachRes.data?.message) setCoaching(coachRes.data.message);
+        } catch { /* ignore */ }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to process photo');
+    }
+    setUploading(false);
+  }
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     if (files.length === 0) return;
-
-    setError(null);
-    setUploading(true);
     for (const file of files) {
-      try {
-        if (file.size > 8 * 1024 * 1024) { setError('Photo too large (max 8MB)'); continue; }
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(new Error('read failed'));
-          reader.readAsDataURL(file);
-        });
-        // Downscale before upload
-        const compressed = await compressImage(dataUrl, 1600, 0.85);
-        const res = await businessService.uploadScanPhoto(workspaceId, scanId, {
-          image_data_url: compressed,
-          room_hint: currentRoom,
-          is_label_photo: isLabel,
-        });
-        if (res.data) {
-          for (const item of res.data.itemsDetected) {
-            setDetected(prev => [...prev, { ...item, roomType: res.data!.roomType }]);
-          }
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Upload failed');
-      }
+      if (file.size > 8 * 1024 * 1024) { setError('Photo too large (max 8MB)'); continue; }
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+      });
+      const compressed = await compressImage(dataUrl, 1600, 0.85);
+      await processOne(compressed);
     }
-    setUploading(false);
   }
 
   async function handleComplete() {
@@ -251,98 +339,155 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
     setCompleting(false);
   }
 
+  function handleNextRoom() {
+    showToast(`Moving on. Currently scanning: ${prettifyItemType(currentRoom)}`);
+  }
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif" }}>
-        <div style={{ padding: '18px 20px', borderBottom: '1px solid #F0EBE6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: D }}>Property scan</div>
-            <div style={{ fontSize: 11, color: '#9B9490' }}>{propertyName}</div>
+    <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif", color: '#fff' }}>
+      {/* Camera viewfinder */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
+        {cameraReady && (
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        )}
+        {!cameraReady && !cameraError && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9B9490', fontSize: 13 }}>
+            Requesting camera access...
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9B9490' }}>×</button>
+        )}
+        {cameraError && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center', color: '#fff' }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>{'\uD83D\uDCF7'}</div>
+            <div style={{ fontSize: 14, marginBottom: 8 }}>{cameraError}</div>
+            <button onClick={() => fileInputRef.current?.click()} style={{
+              marginTop: 14, padding: '10px 22px', borderRadius: 8, border: 'none', background: O, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>Use file upload instead</button>
+          </div>
+        )}
+
+        {/* Top scrim with header + AI guidance */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0,
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%)',
+          padding: '14px 16px 32px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <button onClick={onClose} style={{
+              background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff',
+              width: 34, height: 34, borderRadius: 17, fontSize: 16, cursor: 'pointer',
+            }}>×</button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>Property scan · {propertyName}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>
+                {detected.length} item{detected.length === 1 ? '' : 's'} found · {prettifyItemType(currentRoom)}
+              </div>
+            </div>
+            <button onClick={handleComplete} disabled={completing || detected.length === 0} style={{
+              background: detected.length === 0 ? 'rgba(255,255,255,0.15)' : G,
+              border: 'none', color: '#fff', padding: '8px 14px', borderRadius: 100,
+              fontSize: 12, fontWeight: 600, cursor: detected.length === 0 ? 'default' : 'pointer',
+              opacity: completing ? 0.5 : 1,
+            }}>End scan</button>
+          </div>
+          {/* AI coaching text */}
+          <div style={{
+            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+            borderRadius: 12, padding: '10px 14px', fontSize: 13, lineHeight: 1.45,
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}>
+            <span style={{ fontSize: 16, marginRight: 6 }}>{'\uD83E\uDD16'}</span>
+            {coaching}
+          </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-          <div style={{ background: W, borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, color: '#6B6560', lineHeight: 1.5 }}>
-            Walk through the property and upload photos one room at a time. The AI will identify appliances, systems, and fixtures from each photo. For best results, capture labels and nameplates closely.
+        {/* Toast */}
+        {toast && (
+          <div style={{
+            position: 'absolute', top: 140, left: '50%', transform: 'translateX(-50%)',
+            background: 'rgba(27,158,119,0.95)', color: '#fff',
+            padding: '8px 16px', borderRadius: 100, fontSize: 12, fontWeight: 600,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+            animation: 'scanToast 2.4s ease',
+          }}>
+            {toast}
           </div>
+        )}
+        <style>{`@keyframes scanToast { 0% { opacity: 0; transform: translate(-50%, -8px); } 10%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -8px); } }`}</style>
 
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Current room</label>
+        {error && (
+          <div style={{
+            position: 'absolute', bottom: 200, left: 16, right: 16,
+            background: '#FEF2F2', color: '#991B1B', padding: 10, borderRadius: 8, fontSize: 12, textAlign: 'center',
+          }}>
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom action bar */}
+      <div style={{
+        background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(12px)',
+        padding: '14px 16px 24px', borderTop: '1px solid rgba(255,255,255,0.08)',
+      }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
           <select
             value={currentRoom}
             onChange={e => setCurrentRoom(e.target.value)}
-            style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 13, marginBottom: 14, background: '#fff' }}
-          >
-            {ROOM_OPTIONS.map(r => <option key={r} value={r}>{prettifyItemType(r)}</option>)}
-          </select>
-
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, cursor: 'pointer' }}>
-            <input type="checkbox" checked={isLabel} onChange={e => setIsLabel(e.target.checked)} />
-            <span style={{ fontSize: 12, color: '#6B6560' }}>Close-up of an equipment label / nameplate</span>
-          </label>
-
-          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileSelect} />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
             style={{
-              width: '100%', padding: '14px 0', borderRadius: 10, border: `2px dashed ${O}40`,
-              background: `${O}05`, color: O, fontSize: 14, fontWeight: 600,
-              cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1,
-              fontFamily: "'DM Sans', sans-serif",
+              flex: 1, padding: '8px 12px', borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'rgba(255,255,255,0.05)', color: '#fff',
+              fontSize: 12, fontFamily: "'DM Sans', sans-serif",
             }}
           >
-            {uploading ? 'Processing...' : '+ Add photo(s) for this room'}
-          </button>
-
-          {error && (
-            <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: '#FEF2F2', color: '#991B1B', fontSize: 12 }}>
-              {error}
-            </div>
-          )}
-
-          {detected.length > 0 && (
-            <>
-              <div style={{ marginTop: 20, marginBottom: 10, fontSize: 13, fontWeight: 700, color: D }}>
-                Items detected this session ({detected.length})
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
-                {detected.map((item, i) => (
-                  <div key={`${item.id}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: W, borderRadius: 8, fontSize: 12 }}>
-                    <span style={{
-                      width: 6, height: 6, borderRadius: '50%',
-                      background: item.confidence >= 0.85 ? G : '#D4A437',
-                    }} />
-                    <span style={{ fontWeight: 600, color: D }}>
-                      {item.brand ? `${item.brand} ` : ''}{prettifyItemType(item.itemType)}
-                    </span>
-                    {item.modelNumber && <span style={{ color: '#9B9490' }}>· {item.modelNumber}</span>}
-                    <span style={{ marginLeft: 'auto', fontSize: 10, color: '#9B9490' }}>
-                      {Math.round(item.confidence * 100)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
+            {ROOM_OPTIONS.map(r => <option key={r} value={r} style={{ color: '#000' }}>{prettifyItemType(r)}</option>)}
+          </select>
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 12px', borderRadius: 8,
+            background: isLabel ? `${O}30` : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${isLabel ? O : 'rgba(255,255,255,0.2)'}`,
+            cursor: 'pointer', fontSize: 11, color: isLabel ? O : 'rgba(255,255,255,0.8)',
+            fontWeight: 600,
+          }}>
+            <input type="checkbox" checked={isLabel} onChange={e => setIsLabel(e.target.checked)} style={{ display: 'none' }} />
+            🏷️ Label
+          </label>
         </div>
 
-        <div style={{ padding: '14px 20px', borderTop: '1px solid #F0EBE6', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '10px 18px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: '#6B6560', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            Cancel
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
+          <button onClick={handleNextRoom} style={{
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff',
+            padding: '10px 16px', borderRadius: 100, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          }}>Next room</button>
+
+          {/* Capture button */}
           <button
-            onClick={handleComplete}
-            disabled={completing || detected.length === 0}
+            onClick={captureAndProcess}
+            disabled={uploading || (!cameraReady && !!cameraError === false)}
             style={{
-              padding: '10px 22px', borderRadius: 8, border: 'none',
-              background: O, color: '#fff', fontSize: 13, fontWeight: 600,
-              cursor: completing || detected.length === 0 ? 'default' : 'pointer',
-              opacity: completing || detected.length === 0 ? 0.5 : 1,
+              width: 72, height: 72, borderRadius: '50%',
+              background: '#fff', border: '4px solid rgba(255,255,255,0.4)',
+              cursor: uploading ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(255,255,255,0.2)',
+              opacity: uploading ? 0.6 : 1,
             }}
+            aria-label="Capture photo"
           >
-            {completing ? 'Finalizing...' : 'Finish scan'}
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: uploading ? '#9B9490' : O }} />
           </button>
+
+          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileSelect} />
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff',
+            padding: '10px 16px', borderRadius: 100, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          }}>Upload</button>
         </div>
       </div>
     </div>

@@ -17,6 +17,9 @@ interface ChatBody {
   images?: unknown;
   mode?: unknown;
   property_context?: unknown;
+  /** When set, the chat handler will fetch the property's inventory and inject it into the system prompt */
+  property_id?: unknown;
+  workspace_id?: unknown;
 }
 
 const REPAIR_SYSTEM_PROMPT = `You are Homie, an AI assistant for property managers handling maintenance requests across their portfolio. You're efficient, knowledgeable, and focused on helping PMs dispatch the right pro quickly.
@@ -224,6 +227,57 @@ router.post('/chat', async (req: Request, res: Response) => {
   let systemPrompt = basePrompt;
   if (body.property_context && typeof body.property_context === 'string' && body.property_context.trim()) {
     systemPrompt = `PROPERTY CONTEXT:\n${body.property_context.trim()}\n\n${basePrompt}`;
+  }
+
+  // If a property_id is provided AND the property has a scanned inventory,
+  // inject a compact inventory summary so the AI knows the exact equipment.
+  if (body.property_id && typeof body.property_id === 'string' && body.workspace_id && typeof body.workspace_id === 'string') {
+    try {
+      const { db } = await import('../db');
+      const { propertyInventoryItems } = await import('../db/schema/property-scans');
+      const { properties } = await import('../db/schema/properties');
+      const { eq, and, ne } = await import('drizzle-orm');
+
+      // Verify property belongs to workspace
+      const [prop] = await db.select({ id: properties.id }).from(properties)
+        .where(and(eq(properties.id, body.property_id), eq(properties.workspaceId, body.workspace_id))).limit(1);
+
+      if (prop) {
+        const items = await db.select().from(propertyInventoryItems)
+          .where(and(
+            eq(propertyInventoryItems.propertyId, body.property_id),
+            ne(propertyInventoryItems.status, 'pm_dismissed'),
+          ));
+
+        if (items.length > 0) {
+          // Group by category, keep concise
+          const lines: string[] = [];
+          const byCat = new Map<string, typeof items>();
+          for (const it of items) {
+            const list = byCat.get(it.category) || [];
+            list.push(it);
+            byCat.set(it.category, list);
+          }
+          for (const [cat, list] of byCat) {
+            const itemSummaries = list.map(i => {
+              const parts: string[] = [];
+              if (i.brand) parts.push(i.brand);
+              if (i.modelNumber) parts.push(i.modelNumber);
+              parts.push(i.itemType.replace(/_/g, ' '));
+              if (i.estimatedAgeYears) parts.push(`${i.estimatedAgeYears}yr`);
+              if (i.condition && i.condition !== 'good') parts.push(i.condition);
+              return parts.join(' ');
+            }).slice(0, 12);
+            lines.push(`- ${cat}: ${itemSummaries.join('; ')}`);
+          }
+
+          const inventorySection = `KNOWN PROPERTY INVENTORY (from AI scan):\n${lines.join('\n')}\n\nUse this inventory when discussing maintenance issues — refer to specific brands, models, and ages where relevant. Don't ask the PM to identify equipment we already know about.\n\n`;
+          systemPrompt = `${inventorySection}${systemPrompt}`;
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, '[business-chat] failed to load property inventory');
+    }
   }
 
   // Build message history for multi-turn conversation

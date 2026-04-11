@@ -1145,6 +1145,8 @@ export const businessChatService = {
       history?: { role: 'user' | 'assistant'; content: string }[];
       images?: string[];
       propertyContext?: string;
+      propertyId?: string;
+      workspaceId?: string;
     },
   ): AbortController {
     const controller = new AbortController();
@@ -1160,6 +1162,8 @@ export const businessChatService = {
             ...(options?.history?.length ? { history: options.history } : {}),
             ...(options?.images?.length ? { images: options.images } : {}),
             ...(options?.propertyContext ? { property_context: options.propertyContext } : {}),
+            ...(options?.propertyId ? { property_id: options.propertyId } : {}),
+            ...(options?.workspaceId ? { workspace_id: options.workspaceId } : {}),
           }),
           signal: controller.signal,
         });
@@ -1296,6 +1300,14 @@ export const businessService = {
     fetchAPI<PropertyScan[]>(`/api/v1/business/${workspaceId}/properties/${propertyId}/scan-history`),
   getMaintenanceFlags: (workspaceId: string, propertyId: string) =>
     fetchAPI<MaintenanceFlag[]>(`/api/v1/business/${workspaceId}/properties/${propertyId}/maintenance-flags`),
+  generateScanCoaching: (workspaceId: string, scanId: string, body: { current_room: string; last_detected_items: Array<{ itemType: string; brand: string | null; confidence: number }> }) =>
+    fetchAPI<{ message: string }>(`/api/v1/business/${workspaceId}/scans/${scanId}/coaching`, {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+  getScanChanges: (workspaceId: string, scanId: string) =>
+    fetchAPI<Array<{ id: string; changeType: string; description: string; severity: string; createdAt: string }>>(
+      `/api/v1/business/${workspaceId}/scans/${scanId}/changes`,
+    ),
 
   // CSV Export/Import
   exportPropertiesCsv: (workspaceId: string) =>

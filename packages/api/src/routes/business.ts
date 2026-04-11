@@ -4191,7 +4191,7 @@ router.post('/:workspaceId/scans/:scanId/photos', requireWorkspace, requireWorks
     const mediaType = match[1] as 'image/jpeg' | 'image/png' | 'image/webp';
     const base64 = match[3];
 
-    const { processScanPhoto } = await import('../services/property-scan-processor');
+    const { processScanPhoto, detectChanges } = await import('../services/property-scan-processor');
     const result = await processScanPhoto({
       scanId,
       imageBase64: base64,
@@ -4201,10 +4201,93 @@ router.post('/:workspaceId/scans/:scanId/photos', requireWorkspace, requireWorks
       notes,
     });
 
-    res.json({ data: result, error: null, meta: {} });
+    // Quick scans: detect and persist changes against existing inventory
+    let changes: Array<{ changeType: string; description: string; severity: string }> = [];
+    if (scan.scanType === 'quick' && result.itemsDetected.length > 0) {
+      changes = await detectChanges({
+        scanId,
+        propertyId: scan.propertyId,
+        detectedItems: result.itemsDetected.map(i => ({
+          itemType: i.itemType,
+          brand: i.brand,
+          modelNumber: i.modelNumber,
+        })),
+        roomType: result.roomType,
+      });
+      if (changes.length > 0) {
+        const { propertyScanChanges } = await import('../db/schema/property-scans');
+        await db.insert(propertyScanChanges).values(changes.map(c => ({
+          propertyId: scan.propertyId,
+          scanId,
+          changeType: c.changeType,
+          description: c.description,
+          severity: c.severity,
+        })));
+        await db.update(propertyScans)
+          .set({ changesDetected: scan.changesDetected + changes.length })
+          .where(eq(propertyScans.id, scanId));
+      }
+    }
+
+    res.json({ data: { ...result, changes }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[POST /business/:id/scans/:scanId/photos]');
     res.status(500).json({ data: null, error: 'Failed to process photo', meta: {} });
+  }
+});
+
+// POST /:workspaceId/scans/:scanId/coaching — generate next coaching message
+router.post('/:workspaceId/scans/:scanId/coaching', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { scanId } = req.params;
+  const { current_room, last_detected_items } = req.body as {
+    current_room?: string;
+    last_detected_items?: Array<{ itemType: string; brand: string | null; confidence: number }>;
+  };
+  try {
+    const [scan] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
+    if (!scan || scan.workspaceId !== req.workspaceId) {
+      res.status(404).json({ data: null, error: 'Scan not found', meta: {} });
+      return;
+    }
+
+    const rooms = await db
+      .select({ roomType: propertyRooms.roomType })
+      .from(propertyRooms)
+      .where(eq(propertyRooms.scanId, scanId));
+
+    const { generateCoachingMessage } = await import('../services/property-scan-processor');
+    const message = await generateCoachingMessage({
+      scanId,
+      currentRoom: current_room || 'kitchen',
+      lastDetectedItems: last_detected_items || [],
+      totalItemsSoFar: scan.itemsCataloged,
+      roomsScanned: rooms.map(r => r.roomType.replace(/_/g, ' ')),
+    });
+
+    res.json({ data: { message }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/scans/:scanId/coaching]');
+    res.status(500).json({ data: null, error: 'Failed to generate coaching message', meta: {} });
+  }
+});
+
+// GET /:workspaceId/scans/:scanId/changes — list quick-scan changes
+router.get('/:workspaceId/scans/:scanId/changes', requireWorkspace, async (req: Request, res: Response) => {
+  const { scanId } = req.params;
+  try {
+    const [scan] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
+    if (!scan || scan.workspaceId !== req.workspaceId) {
+      res.status(404).json({ data: null, error: 'Scan not found', meta: {} });
+      return;
+    }
+    const { propertyScanChanges } = await import('../db/schema/property-scans');
+    const changes = await db.select().from(propertyScanChanges)
+      .where(eq(propertyScanChanges.scanId, scanId))
+      .orderBy(desc(propertyScanChanges.createdAt));
+    res.json({ data: changes, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/scans/:scanId/changes]');
+    res.status(500).json({ data: null, error: 'Failed to load changes', meta: {} });
   }
 });
 

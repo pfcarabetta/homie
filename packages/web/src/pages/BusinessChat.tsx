@@ -899,6 +899,8 @@ export default function BusinessChat() {
         history: history.map(m => ({ role: m.role, content: m.content })),
         images,
         propertyContext: getPropertyContext(),
+        propertyId: selectedProperty?.id,
+        workspaceId: selectedWorkspace || undefined,
       },
     );
   }

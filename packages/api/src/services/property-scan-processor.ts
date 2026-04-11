@@ -297,6 +297,112 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
 }
 
 /**
+ * Generate a short coaching message for the PM during a live walkthrough,
+ * based on what the AI just found and what's still missing. Falls back to
+ * a static prompt if Claude isn't available.
+ */
+export async function generateCoachingMessage(args: {
+  scanId: string;
+  currentRoom: string;
+  lastDetectedItems: Array<{ itemType: string; brand: string | null; confidence: number }>;
+  totalItemsSoFar: number;
+  roomsScanned: string[];
+}): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return defaultCoaching(args);
+  }
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const lastItemsLine = args.lastDetectedItems.length > 0
+      ? args.lastDetectedItems.map(i => `${i.brand ? i.brand + ' ' : ''}${i.itemType.replace(/_/g, ' ')}${i.confidence < 0.85 ? ' (needs label)' : ''}`).join(', ')
+      : 'nothing yet';
+
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 150,
+      system: `You are a friendly AI property inspector coaching a property manager through a phone-camera walkthrough. Keep responses to 1-2 short sentences, conversational, encouraging, and actionable. Never use technical jargon. Refer to yourself as "I" and the user informally.`,
+      messages: [{
+        role: 'user',
+        content: `Walkthrough state:
+- Currently in: ${args.currentRoom.replace(/_/g, ' ')}
+- Just detected in this photo: ${lastItemsLine}
+- Total items found so far: ${args.totalItemsSoFar}
+- Rooms scanned: ${args.roomsScanned.join(', ') || 'none'}
+
+What's the next ONE specific thing I should ask them to capture? If I detected an appliance without a model number (low confidence), ask them to grab a close-up of the label. If the room looks scanned, suggest the next logical room. Keep it to 1-2 sentences max, conversational.`,
+      }],
+    });
+
+    const block = response.content.find(b => b.type === 'text');
+    if (block && block.type === 'text') return block.text.trim();
+  } catch (err) {
+    logger.warn({ err }, '[scan-processor] coaching generation failed');
+  }
+
+  return defaultCoaching(args);
+}
+
+function defaultCoaching(args: { currentRoom: string; lastDetectedItems: Array<{ itemType: string; brand: string | null; confidence: number }>; totalItemsSoFar: number }): string {
+  const lowConf = args.lastDetectedItems.find(i => i.confidence < 0.85);
+  if (lowConf) {
+    return `I spotted a ${lowConf.itemType.replace(/_/g, ' ')} but I can't quite read the label. Can you get a close-up of the brand/model sticker?`;
+  }
+  if (args.lastDetectedItems.length > 0) {
+    const last = args.lastDetectedItems[args.lastDetectedItems.length - 1];
+    return `Got it — ${last.brand || ''} ${last.itemType.replace(/_/g, ' ')}. Keep going, or move to the next room when you're ready.`;
+  }
+  return `I'm ready when you are. Walk me through the ${args.currentRoom.replace(/_/g, ' ')} and capture any appliances, fixtures, or systems you see.`;
+}
+
+/**
+ * Compare the items detected in a new photo against an existing inventory
+ * for a quick-scan change detection. Returns a list of changes.
+ */
+export async function detectChanges(args: {
+  scanId: string;
+  propertyId: string;
+  detectedItems: Array<{ itemType: string; brand: string | null; modelNumber: string | null }>;
+  roomType: string;
+}): Promise<Array<{ changeType: string; description: string; severity: string }>> {
+  const { propertyInventoryItems } = await import('../db/schema/property-scans');
+  const { eq, and } = await import('drizzle-orm');
+
+  const existingItems = await db
+    .select()
+    .from(propertyInventoryItems)
+    .where(and(
+      eq(propertyInventoryItems.propertyId, args.propertyId),
+    ));
+
+  const changes: Array<{ changeType: string; description: string; severity: string }> = [];
+
+  for (const detected of args.detectedItems) {
+    // Match by item_type + (brand if known)
+    const match = existingItems.find(e =>
+      e.itemType === detected.itemType &&
+      (detected.brand ? e.brand?.toLowerCase() === detected.brand.toLowerCase() : true),
+    );
+
+    if (!match) {
+      changes.push({
+        changeType: 'item_added',
+        description: `New ${detected.itemType.replace(/_/g, ' ')}${detected.brand ? ` (${detected.brand}${detected.modelNumber ? ' ' + detected.modelNumber : ''})` : ''} detected in ${args.roomType.replace(/_/g, ' ')}`,
+        severity: 'attention',
+      });
+    } else if (detected.modelNumber && match.modelNumber && detected.modelNumber !== match.modelNumber) {
+      changes.push({
+        changeType: 'item_modified',
+        description: `${detected.itemType.replace(/_/g, ' ')} model changed: was ${match.modelNumber}, now ${detected.modelNumber}`,
+        severity: 'attention',
+      });
+    }
+  }
+  return changes;
+}
+
+/**
  * Mark a scan as complete and compute final summary stats.
  */
 export async function completeScan(scanId: string): Promise<void> {
