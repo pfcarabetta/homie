@@ -4478,6 +4478,26 @@ router.put('/:workspaceId/inventory/:itemId', requireWorkspace, requireWorkspace
   }
 });
 
+// DELETE /:workspaceId/inventory/:itemId — permanently remove an item
+router.delete('/:workspaceId/inventory/:itemId', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { itemId } = req.params;
+  try {
+    const [item] = await db.select().from(propertyInventoryItems).where(eq(propertyInventoryItems.id, itemId)).limit(1);
+    if (!item) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
+    const [prop] = await db.select({ workspaceId: properties.workspaceId }).from(properties).where(eq(properties.id, item.propertyId)).limit(1);
+    if (!prop || prop.workspaceId !== req.workspaceId) {
+      res.status(403).json({ data: null, error: 'Forbidden', meta: {} });
+      return;
+    }
+
+    await db.delete(propertyInventoryItems).where(eq(propertyInventoryItems.id, itemId));
+    res.json({ data: { deleted: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[DELETE /business/:id/inventory/:itemId]');
+    res.status(500).json({ data: null, error: 'Failed to delete item', meta: {} });
+  }
+});
+
 // POST /:workspaceId/properties/:propertyId/inventory/manual — add an item manually
 router.post('/:workspaceId/properties/:propertyId/inventory/manual', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
   const { propertyId } = req.params;

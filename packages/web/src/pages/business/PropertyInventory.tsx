@@ -581,6 +581,17 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
     }
   }
 
+  async function handleDelete(item: PropertyInventoryItem) {
+    const label = `${item.brand ? item.brand + ' ' : ''}${prettifyItemType(item.itemType)}`;
+    if (!window.confirm(`Delete "${label}" from inventory? This cannot be undone.`)) return;
+    try {
+      await businessService.deleteInventoryItem(workspaceId, item.id);
+      await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -703,26 +714,50 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                             </span>
                           </div>
                         </div>
-                        {isLowConfidence ? (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={() => handleUpdate(item, 'pm_confirmed')} style={{
-                              padding: '5px 10px', borderRadius: 6, border: 'none',
-                              background: G, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                            }}>Confirm</button>
-                            <button onClick={() => handleUpdate(item, 'pm_dismissed')} style={{
-                              padding: '5px 10px', borderRadius: 6, border: '1px solid #E0DAD4',
-                              background: '#fff', color: '#9B9490', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                            }}>Dismiss</button>
-                          </div>
-                        ) : item.status === 'ai_identified' ? (
-                          <span style={{ fontSize: 10, fontWeight: 700, color: G, background: `${G}15`, padding: '3px 8px', borderRadius: 100 }}>
-                            ✓ HIGH CONFIDENCE
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: 10, fontWeight: 700, color: G, background: `${G}15`, padding: '3px 8px', borderRadius: 100 }}>
-                            ✓ CONFIRMED
-                          </span>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {isLowConfidence ? (
+                            <>
+                              <button onClick={() => handleUpdate(item, 'pm_confirmed')} style={{
+                                padding: '5px 10px', borderRadius: 6, border: 'none',
+                                background: G, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                              }}>Confirm</button>
+                              <button onClick={() => handleUpdate(item, 'pm_dismissed')} style={{
+                                padding: '5px 10px', borderRadius: 6, border: '1px solid #E0DAD4',
+                                background: '#fff', color: '#9B9490', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                              }}>Dismiss</button>
+                            </>
+                          ) : item.status === 'ai_identified' ? (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: G, background: `${G}15`, padding: '3px 8px', borderRadius: 100 }}>
+                              ✓ HIGH CONFIDENCE
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: G, background: `${G}15`, padding: '3px 8px', borderRadius: 100 }}>
+                              ✓ CONFIRMED
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handleDelete(item)}
+                            title="Delete item"
+                            aria-label="Delete item"
+                            style={{
+                              width: 26, height: 26, borderRadius: '50%',
+                              border: '1px solid #E0DAD4', background: '#fff',
+                              color: '#9B9490', fontSize: 16, lineHeight: 1, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              padding: 0, flexShrink: 0,
+                            }}
+                            onMouseEnter={e => {
+                              (e.currentTarget as HTMLElement).style.background = '#FEF2F2';
+                              (e.currentTarget as HTMLElement).style.borderColor = '#FCA5A5';
+                              (e.currentTarget as HTMLElement).style.color = '#DC2626';
+                            }}
+                            onMouseLeave={e => {
+                              (e.currentTarget as HTMLElement).style.background = '#fff';
+                              (e.currentTarget as HTMLElement).style.borderColor = '#E0DAD4';
+                              (e.currentTarget as HTMLElement).style.color = '#9B9490';
+                            }}
+                          >×</button>
+                        </div>
                       </div>
                     );
                   })}

@@ -1292,6 +1292,10 @@ export const businessService = {
     fetchAPI<PropertyInventoryItem>(`/api/v1/business/${workspaceId}/inventory/${itemId}`, {
       method: 'PUT', body: JSON.stringify(body),
     }),
+  deleteInventoryItem: (workspaceId: string, itemId: string) =>
+    fetchAPI<{ deleted: boolean }>(`/api/v1/business/${workspaceId}/inventory/${itemId}`, {
+      method: 'DELETE',
+    }),
   addManualInventoryItem: (workspaceId: string, propertyId: string, body: { room_id?: string; category: string; item_type: string; brand?: string; model_number?: string; estimated_age_years?: number; condition?: string; notes?: string }) =>
     fetchAPI<PropertyInventoryItem>(`/api/v1/business/${workspaceId}/properties/${propertyId}/inventory/manual`, {
       method: 'POST', body: JSON.stringify(body),
