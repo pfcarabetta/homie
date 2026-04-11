@@ -733,10 +733,18 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
   const [data, setData] = useState<PropertyInventoryResponse | null>(null);
   const [flags, setFlags] = useState<MaintenanceFlag[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'appliance' | 'fixture' | 'system' | 'safety' | 'amenity'>('all');
 
-  async function load() {
-    setLoading(true);
+  /**
+   * Load inventory + maintenance flags. When `silent` is true, the full-screen
+   * loading state is skipped — used after confirm/dismiss/delete so the user
+   * doesn't lose their scroll position. A small "Updating…" indicator
+   * appears in the header instead.
+   */
+  async function load(silent = false) {
+    if (silent) setRefreshing(true);
+    else setLoading(true);
     try {
       const [invRes, flagsRes] = await Promise.all([
         businessService.getPropertyInventory(workspaceId, propertyId),
@@ -745,7 +753,8 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
       if (invRes.data) setData(invRes.data);
       if (flagsRes.data) setFlags(flagsRes.data);
     } catch { /* ignore */ }
-    setLoading(false);
+    if (silent) setRefreshing(false);
+    else setLoading(false);
   }
 
   useEffect(() => { load(); }, [workspaceId, propertyId]);
@@ -753,7 +762,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
   async function handleUpdate(item: PropertyInventoryItem, status: 'pm_confirmed' | 'pm_dismissed') {
     try {
       await businessService.updateInventoryItem(workspaceId, item.id, { status });
-      await load();
+      await load(true);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update');
     }
@@ -764,7 +773,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
     if (!window.confirm(`Delete "${label}" from inventory? This cannot be undone.`)) return;
     try {
       await businessService.deleteInventoryItem(workspaceId, item.id);
-      await load();
+      await load(true);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete');
     }
@@ -839,7 +848,15 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
           }}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="bp-pi-header-title" style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, lineHeight: 1.2 }}>Property inventory</div>
+            <div className="bp-pi-header-title" style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 8 }}>
+              Property inventory
+              {refreshing && (
+                <span style={{
+                  fontSize: 11, fontWeight: 600, color: '#9B9490',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}>Updating…</span>
+              )}
+            </div>
             <div className="bp-pi-header-meta" style={{ fontSize: 12, color: '#9B9490', marginTop: 2, lineHeight: 1.4 }}>
               {data.summary.totalItems} items
               {data.summary.averageAge !== null && ` · avg age ${data.summary.averageAge} yrs`}
