@@ -15,6 +15,7 @@ export * from './slack-settings';
 export * from './cost-estimates';
 export * from './schedules';
 export * from './reservations';
+export * from './property-calendar-sources';
 export * from './pricing-config';
 export * from './booking-messages';
 export * from './guest-issue-categories';

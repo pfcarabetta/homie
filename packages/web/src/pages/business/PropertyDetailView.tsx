@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { businessService, jobService, estimateService, type Property, type WorkspaceDispatch, type WorkspaceBooking, type PreferredVendor, type Reservation, type ProviderResponseItem, type CostEstimate } from '@/services/api';
+import { businessService, jobService, estimateService, type Property, type WorkspaceDispatch, type WorkspaceBooking, type PreferredVendor, type Reservation, type ProviderResponseItem, type CostEstimate, type CalendarSource } from '@/services/api';
 import { O, G, D, W, PROPERTY_TYPES, VENDOR_CATEGORIES, MiniCalendar, cleanPrice, renderBold, timeAgo } from './constants';
 import { EditPropertyModal } from './PropertiesTab';
 import { AddVendorModal, EditVendorModal, groupVendors, type GroupedVendor } from './VendorsTab';
@@ -801,6 +801,196 @@ function ProvidersSubPage({ vendors, loading, workspaceId, propertyId, propertie
 
 /* ── Sub-page: Settings ─────────────────────────────────────────────────── */
 
+function CalendarSourceCard({ workspaceId, propertyId }: { workspaceId: string; propertyId: string }) {
+  const [source, setSource] = useState<CalendarSource | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [icalUrl, setIcalUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  async function loadSource() {
+    setLoading(true);
+    try {
+      const res = await businessService.getCalendarSource(workspaceId, propertyId);
+      setSource(res.data ?? null);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }
+
+  useEffect(() => { loadSource(); }, [workspaceId, propertyId]);
+
+  async function handleConnect() {
+    if (!icalUrl.trim()) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await businessService.addCalendarSource(workspaceId, propertyId, icalUrl.trim());
+      if (res.data) {
+        setSource(res.data.source);
+        setIcalUrl('');
+        const r = res.data.syncResult;
+        if (r.success) {
+          setMsg({ type: 'success', text: `Connected — ${r.eventsFound} reservation${r.eventsFound === 1 ? '' : 's'} found (${r.imported} new, ${r.updated} updated)` });
+        } else {
+          setMsg({ type: 'error', text: r.error || 'Initial sync failed' });
+        }
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Failed to connect' });
+      }
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to connect' });
+    }
+    setBusy(false);
+  }
+
+  async function handleSyncNow() {
+    if (!source) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await businessService.syncCalendarSource(workspaceId, propertyId, source.id);
+      if (res.data) {
+        setSource(res.data.source);
+        const r = res.data.syncResult;
+        if (r.success) {
+          setMsg({ type: 'success', text: `Synced — ${r.eventsFound} reservation${r.eventsFound === 1 ? '' : 's'} (${r.imported} new, ${r.updated} updated, ${r.cancelled} cancelled)` });
+        } else {
+          setMsg({ type: 'error', text: r.error || 'Sync failed' });
+        }
+      }
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Sync failed' });
+    }
+    setBusy(false);
+  }
+
+  async function handleDisconnect() {
+    if (!source) return;
+    if (!confirm('Disconnect this calendar feed? Existing reservation data will be preserved.')) return;
+    setBusy(true);
+    try {
+      await businessService.deleteCalendarSource(workspaceId, propertyId, source.id);
+      setSource(null);
+      setMsg({ type: 'success', text: 'Calendar feed disconnected' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to disconnect' });
+    }
+    setBusy(false);
+  }
+
+  function statusDot(): { color: string; label: string } {
+    if (!source) return { color: '#9B9490', label: 'Not connected' };
+    if (source.lastSyncStatus === 'success') {
+      const ageMinutes = source.lastSyncAt ? (Date.now() - new Date(source.lastSyncAt).getTime()) / 60000 : 0;
+      if (ageMinutes > 24 * 60) return { color: '#D4A437', label: 'Stale' };
+      return { color: G, label: 'Healthy' };
+    }
+    if (source.lastSyncStatus === 'paused') return { color: '#DC2626', label: 'Paused (5+ failures)' };
+    if (source.lastSyncStatus === 'failed') return { color: '#DC2626', label: 'Failed' };
+    return { color: '#9B9490', label: 'Never synced' };
+  }
+
+  if (loading) return null;
+
+  const dot = statusDot();
+
+  return (
+    <div style={{ background: 'var(--bp-card)', border: '1px solid var(--bp-border)', borderRadius: 12, padding: 18, marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 16 }}>{'\uD83D\uDCC5'}</span>
+        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 600, color: 'var(--bp-text)' }}>
+          Booking calendar
+        </div>
+      </div>
+
+      {!source ? (
+        <>
+          <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginBottom: 14, lineHeight: 1.5 }}>
+            Connect your booking calendar so Homie can auto-dispatch turnovers, restocks, and inspections based on guest check-in and check-out dates.
+          </div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>iCal feed URL</label>
+          <input
+            value={icalUrl}
+            onChange={e => setIcalUrl(e.target.value)}
+            placeholder="https://www.airbnb.com/calendar/ical/..."
+            style={{
+              width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8,
+              fontSize: 13, boxSizing: 'border-box', marginBottom: 8, background: 'var(--bp-input)', color: 'var(--bp-text)',
+            }}
+          />
+          <button onClick={() => setShowHelp(s => !s)} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 12, color: O, padding: '4px 0', marginBottom: 10, textAlign: 'left',
+          }}>
+            {showHelp ? '− Hide' : '+ Where do I find this?'}
+          </button>
+          {showHelp && (
+            <div style={{ background: 'var(--bp-bg)', borderRadius: 8, padding: 12, fontSize: 12, color: 'var(--bp-muted)', lineHeight: 1.6, marginBottom: 12 }}>
+              <div style={{ marginBottom: 6 }}><strong>Airbnb:</strong> Listing → Availability → "Connect your calendar" → Copy the export link</div>
+              <div style={{ marginBottom: 6 }}><strong>VRBO:</strong> Calendar → Import/Export → Copy iCal URL</div>
+              <div><strong>Other:</strong> Look for "Calendar export" or "iCal feed" in your booking platform's calendar settings</div>
+            </div>
+          )}
+          <button onClick={handleConnect} disabled={busy || !icalUrl.trim()} style={{
+            padding: '10px 22px', borderRadius: 8, border: 'none', background: O, color: '#fff',
+            fontSize: 13, fontWeight: 600, cursor: busy || !icalUrl.trim() ? 'default' : 'pointer',
+            opacity: busy || !icalUrl.trim() ? 0.5 : 1,
+          }}>
+            {busy ? 'Connecting...' : 'Connect calendar'}
+          </button>
+        </>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 10 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: dot.color, flexShrink: 0, boxShadow: `0 0 0 3px ${dot.color}25` }} />
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)' }}>{dot.label}</div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginBottom: 4 }}>
+            iCal sync · {source.icalUrl?.slice(0, 50)}...
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginBottom: 12 }}>
+            {source.lastSyncAt ? `Last synced ${timeAgo(source.lastSyncAt)} — ${source.eventsFound} upcoming reservation${source.eventsFound === 1 ? '' : 's'} found` : 'Never synced'}
+          </div>
+          {source.lastSyncError && (
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 10, fontSize: 12, color: '#991B1B', marginBottom: 12 }}>
+              {source.lastSyncStatus === 'paused'
+                ? `Sync paused after multiple failures. Update the iCal URL or click Sync now to retry. Last error: ${source.lastSyncError}`
+                : source.lastSyncError}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleSyncNow} disabled={busy} style={{
+              padding: '8px 18px', borderRadius: 8, border: '1px solid var(--bp-border)',
+              background: 'var(--bp-card)', color: 'var(--bp-text)', fontSize: 12, fontWeight: 600,
+              cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1,
+            }}>
+              {busy ? 'Syncing...' : 'Sync now'}
+            </button>
+            <button onClick={handleDisconnect} disabled={busy} style={{
+              padding: '8px 18px', borderRadius: 8, border: '1px solid #FECACA',
+              background: 'transparent', color: '#DC2626', fontSize: 12, fontWeight: 600,
+              cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1,
+            }}>
+              Disconnect
+            </button>
+          </div>
+        </>
+      )}
+
+      {msg && (
+        <div style={{ marginTop: 12, padding: 10, borderRadius: 8, fontSize: 12,
+          background: msg.type === 'success' ? `${G}10` : '#FEF2F2',
+          color: msg.type === 'success' ? G : '#991B1B',
+          border: `1px solid ${msg.type === 'success' ? `${G}30` : '#FECACA'}`,
+        }}>
+          {msg.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsSubPage({ property, workspaceId, onPropertyUpdated }: { property: Property; workspaceId: string; onPropertyUpdated?: (p: Property) => void }) {
   const [editing, setEditing] = useState(false);
   const infoRow = (label: string, value: string | number | null | undefined) => {
@@ -830,6 +1020,8 @@ function SettingsSubPage({ property, workspaceId, onPropertyUpdated }: { propert
 
   return (
     <div>
+      <CalendarSourceCard workspaceId={workspaceId} propertyId={property.id} />
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 600, color: 'var(--bp-text)' }}>
           Property Details

@@ -19,6 +19,7 @@ import { handleJobsWebSocket } from './ws/jobs';
 import { startJobExpiryWorker } from './services/job-expiry';
 import { startReservationSync } from './services/reservation-sync';
 import { startOutreachExpansionWorker } from './services/outreach-expansion-worker';
+import { startIcalSyncWorker } from './services/ical-sync-worker';
 import type { JwtPayload } from './middleware/auth';
 
 const PORT = process.env.PORT ?? 3001;
@@ -109,6 +110,7 @@ async function start() {
     startJobExpiryWorker();
     startReservationSync();
     startOutreachExpansionWorker();
+    startIcalSyncWorker();
   });
 }
 

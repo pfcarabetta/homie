@@ -17,6 +17,7 @@ import { providers } from '../db/schema/providers';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { preferredVendors } from '../db/schema/preferred-vendors';
 import { reservations } from '../db/schema/reservations';
+import { propertyCalendarSources } from '../db/schema/property-calendar-sources';
 import { notifications } from '../db/schema/notifications';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 import { generateEstimatePDF } from '../services/estimate-pdf';
@@ -2804,6 +2805,227 @@ router.get('/:workspaceId/properties/:propertyId/current-reservation', requireWo
   } catch (err) {
     logger.error({ err }, '[GET /business/:id/properties/:propertyId/current-reservation]');
     res.status(500).json({ data: null, error: 'Failed to check current reservation', meta: {} });
+  }
+});
+
+// ── Calendar Sources (iCal sync) ───────────────────────────────────────────
+
+// GET /:workspaceId/properties/:propertyId/calendar-source
+// Returns the property's calendar source configuration (if any)
+router.get('/:workspaceId/properties/:propertyId/calendar-source', requireWorkspace, async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const [source] = await db.select().from(propertyCalendarSources)
+      .where(eq(propertyCalendarSources.propertyId, propertyId))
+      .orderBy(desc(propertyCalendarSources.createdAt))
+      .limit(1);
+
+    res.json({ data: source ?? null, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/:propertyId/calendar-source]');
+    res.status(500).json({ data: null, error: 'Failed to fetch calendar source', meta: {} });
+  }
+});
+
+// POST /:workspaceId/properties/:propertyId/calendar-source
+// Add or update an iCal feed for a property
+router.post('/:workspaceId/properties/:propertyId/calendar-source', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  const { ical_url, sync_frequency_minutes } = req.body as { ical_url?: string; sync_frequency_minutes?: number };
+
+  if (!ical_url || typeof ical_url !== 'string') {
+    res.status(400).json({ data: null, error: 'ical_url is required', meta: {} });
+    return;
+  }
+
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    // Validate the URL is reachable + parses
+    const { validateIcalUrl, syncCalendarSource } = await import('../services/ical-sync');
+    const validation = await validateIcalUrl(ical_url);
+    if (!validation.valid) {
+      res.status(400).json({ data: null, error: validation.error || 'Could not validate iCal feed', meta: {} });
+      return;
+    }
+
+    // Check if a source already exists for this property — update if so, insert if not
+    const [existing] = await db.select().from(propertyCalendarSources)
+      .where(eq(propertyCalendarSources.propertyId, propertyId)).limit(1);
+
+    let source;
+    if (existing) {
+      const [updated] = await db.update(propertyCalendarSources)
+        .set({
+          icalUrl: ical_url,
+          syncFrequencyMinutes: sync_frequency_minutes ?? 60,
+          lastSyncStatus: 'never_synced',
+          lastSyncError: null,
+          consecutiveFailures: 0,
+          updatedAt: new Date(),
+        })
+        .where(eq(propertyCalendarSources.id, existing.id))
+        .returning();
+      source = updated;
+    } else {
+      const [inserted] = await db.insert(propertyCalendarSources).values({
+        propertyId,
+        workspaceId: req.workspaceId,
+        sourceType: 'ical_url',
+        icalUrl: ical_url,
+        syncFrequencyMinutes: sync_frequency_minutes ?? 60,
+      }).returning();
+      source = inserted;
+    }
+
+    // Trigger an immediate first sync
+    const result = await syncCalendarSource(source);
+
+    // Return the updated source
+    const [refreshed] = await db.select().from(propertyCalendarSources)
+      .where(eq(propertyCalendarSources.id, source.id)).limit(1);
+
+    res.status(201).json({ data: { source: refreshed, syncResult: result }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/properties/:propertyId/calendar-source]');
+    res.status(500).json({ data: null, error: 'Failed to add calendar source', meta: {} });
+  }
+});
+
+// DELETE /:workspaceId/properties/:propertyId/calendar-source/:sourceId
+// Disconnect a calendar source. Existing reservation rows are preserved.
+router.delete('/:workspaceId/properties/:propertyId/calendar-source/:sourceId', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { propertyId, sourceId } = req.params;
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    await db.delete(propertyCalendarSources)
+      .where(and(eq(propertyCalendarSources.id, sourceId), eq(propertyCalendarSources.propertyId, propertyId)));
+
+    res.json({ data: { ok: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[DELETE /business/:id/properties/:propertyId/calendar-source/:sourceId]');
+    res.status(500).json({ data: null, error: 'Failed to disconnect calendar source', meta: {} });
+  }
+});
+
+// POST /:workspaceId/properties/:propertyId/calendar-source/:sourceId/sync
+// Manually trigger a sync (e.g. PM updated their Airbnb calendar and wants Homie to pick it up now)
+router.post('/:workspaceId/properties/:propertyId/calendar-source/:sourceId/sync', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { propertyId, sourceId } = req.params;
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const [source] = await db.select().from(propertyCalendarSources)
+      .where(and(eq(propertyCalendarSources.id, sourceId), eq(propertyCalendarSources.propertyId, propertyId))).limit(1);
+    if (!source) { res.status(404).json({ data: null, error: 'Calendar source not found', meta: {} }); return; }
+
+    // Reset paused state on manual trigger
+    if (source.lastSyncStatus === 'paused') {
+      await db.update(propertyCalendarSources)
+        .set({ lastSyncStatus: 'never_synced', consecutiveFailures: 0 })
+        .where(eq(propertyCalendarSources.id, source.id));
+    }
+
+    const { syncCalendarSource } = await import('../services/ical-sync');
+    const result = await syncCalendarSource(source);
+
+    const [refreshed] = await db.select().from(propertyCalendarSources)
+      .where(eq(propertyCalendarSources.id, source.id)).limit(1);
+
+    res.json({ data: { source: refreshed, syncResult: result }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/properties/:propertyId/calendar-source/:sourceId/sync]');
+    res.status(500).json({ data: null, error: 'Failed to sync calendar source', meta: {} });
+  }
+});
+
+// POST /:workspaceId/properties/:propertyId/reservations/import-csv
+// Manually import reservations from a CSV (for PMs without iCal/PMS)
+router.post('/:workspaceId/properties/:propertyId/reservations/import-csv', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  const { csv } = req.body as { csv?: string };
+
+  if (!csv || typeof csv !== 'string') {
+    res.status(400).json({ data: null, error: 'csv body is required', meta: {} });
+    return;
+  }
+
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    // Parse CSV — expect a header row
+    const lines = csv.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) {
+      res.status(400).json({ data: null, error: 'CSV must have a header row and at least one data row', meta: {} });
+      return;
+    }
+
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim());
+    const checkInIdx = header.findIndex(h => h === 'checkin_date' || h === 'check_in' || h === 'checkin');
+    const checkOutIdx = header.findIndex(h => h === 'checkout_date' || h === 'check_out' || h === 'checkout');
+    const guestNameIdx = header.findIndex(h => h === 'guest_name' || h === 'name');
+    const guestCountIdx = header.findIndex(h => h === 'guest_count' || h === 'guests' || h === 'count');
+
+    if (checkInIdx === -1 || checkOutIdx === -1) {
+      res.status(400).json({ data: null, error: 'CSV must have checkin_date and checkout_date columns', meta: {} });
+      return;
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim());
+      const checkInStr = cols[checkInIdx];
+      const checkOutStr = cols[checkOutIdx];
+      if (!checkInStr || !checkOutStr) { skipped++; continue; }
+      const checkIn = new Date(checkInStr);
+      const checkOut = new Date(checkOutStr);
+      if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+        errors.push(`Row ${i + 1}: invalid date`);
+        skipped++;
+        continue;
+      }
+      const guestName = guestNameIdx >= 0 ? cols[guestNameIdx] || null : null;
+      const guestCountRaw = guestCountIdx >= 0 ? cols[guestCountIdx] : null;
+      const guestCount = guestCountRaw ? parseInt(guestCountRaw, 10) || null : null;
+
+      try {
+        await db.insert(reservations).values({
+          propertyId,
+          workspaceId: req.workspaceId,
+          guestName,
+          guests: guestCount,
+          checkIn,
+          checkOut,
+          status: 'confirmed',
+          source: 'manual_csv',
+        });
+        imported++;
+      } catch (err) {
+        errors.push(`Row ${i + 1}: ${err instanceof Error ? err.message : 'insert failed'}`);
+        skipped++;
+      }
+    }
+
+    res.json({ data: { imported, skipped, errors: errors.slice(0, 20) }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/properties/:propertyId/reservations/import-csv]');
+    res.status(500).json({ data: null, error: 'Failed to import CSV', meta: {} });
   }
 });
 

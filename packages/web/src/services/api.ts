@@ -753,6 +753,22 @@ export interface PropertyDetails {
   };
 }
 
+export interface CalendarSource {
+  id: string;
+  propertyId: string;
+  workspaceId: string;
+  sourceType: 'ical_url' | 'pms_sync';
+  icalUrl: string | null;
+  syncFrequencyMinutes: number;
+  lastSyncAt: string | null;
+  lastSyncStatus: 'success' | 'failed' | 'never_synced' | 'paused';
+  lastSyncError: string | null;
+  eventsFound: number;
+  consecutiveFailures: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BusinessNotification {
   id: string;
   type: string;
@@ -1078,6 +1094,27 @@ export const businessService = {
     fetchAPI<{ deactivated: boolean }>(`/api/v1/business/${workspaceId}/properties/${propertyId}`, {
       method: 'DELETE',
     }),
+
+  // Calendar source (iCal sync)
+  getCalendarSource: (workspaceId: string, propertyId: string) =>
+    fetchAPI<CalendarSource | null>(`/api/v1/business/${workspaceId}/properties/${propertyId}/calendar-source`),
+  addCalendarSource: (workspaceId: string, propertyId: string, icalUrl: string, syncFrequencyMinutes?: number) =>
+    fetchAPI<{ source: CalendarSource; syncResult: { success: boolean; eventsFound: number; imported: number; updated: number; cancelled: number; error?: string } }>(
+      `/api/v1/business/${workspaceId}/properties/${propertyId}/calendar-source`,
+      { method: 'POST', body: JSON.stringify({ ical_url: icalUrl, sync_frequency_minutes: syncFrequencyMinutes }) },
+    ),
+  deleteCalendarSource: (workspaceId: string, propertyId: string, sourceId: string) =>
+    fetchAPI<{ ok: boolean }>(`/api/v1/business/${workspaceId}/properties/${propertyId}/calendar-source/${sourceId}`, { method: 'DELETE' }),
+  syncCalendarSource: (workspaceId: string, propertyId: string, sourceId: string) =>
+    fetchAPI<{ source: CalendarSource; syncResult: { success: boolean; eventsFound: number; imported: number; updated: number; cancelled: number; error?: string } }>(
+      `/api/v1/business/${workspaceId}/properties/${propertyId}/calendar-source/${sourceId}/sync`,
+      { method: 'POST' },
+    ),
+  importReservationsCsv: (workspaceId: string, propertyId: string, csv: string) =>
+    fetchAPI<{ imported: number; skipped: number; errors: string[] }>(
+      `/api/v1/business/${workspaceId}/properties/${propertyId}/reservations/import-csv`,
+      { method: 'POST', body: JSON.stringify({ csv }) },
+    ),
 
   // CSV Export/Import
   exportPropertiesCsv: (workspaceId: string) =>

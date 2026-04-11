@@ -176,6 +176,13 @@
       "when": 1775863943116,
       "tag": "0024_sudden_king_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1775887585195,
+      "tag": "0025_cooing_prism",
+      "breakpoints": true
     }
   ]
 }
