@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { businessService, type Workspace, type WorkspaceDetail, type Property } from '@/services/api';
 import { O, G, D, TABS, type Tab, HomieBizLogo, useThemeMode } from './constants';
+import { getStoredNav, setStoredNav } from './nav-storage';
 import BusinessLayout from './BusinessLayout';
 import BusinessSidebar from './BusinessSidebar';
 import DashboardTab from './DashboardTab';
@@ -83,7 +84,17 @@ export default function BusinessPortal() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceDetail | null>(null);
-  const [tab, setTab] = useState<Tab>('dashboard');
+  // Initial tab: URL param wins, then localStorage, then default 'dashboard'
+  const [tab, setTab] = useState<Tab>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = params.get('tab');
+      if (urlTab && (TABS as readonly string[]).includes(urlTab)) return urlTab as Tab;
+    } catch { /* ignore */ }
+    const stored = getStoredNav('tab');
+    if (stored && (TABS as readonly string[]).includes(stored)) return stored as Tab;
+    return 'dashboard';
+  });
   const [focusJobId, setFocusJobId] = useState<string | null>(null);
   const [focusIssueId, setFocusIssueId] = useState<string | null>(null);
   const [showReportsUpgrade, setShowReportsUpgrade] = useState(false);
@@ -92,6 +103,8 @@ export default function BusinessPortal() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [selectedPropertyInitialPage, setSelectedPropertyInitialPage] = useState<'activity' | 'jobs' | 'bookings' | 'calendar' | 'providers' | 'property' | undefined>(undefined);
   const [editPropertyId, setEditPropertyId] = useState<string | null>(null);
+  // Tracks whether we've already attempted to restore selectedProperty from localStorage
+  const propertyRestoredRef = useRef(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('bp_sidebar_collapsed') === 'true';
   });
@@ -120,6 +133,51 @@ export default function BusinessPortal() {
       if (res.data) setWorkspace(res.data);
     });
   }, [selectedId]);
+
+  // Persist top-level tab to localStorage on every change
+  useEffect(() => {
+    setStoredNav('tab', tab);
+  }, [tab]);
+
+  // Persist selected property id to localStorage so refreshes restore the
+  // property detail view. Also persist the initial sub-page so an Edit click
+  // that landed on the Property tab survives a refresh.
+  useEffect(() => {
+    setStoredNav('propertyId', selectedProperty?.id ?? null);
+  }, [selectedProperty]);
+
+  useEffect(() => {
+    setStoredNav('propertyInitialPage', selectedPropertyInitialPage ?? null);
+  }, [selectedPropertyInitialPage]);
+
+  // One-time restore of selected property from localStorage. Runs as soon as
+  // the workspace loads. Bails out if the user has already navigated explicitly
+  // (selectedProperty is already set), or if the stored property no longer
+  // exists / belongs to a different workspace.
+  useEffect(() => {
+    if (!workspace || propertyRestoredRef.current || selectedProperty) return;
+    propertyRestoredRef.current = true;
+    const storedId = getStoredNav('propertyId');
+    if (!storedId) return;
+    businessService.getProperty(workspace.id, storedId)
+      .then(res => {
+        if (res.data) {
+          setSelectedProperty(res.data);
+          const storedInitial = getStoredNav('propertyInitialPage');
+          if (storedInitial) {
+            setSelectedPropertyInitialPage(storedInitial as 'activity' | 'jobs' | 'bookings' | 'calendar' | 'providers' | 'property');
+          }
+        } else {
+          // Stored property no longer exists — clear it
+          setStoredNav('propertyId', null);
+          setStoredNav('propertyInitialPage', null);
+        }
+      })
+      .catch(() => {
+        setStoredNav('propertyId', null);
+        setStoredNav('propertyInitialPage', null);
+      });
+  }, [workspace, selectedProperty]);
 
   // Handle URL params for tab navigation and section focus — re-runs on URL changes
   useEffect(() => {

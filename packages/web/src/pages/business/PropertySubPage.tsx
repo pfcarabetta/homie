@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { businessService, type Property, type PropertyDetails, type BedConfig } from '@/services/api';
 import { O, G, D, PROPERTY_TYPES, BED_TYPES } from './constants';
 import { PropertyScanCard, ScanCaptureModal, PropertyInventoryView } from './PropertyInventory';
+import { getStoredNav, setStoredNav } from './nav-storage';
 
 /* ── Shared styles ────────────────────────────────────────────────────────── */
 
@@ -753,6 +754,7 @@ export function PropertyInventoryPanel({ workspaceId, property, plan, onProperty
 /* ── PropertySubPage (container with tabs) ────────────────────────────────── */
 
 type PropertyTab = 'profile' | 'equipment' | 'inventory';
+const VALID_PROPERTY_TABS: PropertyTab[] = ['profile', 'equipment', 'inventory'];
 
 export default function PropertySubPage({ workspaceId, property, plan, onPropertyUpdated, onDeleted }: {
   workspaceId: string;
@@ -761,8 +763,18 @@ export default function PropertySubPage({ workspaceId, property, plan, onPropert
   onPropertyUpdated: (p: Property) => void;
   onDeleted: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<PropertyTab>('profile');
+  // Restore last-viewed sub-tab from localStorage so refreshes land back here
+  const [activeTab, setActiveTab] = useState<PropertyTab>(() => {
+    const stored = getStoredNav('propertySubTab');
+    if (stored && VALID_PROPERTY_TABS.includes(stored as PropertyTab)) return stored as PropertyTab;
+    return 'profile';
+  });
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+
+  // Persist sub-tab to localStorage on every change
+  useEffect(() => {
+    setStoredNav('propertySubTab', activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     function onResize() { setIsMobile(window.innerWidth <= 768); }

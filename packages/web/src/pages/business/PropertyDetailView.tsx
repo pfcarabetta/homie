@@ -4,6 +4,7 @@ import { businessService, jobService, estimateService, type Property, type Works
 import { PropertyScanCard, ScanCaptureModal, PropertyInventoryView } from './PropertyInventory';
 import { O, G, D, W, PROPERTY_TYPES, VENDOR_CATEGORIES, MiniCalendar, cleanPrice, renderBold, timeAgo } from './constants';
 import PropertySubPage from './PropertySubPage';
+import { getStoredNav, setStoredNav } from './nav-storage';
 import { AddVendorModal, EditVendorModal, groupVendors, type GroupedVendor } from './VendorsTab';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -11,6 +12,7 @@ import EstimateBadge from '@/components/EstimateBadge';
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
 type SubPage = 'activity' | 'jobs' | 'bookings' | 'calendar' | 'providers' | 'property';
+const VALID_SUB_PAGES: SubPage[] = ['activity', 'jobs', 'bookings', 'calendar', 'providers', 'property'];
 
 interface PropertyDetailViewProps {
   workspaceId: string;
@@ -1244,7 +1246,19 @@ function CalendarSourceCard({ workspaceId, propertyId }: { workspaceId: string; 
 /* ── Main Component ─────────────────────────────────────────────────────── */
 
 export default function PropertyDetailView({ workspaceId, property, plan, onBack, onPropertyDeleted, initialPage }: PropertyDetailViewProps) {
-  const [activePage, setActivePage] = useState<SubPage>(initialPage ?? 'activity');
+  // Initial active page priority: explicit caller intent (initialPage prop) >
+  // last stored page from a prior session > default 'activity'.
+  const [activePage, setActivePage] = useState<SubPage>(() => {
+    if (initialPage && VALID_SUB_PAGES.includes(initialPage)) return initialPage;
+    const stored = getStoredNav('propertyPage');
+    if (stored && VALID_SUB_PAGES.includes(stored as SubPage)) return stored as SubPage;
+    return 'activity';
+  });
+
+  // Persist active page to localStorage on every change so refreshes restore it
+  useEffect(() => {
+    setStoredNav('propertyPage', activePage);
+  }, [activePage]);
   const [currentProperty, setCurrentProperty] = useState<Property>(property);
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
   const [bookings, setBookings] = useState<WorkspaceBooking[]>([]);
