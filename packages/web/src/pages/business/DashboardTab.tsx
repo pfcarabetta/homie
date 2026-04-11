@@ -6,6 +6,7 @@ import { trendArrow, renderBold, O, G, D, W, type Tab } from './constants';
 function ReservationsWidget({ workspaceId }: { workspaceId: string }) {
   const [data, setData] = useState<{ occupied: DashboardReservation[]; checkouts: DashboardReservation[]; checkins: DashboardReservation[] } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<'occupied' | 'checkout' | 'checkin' | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -20,6 +21,28 @@ function ReservationsWidget({ workspaceId }: { workspaceId: string }) {
   const totalCount = data.occupied.length + data.checkouts.length + data.checkins.length;
   if (totalCount === 0) return null;
 
+  // SVG icons matching the style of dispatchIcon / calendarIcon below
+  const iconStyle = { width: 22, height: 22, display: 'block' as const };
+  const homeIcon = (
+    <svg style={iconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1v-9z" />
+    </svg>
+  );
+  const checkoutIcon = (
+    <svg style={iconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+  const checkinIcon = (
+    <svg style={iconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+      <polyline points="10 17 15 12 10 7" />
+      <line x1="15" y1="12" x2="3" y2="12" />
+    </svg>
+  );
+
   return (
     <div style={{ marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -28,17 +51,46 @@ function ReservationsWidget({ workspaceId }: { workspaceId: string }) {
       </div>
       <div className="bp-res-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
         <style>{`@media (max-width: 1100px) { .bp-res-grid { grid-template-columns: 1fr !important; } }`}</style>
-        <ReservationCard title="Currently occupied" icon={'\uD83C\uDFE0'} accent={G} items={data.occupied} variant="occupied" />
-        <ReservationCard title="Check-outs" icon={'\u27A1\uFE0F'} accent="#3B82F6" items={data.checkouts} variant="checkout" />
-        <ReservationCard title="Check-ins" icon={'\u2B05\uFE0F'} accent={O} items={data.checkins} variant="checkin" />
+        <ReservationKpiCard
+          label="Currently occupied"
+          icon={homeIcon}
+          color={G}
+          items={data.occupied}
+          variant="occupied"
+          isOpen={expanded === 'occupied'}
+          onToggle={() => setExpanded(e => (e === 'occupied' ? null : 'occupied'))}
+        />
+        <ReservationKpiCard
+          label="Check-outs"
+          icon={checkoutIcon}
+          color="#3B82F6"
+          items={data.checkouts}
+          variant="checkout"
+          isOpen={expanded === 'checkout'}
+          onToggle={() => setExpanded(e => (e === 'checkout' ? null : 'checkout'))}
+        />
+        <ReservationKpiCard
+          label="Check-ins"
+          icon={checkinIcon}
+          color={O}
+          items={data.checkins}
+          variant="checkin"
+          isOpen={expanded === 'checkin'}
+          onToggle={() => setExpanded(e => (e === 'checkin' ? null : 'checkin'))}
+        />
       </div>
     </div>
   );
 }
 
-function ReservationCard({ title, icon, accent, items, variant }: {
-  title: string; icon: string; accent: string; items: DashboardReservation[];
+function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onToggle }: {
+  label: string;
+  icon: JSX.Element;
+  color: string;
+  items: DashboardReservation[];
   variant: 'occupied' | 'checkout' | 'checkin';
+  isOpen: boolean;
+  onToggle: () => void;
 }) {
   function fmtDate(iso: string) {
     const d = new Date(iso);
@@ -77,75 +129,115 @@ function ReservationCard({ title, icon, accent, items, variant }: {
     return fmtDate(item.checkIn);
   }
 
-  return (
-    <div style={{
-      background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4',
-      borderTop: `3px solid ${accent}`,
-      padding: 18, display: 'flex', flexDirection: 'column', minHeight: 200,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 16 }}>{icon}</span>
-        <h5 style={{ fontSize: 13, fontWeight: 700, color: D, margin: 0, flex: 1 }}>{title}</h5>
-        <span style={{
-          fontSize: 11, fontWeight: 700, color: accent,
-          background: `${accent}15`, padding: '2px 8px', borderRadius: 100,
-        }}>{items.length}</span>
-      </div>
+  const canExpand = items.length > 0;
 
-      {items.length === 0 ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#B0AAA4', fontSize: 12, padding: '20px 0' }}>
-          None
+  return (
+    <div
+      style={{
+        background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4',
+        fontFamily: "'DM Sans', sans-serif",
+        overflow: 'hidden', transition: 'border-color 0.15s, box-shadow 0.15s',
+        ...(isOpen ? { borderColor: color, boxShadow: `0 4px 16px ${color}1A` } : {}),
+      }}
+    >
+      <button
+        type="button"
+        onClick={canExpand ? onToggle : undefined}
+        disabled={!canExpand}
+        style={{
+          width: '100%', padding: '18px 20px', background: 'transparent', border: 'none',
+          textAlign: 'left', cursor: canExpand ? 'pointer' : 'default',
+          fontFamily: 'inherit', display: 'block',
+        }}
+        onMouseEnter={canExpand ? (e) => {
+          if (!isOpen) {
+            (e.currentTarget.parentElement as HTMLElement).style.borderColor = color;
+            (e.currentTarget.parentElement as HTMLElement).style.transform = 'translateY(-2px)';
+            (e.currentTarget.parentElement as HTMLElement).style.boxShadow = `0 4px 16px ${color}1A`;
+          }
+        } : undefined}
+        onMouseLeave={canExpand ? (e) => {
+          if (!isOpen) {
+            (e.currentTarget.parentElement as HTMLElement).style.borderColor = '#E0DAD4';
+            (e.currentTarget.parentElement as HTMLElement).style.transform = 'translateY(0)';
+            (e.currentTarget.parentElement as HTMLElement).style.boxShadow = 'none';
+          }
+        } : undefined}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>{label}</span>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: `${color}15`, color,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            {icon}
+          </div>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-          {items.slice(0, 6).map(item => (
-            <div key={item.reservationId} style={{
-              padding: '10px 12px', borderRadius: 10,
-              background: '#FAFAF8', border: '1px solid rgba(0,0,0,0.04)',
-            }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {item.propertyName}
-              </div>
-              <div style={{ fontSize: 11, color: '#6B6560', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span>{fmtGuestName(item.guestName)}</span>
-                {item.guestCount && (
-                  <>
-                    <span>·</span>
-                    <span>{item.guestCount} guest{item.guestCount === 1 ? '' : 's'}</span>
-                  </>
-                )}
-                <span>·</span>
-                <span style={{ color: accent, fontWeight: 600 }}>{relevantDateLabel(item)}</span>
-              </div>
-              {item.runs.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
-                  {item.runs.map(run => (
-                    <a
-                      key={run.id}
-                      href={runHref(run)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        background: '#fff', borderRadius: 100,
-                        padding: '3px 9px', fontSize: 10, color: D,
-                        textDecoration: 'none',
-                        border: '1px solid rgba(0,0,0,0.06)',
-                        width: 'fit-content',
-                      }}
-                    >
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: runColor(run.status), flexShrink: 0 }} />
-                      <span style={{ fontWeight: 600 }}>{run.scheduleTitle}</span>
-                      <span style={{ color: '#9B9490' }}>· {run.jobId ? 'View dispatch' : 'View schedule'}</span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-          {items.length > 6 && (
-            <div style={{ fontSize: 11, color: '#9B9490', textAlign: 'center', paddingTop: 4 }}>
-              + {items.length - 6} more
-            </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ fontSize: 28, fontWeight: 700, color: D }}>{items.length}</div>
+          {canExpand && (
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', display: 'flex', alignItems: 'center', gap: 4 }}>
+              {isOpen ? 'Hide' : 'View'}
+              <svg width={12} height={12} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                <polyline points="6 8 10 12 14 8" />
+              </svg>
+            </span>
           )}
+        </div>
+      </button>
+
+      {/* Expandable drawer */}
+      {isOpen && items.length > 0 && (
+        <div style={{
+          borderTop: '1px solid #F0EDE9', padding: '14px 20px 18px',
+          background: '#FAFAF8',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {items.map(item => (
+              <div key={item.reservationId} style={{
+                padding: '10px 12px', borderRadius: 10,
+                background: '#fff', border: '1px solid rgba(0,0,0,0.06)',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.propertyName}
+                </div>
+                <div style={{ fontSize: 11, color: '#6B6560', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span>{fmtGuestName(item.guestName)}</span>
+                  {item.guestCount && (
+                    <>
+                      <span>·</span>
+                      <span>{item.guestCount} guest{item.guestCount === 1 ? '' : 's'}</span>
+                    </>
+                  )}
+                  <span>·</span>
+                  <span style={{ color, fontWeight: 600 }}>{relevantDateLabel(item)}</span>
+                </div>
+                {item.runs.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                    {item.runs.map(run => (
+                      <a
+                        key={run.id}
+                        href={runHref(run)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          background: '#FAFAF8', borderRadius: 100,
+                          padding: '3px 9px', fontSize: 10, color: D,
+                          textDecoration: 'none',
+                          border: '1px solid rgba(0,0,0,0.06)',
+                          width: 'fit-content',
+                        }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: runColor(run.status), flexShrink: 0 }} />
+                        <span style={{ fontWeight: 600 }}>{run.scheduleTitle}</span>
+                        <span style={{ color: '#9B9490' }}>· {run.jobId ? 'View dispatch' : 'View schedule'}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
