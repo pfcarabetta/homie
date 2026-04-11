@@ -198,7 +198,6 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
   onComplete: () => void;
 }) {
   const [currentRoom, setCurrentRoom] = useState<string>('kitchen');
-  const [isLabel, setIsLabel] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [detected, setDetected] = useState<Array<{ id: string; itemType: string; brand: string | null; modelNumber: string | null; confidence: number; roomType: string }>>([]);
@@ -306,7 +305,6 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
       const res = await businessService.uploadScanPhoto(workspaceId, scanId, {
         image_data_url: dataUrl,
         room_hint: currentRoom,
-        is_label_photo: isLabel,
       });
       if (res.data) {
         const newItems = res.data.itemsDetected;
@@ -364,7 +362,11 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
   }
 
   function handleNextRoom() {
-    showToast(`Moving on. Currently scanning: ${prettifyItemType(currentRoom)}`);
+    const idx = ROOM_OPTIONS.indexOf(currentRoom);
+    const nextIdx = idx >= 0 ? (idx + 1) % ROOM_OPTIONS.length : 0;
+    const next = ROOM_OPTIONS[nextIdx];
+    setCurrentRoom(next);
+    showToast(`Now scanning: ${prettifyItemType(next)}`);
   }
 
   return (
@@ -462,12 +464,12 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
         background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(12px)',
         padding: '14px 16px 24px', borderTop: '1px solid rgba(255,255,255,0.08)',
       }}>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+        <div style={{ marginBottom: 12 }}>
           <select
             value={currentRoom}
             onChange={e => setCurrentRoom(e.target.value)}
             style={{
-              flex: 1, padding: '8px 12px', borderRadius: 8,
+              width: '100%', padding: '8px 12px', borderRadius: 8,
               border: '1px solid rgba(255,255,255,0.2)',
               background: 'rgba(255,255,255,0.05)', color: '#fff',
               fontSize: 12, fontFamily: "'DM Sans', sans-serif",
@@ -475,17 +477,6 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
           >
             {ROOM_OPTIONS.map(r => <option key={r} value={r} style={{ color: '#000' }}>{prettifyItemType(r)}</option>)}
           </select>
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '8px 12px', borderRadius: 8,
-            background: isLabel ? `${O}30` : 'rgba(255,255,255,0.05)',
-            border: `1px solid ${isLabel ? O : 'rgba(255,255,255,0.2)'}`,
-            cursor: 'pointer', fontSize: 11, color: isLabel ? O : 'rgba(255,255,255,0.8)',
-            fontWeight: 600,
-          }}>
-            <input type="checkbox" checked={isLabel} onChange={e => setIsLabel(e.target.checked)} style={{ display: 'none' }} />
-            🏷️ Label
-          </label>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
