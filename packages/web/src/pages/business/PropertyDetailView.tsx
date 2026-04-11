@@ -248,7 +248,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
                         )}
                       </div>
                     </div>
-                    {j.status !== 'expired' && j.status !== 'refunded' && j.status !== 'completed' && (
+                    {j.status !== 'archived' && j.status !== 'refunded' && j.status !== 'completed' && (
                       <button onClick={async (e) => {
                         e.stopPropagation();
                         try {

@@ -385,7 +385,10 @@ router.post('/:id/book', async (req: Request, res: Response) => {
       res.status(409).json(out);
       return;
     }
-    if (job.status === 'expired' || job.status === 'refunded') {
+    // Quotes remain bookable until the dispatch is archived. `expired` is
+    // intentionally allowed — if a provider responded after the auto-expire
+    // window, the PM/customer can still take that quote.
+    if (job.status === 'archived' || job.status === 'refunded') {
       const out: ApiResponse<null> = { data: null, error: `Job is ${job.status}`, meta: {} };
       res.status(409).json(out);
       return;

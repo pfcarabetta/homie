@@ -338,6 +338,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
           <option value="collecting">Collecting</option>
           <option value="completed">Completed</option>
           <option value="expired">Expired</option>
+          <option value="archived">Archived</option>
         </select>
         <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
           style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' }}>
@@ -535,7 +536,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                   )}
 
                   {/* Action buttons */}
-                  {(jobResponses.length > 0 || !['expired', 'refunded'].includes(j.status)) && (
+                  {(jobResponses.length > 0 || !['archived', 'refunded'].includes(j.status)) && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                       {jobResponses.length > 0 && (
                         isPro ? (
@@ -549,7 +550,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                           </button>
                         )
                       )}
-                      {!['expired', 'refunded'].includes(j.status) && (
+                      {!['archived', 'refunded'].includes(j.status) && (
                         <button onClick={() => setSharingJobId(j.id)}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${G}40`, background: `${G}08`, color: G, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                           🔗 Share Status
@@ -626,7 +627,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                                 <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
                               )}
                             </div>
-                            {j.status !== 'expired' && j.status !== 'refunded' && (
+                            {j.status !== 'archived' && j.status !== 'refunded' && (
                               j.status === 'completed' ? (
                                 <div style={{ width: '100%', padding: '10px 0', borderRadius: 100, marginTop: 10, background: '#E0DAD4', color: '#9B9490', fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", textAlign: 'center' }}>Booked</div>
                               ) : (

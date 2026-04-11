@@ -517,7 +517,7 @@ function QuotesTab() {
                                 <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
                               )}
                             </div>
-                            {!j.has_booking && !['expired', 'refunded'].includes(j.status) && (
+                            {!j.has_booking && !['archived', 'refunded'].includes(j.status) && (
                               <div style={{ marginTop: 10 }}>
                                 <input
                                   id={`address-${r.id}`}
