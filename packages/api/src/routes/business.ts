@@ -18,7 +18,9 @@ import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { preferredVendors } from '../db/schema/preferred-vendors';
 import { reservations } from '../db/schema/reservations';
 import { propertyCalendarSources } from '../db/schema/property-calendar-sources';
+import { dispatchSchedules, dispatchScheduleRuns } from '../db/schema/schedules';
 import { notifications } from '../db/schema/notifications';
+import { inArray } from 'drizzle-orm';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 import { generateEstimatePDF } from '../services/estimate-pdf';
 
@@ -3026,6 +3028,209 @@ router.post('/:workspaceId/properties/:propertyId/reservations/import-csv', requ
   } catch (err) {
     logger.error({ err }, '[POST /business/:id/properties/:propertyId/reservations/import-csv]');
     res.status(500).json({ data: null, error: 'Failed to import CSV', meta: {} });
+  }
+});
+
+// GET /:workspaceId/properties/:propertyId/timeline
+// Combined view of upcoming reservations + turnover gaps + auto-dispatch runs
+router.get('/:workspaceId/properties/:propertyId/timeline', requireWorkspace, async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  const { days } = req.query as { days?: string };
+  const dayCount = Math.min(parseInt(days || '30', 10) || 30, 90);
+
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const now = new Date();
+    const horizon = new Date(now.getTime() + dayCount * 24 * 60 * 60 * 1000);
+
+    const reservationRows = await db
+      .select()
+      .from(reservations)
+      .where(and(
+        eq(reservations.propertyId, propertyId),
+        gte(reservations.checkOut, now),
+        lte(reservations.checkIn, horizon),
+        ne(reservations.status, 'cancelled'),
+        ne(reservations.status, 'Cancelled'),
+        ne(reservations.status, 'canceled'),
+      ))
+      .orderBy(reservations.checkIn);
+
+    // Pull active per_checkout schedules + their pending runs for these reservations
+    const reservationIds = reservationRows.map(r => r.id);
+    let runRows: Array<{
+      id: string; scheduleId: string; reservationId: string | null; scheduledFor: Date;
+      status: string; jobId: string | null;
+      scheduleTitle: string; scheduleCategory: string;
+    }> = [];
+    if (reservationIds.length > 0) {
+      runRows = await db
+        .select({
+          id: dispatchScheduleRuns.id,
+          scheduleId: dispatchScheduleRuns.scheduleId,
+          reservationId: dispatchScheduleRuns.reservationId,
+          scheduledFor: dispatchScheduleRuns.scheduledFor,
+          status: dispatchScheduleRuns.status,
+          jobId: dispatchScheduleRuns.jobId,
+          scheduleTitle: dispatchSchedules.title,
+          scheduleCategory: dispatchSchedules.category,
+        })
+        .from(dispatchScheduleRuns)
+        .innerJoin(dispatchSchedules, eq(dispatchScheduleRuns.scheduleId, dispatchSchedules.id))
+        .where(inArray(dispatchScheduleRuns.reservationId, reservationIds));
+    }
+    const runsByReservation = new Map<string, typeof runRows>();
+    for (const r of runRows) {
+      if (!r.reservationId) continue;
+      const list = runsByReservation.get(r.reservationId) || [];
+      list.push(r);
+      runsByReservation.set(r.reservationId, list);
+    }
+
+    // Compute turnover gap to next reservation, flag tight windows
+    const TIGHT_GAP_HOURS = 5;
+    const items = reservationRows.map((r, i) => {
+      const next = reservationRows[i + 1];
+      const turnoverGapHours = next ? (next.checkIn.getTime() - r.checkOut.getTime()) / 3_600_000 : null;
+      const tight = turnoverGapHours !== null && turnoverGapHours < TIGHT_GAP_HOURS;
+      return {
+        id: r.id,
+        guestName: r.guestName,
+        guestCount: r.guests,
+        checkIn: r.checkIn,
+        checkOut: r.checkOut,
+        status: r.status,
+        source: r.source,
+        turnoverGapHours,
+        tightTurnover: tight,
+        runs: (runsByReservation.get(r.id) || []).map(run => ({
+          id: run.id,
+          scheduleId: run.scheduleId,
+          scheduledFor: run.scheduledFor,
+          status: run.status,
+          jobId: run.jobId,
+          scheduleTitle: run.scheduleTitle,
+          scheduleCategory: run.scheduleCategory,
+        })),
+      };
+    });
+
+    res.json({ data: { items, days: dayCount }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/:propertyId/timeline]');
+    res.status(500).json({ data: null, error: 'Failed to load timeline', meta: {} });
+  }
+});
+
+// GET /:workspaceId/dashboard/turnovers
+// This week's checkouts across all workspace properties
+router.get('/:workspaceId/dashboard/turnovers', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Workspace properties
+    const propRows = await db
+      .select({ id: properties.id, name: properties.name })
+      .from(properties)
+      .where(and(eq(properties.workspaceId, req.workspaceId), eq(properties.active, true)));
+
+    if (propRows.length === 0) { res.json({ data: { items: [] }, error: null, meta: {} }); return; }
+
+    const propIds = propRows.map(p => p.id);
+    const propNameById = new Map(propRows.map(p => [p.id, p.name] as const));
+
+    // Upcoming checkouts within 7 days
+    const checkouts = await db
+      .select()
+      .from(reservations)
+      .where(and(
+        inArray(reservations.propertyId, propIds),
+        gte(reservations.checkOut, now),
+        lte(reservations.checkOut, sevenDaysOut),
+        ne(reservations.status, 'cancelled'),
+        ne(reservations.status, 'Cancelled'),
+        ne(reservations.status, 'canceled'),
+      ))
+      .orderBy(reservations.checkOut);
+
+    // Group by property to compute turnover gap (next reservation per property)
+    const byProperty = new Map<string, typeof checkouts>();
+    for (const r of checkouts) {
+      const list = byProperty.get(r.propertyId) || [];
+      list.push(r);
+      byProperty.set(r.propertyId, list);
+    }
+    // We also need NEXT checkin (which may be outside the 7-day window)
+    const allUpcoming = await db
+      .select({ id: reservations.id, propertyId: reservations.propertyId, checkIn: reservations.checkIn, checkOut: reservations.checkOut })
+      .from(reservations)
+      .where(and(
+        inArray(reservations.propertyId, propIds),
+        gte(reservations.checkIn, now),
+        ne(reservations.status, 'cancelled'),
+      ))
+      .orderBy(reservations.checkIn);
+    const checkinByProperty = new Map<string, typeof allUpcoming>();
+    for (const r of allUpcoming) {
+      const list = checkinByProperty.get(r.propertyId) || [];
+      list.push(r);
+      checkinByProperty.set(r.propertyId, list);
+    }
+
+    // Pull dispatch runs for these reservations
+    const reservationIds = checkouts.map(r => r.id);
+    let runRows: Array<{ reservationId: string | null; status: string }> = [];
+    if (reservationIds.length > 0) {
+      runRows = await db
+        .select({ reservationId: dispatchScheduleRuns.reservationId, status: dispatchScheduleRuns.status })
+        .from(dispatchScheduleRuns)
+        .where(inArray(dispatchScheduleRuns.reservationId, reservationIds));
+    }
+    const runsByReservation = new Map<string, typeof runRows>();
+    for (const r of runRows) {
+      if (!r.reservationId) continue;
+      const list = runsByReservation.get(r.reservationId) || [];
+      list.push(r);
+      runsByReservation.set(r.reservationId, list);
+    }
+
+    const TIGHT_GAP_HOURS = 5;
+    const items = checkouts.map(r => {
+      const propUpcoming = checkinByProperty.get(r.propertyId) || [];
+      const nextCheckin = propUpcoming.find(x => x.checkIn > r.checkOut);
+      const gapHours = nextCheckin ? (nextCheckin.checkIn.getTime() - r.checkOut.getTime()) / 3_600_000 : null;
+      const runs = runsByReservation.get(r.id) || [];
+      const totalRuns = runs.length;
+      const confirmedRuns = runs.filter(x => x.status === 'completed' || x.status === 'dispatched').length;
+      const failedRuns = runs.filter(x => x.status === 'failed').length;
+      let dispatchStatus: 'confirmed' | 'pending' | 'attention' | 'none' = 'none';
+      if (totalRuns > 0) {
+        if (failedRuns > 0) dispatchStatus = 'attention';
+        else if (confirmedRuns === totalRuns) dispatchStatus = 'confirmed';
+        else dispatchStatus = 'pending';
+      }
+      return {
+        reservationId: r.id,
+        propertyId: r.propertyId,
+        propertyName: propNameById.get(r.propertyId) ?? '',
+        guestName: r.guestName,
+        checkOut: r.checkOut,
+        nextCheckIn: nextCheckin?.checkIn ?? null,
+        turnoverGapHours: gapHours,
+        tightTurnover: gapHours !== null && gapHours < TIGHT_GAP_HOURS,
+        dispatchStatus,
+        runCount: totalRuns,
+      };
+    });
+
+    res.json({ data: { items }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/dashboard/turnovers]');
+    res.status(500).json({ data: null, error: 'Failed to load turnovers', meta: {} });
   }
 });
 

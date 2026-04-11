@@ -87,6 +87,8 @@ export const dispatchScheduleRuns = pgTable('dispatch_schedule_runs', {
     .notNull()
     .references(() => dispatchSchedules.id, { onDelete: 'cascade' }),
   jobId: uuid('job_id').references(() => jobs.id),
+  /** Reservation that triggered this run (for per_checkout schedules) */
+  reservationId: uuid('reservation_id'),
   scheduledFor: timestamp('scheduled_for', { withTimezone: true }).notNull(),
   dispatchedAt: timestamp('dispatched_at', { withTimezone: true }),
   status: text('status').notNull().default('pending'),
@@ -96,7 +98,10 @@ export const dispatchScheduleRuns = pgTable('dispatch_schedule_runs', {
   requiredIntervention: boolean('required_intervention').notNull().default(false),
   interventionType: varchar('intervention_type', { length: 50 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index('schedule_runs_reservation_idx').on(table.reservationId),
+  index('schedule_runs_scheduled_for_idx').on(table.scheduledFor),
+]);
 
 export type DispatchScheduleRun = typeof dispatchScheduleRuns.$inferSelect;
 export type NewDispatchScheduleRun = typeof dispatchScheduleRuns.$inferInsert;

@@ -1,8 +1,9 @@
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray, gte } from 'drizzle-orm';
 import * as ical from 'node-ical';
 import { db } from '../db';
 import { reservations } from '../db/schema/reservations';
 import { propertyCalendarSources, type PropertyCalendarSource } from '../db/schema/property-calendar-sources';
+import { dispatchSchedules, dispatchScheduleRuns, type CadenceConfig } from '../db/schema/schedules';
 import logger from '../logger';
 
 const FETCH_TIMEOUT_MS = 20_000;
@@ -237,6 +238,161 @@ export async function syncCalendarSource(source: PropertyCalendarSource): Promis
     })
     .where(eq(propertyCalendarSources.id, source.id));
 
+  // Trigger per_checkout dispatch runs for any new/updated checkouts
+  try {
+    await triggerPerCheckoutRuns(source.propertyId);
+  } catch (err) {
+    logger.warn({ err, propertyId: source.propertyId }, '[ical-sync] per_checkout trigger failed');
+  }
+
+  // Detect tight turnovers from the freshly synced reservations and notify
+  try {
+    await detectTightTurnovers(source);
+  } catch (err) {
+    logger.warn({ err, propertyId: source.propertyId }, '[ical-sync] tight turnover detection failed');
+  }
+
   logger.info({ sourceId: source.id, propertyId: source.propertyId, eventsFound: parsedEvents.length, imported, updated, cancelled }, '[ical-sync] sync complete');
   return { success: true, eventsFound: parsedEvents.length, imported, updated, cancelled };
+}
+
+/**
+ * For each active per_checkout schedule on a property, ensure there's a
+ * pending dispatch_schedule_run for every upcoming confirmed reservation
+ * that doesn't already have one. Idempotent (deduped by reservation_id).
+ */
+export async function triggerPerCheckoutRuns(propertyId: string): Promise<{ created: number }> {
+  // Find active per_checkout schedules for this property
+  const schedules = await db
+    .select()
+    .from(dispatchSchedules)
+    .where(and(
+      eq(dispatchSchedules.propertyId, propertyId),
+      eq(dispatchSchedules.cadenceType, 'per_checkout'),
+      eq(dispatchSchedules.status, 'active'),
+    ));
+
+  if (schedules.length === 0) return { created: 0 };
+
+  // Get upcoming confirmed reservations for this property (next 60 days)
+  const sixtyDaysFromNow = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+  const upcoming = await db
+    .select({ id: reservations.id, checkOut: reservations.checkOut })
+    .from(reservations)
+    .where(and(
+      eq(reservations.propertyId, propertyId),
+      eq(reservations.status, 'confirmed'),
+      gte(reservations.checkOut, new Date()),
+      sql`${reservations.checkOut} <= ${sixtyDaysFromNow}`,
+    ));
+
+  if (upcoming.length === 0) return { created: 0 };
+
+  // For each (schedule, reservation), check if a run already exists
+  const reservationIds = upcoming.map(r => r.id);
+  const existingRuns = await db
+    .select({ scheduleId: dispatchScheduleRuns.scheduleId, reservationId: dispatchScheduleRuns.reservationId })
+    .from(dispatchScheduleRuns)
+    .where(and(
+      inArray(dispatchScheduleRuns.scheduleId, schedules.map(s => s.id)),
+      inArray(dispatchScheduleRuns.reservationId, reservationIds),
+    ));
+
+  const existingKeys = new Set(existingRuns.map(r => `${r.scheduleId}|${r.reservationId}`));
+
+  let created = 0;
+  for (const sched of schedules) {
+    // Determine offset from checkout (default: 2 hours after checkout)
+    const cfg = sched.cadenceConfig as CadenceConfig | null;
+    const offsetHours = (cfg?.offsetHours as number | undefined) ?? 2;
+
+    for (const res of upcoming) {
+      const key = `${sched.id}|${res.id}`;
+      if (existingKeys.has(key)) continue;
+
+      const scheduledFor = new Date(res.checkOut.getTime() + offsetHours * 60 * 60 * 1000);
+      try {
+        await db.insert(dispatchScheduleRuns).values({
+          scheduleId: sched.id,
+          reservationId: res.id,
+          scheduledFor,
+          status: 'pending',
+        });
+        created++;
+      } catch (err) {
+        logger.warn({ err, scheduleId: sched.id, reservationId: res.id }, '[ical-sync] failed to create per_checkout run');
+      }
+    }
+  }
+
+  if (created > 0) {
+    logger.info({ propertyId, created }, '[ical-sync] created per_checkout runs');
+  }
+  return { created };
+}
+
+// Tight turnover threshold + per-process dedupe so we only alert once per
+// (reservation, sync run) combo
+const TIGHT_TURNOVER_HOURS = 5;
+const alertedTightTurnovers = new Set<string>();
+
+async function detectTightTurnovers(source: PropertyCalendarSource): Promise<void> {
+  const now = new Date();
+  const horizon = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+  const upcoming = await db
+    .select({ id: reservations.id, checkIn: reservations.checkIn, checkOut: reservations.checkOut, guestName: reservations.guestName })
+    .from(reservations)
+    .where(and(
+      eq(reservations.propertyId, source.propertyId),
+      eq(reservations.status, 'confirmed'),
+      gte(reservations.checkOut, now),
+      sql`${reservations.checkIn} <= ${horizon}`,
+    ))
+    .orderBy(reservations.checkIn);
+
+  if (upcoming.length < 2) return;
+
+  // Find property name for the alert
+  const { properties } = await import('../db/schema/properties');
+  const [prop] = await db.select({ name: properties.name }).from(properties).where(eq(properties.id, source.propertyId)).limit(1);
+  const propertyName = prop?.name ?? 'Property';
+
+  for (let i = 0; i < upcoming.length - 1; i++) {
+    const curr = upcoming[i];
+    const next = upcoming[i + 1];
+    const gapHours = (next.checkIn.getTime() - curr.checkOut.getTime()) / 3_600_000;
+    if (gapHours >= TIGHT_TURNOVER_HOURS) continue;
+
+    const dedupeKey = `${source.propertyId}|${curr.id}|${next.id}`;
+    if (alertedTightTurnovers.has(dedupeKey)) continue;
+    alertedTightTurnovers.add(dedupeKey);
+
+    const gapHoursLabel = gapHours.toFixed(1);
+    logger.info({ propertyId: source.propertyId, propertyName, gapHours: gapHoursLabel }, '[ical-sync] tight turnover detected');
+
+    // In-app notification feed
+    try {
+      const { recordNotification } = await import('./notification-feed');
+      void recordNotification({
+        workspaceId: source.workspaceId,
+        type: 'approval_needed',
+        title: `Tight turnover at ${propertyName}`,
+        body: `${gapHoursLabel}hr window between guests on ${curr.checkOut.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}. Review the schedule to make sure your turnover team can finish in time.`,
+        propertyId: source.propertyId,
+        link: `/business?tab=properties`,
+      });
+    } catch { /* silent */ }
+
+    // Slack notification (if connected)
+    try {
+      const { notifySlack } = await import('./slack-notifier');
+      void notifySlack(source.workspaceId, 'approval_needed', {
+        jobId: 'tight-turnover',
+        category: 'turnover',
+        severity: 'high',
+        summary: `Tight turnover alert: ${propertyName}. ${gapHoursLabel}hr window between guests.`,
+      });
+    } catch { /* silent */ }
+  }
 }

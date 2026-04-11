@@ -421,7 +421,176 @@ function getDateLabel(dateStr: string): string {
 
 /* ── Sub-page: Activity (merged timeline with expandable cards) ────────── */
 
-function ActivitySubPage({ dispatches, bookings, loading, workspaceId }: { dispatches: WorkspaceDispatch[]; bookings: WorkspaceBooking[]; loading: boolean; workspaceId: string }) {
+/* ── Reservation Timeline ───────────────────────────────────────────────── */
+
+function ReservationTimeline({ workspaceId, propertyId }: { workspaceId: string; propertyId: string }) {
+  const [items, setItems] = useState<import('@/services/api').ReservationTimelineItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [hasSource, setHasSource] = useState<boolean | null>(null);
+  const [showMore, setShowMore] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      businessService.getPropertyTimeline(workspaceId, propertyId, 30),
+      businessService.getCalendarSource(workspaceId, propertyId),
+    ]).then(([timelineRes, sourceRes]) => {
+      if (timelineRes.data) setItems(timelineRes.data.items);
+      setHasSource(sourceRes.data !== null);
+    }).catch(() => { /* silent */ }).finally(() => setLoading(false));
+  }, [workspaceId, propertyId]);
+
+  if (loading) return null;
+
+  // No calendar source connected → soft prompt
+  if (!hasSource && items.length === 0) {
+    return (
+      <div style={{
+        background: 'var(--bp-card)', border: '1px dashed var(--bp-border)',
+        borderRadius: 12, padding: 24, marginBottom: 20, textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCC5'}</div>
+        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 6 }}>
+          Connect your booking calendar
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--bp-subtle)', maxWidth: 400, margin: '0 auto 14px', lineHeight: 1.5 }}>
+          See upcoming stays and auto-dispatch turnovers based on guest check-in and check-out dates.
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--bp-muted)' }}>
+          Open Property Settings → Booking calendar to add your iCal feed.
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length === 0) return null;
+
+  const visible = showMore ? items : items.slice(0, 6);
+
+  function fmtDateRange(checkIn: string, checkOut: string) {
+    const ci = new Date(checkIn);
+    const co = new Date(checkOut);
+    const sameMonth = ci.getMonth() === co.getMonth();
+    const ciStr = ci.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const coStr = sameMonth ? co.getDate().toString() : co.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${ciStr}–${coStr}`;
+  }
+
+  function fmtGuestName(name: string | null): string {
+    if (!name) return 'Guest';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+  }
+
+  function statusColor(status: string): string {
+    if (status === 'completed' || status === 'dispatched') return G;
+    if (status === 'failed') return '#DC2626';
+    return '#9B9490';
+  }
+
+  function statusLabel(status: string): string {
+    if (status === 'completed') return 'Confirmed';
+    if (status === 'dispatched') return 'In progress';
+    if (status === 'failed') return 'Needs attention';
+    return 'Pending';
+  }
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: 'var(--bp-text)', margin: 0 }}>
+            Upcoming stays
+          </h4>
+          <span style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>{items.length} upcoming</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {visible.map((r, i) => {
+          const tightTurnover = r.tightTurnover;
+          const statusBorder = r.status === 'tentative' ? '#9B9490' : '#3B82F6';
+          return (
+            <div key={r.id}>
+              {/* Reservation card */}
+              <div style={{
+                background: 'var(--bp-card)', borderRadius: 12,
+                border: '1px solid var(--bp-border)',
+                borderLeft: `4px solid ${statusBorder}`,
+                padding: '14px 16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ fontFamily: 'Fraunces, serif', fontSize: 17, fontWeight: 700, color: 'var(--bp-text)' }}>
+                      {fmtDateRange(r.checkIn, r.checkOut)}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--bp-muted)' }}>
+                      {fmtGuestName(r.guestName)}{r.guestCount ? ` · ${r.guestCount} guest${r.guestCount === 1 ? '' : 's'}` : ''}
+                    </div>
+                    {r.status === 'tentative' && (
+                      <span style={{ fontSize: 9, fontWeight: 700, color: '#6B6560', background: 'rgba(0,0,0,0.06)', padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase' }}>
+                        Blocked
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Turnover gap to next reservation */}
+              {i < visible.length - 1 && r.turnoverGapHours !== null && (
+                <div style={{
+                  margin: '0 0 0 24px',
+                  padding: '8px 16px',
+                  borderLeft: tightTurnover ? '2px dashed #D4A437' : '2px solid var(--bp-border)',
+                  position: 'relative',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: r.runs.length > 0 ? 6 : 0 }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 600,
+                      color: tightTurnover ? '#D4A437' : 'var(--bp-subtle)',
+                    }}>
+                      {tightTurnover && '⚠️ '}{Math.round(r.turnoverGapHours)}hr turnover
+                    </span>
+                  </div>
+                  {/* Auto-dispatch runs attached to this turnover */}
+                  {r.runs.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {r.runs.map(run => (
+                        <div key={run.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          background: 'var(--bp-bg)', borderRadius: 100,
+                          padding: '4px 10px', fontSize: 11, color: 'var(--bp-text)',
+                          width: 'fit-content',
+                        }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor(run.status), flexShrink: 0 }} />
+                          <span style={{ fontWeight: 600 }}>{run.scheduleTitle}</span>
+                          <span style={{ color: 'var(--bp-subtle)' }}>· {statusLabel(run.status)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {items.length > 6 && (
+        <button onClick={() => setShowMore(s => !s)} style={{
+          marginTop: 12, padding: '8px 16px', borderRadius: 8, border: '1px solid var(--bp-border)',
+          background: 'var(--bp-card)', color: 'var(--bp-muted)', fontSize: 12, fontWeight: 600,
+          cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+        }}>
+          {showMore ? 'Show less' : `Show ${items.length - 6} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ActivitySubPage({ dispatches, bookings, loading, workspaceId, propertyId }: { dispatches: WorkspaceDispatch[]; bookings: WorkspaceBooking[]; loading: boolean; workspaceId: string; propertyId: string }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
@@ -464,10 +633,13 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId }: { dispa
 
   if (items.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCCB'}</div>
-        <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No activity yet</div>
-        <div style={{ fontSize: 14, color: '#9B9490' }}>Dispatches and bookings for this property will appear here.</div>
+      <div>
+        <ReservationTimeline workspaceId={workspaceId} propertyId={propertyId} />
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCCB'}</div>
+          <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No activity yet</div>
+          <div style={{ fontSize: 14, color: '#9B9490' }}>Dispatches and bookings for this property will appear here.</div>
+        </div>
       </div>
     );
   }
@@ -475,6 +647,7 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId }: { dispa
   let lastDateLabel = '';
   return (
     <div>
+      <ReservationTimeline workspaceId={workspaceId} propertyId={propertyId} />
       <style dangerouslySetInnerHTML={{ __html: PDV_CARD_STYLES }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {items.map(item => {
@@ -1247,7 +1420,7 @@ export default function PropertyDetailView({ workspaceId, property, plan: _plan,
   function renderContent() {
     switch (activePage) {
       case 'activity':
-        return <ActivitySubPage dispatches={dispatches} bookings={bookings} loading={loadingDispatches || loadingBookings} workspaceId={workspaceId} />;
+        return <ActivitySubPage dispatches={dispatches} bookings={bookings} loading={loadingDispatches || loadingBookings} workspaceId={workspaceId} propertyId={currentProperty.id} />;
       case 'jobs':
         return <JobsSubPage dispatches={dispatches} loading={loadingDispatches} workspaceId={workspaceId} propertyId={currentProperty.id} />;
       case 'bookings':

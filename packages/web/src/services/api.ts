@@ -753,6 +753,42 @@ export interface PropertyDetails {
   };
 }
 
+export interface ReservationTimelineRun {
+  id: string;
+  scheduleId: string;
+  scheduledFor: string;
+  status: string;
+  jobId: string | null;
+  scheduleTitle: string;
+  scheduleCategory: string;
+}
+
+export interface ReservationTimelineItem {
+  id: string;
+  guestName: string | null;
+  guestCount: number | null;
+  checkIn: string;
+  checkOut: string;
+  status: string;
+  source: string | null;
+  turnoverGapHours: number | null;
+  tightTurnover: boolean;
+  runs: ReservationTimelineRun[];
+}
+
+export interface TurnoverItem {
+  reservationId: string;
+  propertyId: string;
+  propertyName: string;
+  guestName: string | null;
+  checkOut: string;
+  nextCheckIn: string | null;
+  turnoverGapHours: number | null;
+  tightTurnover: boolean;
+  dispatchStatus: 'confirmed' | 'pending' | 'attention' | 'none';
+  runCount: number;
+}
+
 export interface CalendarSource {
   id: string;
   propertyId: string;
@@ -1115,6 +1151,12 @@ export const businessService = {
       `/api/v1/business/${workspaceId}/properties/${propertyId}/reservations/import-csv`,
       { method: 'POST', body: JSON.stringify({ csv }) },
     ),
+  getPropertyTimeline: (workspaceId: string, propertyId: string, days?: number) =>
+    fetchAPI<{ items: ReservationTimelineItem[]; days: number }>(
+      `/api/v1/business/${workspaceId}/properties/${propertyId}/timeline${days ? `?days=${days}` : ''}`,
+    ),
+  getDashboardTurnovers: (workspaceId: string) =>
+    fetchAPI<{ items: TurnoverItem[] }>(`/api/v1/business/${workspaceId}/dashboard/turnovers`),
 
   // CSV Export/Import
   exportPropertiesCsv: (workspaceId: string) =>
