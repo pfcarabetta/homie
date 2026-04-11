@@ -24,6 +24,7 @@ import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/sche
 import { inArray } from 'drizzle-orm';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 import { generateEstimatePDF } from '../services/estimate-pdf';
+import { applyStandardCheckInTime, applyStandardCheckOutTime } from '../services/reservation-times';
 
 const router = Router();
 
@@ -2645,8 +2646,9 @@ router.post('/:workspaceId/import/track/reservations', requireWorkspace, require
 
         if (!checkInStr || !checkOutStr) continue;
 
-        const checkIn = new Date(checkInStr);
-        const checkOut = new Date(checkOutStr);
+        // Normalize to standard times: 4 PM check-in, 11 AM check-out
+        const checkIn = applyStandardCheckInTime(new Date(checkInStr));
+        const checkOut = applyStandardCheckOutTime(new Date(checkOutStr));
 
         // Skip past reservations (checkOut in the past)
         if (checkOut < now) continue;
@@ -2996,13 +2998,16 @@ router.post('/:workspaceId/properties/:propertyId/reservations/import-csv', requ
       const checkInStr = cols[checkInIdx];
       const checkOutStr = cols[checkOutIdx];
       if (!checkInStr || !checkOutStr) { skipped++; continue; }
-      const checkIn = new Date(checkInStr);
-      const checkOut = new Date(checkOutStr);
-      if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+      const rawCheckIn = new Date(checkInStr);
+      const rawCheckOut = new Date(checkOutStr);
+      if (isNaN(rawCheckIn.getTime()) || isNaN(rawCheckOut.getTime())) {
         errors.push(`Row ${i + 1}: invalid date`);
         skipped++;
         continue;
       }
+      // Normalize to standard times: 4 PM check-in, 11 AM check-out
+      const checkIn = applyStandardCheckInTime(rawCheckIn);
+      const checkOut = applyStandardCheckOutTime(rawCheckOut);
       const guestName = guestNameIdx >= 0 ? cols[guestNameIdx] || null : null;
       const guestCountRaw = guestCountIdx >= 0 ? cols[guestCountIdx] : null;
       const guestCount = guestCountRaw ? parseInt(guestCountRaw, 10) || null : null;

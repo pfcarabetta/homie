@@ -3,6 +3,7 @@ import { db } from '../db';
 import { workspaces } from '../db/schema/workspaces';
 import { properties } from '../db/schema/properties';
 import { reservations } from '../db/schema/reservations';
+import { applyStandardCheckInTime, applyStandardCheckOutTime } from './reservation-times';
 import { eq, and } from 'drizzle-orm';
 import logger from '../logger';
 
@@ -252,8 +253,9 @@ async function syncWorkspaceReservations(ws: {
       const checkOutStr = tr.departureDate ?? tr.checkOut ?? tr.endDate;
       if (!checkInStr || !checkOutStr) continue;
 
-      const checkIn = new Date(checkInStr);
-      const checkOut = new Date(checkOutStr);
+      // Normalize to standard times: 4 PM check-in, 11 AM check-out
+      const checkIn = applyStandardCheckInTime(new Date(checkInStr));
+      const checkOut = applyStandardCheckOutTime(new Date(checkOutStr));
       if (checkOut < now) continue;
 
       const guestCount = tr.numGuests ?? tr.guests ?? tr.numberOfGuests ?? null;

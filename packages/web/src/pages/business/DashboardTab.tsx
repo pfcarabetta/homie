@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { businessService, type WorkspaceDetail, type DashboardData, type SeasonalSuggestion, type Property, type DashboardReservation, type DashboardReservationRun } from '@/services/api';
-import { trendArrow, renderBold, O, G, D, W, type Tab } from './constants';
+import { trendArrow, renderBold, O, G, D, W, type Tab, formatReservationMoment } from './constants';
 
 function ReservationsWidget({ workspaceId }: { workspaceId: string }) {
   const [data, setData] = useState<{ occupied: DashboardReservation[]; checkouts: DashboardReservation[]; checkins: DashboardReservation[] } | null>(null);
@@ -92,19 +92,6 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
   isOpen: boolean;
   onToggle: () => void;
 }) {
-  function fmtDate(iso: string) {
-    const d = new Date(iso);
-    const now = new Date();
-    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    if (d.toDateString() === now.toDateString()) {
-      return `Today ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
-    }
-    if (d.toDateString() === tomorrow.toDateString()) {
-      return `Tmrw ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
-    }
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  }
-
   function fmtGuestName(name: string | null): string {
     if (!name) return 'Guest';
     const parts = name.trim().split(' ');
@@ -124,9 +111,9 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
   }
 
   function relevantDateLabel(item: DashboardReservation): string {
-    if (variant === 'occupied') return `Until ${fmtDate(item.checkOut)}`;
-    if (variant === 'checkout') return fmtDate(item.checkOut);
-    return fmtDate(item.checkIn);
+    if (variant === 'occupied') return `Until ${formatReservationMoment(item.checkOut, 'checkOut')}`;
+    if (variant === 'checkout') return formatReservationMoment(item.checkOut, 'checkOut');
+    return formatReservationMoment(item.checkIn, 'checkIn');
   }
 
   const canExpand = items.length > 0;

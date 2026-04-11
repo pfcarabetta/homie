@@ -5,6 +5,35 @@ import type { Reservation } from '@/services/api';
 // ── Color Constants ──────────────────────────────────────────────────────────
 export const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
+// ── Reservation time constants ───────────────────────────────────────────────
+// Homie uses standard check-in/check-out times across all reservations.
+// API normalizes imports to these times in UTC; display formats them with
+// timeZone: 'UTC' so every viewer sees the same wall-clock value.
+export const RESERVATION_CHECK_IN_LABEL = '4:00 PM';
+export const RESERVATION_CHECK_OUT_LABEL = '11:00 AM';
+
+/**
+ * Format a reservation date as "Today 4:00 PM" / "Tmrw 11:00 AM" / "Wed Apr 15".
+ * `kind` controls which standard time label is appended when the date is today
+ * or tomorrow. For dates further out, only the date is shown.
+ */
+export function formatReservationMoment(iso: string, kind: 'checkIn' | 'checkOut'): string {
+  const d = new Date(iso);
+  // Build a UTC-anchored date for "today" comparisons. Reservations are stored
+  // as 4 PM / 11 AM UTC, so we compare date parts in UTC to avoid timezone drift.
+  const now = new Date();
+  const dDate = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  const today = `${now.getUTCFullYear()}-${now.getUTCMonth()}-${now.getUTCDate()}`;
+  const tomorrowDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  const tomorrow = `${tomorrowDate.getUTCFullYear()}-${tomorrowDate.getUTCMonth()}-${tomorrowDate.getUTCDate()}`;
+
+  const timeLabel = kind === 'checkIn' ? RESERVATION_CHECK_IN_LABEL : RESERVATION_CHECK_OUT_LABEL;
+
+  if (dDate === today) return `Today ${timeLabel}`;
+  if (dDate === tomorrow) return `Tmrw ${timeLabel}`;
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 // ── Tab Types ────────────────────────────────────────────────────────────────
 export const TABS = ['dashboard', 'dispatch-chat', 'dispatches', 'bookings', 'guest-requests', 'guest-issues', 'guest-settings', 'guest-auto-dispatch', 'guest-qr-codes', 'schedules', 'reports', 'scorecards', 'properties', 'vendors', 'team', 'settings', 'billing'] as const;
 export type Tab = typeof TABS[number];

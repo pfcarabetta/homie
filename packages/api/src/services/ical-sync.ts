@@ -4,6 +4,7 @@ import { db } from '../db';
 import { reservations } from '../db/schema/reservations';
 import { propertyCalendarSources, type PropertyCalendarSource } from '../db/schema/property-calendar-sources';
 import { dispatchSchedules, dispatchScheduleRuns, type CadenceConfig } from '../db/schema/schedules';
+import { applyStandardCheckInTime, applyStandardCheckOutTime } from './reservation-times';
 import logger from '../logger';
 
 const FETCH_TIMEOUT_MS = 20_000;
@@ -173,15 +174,19 @@ export async function syncCalendarSource(source: PropertyCalendarSource): Promis
       .where(and(eq(reservations.icalUid, ev.uid), eq(reservations.propertyId, source.propertyId)))
       .limit(1);
 
+    // Normalize check-in to 4 PM UTC and check-out to 11 AM UTC
+    const normalizedCheckIn = applyStandardCheckInTime(ev.start);
+    const normalizedCheckOut = applyStandardCheckOutTime(ev.end);
+
     if (existing) {
       // Update if dates or status changed
-      const datesChanged = existing.checkIn.getTime() !== ev.start.getTime() || existing.checkOut.getTime() !== ev.end.getTime();
+      const datesChanged = existing.checkIn.getTime() !== normalizedCheckIn.getTime() || existing.checkOut.getTime() !== normalizedCheckOut.getTime();
       const statusChanged = existing.status !== status;
       if (datesChanged || statusChanged) {
         await db.update(reservations)
           .set({
-            checkIn: ev.start,
-            checkOut: ev.end,
+            checkIn: normalizedCheckIn,
+            checkOut: normalizedCheckOut,
             guestName,
             status,
             syncedAt: now,
@@ -198,8 +203,8 @@ export async function syncCalendarSource(source: PropertyCalendarSource): Promis
         propertyId: source.propertyId,
         workspaceId: source.workspaceId,
         guestName,
-        checkIn: ev.start,
-        checkOut: ev.end,
+        checkIn: normalizedCheckIn,
+        checkOut: normalizedCheckOut,
         status,
         source: 'ical_import',
         icalUid: ev.uid,
