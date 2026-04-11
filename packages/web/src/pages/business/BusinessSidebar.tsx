@@ -35,9 +35,9 @@ function getNavItems(plan: string, role: string): NavItem[] {
     {
       id: 'dispatch-group', label: 'Dispatch', icon: 'dispatch', children: [
         { id: 'dispatch-new', label: 'New Dispatch', icon: 'plus', action: 'new-dispatch' },
+        { id: 'schedules', label: 'Auto-Dispatch', icon: 'history', tab: 'schedules', locked: !isPro },
         { id: 'dispatches', label: 'Active Jobs', icon: 'dispatch', tab: 'dispatches' },
         { id: 'bookings', label: 'Bookings', icon: 'approvals', tab: 'bookings' },
-        { id: 'schedules', label: 'Auto-Dispatch', icon: 'history', tab: 'schedules', locked: !isPro },
       ],
     },
     {
