@@ -20,6 +20,7 @@ import { reservations } from '../db/schema/reservations';
 import { propertyCalendarSources } from '../db/schema/property-calendar-sources';
 import { dispatchSchedules, dispatchScheduleRuns } from '../db/schema/schedules';
 import { notifications } from '../db/schema/notifications';
+import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/schema/property-scans';
 import { inArray } from 'drizzle-orm';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
 import { generateEstimatePDF } from '../services/estimate-pdf';
@@ -4131,6 +4132,310 @@ router.get('/:workspaceId/notifications', requireWorkspace, async (req: Request,
   } catch (err) {
     logger.error({ err }, '[GET /business/:id/notifications]');
     res.status(500).json({ data: null, error: 'Failed to load notifications', meta: {} });
+  }
+});
+
+// ── Property Scans ─────────────────────────────────────────────────────────
+
+// POST /:workspaceId/properties/:propertyId/scans — start a new scan
+router.post('/:workspaceId/properties/:propertyId/scans', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  const { scan_type } = req.body as { scan_type?: 'full' | 'quick' };
+
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const [scan] = await db.insert(propertyScans).values({
+      propertyId,
+      workspaceId: req.workspaceId,
+      scanType: scan_type ?? 'full',
+      scannedBy: req.homeownerId ?? null,
+      status: 'in_progress',
+    }).returning();
+
+    res.status(201).json({ data: scan, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/properties/:propertyId/scans]');
+    res.status(500).json({ data: null, error: 'Failed to start scan', meta: {} });
+  }
+});
+
+// POST /:workspaceId/scans/:scanId/photos — upload + process a photo
+router.post('/:workspaceId/scans/:scanId/photos', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { scanId } = req.params;
+  const { image_data_url, room_hint, is_label_photo, notes } = req.body as {
+    image_data_url?: string; room_hint?: string; is_label_photo?: boolean; notes?: string;
+  };
+
+  if (!image_data_url) {
+    res.status(400).json({ data: null, error: 'image_data_url is required', meta: {} });
+    return;
+  }
+
+  try {
+    // Verify scan belongs to workspace
+    const [scan] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
+    if (!scan || scan.workspaceId !== req.workspaceId) {
+      res.status(404).json({ data: null, error: 'Scan not found', meta: {} });
+      return;
+    }
+
+    // Parse data URL: "data:image/jpeg;base64,..."
+    const match = image_data_url.match(/^data:(image\/(jpeg|png|webp));base64,(.+)$/);
+    if (!match) {
+      res.status(400).json({ data: null, error: 'image_data_url must be a base64-encoded data URL (image/jpeg, png, or webp)', meta: {} });
+      return;
+    }
+    const mediaType = match[1] as 'image/jpeg' | 'image/png' | 'image/webp';
+    const base64 = match[3];
+
+    const { processScanPhoto } = await import('../services/property-scan-processor');
+    const result = await processScanPhoto({
+      scanId,
+      imageBase64: base64,
+      imageMediaType: mediaType,
+      roomHint: room_hint,
+      isLabelPhoto: is_label_photo ?? false,
+      notes,
+    });
+
+    res.json({ data: result, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/scans/:scanId/photos]');
+    res.status(500).json({ data: null, error: 'Failed to process photo', meta: {} });
+  }
+});
+
+// POST /:workspaceId/scans/:scanId/complete — finalize a scan
+router.post('/:workspaceId/scans/:scanId/complete', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { scanId } = req.params;
+  try {
+    const [scan] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
+    if (!scan || scan.workspaceId !== req.workspaceId) {
+      res.status(404).json({ data: null, error: 'Scan not found', meta: {} });
+      return;
+    }
+    const { completeScan } = await import('../services/property-scan-processor');
+    await completeScan(scanId);
+    const [updated] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
+    res.json({ data: updated, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/scans/:scanId/complete]');
+    res.status(500).json({ data: null, error: 'Failed to complete scan', meta: {} });
+  }
+});
+
+// GET /:workspaceId/properties/:propertyId/inventory — full inventory grouped by room
+router.get('/:workspaceId/properties/:propertyId/inventory', requireWorkspace, async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const rooms = await db.select().from(propertyRooms)
+      .where(eq(propertyRooms.propertyId, propertyId))
+      .orderBy(propertyRooms.sortOrder, propertyRooms.createdAt);
+
+    const items = await db.select().from(propertyInventoryItems)
+      .where(and(
+        eq(propertyInventoryItems.propertyId, propertyId),
+        ne(propertyInventoryItems.status, 'pm_dismissed'),
+      ))
+      .orderBy(desc(propertyInventoryItems.confidenceScore));
+
+    // Compute summary stats
+    const itemsByRoom = new Map<string | null, typeof items>();
+    let totalAge = 0;
+    let agedCount = 0;
+    let agingItems = 0;
+    let safetyFlags = 0;
+    for (const it of items) {
+      const key = it.roomId;
+      const list = itemsByRoom.get(key) || [];
+      list.push(it);
+      itemsByRoom.set(key, list);
+      const age = it.estimatedAgeYears ? parseFloat(it.estimatedAgeYears) : null;
+      if (age !== null) { totalAge += age; agedCount++; }
+      if (it.maintenanceFlags && it.maintenanceFlags.length > 0) {
+        if (it.maintenanceFlags.some(f => /safety|electrical/i.test(f))) safetyFlags++;
+        if (it.maintenanceFlags.some(f => /end_of_life|aging/i.test(f))) agingItems++;
+      }
+    }
+
+    res.json({
+      data: {
+        rooms: rooms.map(r => ({
+          ...r,
+          items: itemsByRoom.get(r.id) ?? [],
+        })),
+        unassignedItems: itemsByRoom.get(null) ?? [],
+        summary: {
+          totalItems: items.length,
+          averageAge: agedCount > 0 ? Math.round((totalAge / agedCount) * 10) / 10 : null,
+          agingItems,
+          safetyFlags,
+        },
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/:propertyId/inventory]');
+    res.status(500).json({ data: null, error: 'Failed to load inventory', meta: {} });
+  }
+});
+
+// PUT /:workspaceId/inventory/:itemId — confirm / correct / dismiss
+router.put('/:workspaceId/inventory/:itemId', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { itemId } = req.params;
+  const body = req.body as {
+    status?: 'pm_confirmed' | 'pm_corrected' | 'pm_dismissed';
+    brand?: string | null;
+    model_number?: string | null;
+    estimated_age_years?: number | null;
+    condition?: string | null;
+    notes?: string | null;
+  };
+  try {
+    // Verify ownership through property → workspace
+    const [item] = await db.select().from(propertyInventoryItems).where(eq(propertyInventoryItems.id, itemId)).limit(1);
+    if (!item) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
+    const [prop] = await db.select({ workspaceId: properties.workspaceId }).from(properties).where(eq(properties.id, item.propertyId)).limit(1);
+    if (!prop || prop.workspaceId !== req.workspaceId) {
+      res.status(403).json({ data: null, error: 'Forbidden', meta: {} });
+      return;
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.status) {
+      updates.status = body.status;
+      if (body.status === 'pm_confirmed' || body.status === 'pm_corrected') {
+        updates.confirmedBy = req.homeownerId ?? null;
+        updates.confirmedAt = new Date();
+      }
+    }
+    if (body.brand !== undefined) updates.brand = body.brand;
+    if (body.model_number !== undefined) updates.modelNumber = body.model_number;
+    if (body.estimated_age_years !== undefined) updates.estimatedAgeYears = body.estimated_age_years !== null ? body.estimated_age_years.toString() : null;
+    if (body.condition !== undefined) updates.condition = body.condition;
+    if (body.notes !== undefined) updates.notes = body.notes;
+
+    const [updated] = await db.update(propertyInventoryItems).set(updates).where(eq(propertyInventoryItems.id, itemId)).returning();
+    res.json({ data: updated, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PUT /business/:id/inventory/:itemId]');
+    res.status(500).json({ data: null, error: 'Failed to update item', meta: {} });
+  }
+});
+
+// POST /:workspaceId/properties/:propertyId/inventory/manual — add an item manually
+router.post('/:workspaceId/properties/:propertyId/inventory/manual', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  const body = req.body as {
+    room_id?: string;
+    category: string;
+    item_type: string;
+    brand?: string;
+    model_number?: string;
+    estimated_age_years?: number;
+    condition?: string;
+    notes?: string;
+  };
+  if (!body.category || !body.item_type) {
+    res.status(400).json({ data: null, error: 'category and item_type are required', meta: {} });
+    return;
+  }
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const [inserted] = await db.insert(propertyInventoryItems).values({
+      propertyId,
+      roomId: body.room_id ?? null,
+      category: body.category,
+      itemType: body.item_type,
+      brand: body.brand ?? null,
+      modelNumber: body.model_number ?? null,
+      estimatedAgeYears: body.estimated_age_years !== undefined ? body.estimated_age_years.toString() : null,
+      condition: body.condition ?? null,
+      notes: body.notes ?? null,
+      identificationMethod: 'pm_manual',
+      confidenceScore: '1.00',
+      status: 'pm_confirmed',
+      confirmedBy: req.homeownerId ?? null,
+      confirmedAt: new Date(),
+    }).returning();
+
+    res.status(201).json({ data: inserted, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/properties/:propertyId/inventory/manual]');
+    res.status(500).json({ data: null, error: 'Failed to add item', meta: {} });
+  }
+});
+
+// GET /:workspaceId/properties/:propertyId/scan-history — list past scans
+router.get('/:workspaceId/properties/:propertyId/scan-history', requireWorkspace, async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const scans = await db.select().from(propertyScans)
+      .where(eq(propertyScans.propertyId, propertyId))
+      .orderBy(desc(propertyScans.createdAt))
+      .limit(20);
+    res.json({ data: scans, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/:propertyId/scan-history]');
+    res.status(500).json({ data: null, error: 'Failed to load scan history', meta: {} });
+  }
+});
+
+// GET /:workspaceId/properties/:propertyId/maintenance-flags
+router.get('/:workspaceId/properties/:propertyId/maintenance-flags', requireWorkspace, async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  try {
+    const [prop] = await db.select({ id: properties.id }).from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
+    if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
+
+    const items = await db.select().from(propertyInventoryItems)
+      .where(and(
+        eq(propertyInventoryItems.propertyId, propertyId),
+        ne(propertyInventoryItems.status, 'pm_dismissed'),
+      ));
+
+    const flags: Array<{ itemId: string; itemType: string; brand: string | null; description: string; severity: string }> = [];
+    for (const item of items) {
+      if (!item.maintenanceFlags) continue;
+      for (const f of item.maintenanceFlags) {
+        let description = '';
+        let severity = 'info';
+        if (f === 'approaching_end_of_life') {
+          description = `${item.brand ? item.brand + ' ' : ''}${item.itemType.replace(/_/g, ' ')} is ${item.estimatedAgeYears ?? '?'} years old — approaching end of life`;
+          severity = 'attention';
+        } else {
+          description = f.replace(/_/g, ' ');
+        }
+        flags.push({
+          itemId: item.id,
+          itemType: item.itemType,
+          brand: item.brand,
+          description,
+          severity,
+        });
+      }
+    }
+
+    res.json({ data: flags, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/properties/:propertyId/maintenance-flags]');
+    res.status(500).json({ data: null, error: 'Failed to load flags', meta: {} });
   }
 });
 

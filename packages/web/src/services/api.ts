@@ -811,6 +811,88 @@ export interface TurnoverItem {
   runCount: number;
 }
 
+export interface PropertyScan {
+  id: string;
+  propertyId: string;
+  workspaceId: string;
+  scanType: 'full' | 'quick';
+  scannedBy: string | null;
+  status: 'in_progress' | 'processing' | 'review_pending' | 'completed' | 'failed';
+  durationSeconds: number | null;
+  roomsScanned: number;
+  itemsCataloged: number;
+  itemsConfirmed: number;
+  itemsFlaggedForReview: number;
+  changesDetected: number;
+  scanNotes: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface PropertyInventoryItem {
+  id: string;
+  propertyId: string;
+  roomId: string | null;
+  scanId: string | null;
+  category: 'appliance' | 'fixture' | 'system' | 'safety' | 'amenity' | 'infrastructure';
+  itemType: string;
+  brand: string | null;
+  modelNumber: string | null;
+  serialNumber: string | null;
+  manufactureDate: string | null;
+  estimatedAgeYears: string | null;
+  fuelType: string | null;
+  capacity: string | null;
+  condition: string | null;
+  identificationMethod: 'label_ocr' | 'visual_classification' | 'pm_manual';
+  confidenceScore: string;
+  photoFrameUrl: string | null;
+  labelPhotoUrl: string | null;
+  maintenanceFlags: string[] | null;
+  notes: string | null;
+  status: 'ai_identified' | 'pm_confirmed' | 'pm_corrected' | 'pm_dismissed';
+  confirmedBy: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyRoomWithItems {
+  id: string;
+  propertyId: string;
+  scanId: string | null;
+  roomType: string;
+  roomLabel: string;
+  floorLevel: number;
+  flooringType: string | null;
+  generalCondition: string | null;
+  photoUrl: string | null;
+  notes: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  items: PropertyInventoryItem[];
+}
+
+export interface PropertyInventoryResponse {
+  rooms: PropertyRoomWithItems[];
+  unassignedItems: PropertyInventoryItem[];
+  summary: {
+    totalItems: number;
+    averageAge: number | null;
+    agingItems: number;
+    safetyFlags: number;
+  };
+}
+
+export interface MaintenanceFlag {
+  itemId: string;
+  itemType: string;
+  brand: string | null;
+  description: string;
+  severity: 'info' | 'attention' | 'urgent';
+}
+
 export interface CalendarSource {
   id: string;
   propertyId: string;
@@ -1187,6 +1269,33 @@ export const businessService = {
     fetchAPI<{ occupied: DashboardReservation[]; checkouts: DashboardReservation[]; checkins: DashboardReservation[] }>(
       `/api/v1/business/${workspaceId}/dashboard/reservations`,
     ),
+
+  // Property scans + inventory
+  startPropertyScan: (workspaceId: string, propertyId: string, scanType: 'full' | 'quick') =>
+    fetchAPI<PropertyScan>(`/api/v1/business/${workspaceId}/properties/${propertyId}/scans`, {
+      method: 'POST', body: JSON.stringify({ scan_type: scanType }),
+    }),
+  uploadScanPhoto: (workspaceId: string, scanId: string, body: { image_data_url: string; room_hint?: string; is_label_photo?: boolean; notes?: string }) =>
+    fetchAPI<{ roomId: string; roomType: string; itemsDetected: Array<{ id: string; itemType: string; brand: string | null; modelNumber: string | null; confidence: number; status: string }>; maintenanceFlags: { description: string; severity: string }[] }>(
+      `/api/v1/business/${workspaceId}/scans/${scanId}/photos`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  completePropertyScan: (workspaceId: string, scanId: string) =>
+    fetchAPI<PropertyScan>(`/api/v1/business/${workspaceId}/scans/${scanId}/complete`, { method: 'POST' }),
+  getPropertyInventory: (workspaceId: string, propertyId: string) =>
+    fetchAPI<PropertyInventoryResponse>(`/api/v1/business/${workspaceId}/properties/${propertyId}/inventory`),
+  updateInventoryItem: (workspaceId: string, itemId: string, body: { status?: 'pm_confirmed' | 'pm_corrected' | 'pm_dismissed'; brand?: string | null; model_number?: string | null; estimated_age_years?: number | null; condition?: string | null; notes?: string | null }) =>
+    fetchAPI<PropertyInventoryItem>(`/api/v1/business/${workspaceId}/inventory/${itemId}`, {
+      method: 'PUT', body: JSON.stringify(body),
+    }),
+  addManualInventoryItem: (workspaceId: string, propertyId: string, body: { room_id?: string; category: string; item_type: string; brand?: string; model_number?: string; estimated_age_years?: number; condition?: string; notes?: string }) =>
+    fetchAPI<PropertyInventoryItem>(`/api/v1/business/${workspaceId}/properties/${propertyId}/inventory/manual`, {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+  getScanHistory: (workspaceId: string, propertyId: string) =>
+    fetchAPI<PropertyScan[]>(`/api/v1/business/${workspaceId}/properties/${propertyId}/scan-history`),
+  getMaintenanceFlags: (workspaceId: string, propertyId: string) =>
+    fetchAPI<MaintenanceFlag[]>(`/api/v1/business/${workspaceId}/properties/${propertyId}/maintenance-flags`),
 
   // CSV Export/Import
   exportPropertiesCsv: (workspaceId: string) =>

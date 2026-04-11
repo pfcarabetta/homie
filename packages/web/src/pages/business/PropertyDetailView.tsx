@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { businessService, jobService, estimateService, type Property, type WorkspaceDispatch, type WorkspaceBooking, type PreferredVendor, type Reservation, type ProviderResponseItem, type CostEstimate, type CalendarSource } from '@/services/api';
+import { PropertyScanCard, ScanCaptureModal, PropertyInventoryView } from './PropertyInventory';
 import { O, G, D, W, PROPERTY_TYPES, VENDOR_CATEGORIES, MiniCalendar, cleanPrice, renderBold, timeAgo } from './constants';
 import { EditPropertyModal } from './PropertiesTab';
 import { AddVendorModal, EditVendorModal, groupVendors, type GroupedVendor } from './VendorsTab';
@@ -619,8 +620,11 @@ function ReservationTimeline({ workspaceId, property }: { workspaceId: string; p
   );
 }
 
-function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property }: { dispatches: WorkspaceDispatch[]; bookings: WorkspaceBooking[]; loading: boolean; workspaceId: string; property: Property }) {
+function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property, plan }: { dispatches: WorkspaceDispatch[]; bookings: WorkspaceBooking[]; loading: boolean; workspaceId: string; property: Property; plan: string }) {
   const propertyId = property.id;
+  const [scanModalScanId, setScanModalScanId] = useState<string | null>(null);
+  const [showInventory, setShowInventory] = useState(false);
+  const [scanRefreshKey, setScanRefreshKey] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
@@ -664,7 +668,27 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property 
   if (items.length === 0) {
     return (
       <div>
-        <ReservationTimeline workspaceId={workspaceId} property={property} />
+        <PropertyScanCard
+        key={`scan-card-${scanRefreshKey}`}
+        workspaceId={workspaceId}
+        property={property}
+        plan={plan}
+        onScanStart={(id) => setScanModalScanId(id)}
+        onViewInventory={() => setShowInventory(true)}
+      />
+      {scanModalScanId && (
+        <ScanCaptureModal
+          workspaceId={workspaceId}
+          scanId={scanModalScanId}
+          propertyName={property.name}
+          onClose={() => setScanModalScanId(null)}
+          onComplete={() => { setScanModalScanId(null); setScanRefreshKey(k => k + 1); setShowInventory(true); }}
+        />
+      )}
+      {showInventory && (
+        <PropertyInventoryView workspaceId={workspaceId} propertyId={property.id} onClose={() => setShowInventory(false)} />
+      )}
+      <ReservationTimeline workspaceId={workspaceId} property={property} />
         <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCCB'}</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No activity yet</div>
@@ -677,6 +701,26 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property 
   let lastDateLabel = '';
   return (
     <div>
+      <PropertyScanCard
+        key={`scan-card-${scanRefreshKey}`}
+        workspaceId={workspaceId}
+        property={property}
+        plan={plan}
+        onScanStart={(id) => setScanModalScanId(id)}
+        onViewInventory={() => setShowInventory(true)}
+      />
+      {scanModalScanId && (
+        <ScanCaptureModal
+          workspaceId={workspaceId}
+          scanId={scanModalScanId}
+          propertyName={property.name}
+          onClose={() => setScanModalScanId(null)}
+          onComplete={() => { setScanModalScanId(null); setScanRefreshKey(k => k + 1); setShowInventory(true); }}
+        />
+      )}
+      {showInventory && (
+        <PropertyInventoryView workspaceId={workspaceId} propertyId={property.id} onClose={() => setShowInventory(false)} />
+      )}
       <ReservationTimeline workspaceId={workspaceId} property={property} />
       <style dangerouslySetInnerHTML={{ __html: PDV_CARD_STYLES }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1394,7 +1438,7 @@ function SettingsSubPage({ property, workspaceId, onPropertyUpdated }: { propert
 
 /* ── Main Component ─────────────────────────────────────────────────────── */
 
-export default function PropertyDetailView({ workspaceId, property, plan: _plan, onBack }: PropertyDetailViewProps) {
+export default function PropertyDetailView({ workspaceId, property, plan, onBack }: PropertyDetailViewProps) {
   const [activePage, setActivePage] = useState<SubPage>('activity');
   const [currentProperty, setCurrentProperty] = useState<Property>(property);
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
@@ -1450,7 +1494,7 @@ export default function PropertyDetailView({ workspaceId, property, plan: _plan,
   function renderContent() {
     switch (activePage) {
       case 'activity':
-        return <ActivitySubPage dispatches={dispatches} bookings={bookings} loading={loadingDispatches || loadingBookings} workspaceId={workspaceId} property={currentProperty} />;
+        return <ActivitySubPage dispatches={dispatches} bookings={bookings} loading={loadingDispatches || loadingBookings} workspaceId={workspaceId} property={currentProperty} plan={plan} />;
       case 'jobs':
         return <JobsSubPage dispatches={dispatches} loading={loadingDispatches} workspaceId={workspaceId} propertyId={currentProperty.id} />;
       case 'bookings':

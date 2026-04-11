@@ -190,6 +190,13 @@
       "when": 1775888068813,
       "tag": "0026_awesome_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1775893556639,
+      "tag": "0027_left_karnak",
+      "breakpoints": true
     }
   ]
 }
