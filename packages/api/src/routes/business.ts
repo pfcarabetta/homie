@@ -4236,6 +4236,19 @@ router.post('/:workspaceId/scans/:scanId/photos', requireWorkspace, requireWorks
   }
 });
 
+// GET /:workspaceId/scans/room-targets — return the static per-room target lists
+// Used by the frontend to render the checklist immediately when switching rooms,
+// before the first coaching call comes back.
+router.get('/:workspaceId/scans/room-targets', requireWorkspace, async (_req: Request, res: Response) => {
+  try {
+    const { ROOM_TARGETS } = await import('../services/property-scan-processor');
+    res.json({ data: { targets: ROOM_TARGETS }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/scans/room-targets]');
+    res.status(500).json({ data: null, error: 'Failed to load room targets', meta: {} });
+  }
+});
+
 // POST /:workspaceId/scans/:scanId/coaching — generate next coaching message
 router.post('/:workspaceId/scans/:scanId/coaching', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
   const { scanId } = req.params;

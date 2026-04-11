@@ -216,8 +216,23 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
   const [flash, setFlash] = useState<{ items: string[]; key: number } | null>(null);
   const flashTimerRef = useRef<number | null>(null);
   const [roomProgress, setRoomProgress] = useState<{ expected: string[]; captured: string[]; remaining: string[] } | null>(null);
+  const [roomTargets, setRoomTargets] = useState<Record<string, string[]>>({});
+  // Cache last-known captured items per room so re-entering a room shows the
+  // real progress immediately instead of resetting to 0.
+  const capturedByRoomRef = useRef<Map<string, Set<string>>>(new Map());
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch the static per-room target lists once on mount
+  useEffect(() => {
+    let cancelled = false;
+    businessService.getRoomTargets(workspaceId)
+      .then(res => {
+        if (!cancelled && res.data?.targets) setRoomTargets(res.data.targets);
+      })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [workspaceId]);
 
   // Step 1: request camera access on mount
   useEffect(() => {
@@ -346,11 +361,13 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
           });
           if (coachRes.data?.message) setCoaching(coachRes.data.message);
           if (coachRes.data?.roomProgress) {
+            const rp = coachRes.data.roomProgress;
             setRoomProgress({
-              expected: coachRes.data.roomProgress.expected,
-              captured: coachRes.data.roomProgress.captured,
-              remaining: coachRes.data.roomProgress.remaining,
+              expected: rp.expected,
+              captured: rp.captured,
+              remaining: rp.remaining,
             });
+            capturedByRoomRef.current.set(currentRoom, new Set(rp.captured));
           }
         } catch { /* ignore */ }
       }
@@ -398,9 +415,22 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
     showToast(`Now scanning: ${prettifyItemType(nextRoom)}`);
   }
 
-  // Whenever the current room changes, fetch fresh coaching + progress so the
-  // PM immediately sees the checklist for the new room without having to capture first.
+  // Whenever the current room changes:
+  //   1. Seed the checklist instantly from the cached targets + cached captured set
+  //      so the PM sees something the moment they switch rooms.
+  //   2. Fetch fresh coaching from the server, which returns the authoritative
+  //      progress (with anything captured in earlier sessions) and updates the UI.
   useEffect(() => {
+    const expected = roomTargets[currentRoom] ?? [];
+    if (expected.length > 0) {
+      const cachedCaptured = capturedByRoomRef.current.get(currentRoom) ?? new Set<string>();
+      const captured = expected.filter(t => cachedCaptured.has(t));
+      const remaining = expected.filter(t => !cachedCaptured.has(t));
+      setRoomProgress({ expected, captured, remaining });
+    } else {
+      setRoomProgress(null);
+    }
+
     let cancelled = false;
     businessService.generateScanCoaching(workspaceId, scanId, {
       current_room: currentRoom,
@@ -410,16 +440,19 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
         if (cancelled) return;
         if (res.data?.message) setCoaching(res.data.message);
         if (res.data?.roomProgress) {
+          const rp = res.data.roomProgress;
           setRoomProgress({
-            expected: res.data.roomProgress.expected,
-            captured: res.data.roomProgress.captured,
-            remaining: res.data.roomProgress.remaining,
+            expected: rp.expected,
+            captured: rp.captured,
+            remaining: rp.remaining,
           });
+          // Seed the per-room cache with the authoritative captured set
+          capturedByRoomRef.current.set(currentRoom, new Set(rp.captured));
         }
       })
       .catch(() => { /* ignore */ });
     return () => { cancelled = true; };
-  }, [workspaceId, scanId, currentRoom]);
+  }, [workspaceId, scanId, currentRoom, roomTargets]);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif", color: '#fff' }}>
