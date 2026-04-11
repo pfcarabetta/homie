@@ -3265,8 +3265,8 @@ router.get('/:workspaceId/dashboard/reservations', requireWorkspace, async (req:
         ne(reservations.status, 'cancelled'),
         ne(reservations.status, 'Cancelled'),
         ne(reservations.status, 'canceled'),
-        sql`${reservations.checkOut} >= ${now}`,
-        sql`${reservations.checkIn} <= ${horizon}`,
+        gte(reservations.checkOut, now),
+        lte(reservations.checkIn, horizon),
       ))
       .orderBy(reservations.checkIn);
 
