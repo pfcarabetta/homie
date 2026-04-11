@@ -6,9 +6,74 @@ import {
   propertyRooms,
   propertyInventoryItems,
   type NewPropertyInventoryItem,
+  type PropertyInventoryItem,
 } from '../db/schema/property-scans';
 import { decodeSerial, ageFromDate } from './serial-decoder';
 import logger from '../logger';
+
+/* ── Dedup helpers ─────────────────────────────────────────────────────── */
+
+/** Item types that are typically unique within a single room.
+ *  When we already have one of these in a room, a new detection of the
+ *  same type in the same room is treated as a duplicate. */
+const UNIQUE_PER_ROOM = new Set<string>([
+  'water_heater', 'hvac_condenser', 'hvac_air_handler', 'electrical_panel',
+  'thermostat', 'refrigerator', 'range', 'dishwasher', 'microwave',
+  'washer', 'dryer', 'garbage_disposal', 'water_softener',
+  'pool', 'pool_heater', 'pool_pump', 'hot_tub',
+  'gas_meter', 'water_meter', 'irrigation_controller',
+  'gas_grill', 'fireplace', 'fire_extinguisher', 'co_detector',
+  'generator', 'solar_system', 'ev_charger', 'garage_door',
+]);
+
+function norm(s: string | null | undefined): string {
+  return (s || '').trim().toLowerCase();
+}
+
+/**
+ * Find an existing inventory item that the newly detected one is a duplicate of.
+ * Match strategy (in order):
+ *  1. Exact brand+model match anywhere in the property — strong signal
+ *  2. Same type + same brand in the same room
+ *  3. Unique-per-room types: same type in the same room (no brand needed)
+ */
+function findDuplicate(
+  detected: { itemType: string; brand: string | null | undefined; modelNumber: string | null | undefined },
+  existing: PropertyInventoryItem[],
+  currentRoomId: string,
+): PropertyInventoryItem | null {
+  const dType = norm(detected.itemType);
+  const dBrand = norm(detected.brand);
+  const dModel = norm(detected.modelNumber);
+
+  if (dBrand && dModel) {
+    const m = existing.find(e =>
+      norm(e.itemType) === dType &&
+      norm(e.brand) === dBrand &&
+      norm(e.modelNumber) === dModel
+    );
+    if (m) return m;
+  }
+
+  if (dBrand) {
+    const m = existing.find(e =>
+      norm(e.itemType) === dType &&
+      norm(e.brand) === dBrand &&
+      e.roomId === currentRoomId
+    );
+    if (m) return m;
+  }
+
+  if (UNIQUE_PER_ROOM.has(dType)) {
+    const m = existing.find(e =>
+      norm(e.itemType) === dType &&
+      e.roomId === currentRoomId
+    );
+    if (m) return m;
+  }
+
+  return null;
+}
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 2500;
@@ -225,7 +290,13 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
     vision.general_condition ?? null,
   );
 
-  // Insert items
+  // Load existing inventory once for this property so we can dedup against it
+  // (and against items we just inserted in this same batch).
+  const existingItems: PropertyInventoryItem[] = await db
+    .select()
+    .from(propertyInventoryItems)
+    .where(eq(propertyInventoryItems.propertyId, scan.propertyId));
+
   const itemsDetected: ScanProcessResult['itemsDetected'] = [];
   for (const item of vision.items || []) {
     // Decode serial to manufacture date if we got one
@@ -236,7 +307,7 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
     let confidence = Math.min(0.99, Math.max(0.1, item.confidence ?? 0.5));
     if (decoded && decoded.confidence > confidence) confidence = decoded.confidence;
 
-    const status = confidence >= 0.85 ? 'ai_identified' : 'ai_identified';
+    const status = 'ai_identified';
     const identMethod: 'label_ocr' | 'visual_classification' =
       item.brand_source === 'label_ocr' || decoded ? 'label_ocr' : 'visual_classification';
 
@@ -261,6 +332,64 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
       }
     }
 
+    // ── Dedup check ──
+    const dup = findDuplicate(
+      { itemType: item.item_type, brand: item.brand, modelNumber: item.model_number },
+      existingItems,
+      roomId,
+    );
+
+    if (dup) {
+      // Don't resurrect items the PM has explicitly dismissed
+      if (dup.status === 'pm_dismissed') continue;
+
+      // Enrich the existing item with any new info we now have. Only fill
+      // empty fields — don't overwrite PM-confirmed data.
+      const updates: Record<string, unknown> = {};
+      if (item.brand && !dup.brand) updates.brand = item.brand;
+      if (item.model_number && !dup.modelNumber) updates.modelNumber = item.model_number;
+      if (item.serial_number && !dup.serialNumber) updates.serialNumber = item.serial_number;
+      if (decoded && !dup.manufactureDate) {
+        updates.manufactureDate = decoded.manufactureDate.toISOString().slice(0, 10);
+        if (ageYears !== null) updates.estimatedAgeYears = ageYears.toString();
+      }
+      if (item.fuel_type && !dup.fuelType) updates.fuelType = item.fuel_type;
+      if (item.capacity && !dup.capacity) updates.capacity = item.capacity;
+      if (item.condition && !dup.condition) updates.condition = item.condition;
+
+      // Boost confidence if the new detection is meaningfully higher
+      const dupConf = parseFloat(dup.confidenceScore);
+      if (confidence > dupConf + 0.05) updates.confidenceScore = confidence.toFixed(2);
+
+      // Upgrade identification method if we now have a label OCR or serial decode
+      if ((item.brand_source === 'label_ocr' || decoded) && dup.identificationMethod === 'visual_classification') {
+        updates.identificationMethod = 'label_ocr';
+      }
+
+      // New maintenance flags can be appended
+      if (maintenanceFlags.length > 0) {
+        const existingFlags = new Set(dup.maintenanceFlags ?? []);
+        for (const f of maintenanceFlags) existingFlags.add(f);
+        if (existingFlags.size !== (dup.maintenanceFlags?.length ?? 0)) {
+          updates.maintenanceFlags = Array.from(existingFlags);
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        updates.updatedAt = new Date();
+        const [updated] = await db.update(propertyInventoryItems)
+          .set(updates)
+          .where(eq(propertyInventoryItems.id, dup.id))
+          .returning();
+        // Keep local cache in sync so subsequent items in this batch see the update
+        const idx = existingItems.findIndex(e => e.id === dup.id);
+        if (idx >= 0 && updated) existingItems[idx] = updated;
+      }
+
+      // Don't add to itemsDetected — this isn't a new find
+      continue;
+    }
+
     const newItem: NewPropertyInventoryItem = {
       propertyId: scan.propertyId,
       roomId,
@@ -282,7 +411,7 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
       status,
     };
 
-    const [inserted] = await db.insert(propertyInventoryItems).values(newItem).returning({ id: propertyInventoryItems.id });
+    const [inserted] = await db.insert(propertyInventoryItems).values(newItem).returning();
     itemsDetected.push({
       id: inserted.id,
       itemType: item.item_type,
@@ -291,9 +420,11 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
       confidence,
       status,
     });
+    // Add to local cache so a later item in this same batch can dedup against it
+    existingItems.push(inserted);
   }
 
-  // Bump scan stats
+  // Bump scan stats — only count newly inserted items, not updates/dedups
   const newCount = scan.itemsCataloged + itemsDetected.length;
   const newFlagged = scan.itemsFlaggedForReview + itemsDetected.filter(i => i.confidence < 0.85).length;
   await db.update(propertyScans)
