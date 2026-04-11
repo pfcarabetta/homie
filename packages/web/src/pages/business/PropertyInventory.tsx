@@ -608,38 +608,102 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
   const filtered = filter === 'all' ? allItems : allItems.filter(i => i.category === filter);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 820, maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif" }}>
-        <div style={{ padding: '18px 22px', borderBottom: '1px solid #F0EBE6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D }}>Property inventory</div>
-            <div style={{ fontSize: 12, color: '#9B9490' }}>
+    <div
+      className="bp-pi-overlay"
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+        zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        paddingTop: 'max(16px, env(safe-area-inset-top))',
+        paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(16px, env(safe-area-inset-left))',
+        paddingRight: 'max(16px, env(safe-area-inset-right))',
+      }}
+    >
+      <style>{`
+        /* Use dynamic viewport height on iOS so the URL bar doesn't clip the modal */
+        .bp-pi-modal {
+          max-height: 92vh;
+        }
+        @supports (height: 100dvh) {
+          .bp-pi-modal { max-height: 100dvh; }
+        }
+        .bp-pi-tab { flex-shrink: 0; }
+        .bp-pi-tabs {
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+        }
+        .bp-pi-tabs::-webkit-scrollbar { display: none; }
+        @media (max-width: 600px) {
+          .bp-pi-header { padding: 14px 16px !important; gap: 10px !important; }
+          .bp-pi-header-title { font-size: 17px !important; }
+          .bp-pi-header-meta { font-size: 11px !important; }
+          .bp-pi-tabs { padding: 10px 16px !important; }
+          .bp-pi-content { padding: 14px !important; }
+          .bp-pi-item { padding: 11px 12px !important; gap: 10px !important; }
+          .bp-pi-item-title { font-size: 13px !important; }
+          .bp-pi-item-actions { width: 100%; justify-content: flex-end; }
+        }
+      `}</style>
+      <div
+        className="bp-pi-modal"
+        style={{
+          background: '#fff', borderRadius: 16, width: '100%', maxWidth: 820,
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          fontFamily: "'DM Sans', sans-serif", minHeight: 0,
+        }}
+      >
+        <div
+          className="bp-pi-header"
+          style={{
+            padding: '18px 22px', borderBottom: '1px solid #F0EBE6',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 12, flexShrink: 0,
+          }}
+        >
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="bp-pi-header-title" style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, lineHeight: 1.2 }}>Property inventory</div>
+            <div className="bp-pi-header-meta" style={{ fontSize: 12, color: '#9B9490', marginTop: 2, lineHeight: 1.4 }}>
               {data.summary.totalItems} items
               {data.summary.averageAge !== null && ` · avg age ${data.summary.averageAge} yrs`}
               {data.summary.agingItems > 0 && ` · ${data.summary.agingItems} aging`}
-              {data.summary.safetyFlags > 0 && ` · ${data.summary.safetyFlags} safety flags`}
+              {data.summary.safetyFlags > 0 && ` · ${data.summary.safetyFlags} flags`}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9B9490' }}>×</button>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              background: 'none', border: 'none', fontSize: 26, lineHeight: 1,
+              cursor: 'pointer', color: '#9B9490', padding: 4, flexShrink: 0,
+              width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >×</button>
         </div>
 
         {/* Filter tabs */}
-        <div style={{ display: 'flex', gap: 6, padding: '12px 22px', borderBottom: '1px solid #F0EBE6', overflowX: 'auto' }}>
+        <div
+          className="bp-pi-tabs"
+          style={{
+            display: 'flex', gap: 6, padding: '12px 22px',
+            borderBottom: '1px solid #F0EBE6', overflowX: 'auto', flexShrink: 0,
+          }}
+        >
           {(['all', 'appliance', 'fixture', 'system', 'safety', 'amenity'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{
+            <button key={f} onClick={() => setFilter(f)} className="bp-pi-tab" style={{
               padding: '6px 14px', borderRadius: 100,
               border: filter === f ? `1px solid ${O}` : '1px solid #E0DAD4',
               background: filter === f ? `${O}10` : '#fff',
               color: filter === f ? O : '#6B6560',
               fontSize: 12, fontWeight: 600, cursor: 'pointer',
               textTransform: 'capitalize', fontFamily: "'DM Sans', sans-serif",
+              whiteSpace: 'nowrap',
             }}>
               {f}
             </button>
           ))}
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+        <div className="bp-pi-content" style={{ flex: 1, overflowY: 'auto', padding: 20, minHeight: 0 }}>
           {/* Maintenance flags */}
           {flags.length > 0 && (
             <div style={{ marginBottom: 18 }}>
@@ -682,18 +746,18 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                       : isLowConfidence ? '#D4A437'
                       : '#9B9490';
                     return (
-                      <div key={item.id} style={{
+                      <div key={item.id} className="bp-pi-item" style={{
                         background: '#fff', borderRadius: 10, padding: '12px 14px',
                         border: '1px solid #E0DAD4', borderLeft: `4px solid ${borderColor}`,
                         display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
                       }}>
-                        <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{categoryIcon(item.category)}</span>
-                        <div style={{ flex: 1, minWidth: 200 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: D }}>
+                        <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{categoryIcon(item.category)}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="bp-pi-item-title" style={{ fontSize: 13, fontWeight: 700, color: D, wordBreak: 'break-word' }}>
                             {item.brand ? `${item.brand} ` : ''}{prettifyItemType(item.itemType)}
                           </div>
                           <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            {item.modelNumber && <span>{item.modelNumber}</span>}
+                            {item.modelNumber && <span style={{ wordBreak: 'break-all' }}>{item.modelNumber}</span>}
                             {age !== null && (
                               <>
                                 {item.modelNumber && <span>·</span>}
@@ -706,7 +770,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                                 <span style={{ textTransform: 'capitalize' }}>{item.condition.replace(/_/g, ' ')}</span>
                               </>
                             )}
-                            <span style={{ marginLeft: 'auto', fontSize: 10 }}>
+                            <span style={{ marginLeft: 'auto', fontSize: 10, flexShrink: 0 }}>
                               {item.identificationMethod === 'label_ocr' && '🏷️'}
                               {item.identificationMethod === 'visual_classification' && '👁️'}
                               {item.identificationMethod === 'pm_manual' && '✏️'}
@@ -714,7 +778,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                             </span>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div className="bp-pi-item-actions" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                           {isLowConfidence ? (
                             <>
                               <button onClick={() => handleUpdate(item, 'pm_confirmed')} style={{
