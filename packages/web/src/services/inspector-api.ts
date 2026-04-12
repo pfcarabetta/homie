@@ -208,12 +208,22 @@ export const inspectorService = {
   signup(data: InspectorSignupData) {
     return inspectorFetch<{ token: string; inspector: InspectorProfile }>('/api/v1/inspector/signup', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        company_name: data.companyName,
+        email: data.email,
+        phone: data.phone,
+        password: data.password,
+        website: data.website,
+        license_number: data.licenseNumber,
+        certifications: data.certifications,
+        service_area_zips: data.serviceZipCodes,
+        inspection_software: data.inspectionSoftware,
+      }),
     });
   },
 
   login(email: string, password: string) {
-    return inspectorFetch<{ token: string; inspector: InspectorProfile }>('/api/v1/inspector/login', {
+    return inspectorFetch<{ token: string; partner: Record<string, unknown> }>('/api/v1/inspector/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
