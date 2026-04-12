@@ -49,7 +49,7 @@ function ReservationsWidget({ workspaceId }: { workspaceId: string }) {
         <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: 0 }}>Reservations this week</h4>
         <span style={{ fontSize: 11, color: '#9B9490' }}>{totalCount} active</span>
       </div>
-      <div className="bp-res-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+      <div className="bp-res-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, alignItems: 'start' }}>
         <style>{`@media (max-width: 1100px) { .bp-res-grid { grid-template-columns: 1fr !important; } }`}</style>
         <ReservationKpiCard
           label="Currently occupied"
