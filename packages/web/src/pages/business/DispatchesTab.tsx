@@ -668,21 +668,57 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                     </div>
                   )}
 
-                  {/* Archive button */}
-                  {(j.status === 'completed' || j.status === 'expired') && (
-                    <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 14 }}>
-                      <button onClick={async (e) => {
-                        e.stopPropagation();
-                        try {
-                          await businessService.archiveDispatch(workspaceId, j.id);
-                          setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'archived' } : d));
-                          setExpandedId(null);
-                        } catch { alert('Failed to archive'); }
-                      }} style={{
-                        width: '100%', padding: '10px 0', borderRadius: 100,
-                        border: '1px solid #9B9490', background: '#fff', color: '#9B9490',
-                        fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      }}>Archive</button>
+                  {/* Archive / Re-open buttons */}
+                  {(j.status === 'completed' || j.status === 'expired' || j.status === 'archived') && (
+                    <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 14, display: 'flex', gap: 8 }}>
+                      {/* Re-open for booking — visible for completed (stuck) and archived */}
+                      {(j.status === 'completed' || j.status === 'archived') && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const reason = j.status === 'completed'
+                              ? 'Re-open this dispatch for booking? Use this if a quote got stuck as "Booked" without an actual confirmation.'
+                              : 'Re-open this archived dispatch so quotes can be booked again?';
+                            if (!window.confirm(reason)) return;
+                            try {
+                              const res = await businessService.reopenDispatch(workspaceId, j.id);
+                              if (res.error) { alert(res.error); return; }
+                              setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'expired' } : d));
+                              const reparsedCount = res.data?.reparsedQuotes?.length ?? 0;
+                              if (reparsedCount > 0) {
+                                alert(`Re-opened. Updated ${reparsedCount} quote${reparsedCount === 1 ? '' : 's'} with the latest parser.`);
+                              }
+                              // Refresh responses for this job so the new prices show up
+                              try {
+                                const respRes = await jobService.getResponses(j.id);
+                                if (respRes.data) setResponses(prev => ({ ...prev, [j.id]: respRes.data!.responses }));
+                              } catch { /* ignore */ }
+                            } catch (err) {
+                              alert((err as Error).message || 'Failed to re-open');
+                            }
+                          }}
+                          style={{
+                            flex: 1, padding: '10px 0', borderRadius: 100,
+                            border: `1px solid ${O}`, background: `${O}10`, color: O,
+                            fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >Re-open for booking</button>
+                      )}
+                      {/* Archive — only for non-archived */}
+                      {j.status !== 'archived' && (
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await businessService.archiveDispatch(workspaceId, j.id);
+                            setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'archived' } : d));
+                            setExpandedId(null);
+                          } catch { alert('Failed to archive'); }
+                        }} style={{
+                          flex: 1, padding: '10px 0', borderRadius: 100,
+                          border: '1px solid #9B9490', background: '#fff', color: '#9B9490',
+                          fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                        }}>Archive</button>
+                      )}
                     </div>
                   )}
                 </div>

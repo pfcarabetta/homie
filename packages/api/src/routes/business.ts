@@ -1557,6 +1557,92 @@ router.post('/:workspaceId/dispatches/:jobId/archive', requireWorkspace, async (
   }
 });
 
+// POST /:workspaceId/dispatches/:jobId/reopen
+// Re-opens a completed or archived dispatch for booking. Use this when a job
+// got stuck in "completed" without an actual booking row, or when the user
+// wants to recover an accidentally archived dispatch. Also re-runs the quote
+// parser on every provider response so prices like "$70/hr 3 hr min, possibly
+// 4 hours" come out as "$210-$280" instead of "$70".
+router.post('/:workspaceId/dispatches/:jobId/reopen', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+
+  try {
+    const [job] = await db
+      .select({ id: jobs.id, status: jobs.status, workspaceId: jobs.workspaceId })
+      .from(jobs)
+      .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, req.workspaceId)))
+      .limit(1);
+
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Dispatch not found', meta: {} });
+      return;
+    }
+
+    // Refunded dispatches can't be re-opened — money came back, the booking
+    // contract is over.
+    if (job.status === 'refunded') {
+      res.status(400).json({ data: null, error: 'Refunded dispatches cannot be re-opened', meta: {} });
+      return;
+    }
+
+    // If status is 'completed', verify there's no real booking row before
+    // reverting. We never want to silently break a confirmed booking.
+    if (job.status === 'completed') {
+      const [booking] = await db
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(eq(bookings.jobId, jobId))
+        .limit(1);
+      if (booking) {
+        res.status(409).json({
+          data: null,
+          error: 'This dispatch has a confirmed booking and cannot be re-opened. Cancel the booking first.',
+          meta: { bookingId: booking.id },
+        });
+        return;
+      }
+    }
+
+    // Reparse provider responses so prices benefit from the latest parser
+    const responseRows = await db.select().from(providerResponses).where(eq(providerResponses.jobId, jobId));
+    const { formatQuotedPrice } = await import('../services/quote-parser');
+    const reparsed: Array<{ id: string; before: string | null; after: string | null }> = [];
+    for (const r of responseRows) {
+      // Prefer the longer of (message, quotedPrice) — message often has the
+      // full sentence ("$70/hr 3 hour minimum...") while quotedPrice may have
+      // been truncated by an earlier parser pass.
+      const sourceText = (r.message && r.message.length > (r.quotedPrice?.length ?? 0))
+        ? r.message
+        : r.quotedPrice;
+      const newPrice = formatQuotedPrice(sourceText);
+      if (newPrice && newPrice !== r.quotedPrice) {
+        await db.update(providerResponses)
+          .set({ quotedPrice: newPrice })
+          .where(eq(providerResponses.id, r.id));
+        reparsed.push({ id: r.id, before: r.quotedPrice, after: newPrice });
+      }
+    }
+
+    // Revert status. We use 'expired' as the bookable-but-not-actively-collecting
+    // state — quotes stay visible and the Book button reappears.
+    if (job.status === 'completed' || job.status === 'archived') {
+      await db.update(jobs)
+        .set({ status: 'expired' } as Record<string, unknown>)
+        .where(eq(jobs.id, jobId));
+      logger.info({ jobId, previousStatus: job.status, reparsedCount: reparsed.length }, '[business] Dispatch re-opened for booking');
+    }
+
+    res.json({
+      data: { reopened: true, previousStatus: job.status, newStatus: 'expired', reparsedQuotes: reparsed },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/dispatches/:jobId/reopen]');
+    res.status(500).json({ data: null, error: 'Failed to re-open dispatch', meta: {} });
+  }
+});
+
 // GET /:workspaceId/dispatches
 router.get('/:workspaceId/dispatches', requireWorkspace, async (req: Request, res: Response) => {
   try {

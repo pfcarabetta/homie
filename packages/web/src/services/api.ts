@@ -1485,6 +1485,9 @@ export const businessService = {
       `/api/v1/business/${workspaceId}/dispatches/${jobId}/cancel`, { method: 'POST' }),
   archiveDispatch: (workspaceId: string, jobId: string) =>
     fetchAPI<{ archived: boolean }>(`/api/v1/business/${workspaceId}/dispatches/${jobId}/archive`, { method: 'POST' }),
+  reopenDispatch: (workspaceId: string, jobId: string) =>
+    fetchAPI<{ reopened: boolean; previousStatus: string; newStatus: string; reparsedQuotes: Array<{ id: string; before: string | null; after: string | null }> }>(
+      `/api/v1/business/${workspaceId}/dispatches/${jobId}/reopen`, { method: 'POST' }),
 
   // Bookings
   listBookings: (workspaceId: string) =>
