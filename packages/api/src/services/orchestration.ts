@@ -250,6 +250,7 @@ async function sendOutreachToProvider(
         script,
         channel,
         workspaceName,
+        imageUrls: job.photoUrls ?? undefined,
       });
 
       if (result.status === 'failed') {

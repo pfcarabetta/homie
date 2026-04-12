@@ -13,7 +13,17 @@ function buildRespondUrl(attemptId: string, action: 'accept' | 'decline'): strin
   return `${base}/api/v1/webhooks/web/respond?attemptId=${encodeURIComponent(attemptId)}&action=${action}&token=${token}`;
 }
 
-function buildEmailHtml(script: string, acceptUrl: string, declineUrl: string, providerName: string): string {
+function buildEmailHtml(script: string, acceptUrl: string, declineUrl: string, providerName: string, imageUrls?: string[]): string {
+  // Build photo gallery block if images are available
+  const photoHtml = imageUrls && imageUrls.length > 0
+    ? `<div style="margin-bottom:24px">
+        <p style="color:#9B9490;font-size:12px;font-weight:600;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.04em">Photos from the homeowner</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${imageUrls.slice(0, 4).map(url => `<img src="${url}" alt="Issue photo" style="width:auto;max-width:260px;max-height:200px;border-radius:10px;border:1px solid rgba(0,0,0,0.06)" />`).join('\n          ')}
+        </div>
+      </div>`
+    : '';
+
   return `<!DOCTYPE html>
 <html>
 <body style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:600px;margin:0 auto;padding:0;background:#F9F5F2">
@@ -32,6 +42,9 @@ function buildEmailHtml(script: string, acceptUrl: string, declineUrl: string, p
     <div style="background:#F9F5F2;border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid rgba(0,0,0,0.04)">
       <p style="color:#2D2926;font-size:15px;line-height:1.6;margin:0;white-space:pre-wrap">${script}</p>
     </div>
+
+    <!-- Homeowner Photos -->
+    ${photoHtml}
 
     <!-- CTA Buttons -->
     <div style="text-align:center;margin-bottom:8px">
@@ -108,7 +121,7 @@ export class WebAdapter implements ChannelAdapter {
         from: fromEmail,
         subject: `New job opportunity near you — Homie`,
         text: payload.script,
-        html: buildEmailHtml(payload.script, acceptUrl, declineUrl, payload.providerName),
+        html: buildEmailHtml(payload.script, acceptUrl, declineUrl, payload.providerName, payload.imageUrls),
       });
 
       return { status: 'pending' };

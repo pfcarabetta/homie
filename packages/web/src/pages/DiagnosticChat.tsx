@@ -17,6 +17,7 @@ import {
   connectJobSocket,
   accountService,
   estimateService,
+  uploadDiagnosticImage,
   type JobStatusResponse,
   type HomeData,
   type CostEstimate,
@@ -539,6 +540,8 @@ export default function DiagnosticChat() {
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const homeContextRef = useRef<string>('');
+  /** Cloudinary URLs of photos uploaded during this chat session. Passed to createJob so they appear in outreach. */
+  const uploadedPhotoUrlsRef = useRef<string[]>([]);
 
   // Load home details for context
   useEffect(() => {
@@ -690,6 +693,15 @@ export default function DiagnosticChat() {
         image ? [image] : undefined,
         history,
       );
+
+      // Upload the image to Cloudinary in parallel so we have a persistent URL
+      // for outreach MMS/email. This is fire-and-forget — if it fails, the chat
+      // still works, we just won't have the photo for outreach.
+      if (image) {
+        void uploadDiagnosticImage(image).then(result => {
+          if (result?.url) uploadedPhotoUrlsRef.current.push(result.url);
+        });
+      }
     },
     [state.streaming],
   );
@@ -811,6 +823,7 @@ export default function DiagnosticChat() {
         budget,
         tier: state.tier,
         zipCode: state.zipCode,
+        photos: uploadedPhotoUrlsRef.current.length > 0 ? uploadedPhotoUrlsRef.current : undefined,
       });
 
       if (!res.data) {
@@ -1158,6 +1171,7 @@ export default function DiagnosticChat() {
           isDemo={isDemo}
           initialCostEstimate={costEstimate}
           initialJobId={state.jobId}
+          photoUrls={uploadedPhotoUrlsRef.current}
         />
       )}
 
@@ -1334,6 +1348,7 @@ function diagCleanPrice(price: string): string {
 }
 
 interface DiagnosticOutreachModalProps {
+  photoUrls?: string[];
   isOpen: boolean;
   onClose: (hasJob: boolean) => void;
   diagnosis: DiagnosisData | null;
@@ -1343,7 +1358,7 @@ interface DiagnosticOutreachModalProps {
   initialJobId?: string | null;
 }
 
-function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDemo, initialCostEstimate, initialJobId }: DiagnosticOutreachModalProps) {
+function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDemo, initialCostEstimate, initialJobId, photoUrls }: DiagnosticOutreachModalProps) {
   const navigate = useNavigate();
   const { pricing } = usePricing();
   const [step, setStep] = useState<'tier' | 'preferences' | 'auth_gate' | 'outreach'>(initialJobId ? 'outreach' : 'tier');
@@ -1526,6 +1541,7 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
         budget: budget === 'Under $100' ? 'under_100' : budget === '$100-250' ? '100_250' : budget === '$250-500' ? '250_500' : budget === '$500+' ? '500_plus' : 'flexible',
         tier: tier as 'standard' | 'priority' | 'emergency',
         zipCode: zip,
+        photos: photoUrls && photoUrls.length > 0 ? photoUrls : undefined,
       });
 
       if (!res.data) {

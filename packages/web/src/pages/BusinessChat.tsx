@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import {
   businessService, businessChatService, jobService, connectJobSocket, trackingService, estimateService,
+  uploadDiagnosticImage,
   type Property, type PropertyDetails, type Workspace, type DiagnosticStreamCallbacks,
   type JobStatusResponse, type ProviderResponseItem, type CostEstimate,
 } from '@/services/api';
@@ -606,6 +607,8 @@ export default function BusinessChat() {
 
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /** Cloudinary URLs of photos uploaded during this chat session */
+  const uploadedPhotoUrlsRef = useRef<string[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sessionIdRef = useRef(`b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -975,6 +978,13 @@ export default function BusinessChat() {
     setImgPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
 
+    // Upload image to Cloudinary in parallel for outreach MMS/email
+    if (currentImage) {
+      void uploadDiagnosticImage(currentImage).then(result => {
+        if (result?.url) uploadedPhotoUrlsRef.current.push(result.url);
+      });
+    }
+
     // If we've had enough exchanges, ask if there's anything else before budget
     if (exchangeCount >= 2) {
       setTimeout(() => {
@@ -1161,6 +1171,7 @@ export default function BusinessChat() {
         workspaceId: selectedWorkspace || undefined,
         propertyId: selectedProperty?.id || undefined,
         notifyGuest: notifyGuest || undefined,
+        photos: uploadedPhotoUrlsRef.current.length > 0 ? uploadedPhotoUrlsRef.current : undefined,
       });
 
       if (res.data) {

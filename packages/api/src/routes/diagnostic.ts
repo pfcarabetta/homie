@@ -98,6 +98,31 @@ RULES:
 - Keep responses concise but helpful — 2-4 sentences for questions, more detail for diagnoses
 - Use **bold** for emphasis and keep paragraphs short`;
 
+// ── POST /api/v1/diagnostic/upload-image ────────────────────────────────────
+// Upload a diagnostic photo to Cloudinary so it persists and can be included
+// in outreach SMS/MMS and email to providers.
+router.post('/upload-image', async (req: Request, res: Response) => {
+  const { image_data_url } = req.body as { image_data_url?: string };
+  if (!image_data_url || typeof image_data_url !== 'string' || !image_data_url.startsWith('data:image/')) {
+    res.status(400).json({ data: null, error: 'image_data_url is required (data:image/* format)', meta: {} });
+    return;
+  }
+  try {
+    const { uploadImage } = await import('../services/image-upload');
+    const result = await uploadImage(image_data_url, 'homie/diagnostics');
+    if (!result) {
+      // Cloudinary not configured — return a null result so the frontend
+      // can gracefully skip image persistence without breaking the chat flow
+      res.json({ data: null, error: null, meta: { reason: 'image_storage_not_configured' } });
+      return;
+    }
+    res.json({ data: result, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /diagnostic/upload-image]');
+    res.status(500).json({ data: null, error: 'Image upload failed', meta: {} });
+  }
+});
+
 // ── POST /api/v1/diagnostic/chat ────────────────────────────────────────────
 
 router.post('/chat', async (req: Request, res: Response) => {

@@ -18,11 +18,16 @@ export class SmsAdapter implements ChannelAdapter {
     try {
       const client = twilio(accountSid, authToken);
 
+      // Include up to 3 photos as MMS media when available. Twilio MMS
+      // supports mediaUrl on US/CA numbers at no extra cost per message.
+      const mediaUrl = payload.imageUrls?.slice(0, 3).filter(u => u.startsWith('https://'));
+
       await client.messages.create({
         to: payload.phone,
         from: fromNumber,
         body: (payload.workspaceName ? `HomiePro: ${payload.workspaceName} has a job — ` : 'HomiePro: ') + payload.script + '\n\nReply STOP to opt out. HELP for info.',
         statusCallback: `${process.env.API_BASE_URL}/api/v1/webhooks/twilio/sms/status?attemptId=${encodeURIComponent(payload.attemptId)}`,
+        ...(mediaUrl && mediaUrl.length > 0 ? { mediaUrl } : {}),
       });
 
       return { status: 'pending' };

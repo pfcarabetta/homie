@@ -212,6 +212,31 @@ export type JobSocketEvent =
   | { type: 'job.expired'; data: { job_id: string } }
   | { type: 'job.completed'; data: { job_id: string } };
 
+// ── Image upload ────────────────────────────────────────────────────────────
+
+export interface ImageUploadResult {
+  url: string;
+  thumbnailUrl: string;
+  publicId: string;
+}
+
+/**
+ * Upload a diagnostic/chat photo to persistent storage (Cloudinary).
+ * Returns null if storage isn't configured — the caller should continue
+ * the chat flow regardless.
+ */
+export async function uploadDiagnosticImage(imageDataUrl: string): Promise<ImageUploadResult | null> {
+  try {
+    const res = await fetchAPI<ImageUploadResult | null>('/api/v1/diagnostic/upload-image', {
+      method: 'POST',
+      body: JSON.stringify({ image_data_url: imageDataUrl }),
+    });
+    return res.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── diagnosticService ───────────────────────────────────────────────────────
 
 export const diagnosticService = {

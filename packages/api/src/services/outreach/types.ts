@@ -11,6 +11,8 @@ export interface OutreachPayload {
   script: string;
   channel: OutreachChannel;
   workspaceName?: string;
+  /** URLs to homeowner-submitted photos of the issue. Used for MMS and email inline images. */
+  imageUrls?: string[];
 }
 
 /** Adapters return 'pending' when the interaction is async (webhook delivers the result later). */
