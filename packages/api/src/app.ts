@@ -23,6 +23,7 @@ import estimatesRouter from './routes/estimates';
 import { scheduleRouter, templateRouter } from './routes/schedules';
 import { guestPublicRouter, guestPmRouter } from './routes/guest-reporter';
 import { bookingMessagesPublicRouter } from './routes/booking-messages-public';
+import inspectorRouter from './routes/inspector';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
 import { requireProviderAuth } from './middleware/provider-auth';
@@ -80,6 +81,10 @@ app.use('/api/v1/admin', requireAdmin, adminRouter);
 app.use('/api/v1/business', apiLimiter, requireAuth, businessRouter);
 app.use('/api/v1/demo', demoEstimateRouter);
 app.use('/api/v1/business-chat', diagnosticLimiter, requireAuth, businessChatRouter);
+// Inspector partner portal — signup/login are public, other routes require inspector JWT
+app.use('/api/v1/inspector', apiLimiter, inspectorRouter);
+// Client-facing inspect report (token-based, no auth)
+app.use('/api/v1/inspect', apiLimiter, inspectorRouter);
 app.use('/api/v1/tracking', apiLimiter, trackingPublicRouter);
 app.use('/api/v1/jobs', apiLimiter, requireAuth, trackingAuthRouter);
 app.use('/api/v1/integrations/slack', apiLimiter, slackAuthRouter);

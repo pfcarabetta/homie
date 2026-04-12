@@ -225,6 +225,13 @@
       "when": 1776192200000,
       "tag": "0031_stripe_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1776192300000,
+      "tag": "0032_inspector_portal",
+      "breakpoints": true
     }
   ]
 }
