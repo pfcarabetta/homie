@@ -6,8 +6,9 @@ import {
   businessService, businessChatService, jobService, connectJobSocket, trackingService, estimateService,
   uploadDiagnosticImage,
   type Property, type PropertyDetails, type Workspace, type DiagnosticStreamCallbacks,
-  type JobStatusResponse, type ProviderResponseItem, type CostEstimate,
+  type JobStatusResponse, type ProviderResponseItem, type CostEstimate, type Reservation,
 } from '@/services/api';
+import { MiniCalendar, formatReservationMoment } from './business/constants';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
@@ -605,6 +606,15 @@ export default function BusinessChat() {
   const [entryPermission, setEntryPermission] = useState<string | null>(null);
   const [notifyGuest, setNotifyGuest] = useState(false);
 
+  // Header occupancy badge + calendar state
+  const [headerOccupancy, setHeaderOccupancy] = useState<{
+    occupied: boolean;
+    reservation: { guestName: string | null; checkIn: string; checkOut: string } | null;
+    nextCheckIn?: { guestName: string | null; checkIn: string } | null;
+  } | null>(null);
+  const [calendarReservations, setCalendarReservations] = useState<Reservation[]>([]);
+  const [showCalendar, setShowCalendar] = useState(false);
+
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Cloudinary URLs of photos uploaded during this chat session */
@@ -907,6 +917,53 @@ export default function BusinessChat() {
       },
     );
   }
+
+  // Fetch header occupancy + calendar when property is selected
+  useEffect(() => {
+    if (!selectedProperty || !selectedWorkspace) {
+      setHeaderOccupancy(null);
+      setCalendarReservations([]);
+      return;
+    }
+    let cancelled = false;
+    // Fetch current reservation (occupancy)
+    businessService.getCurrentReservation(selectedWorkspace, selectedProperty.id)
+      .then(res => {
+        if (cancelled) return;
+        if (res.data) {
+          setHeaderOccupancy({
+            occupied: res.data.occupied,
+            reservation: res.data.reservation ? {
+              guestName: res.data.reservation.guestName,
+              checkIn: res.data.reservation.checkIn,
+              checkOut: res.data.reservation.checkOut,
+            } : null,
+          });
+        }
+      }).catch(() => {});
+    // Fetch 90-day reservation window for calendar
+    const now = new Date();
+    const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const future = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+    const to = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    businessService.getPropertyReservations(selectedWorkspace, selectedProperty.id, from, to)
+      .then(res => {
+        if (cancelled) return;
+        if (res.data) {
+          setCalendarReservations(res.data.reservations);
+          // If not currently occupied, find next upcoming check-in
+          if (!cancelled) {
+            const upcoming = res.data.reservations
+              .filter(r => new Date(r.checkIn) > now && r.status !== 'cancelled')
+              .sort((a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime());
+            if (upcoming.length > 0) {
+              setHeaderOccupancy(prev => prev ? { ...prev, nextCheckIn: { guestName: upcoming[0].guestName, checkIn: upcoming[0].checkIn } } : prev);
+            }
+          }
+        }
+      }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedProperty, selectedWorkspace]);
 
   // Handle property selection
   function selectProperty(p: Property) {
@@ -1243,13 +1300,80 @@ export default function BusinessChat() {
         padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px solid rgba(0,0,0,0.05)', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1, position: 'relative' }}>
           {selectedProperty && (
-            <span style={{ fontSize: 14, color: '#9B9490', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-              {selectedProperty.name}
-            </span>
+            <>
+              <span style={{ fontSize: 14, color: D, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1 }}>
+                {selectedProperty.name}
+              </span>
+              {/* Occupancy badge */}
+              {headerOccupancy && (
+                <button
+                  onClick={() => setShowCalendar(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '3px 10px', borderRadius: 100, border: 'none',
+                    background: headerOccupancy.occupied ? '#FEF2F2' : '#F0FDF4',
+                    cursor: 'pointer', flexShrink: 0, fontFamily: "'DM Sans', sans-serif",
+                  }}
+                  title={headerOccupancy.occupied
+                    ? `Occupied by ${headerOccupancy.reservation?.guestName || 'Guest'} until ${headerOccupancy.reservation?.checkOut ? new Date(headerOccupancy.reservation.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '?'}`
+                    : headerOccupancy.nextCheckIn
+                      ? `Vacant until ${new Date(headerOccupancy.nextCheckIn.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
+                      : 'Vacant — no upcoming reservations'}
+                >
+                  <div style={{
+                    width: 7, height: 7, borderRadius: '50%',
+                    background: headerOccupancy.occupied ? '#DC2626' : G,
+                  }} />
+                  <span style={{
+                    fontSize: 11, fontWeight: 600,
+                    color: headerOccupancy.occupied ? '#DC2626' : G,
+                  }}>
+                    {headerOccupancy.occupied ? 'Occupied' : 'Vacant'}
+                  </span>
+                  <span className="b2b-occ-detail" style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>
+                    {headerOccupancy.occupied && headerOccupancy.reservation
+                      ? `${headerOccupancy.reservation.guestName || 'Guest'} · until ${new Date(headerOccupancy.reservation.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
+                      : headerOccupancy.nextCheckIn
+                        ? `until ${new Date(headerOccupancy.nextCheckIn.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
+                        : ''}
+                  </span>
+                  <svg width={10} height={10} viewBox="0 0 20 20" fill="none" stroke="#9B9490" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <polyline points="6 8 10 12 14 8" />
+                  </svg>
+                </button>
+              )}
+              {/* Calendar popover */}
+              {showCalendar && (
+                <>
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowCalendar(false)} />
+                  <div className="b2b-cal-popover" style={{
+                    position: 'absolute', top: 44, left: 0, zIndex: 100,
+                    background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.08)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: 16,
+                    width: 'min(460px, calc(100vw - 40px))', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto',
+                  }}>
+                    <div style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 700, color: D, marginBottom: 12 }}>
+                      {selectedProperty.name} — Reservations
+                    </div>
+                    {calendarReservations.length === 0 ? (
+                      <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No upcoming reservations</div>
+                    ) : (
+                      <MiniCalendar reservations={calendarReservations} />
+                    )}
+                  </div>
+                </>
+              )}
+            </>
           )}
         </div>
+        <style>{`
+          @media (max-width: 600px) {
+            .b2b-occ-detail { display: none !important; }
+            .b2b-cal-popover { left: -12px !important; right: -12px !important; width: auto !important; }
+          }
+        `}</style>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {(() => {
             const hour = new Date().getHours();
