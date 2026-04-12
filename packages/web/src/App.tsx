@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProviderAuthProvider } from '@/contexts/ProviderAuthContext';
+import { InspectorAuthProvider } from '@/contexts/InspectorAuthContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import HomePage from '@/pages/HomePage';
 import DiagnosticChat from '@/pages/DiagnosticChat';
@@ -32,6 +33,18 @@ import AdminProviders from '@/pages/admin/AdminProviders';
 import AdminBookings from '@/pages/admin/AdminBookings';
 import AdminBusiness from '@/pages/admin/AdminBusiness';
 import AdminPricing from '@/pages/admin/AdminPricing';
+import InspectorLayout from '@/pages/inspector/InspectorLayout';
+import InspectorLogin from '@/pages/inspector/InspectorLogin';
+import InspectorSignup from '@/pages/inspector/InspectorSignup';
+import InspectorDashboard from '@/pages/inspector/InspectorDashboard';
+import InspectorReports from '@/pages/inspector/InspectorReports';
+import InspectorReportDetail from '@/pages/inspector/InspectorReportDetail';
+import InspectorUpload from '@/pages/inspector/InspectorUpload';
+import InspectorEarnings from '@/pages/inspector/InspectorEarnings';
+import InspectorLeads from '@/pages/inspector/InspectorLeads';
+import InspectorMarketing from '@/pages/inspector/InspectorMarketing';
+import InspectorSettings from '@/pages/inspector/InspectorSettings';
+import InspectReport from '@/pages/InspectReport';
 import TrackingStatus from '@/pages/TrackingStatus';
 import GuestReporterPage from '@/pages/GuestReporter';
 import LoadingDemo from '@/pages/LoadingDemo';
@@ -43,6 +56,7 @@ export default function App() {
     <ErrorBoundary>
     <AuthProvider>
       <ProviderAuthProvider>
+      <InspectorAuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -81,8 +95,22 @@ export default function App() {
             <Route path="/admin/business" element={<AdminBusiness />} />
             <Route path="/admin/pricing" element={<AdminPricing />} />
           </Route>
+          <Route path="/inspector/login" element={<InspectorLogin />} />
+          <Route path="/inspector/signup" element={<InspectorSignup />} />
+          <Route element={<InspectorLayout />}>
+            <Route path="/inspector" element={<InspectorDashboard />} />
+            <Route path="/inspector/reports" element={<InspectorReports />} />
+            <Route path="/inspector/reports/upload" element={<InspectorUpload />} />
+            <Route path="/inspector/reports/:id" element={<InspectorReportDetail />} />
+            <Route path="/inspector/earnings" element={<InspectorEarnings />} />
+            <Route path="/inspector/leads" element={<InspectorLeads />} />
+            <Route path="/inspector/marketing" element={<InspectorMarketing />} />
+            <Route path="/inspector/settings" element={<InspectorSettings />} />
+          </Route>
+          <Route path="/inspect/:token" element={<InspectReport />} />
         </Routes>
       </BrowserRouter>
+      </InspectorAuthProvider>
       </ProviderAuthProvider>
     </AuthProvider>
     </ErrorBoundary>
