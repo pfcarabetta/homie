@@ -4,8 +4,11 @@ import { properties } from './properties';
 // ── Scans ──────────────────────────────────────────────────────────────────
 export const propertyScans = pgTable('property_scans', {
   id: uuid('id').defaultRandom().primaryKey(),
-  propertyId: uuid('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
-  workspaceId: uuid('workspace_id').notNull(),
+  /** Business scans link to a property; consumer scans use homeownerId instead */
+  propertyId: uuid('property_id').references(() => properties.id, { onDelete: 'cascade' }),
+  workspaceId: uuid('workspace_id'),
+  /** Consumer home scans link to the homeowner directly */
+  homeownerId: uuid('homeowner_id'),
   /** 'full' or 'quick' */
   scanType: text('scan_type').notNull().default('full'),
   scannedBy: uuid('scanned_by'),
@@ -23,6 +26,7 @@ export const propertyScans = pgTable('property_scans', {
 }, (t) => [
   index('property_scans_property_idx').on(t.propertyId),
   index('property_scans_workspace_idx').on(t.workspaceId),
+  index('property_scans_homeowner_idx').on(t.homeownerId),
   index('property_scans_status_idx').on(t.status),
 ]);
 
@@ -32,7 +36,8 @@ export type NewPropertyScan = typeof propertyScans.$inferInsert;
 // ── Rooms ──────────────────────────────────────────────────────────────────
 export const propertyRooms = pgTable('property_rooms', {
   id: uuid('id').defaultRandom().primaryKey(),
-  propertyId: uuid('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  propertyId: uuid('property_id').references(() => properties.id, { onDelete: 'cascade' }),
+  homeownerId: uuid('homeowner_id'),
   scanId: uuid('scan_id'),
   roomType: text('room_type').notNull(),
   roomLabel: text('room_label').notNull(),
@@ -55,7 +60,8 @@ export type NewPropertyRoom = typeof propertyRooms.$inferInsert;
 // ── Inventory items ────────────────────────────────────────────────────────
 export const propertyInventoryItems = pgTable('property_inventory_items', {
   id: uuid('id').defaultRandom().primaryKey(),
-  propertyId: uuid('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  propertyId: uuid('property_id').references(() => properties.id, { onDelete: 'cascade' }),
+  homeownerId: uuid('homeowner_id'),
   roomId: uuid('room_id'),
   scanId: uuid('scan_id'),
   /** appliance, fixture, system, safety, amenity, infrastructure */
@@ -89,6 +95,7 @@ export const propertyInventoryItems = pgTable('property_inventory_items', {
   index('inventory_brand_model_idx').on(t.brand, t.modelNumber),
   index('inventory_age_idx').on(t.estimatedAgeYears),
   index('inventory_room_idx').on(t.roomId),
+  index('inventory_homeowner_idx').on(t.homeownerId),
 ]);
 
 export type PropertyInventoryItem = typeof propertyInventoryItems.$inferSelect;
@@ -97,7 +104,7 @@ export type NewPropertyInventoryItem = typeof propertyInventoryItems.$inferInser
 // ── Scan changes (for quick scans) ─────────────────────────────────────────
 export const propertyScanChanges = pgTable('property_scan_changes', {
   id: uuid('id').defaultRandom().primaryKey(),
-  propertyId: uuid('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  propertyId: uuid('property_id').references(() => properties.id, { onDelete: 'cascade' }),
   scanId: uuid('scan_id').notNull(),
   existingItemId: uuid('existing_item_id'),
   /** item_added, item_removed, item_modified, condition_changed, damage_detected */

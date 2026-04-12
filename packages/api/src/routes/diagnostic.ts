@@ -1,6 +1,10 @@
 import { Router, Request, Response } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
+import { eq } from 'drizzle-orm';
 import logger from '../logger';
+import { db } from '../db';
+import { homeowners } from '../db/schema/homeowners';
+import { propertyInventoryItems } from '../db/schema/property-scans';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -156,13 +160,77 @@ router.post('/chat', async (req: Request, res: Response) => {
     'X-Accel-Buffering': 'no',
   });
 
+  // Enrich the system prompt with the homeowner's equipment context if available.
+  // This gives Homie knowledge about the specific appliances, systems, and fixtures
+  // in the home so it can reference brands, models, and ages during diagnosis.
+  let systemPrompt = SYSTEM_PROMPT;
+  try {
+    if (req.homeownerId) {
+      const [ho] = await db
+        .select({ homeDetails: homeowners.homeDetails })
+        .from(homeowners)
+        .where(eq(homeowners.id, req.homeownerId))
+        .limit(1);
+      const details = ho?.homeDetails as Record<string, unknown> | null;
+      if (details && Object.keys(details).length > 0) {
+        // Build a compact summary from the structured details
+        const lines: string[] = [];
+        for (const [section, fields] of Object.entries(details)) {
+          if (!fields || typeof fields !== 'object') continue;
+          const entries = Object.entries(fields as Record<string, unknown>)
+            .filter(([, v]) => v !== null && v !== undefined && v !== '' && v !== false)
+            .map(([k, v]) => {
+              if (typeof v === 'object') {
+                // Nested appliance objects like { brand: "Samsung", model: "RF28..." }
+                const sub = Object.entries(v as Record<string, string>).filter(([, sv]) => sv).map(([sk, sv]) => `${sk}: ${sv}`).join(', ');
+                return sub ? `${k} (${sub})` : null;
+              }
+              return `${k}: ${v}`;
+            })
+            .filter(Boolean);
+          if (entries.length > 0) {
+            lines.push(`${section}: ${entries.join('; ')}`);
+          }
+        }
+        if (lines.length > 0) {
+          systemPrompt = `HOME EQUIPMENT PROFILE:\n${lines.join('\n')}\n\nUse this equipment profile when discussing issues — refer to specific brands, models, and ages. Don't ask the homeowner to identify equipment already listed above.\n\n${systemPrompt}`;
+        }
+      }
+
+      // Also check scan inventory for more detailed info (brands, ages, conditions)
+      const invItems = await db
+        .select()
+        .from(propertyInventoryItems)
+        .where(eq(propertyInventoryItems.homeownerId, req.homeownerId));
+      if (invItems.length > 0) {
+        const itemLines = invItems
+          .filter(i => i.status !== 'pm_dismissed')
+          .slice(0, 20) // limit context size
+          .map(i => {
+            const parts: string[] = [];
+            if (i.brand) parts.push(i.brand);
+            if (i.modelNumber) parts.push(i.modelNumber);
+            parts.push(i.itemType.replace(/_/g, ' '));
+            if (i.estimatedAgeYears) parts.push(`${i.estimatedAgeYears}yr`);
+            if (i.condition && i.condition !== 'good') parts.push(i.condition);
+            return `- ${parts.join(' ')}`;
+          });
+        if (itemLines.length > 0) {
+          systemPrompt = `KNOWN HOME INVENTORY (from AI scan):\n${itemLines.join('\n')}\n\n${systemPrompt}`;
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, '[diagnostic/chat] Failed to load home equipment context');
+  }
+
   try {
     const client = new Anthropic({ apiKey });
 
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages,
     });
 

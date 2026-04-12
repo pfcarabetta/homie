@@ -4397,7 +4397,7 @@ router.post('/:workspaceId/scans/:scanId/photos', requireWorkspace, requireWorks
 
     // Quick scans: detect and persist changes against existing inventory
     let changes: Array<{ changeType: string; description: string; severity: string }> = [];
-    if (scan.scanType === 'quick' && result.itemsDetected.length > 0) {
+    if (scan.scanType === 'quick' && result.itemsDetected.length > 0 && scan.propertyId) {
       changes = await detectChanges({
         scanId,
         propertyId: scan.propertyId,
@@ -4411,7 +4411,7 @@ router.post('/:workspaceId/scans/:scanId/photos', requireWorkspace, requireWorks
       if (changes.length > 0) {
         const { propertyScanChanges } = await import('../db/schema/property-scans');
         await db.insert(propertyScanChanges).values(changes.map(c => ({
-          propertyId: scan.propertyId,
+          propertyId: scan.propertyId ?? undefined,
           scanId,
           changeType: c.changeType,
           description: c.description,
@@ -4705,7 +4705,7 @@ router.put('/:workspaceId/inventory/:itemId', requireWorkspace, requireWorkspace
   try {
     // Verify ownership through property → workspace
     const [item] = await db.select().from(propertyInventoryItems).where(eq(propertyInventoryItems.id, itemId)).limit(1);
-    if (!item) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
+    if (!item || !item.propertyId) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
     const [prop] = await db.select({ workspaceId: properties.workspaceId }).from(properties).where(eq(properties.id, item.propertyId)).limit(1);
     if (!prop || prop.workspaceId !== req.workspaceId) {
       res.status(403).json({ data: null, error: 'Forbidden', meta: {} });
@@ -4739,7 +4739,7 @@ router.delete('/:workspaceId/inventory/:itemId', requireWorkspace, requireWorksp
   const { itemId } = req.params;
   try {
     const [item] = await db.select().from(propertyInventoryItems).where(eq(propertyInventoryItems.id, itemId)).limit(1);
-    if (!item) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
+    if (!item || !item.propertyId) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
     const [prop] = await db.select({ workspaceId: properties.workspaceId }).from(properties).where(eq(properties.id, item.propertyId)).limit(1);
     if (!prop || prop.workspaceId !== req.workspaceId) {
       res.status(403).json({ data: null, error: 'Forbidden', meta: {} });

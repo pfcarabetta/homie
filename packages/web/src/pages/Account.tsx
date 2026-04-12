@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { accountService, jobService, estimateService, businessService, type AccountProfile, type AccountJob, type AccountBooking, type ProviderResponseItem, type HomeData, type PropertyDetails, type CostEstimate } from '@/services/api';
+import { accountService, jobService, estimateService, businessService, type AccountProfile, type AccountJob, type AccountBooking, type ProviderResponseItem, type HomeData, type PropertyDetails, type PropertyScan, type CostEstimate } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -615,6 +615,311 @@ function BookingsTab() {
 }
 
 /* -- My Home Tab -- */
+/* ── Consumer AI Home Scan ──────────────────────────────────────────────── */
+
+const ROOM_OPTIONS_CONSUMER = [
+  'kitchen', 'dining_room', 'living_room',
+  'master_bedroom', 'bedroom',
+  'master_bathroom', 'bathroom', 'half_bathroom',
+  'laundry', 'mechanical_room', 'garage',
+  'office', 'hallway',
+  'patio', 'pool_area', 'exterior_front', 'exterior_back',
+  'other',
+];
+
+function prettifyItemType(type: string): string {
+  return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function ConsumerScanCard({ onDetailsUpdated }: { onDetailsUpdated: () => void }) {
+  const [history, setHistory] = useState<PropertyScan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeScanId, setActiveScanId] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    accountService.getHomeScanHistory().then(res => {
+      if (res.data) setHistory(res.data);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const latest = history.find(s => s.status === 'completed' || s.status === 'review_pending');
+
+  async function handleStart() {
+    setStarting(true);
+    try {
+      const res = await accountService.startHomeScan('full');
+      if (res.data) setActiveScanId(res.data.id);
+    } catch { alert('Failed to start scan'); }
+    setStarting(false);
+  }
+
+  if (loading) return null;
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      {!latest ? (
+        <div style={{
+          background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.08)',
+          padding: 24, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>📱</div>
+          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 600, color: D, marginBottom: 6 }}>
+            Scan your home
+          </div>
+          <div style={{ fontSize: 13, color: '#6B6560', maxWidth: 420, margin: '0 auto 16px', lineHeight: 1.5 }}>
+            Walk through your home with your camera. The AI catalogs appliances, systems, and features so Homie can give you better diagnostics and faster quotes.
+          </div>
+          <button onClick={handleStart} disabled={starting}
+            style={{
+              padding: '12px 28px', borderRadius: 100, border: 'none',
+              background: O, color: '#fff', fontSize: 14, fontWeight: 600,
+              cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>{starting ? 'Starting...' : 'Start home scan'}</button>
+        </div>
+      ) : (
+        <div style={{
+          background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.08)',
+          padding: 18,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 22 }}>📱</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 700, color: D }}>Home inventory</div>
+              <div style={{ fontSize: 11, color: '#9B9490' }}>
+                Last scanned {new Date(latest.completedAt || latest.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 12, color: '#6B6560' }}>
+            <span><strong style={{ color: D }}>{latest.itemsCataloged}</strong> items</span>
+            <span>·</span>
+            <span><strong style={{ color: G }}>{latest.roomsScanned}</strong> rooms</span>
+          </div>
+          <button onClick={handleStart} disabled={starting}
+            style={{
+              padding: '8px 18px', borderRadius: 8, border: 'none',
+              background: O, color: '#fff', fontSize: 12, fontWeight: 600,
+              cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>{starting ? 'Starting...' : 'Rescan home'}</button>
+        </div>
+      )}
+
+      {activeScanId && (
+        <ConsumerScanModal
+          scanId={activeScanId}
+          onClose={() => setActiveScanId(null)}
+          onComplete={() => {
+            setActiveScanId(null);
+            onDetailsUpdated();
+            accountService.getHomeScanHistory().then(res => {
+              if (res.data) setHistory(res.data);
+            }).catch(() => {});
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConsumerScanModal({ scanId, onClose, onComplete }: { scanId: string; onClose: () => void; onComplete: () => void }) {
+  const [currentRoom, setCurrentRoom] = useState<string>('kitchen');
+  const [uploading, setUploading] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [detected, setDetected] = useState<Array<{ id: string; itemType: string; brand: string | null; confidence: number }>>([]);
+  const [coaching, setCoaching] = useState<string>("Let's start in the kitchen. Slowly pan your camera and capture the appliances.");
+  const [error, setError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [flash, setFlash] = useState<{ items: string[]; key: number } | null>(null);
+  const [roomProgress, setRoomProgress] = useState<{ expected: string[]; captured: string[]; remaining: string[] } | null>(null);
+  const flashTimerRef = useRef<number | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Camera setup
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!navigator.mediaDevices?.getUserMedia) { setCameraError('Camera not available'); return; }
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false,
+        });
+        if (cancelled) { s.getTracks().forEach(t => t.stop()); return; }
+        setStream(s);
+      } catch (err) { setCameraError((err as Error).message || 'Camera denied'); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!stream || !videoRef.current) return;
+    const v = videoRef.current;
+    v.srcObject = stream;
+    const tryPlay = () => v.play().then(() => setCameraReady(true)).catch(() => {
+      setTimeout(() => v.play().then(() => setCameraReady(true)).catch(() => {}), 200);
+    });
+    if (v.readyState >= 2) tryPlay(); else v.onloadedmetadata = tryPlay;
+    return () => { v.onloadedmetadata = null; };
+  }, [stream]);
+
+  useEffect(() => () => { stream?.getTracks().forEach(t => t.stop()); }, [stream]);
+
+  // Fetch coaching on room change
+  useEffect(() => {
+    let c = false;
+    accountService.getHomeScanCoaching(scanId, { current_room: currentRoom, last_detected_items: [] })
+      .then(res => { if (!c && res.data?.message) setCoaching(res.data.message); if (!c && res.data?.roomProgress) setRoomProgress(res.data.roomProgress); }).catch(() => {});
+    return () => { c = true; };
+  }, [scanId, currentRoom]);
+
+  function showFlash(items: string[]) {
+    if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+    setFlash({ items, key: Date.now() });
+    flashTimerRef.current = window.setTimeout(() => setFlash(null), 1800);
+  }
+
+  async function captureAndProcess() {
+    if (uploading || !cameraReady || !videoRef.current) return;
+    const v = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(v, 0, 0);
+    let dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    if (dataUrl.length > 4_000_000) {
+      const img = new Image();
+      await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = dataUrl; });
+      const c2 = document.createElement('canvas');
+      const ratio = Math.min(1600 / img.width, 1600 / img.height, 1);
+      c2.width = Math.round(img.width * ratio); c2.height = Math.round(img.height * ratio);
+      c2.getContext('2d')!.drawImage(img, 0, 0, c2.width, c2.height);
+      dataUrl = c2.toDataURL('image/jpeg', 0.85);
+    }
+    setUploading(true); setError(null);
+    try {
+      const res = await accountService.uploadHomeScanPhoto(scanId, { image_data_url: dataUrl, room_hint: currentRoom });
+      if (res.data) {
+        const newItems = res.data.itemsDetected;
+        for (const item of newItems) setDetected(prev => [...prev, { id: item.id, itemType: item.itemType, brand: item.brand, confidence: item.confidence }]);
+        if (newItems.length > 0) showFlash(newItems.map(i => `${i.brand || ''} ${prettifyItemType(i.itemType)}`.trim()));
+        try {
+          const cr = await accountService.getHomeScanCoaching(scanId, { current_room: currentRoom, last_detected_items: newItems.map(i => ({ itemType: i.itemType, brand: i.brand, confidence: i.confidence })) });
+          if (cr.data?.message) setCoaching(cr.data.message);
+          if (cr.data?.roomProgress) setRoomProgress(cr.data.roomProgress);
+        } catch { /* ignore */ }
+      }
+    } catch (err) { setError((err as Error).message || 'Failed to process'); }
+    setUploading(false);
+  }
+
+  async function handleComplete() {
+    setCompleting(true);
+    try { await accountService.completeHomeScan(scanId); onComplete(); }
+    catch (err) { setError((err as Error).message || 'Failed to complete'); }
+    setCompleting(false);
+  }
+
+  const nextRoomIdx = ROOM_OPTIONS_CONSUMER.indexOf(currentRoom);
+  const nextRoom = ROOM_OPTIONS_CONSUMER[(nextRoomIdx + 1) % ROOM_OPTIONS_CONSUMER.length];
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif", color: '#fff' }}>
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <video ref={videoRef} autoPlay playsInline muted style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: cameraReady ? 1 : 0 }} />
+        {!cameraReady && !cameraError && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9B9490', fontSize: 13 }}>Requesting camera...</div>}
+        {cameraError && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>📷</div>
+            <div style={{ fontSize: 14, marginBottom: 8 }}>{cameraError}</div>
+            <button onClick={() => fileInputRef.current?.click()} style={{ padding: '10px 22px', borderRadius: 8, border: 'none', background: O, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Upload photos instead</button>
+          </div>
+        )}
+        {/* Top header */}
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%)', padding: '14px 16px 32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', width: 34, height: 34, borderRadius: 17, fontSize: 16, cursor: 'pointer' }}>×</button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>Home scan</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>{detected.length} item{detected.length === 1 ? '' : 's'} found · {prettifyItemType(currentRoom)}</div>
+            </div>
+            <button onClick={handleComplete} disabled={completing} style={{ background: G, border: 'none', color: '#fff', padding: '8px 14px', borderRadius: 100, fontSize: 12, fontWeight: 600, cursor: completing ? 'default' : 'pointer', opacity: completing ? 0.5 : 1 }}>{completing ? 'Ending…' : 'End scan'}</button>
+          </div>
+          <div style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', borderRadius: 12, padding: '10px 14px', fontSize: 13, lineHeight: 1.45, border: '1px solid rgba(255,255,255,0.1)' }}>
+            <span style={{ fontSize: 16, marginRight: 6 }}>🤖</span>{coaching}
+          </div>
+          {roomProgress && roomProgress.expected.length > 0 && (
+            <div style={{ marginTop: 8, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', borderRadius: 12, padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Checklist</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: roomProgress.remaining.length === 0 ? '#5DDB9D' : '#fff' }}>{roomProgress.captured.length} of {roomProgress.expected.length}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {roomProgress.expected.map(t => {
+                  const done = roomProgress.captured.includes(t);
+                  return <span key={t} style={{ fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 100, background: done ? 'rgba(93,219,157,0.22)' : 'rgba(255,255,255,0.08)', color: done ? '#5DDB9D' : 'rgba(255,255,255,0.7)', border: `1px solid ${done ? 'rgba(93,219,157,0.4)' : 'rgba(255,255,255,0.15)'}`, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>{done ? '✓ ' : ''}{prettifyItemType(t)}</span>;
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Flash */}
+        {flash && (
+          <div key={flash.key} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, pointerEvents: 'none', zIndex: 5, animation: 'csFlash 1.8s ease forwards' }}>
+            <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'rgba(27,158,119,0.78)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', border: '3px solid rgba(255,255,255,0.55)' }}>
+              <svg width={52} height={52} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+            </div>
+            <div style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)', padding: '10px 18px', borderRadius: 14, fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 280, textAlign: 'center', lineHeight: 1.4, border: '1px solid rgba(255,255,255,0.18)' }}>
+              {flash.items.slice(0, 3).join(', ')}{flash.items.length > 3 && ` +${flash.items.length - 3} more`}
+            </div>
+          </div>
+        )}
+        <style>{`@keyframes csFlash { 0% { opacity:0; transform:translate(-50%,-50%) scale(0.55); } 18% { opacity:1; transform:translate(-50%,-50%) scale(1.08); } 30% { transform:translate(-50%,-50%) scale(1); } 78% { opacity:1; } 100% { opacity:0; } }`}</style>
+        {error && <div style={{ position: 'absolute', bottom: 200, left: 16, right: 16, background: '#FEF2F2', color: '#991B1B', padding: 10, borderRadius: 8, fontSize: 12, textAlign: 'center' }}>{error}</div>}
+      </div>
+      {/* Bottom bar */}
+      <div style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(12px)', padding: '14px 16px 24px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ marginBottom: 12 }}>
+          <select value={currentRoom} onChange={e => setCurrentRoom(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12, fontFamily: "'DM Sans',sans-serif" }}>
+            {ROOM_OPTIONS_CONSUMER.map(r => <option key={r} value={r} style={{ color: '#000' }}>{prettifyItemType(r)}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
+          <button onClick={() => { const next = ROOM_OPTIONS_CONSUMER[(ROOM_OPTIONS_CONSUMER.indexOf(currentRoom) + 1) % ROOM_OPTIONS_CONSUMER.length]; setCurrentRoom(next); setRoomProgress(null); }}
+            style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 14px', borderRadius: 100, fontSize: 12, fontWeight: 600, cursor: 'pointer', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Next: {prettifyItemType(nextRoom)} ›
+          </button>
+          <button onClick={captureAndProcess} disabled={uploading || !cameraReady} aria-label="Capture" style={{ width: 72, height: 72, borderRadius: '50%', background: '#fff', border: '4px solid rgba(255,255,255,0.4)', cursor: uploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: uploading ? 0.6 : 1 }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: uploading ? '#9B9490' : O }} />
+          </button>
+          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={async (e) => {
+            const files = Array.from(e.target.files || []); e.target.value = '';
+            for (const file of files) {
+              if (file.size > 8 * 1024 * 1024) continue;
+              const dataUrl = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(file); });
+              setUploading(true);
+              try {
+                const result = await accountService.uploadHomeScanPhoto(scanId, { image_data_url: dataUrl, room_hint: currentRoom });
+                if (result.data) {
+                  for (const item of result.data.itemsDetected) setDetected(prev => [...prev, { id: item.id, itemType: item.itemType, brand: item.brand, confidence: item.confidence }]);
+                  if (result.data.itemsDetected.length > 0) showFlash(result.data.itemsDetected.map(i => `${i.brand || ''} ${prettifyItemType(i.itemType)}`.trim()));
+                }
+              } catch { /* ignore */ }
+              setUploading(false);
+            }
+          }} />
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 16px', borderRadius: 100, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Upload</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MyHomeTab() {
   const [homeData, setHomeData] = useState<HomeData | null>(null);
   const [address, setAddress] = useState('');
@@ -722,6 +1027,19 @@ function MyHomeTab() {
       <div style={{ fontSize: 14, color: '#6B6560', marginBottom: 16, lineHeight: 1.5 }}>
         Save your home details so Homie can give you better diagnostics and more accurate quotes.
       </div>
+
+      {/* AI Home Scan */}
+      <ConsumerScanCard
+        onDetailsUpdated={() => {
+          // Refresh home data after scan fills in details
+          accountService.getHome().then(res => {
+            if (res.data) {
+              setHomeData(res.data);
+              setDetails(res.data.details || {});
+            }
+          }).catch(() => {});
+        }}
+      />
 
       {/* Basic home info */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>

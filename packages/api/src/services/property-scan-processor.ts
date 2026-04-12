@@ -355,15 +355,14 @@ async function analyzeImage(req: ScanProcessRequest): Promise<VisionResponse | n
 
 /* ── Persistence ─────────────────────────────────────────────────────────── */
 
-async function getOrCreateRoom(propertyId: string, scanId: string, roomType: string, roomLabel: string, flooring: string | null, condition: string | null): Promise<string> {
-  // Look for an existing room for this scan with the same type
-  const [existing] = await db
-    .select({ id: propertyRooms.id })
-    .from(propertyRooms)
-    .where(eq(propertyRooms.scanId, scanId))
-    .limit(1);
-  // For simplicity in v1 we create a new room per scan-photo if none exists for this scan/type
-  // (proper dedup happens via scanId+roomType uniqueness in a future iteration)
+async function getOrCreateRoom(
+  owner: { propertyId: string | null; homeownerId: string | null },
+  scanId: string,
+  roomType: string,
+  roomLabel: string,
+  flooring: string | null,
+  condition: string | null,
+): Promise<string> {
   const matching = await db
     .select({ id: propertyRooms.id, roomType: propertyRooms.roomType })
     .from(propertyRooms)
@@ -374,7 +373,8 @@ async function getOrCreateRoom(propertyId: string, scanId: string, roomType: str
   }
 
   const [inserted] = await db.insert(propertyRooms).values({
-    propertyId,
+    propertyId: owner.propertyId,
+    homeownerId: owner.homeownerId,
     scanId,
     roomType,
     roomLabel: roomLabel || roomType.replace(/_/g, ' '),
@@ -406,8 +406,9 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
   }
 
   const roomType = vision.room_type || req.roomHint || 'other';
+  const owner = { propertyId: scan.propertyId, homeownerId: scan.homeownerId };
   const roomId = await getOrCreateRoom(
-    scan.propertyId,
+    owner,
     req.scanId,
     roomType,
     vision.room_label || roomType.replace(/_/g, ' '),
@@ -415,12 +416,18 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
     vision.general_condition ?? null,
   );
 
-  // Load existing inventory once for this property so we can dedup against it
-  // (and against items we just inserted in this same batch).
+  // Load existing inventory once so we can dedup against it (and against items
+  // we just inserted in this same batch). Use propertyId for business scans,
+  // homeownerId for consumer scans.
+  const ownerFilter = scan.propertyId
+    ? eq(propertyInventoryItems.propertyId, scan.propertyId)
+    : scan.homeownerId
+      ? eq(propertyInventoryItems.homeownerId, scan.homeownerId)
+      : eq(propertyInventoryItems.scanId, scan.id); // fallback: just this scan
   const existingItems: PropertyInventoryItem[] = await db
     .select()
     .from(propertyInventoryItems)
-    .where(eq(propertyInventoryItems.propertyId, scan.propertyId));
+    .where(ownerFilter);
 
   const itemsDetected: ScanProcessResult['itemsDetected'] = [];
   for (const item of vision.items || []) {
@@ -516,7 +523,8 @@ export async function processScanPhoto(req: ScanProcessRequest): Promise<ScanPro
     }
 
     const newItem: NewPropertyInventoryItem = {
-      propertyId: scan.propertyId,
+      propertyId: scan.propertyId ?? undefined,
+      homeownerId: scan.homeownerId ?? undefined,
       roomId,
       scanId: req.scanId,
       category: item.category,
@@ -842,8 +850,13 @@ export async function completeScan(scanId: string): Promise<{ settingsUpdatedPat
 
   // Push scan results into property.details (Equipment & Systems settings).
   // This is best-effort — failures are logged but won't break scan completion.
-  const { applyScanToPropertySettings } = await import('./scan-to-settings-mapper');
-  const settingsUpdatedPaths = await applyScanToPropertySettings(scan.propertyId);
+  // Consumer scans (homeownerId, no propertyId) are handled by the account route's
+  // own completion handler which writes to homeowners.homeDetails directly.
+  let settingsUpdatedPaths: string[] = [];
+  if (scan.propertyId) {
+    const { applyScanToPropertySettings } = await import('./scan-to-settings-mapper');
+    settingsUpdatedPaths = await applyScanToPropertySettings(scan.propertyId);
+  }
 
   return { settingsUpdatedPaths };
 }

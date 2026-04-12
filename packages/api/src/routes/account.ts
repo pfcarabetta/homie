@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq, desc, and, isNull, inArray, sql } from 'drizzle-orm';
+import { eq, desc, and, ne, isNull, inArray, sql } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
@@ -8,6 +8,7 @@ import { jobs } from '../db/schema/jobs';
 import { bookings } from '../db/schema/bookings';
 import { providers } from '../db/schema/providers';
 import { providerResponses } from '../db/schema/provider-responses';
+import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/schema/property-scans';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -367,6 +368,279 @@ router.get('/bookings', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /account/bookings]');
     res.status(500).json({ data: null, error: 'Failed to fetch bookings', meta: {} });
+  }
+});
+
+// ── Consumer Home Scan ─────────────────────────────────────────────────────
+
+// POST /api/v1/account/home/scan — start a home scan
+router.post('/home/scan', async (req: Request, res: Response) => {
+  const { scan_type } = req.body as { scan_type?: 'full' | 'quick' };
+  try {
+    const [scan] = await db.insert(propertyScans).values({
+      homeownerId: req.homeownerId,
+      scanType: scan_type || 'full',
+      scannedBy: req.homeownerId,
+      status: 'in_progress',
+    }).returning();
+    res.json({ data: scan, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/home/scan]');
+    res.status(500).json({ data: null, error: 'Failed to start scan', meta: {} });
+  }
+});
+
+// POST /api/v1/account/home/scan/:scanId/photos — upload a photo for processing
+router.post('/home/scan/:scanId/photos', async (req: Request, res: Response) => {
+  const { scanId } = req.params;
+  const { image_data_url, room_hint, notes } = req.body as {
+    image_data_url?: string;
+    room_hint?: string;
+    notes?: string;
+  };
+  if (!image_data_url || typeof image_data_url !== 'string') {
+    res.status(400).json({ data: null, error: 'image_data_url is required', meta: {} });
+    return;
+  }
+  try {
+    const [scan] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
+    if (!scan || scan.homeownerId !== req.homeownerId) {
+      res.status(404).json({ data: null, error: 'Scan not found', meta: {} });
+      return;
+    }
+    const match = image_data_url.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (!match) {
+      res.status(400).json({ data: null, error: 'Invalid image data URL', meta: {} });
+      return;
+    }
+    const { processScanPhoto } = await import('../services/property-scan-processor');
+    const result = await processScanPhoto({
+      scanId,
+      imageBase64: match[2],
+      imageMediaType: match[1] as 'image/jpeg' | 'image/png' | 'image/webp',
+      roomHint: room_hint,
+      notes,
+    });
+    res.json({ data: result, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/home/scan/:scanId/photos]');
+    res.status(500).json({ data: null, error: 'Failed to process photo', meta: {} });
+  }
+});
+
+// POST /api/v1/account/home/scan/:scanId/complete — finalize the scan
+router.post('/home/scan/:scanId/complete', async (req: Request, res: Response) => {
+  const { scanId } = req.params;
+  try {
+    const [scan] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
+    if (!scan || scan.homeownerId !== req.homeownerId) {
+      res.status(404).json({ data: null, error: 'Scan not found', meta: {} });
+      return;
+    }
+
+    // Count rooms + mark complete
+    const rooms = await db.select({ id: propertyRooms.id }).from(propertyRooms).where(eq(propertyRooms.scanId, scanId));
+    await db.update(propertyScans).set({
+      roomsScanned: rooms.length,
+      status: 'completed',
+      completedAt: new Date(),
+      durationSeconds: scan.createdAt ? Math.round((Date.now() - scan.createdAt.getTime()) / 1000) : null,
+    }).where(eq(propertyScans.id, scanId));
+
+    // Auto-fill homeowner's homeDetails from scan inventory (same mapper logic as business)
+    let settingsUpdatedPaths: string[] = [];
+    try {
+      const { buildSettingsPatchFromInventory, mergeSettingsPatch } = await import('../services/scan-to-settings-mapper');
+      const items = await db.select().from(propertyInventoryItems)
+        .where(eq(propertyInventoryItems.homeownerId, req.homeownerId));
+      const allRooms = await db.select().from(propertyRooms)
+        .where(eq(propertyRooms.homeownerId, req.homeownerId));
+      const patch = buildSettingsPatchFromInventory(items, allRooms);
+      if (Object.keys(patch).length > 0) {
+        const [ho] = await db.select({ homeDetails: homeowners.homeDetails }).from(homeowners).where(eq(homeowners.id, req.homeownerId)).limit(1);
+        const { merged, updatedPaths } = mergeSettingsPatch(ho?.homeDetails ?? null, patch);
+        if (updatedPaths.length > 0) {
+          await db.update(homeowners).set({ homeDetails: merged }).where(eq(homeowners.id, req.homeownerId));
+          settingsUpdatedPaths = updatedPaths;
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, '[account/home/scan/complete] failed to apply scan to homeDetails');
+    }
+
+    const [updated] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
+    res.json({ data: updated, error: null, meta: { settingsUpdatedPaths } });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/home/scan/:scanId/complete]');
+    res.status(500).json({ data: null, error: 'Failed to complete scan', meta: {} });
+  }
+});
+
+// POST /api/v1/account/home/scan/:scanId/coaching — coaching message
+router.post('/home/scan/:scanId/coaching', async (req: Request, res: Response) => {
+  const { scanId } = req.params;
+  const { current_room, last_detected_items } = req.body as {
+    current_room?: string;
+    last_detected_items?: Array<{ itemType: string; brand: string | null; confidence: number }>;
+  };
+  try {
+    const [scan] = await db.select().from(propertyScans).where(eq(propertyScans.id, scanId)).limit(1);
+    if (!scan || scan.homeownerId !== req.homeownerId) {
+      res.status(404).json({ data: null, error: 'Scan not found', meta: {} });
+      return;
+    }
+    const rooms = await db.select({ roomType: propertyRooms.roomType }).from(propertyRooms).where(eq(propertyRooms.scanId, scanId));
+    const { generateCoachingMessage } = await import('../services/property-scan-processor');
+    const result = await generateCoachingMessage({
+      scanId,
+      currentRoom: current_room || 'kitchen',
+      lastDetectedItems: last_detected_items || [],
+      totalItemsSoFar: scan.itemsCataloged,
+      roomsScanned: rooms.map(r => r.roomType.replace(/_/g, ' ')),
+    });
+    res.json({ data: { message: result.message, roomProgress: result.roomProgress }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/home/scan/:scanId/coaching]');
+    res.status(500).json({ data: null, error: 'Failed to generate coaching', meta: {} });
+  }
+});
+
+// GET /api/v1/account/home/inventory — consumer home inventory
+router.get('/home/inventory', async (req: Request, res: Response) => {
+  try {
+    const rooms = await db.select().from(propertyRooms)
+      .where(eq(propertyRooms.homeownerId, req.homeownerId))
+      .orderBy(propertyRooms.sortOrder, propertyRooms.createdAt);
+    const items = await db.select().from(propertyInventoryItems)
+      .where(and(
+        eq(propertyInventoryItems.homeownerId, req.homeownerId),
+        ne(propertyInventoryItems.status, 'pm_dismissed'),
+      ))
+      .orderBy(desc(propertyInventoryItems.confidenceScore));
+
+    const { mergeDuplicateInventoryItems } = await import('../services/property-scan-processor');
+
+    // Merge rooms by type + dedupe items (same logic as business inventory endpoint)
+    const itemsByRoomId = new Map<string | null, typeof items>();
+    for (const it of items) {
+      const list = itemsByRoomId.get(it.roomId) || [];
+      list.push(it);
+      itemsByRoomId.set(it.roomId, list);
+    }
+
+    type MergedRoom = (typeof rooms)[number] & { items: typeof items; roomCount: number };
+    const mergedByType = new Map<string, MergedRoom>();
+    for (const room of rooms) {
+      const roomItems = itemsByRoomId.get(room.id) ?? [];
+      const existing = mergedByType.get(room.roomType);
+      if (existing) {
+        existing.items.push(...roomItems);
+        existing.roomCount += 1;
+      } else {
+        mergedByType.set(room.roomType, { ...room, items: [...roomItems], roomCount: 1 });
+      }
+    }
+    const mergedRooms: MergedRoom[] = [];
+    for (const merged of mergedByType.values()) {
+      merged.items = mergeDuplicateInventoryItems(merged.items);
+      mergedRooms.push(merged);
+    }
+    const unassignedItems = mergeDuplicateInventoryItems(itemsByRoomId.get(null) ?? []);
+    const allDeduped = [...mergedRooms.flatMap(r => r.items), ...unassignedItems];
+
+    let totalAge = 0; let agedCount = 0; let agingItems = 0; let safetyFlags = 0;
+    for (const it of allDeduped) {
+      const age = it.estimatedAgeYears ? parseFloat(it.estimatedAgeYears) : null;
+      if (age !== null) { totalAge += age; agedCount++; }
+      if (it.maintenanceFlags?.length) {
+        if (it.maintenanceFlags.some(f => /safety|electrical/i.test(f))) safetyFlags++;
+        if (it.maintenanceFlags.some(f => /end_of_life|aging/i.test(f))) agingItems++;
+      }
+    }
+
+    res.json({
+      data: {
+        rooms: mergedRooms,
+        unassignedItems,
+        summary: {
+          totalItems: allDeduped.length,
+          averageAge: agedCount > 0 ? Math.round((totalAge / agedCount) * 10) / 10 : null,
+          agingItems, safetyFlags,
+        },
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/home/inventory]');
+    res.status(500).json({ data: null, error: 'Failed to load inventory', meta: {} });
+  }
+});
+
+// DELETE /api/v1/account/home/inventory/:itemId — delete an item
+router.delete('/home/inventory/:itemId', async (req: Request, res: Response) => {
+  const { itemId } = req.params;
+  try {
+    const [item] = await db.select().from(propertyInventoryItems).where(eq(propertyInventoryItems.id, itemId)).limit(1);
+    if (!item || item.homeownerId !== req.homeownerId) {
+      res.status(404).json({ data: null, error: 'Item not found', meta: {} });
+      return;
+    }
+    await db.delete(propertyInventoryItems).where(eq(propertyInventoryItems.id, itemId));
+    res.json({ data: { deleted: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[DELETE /account/home/inventory/:itemId]');
+    res.status(500).json({ data: null, error: 'Failed to delete item', meta: {} });
+  }
+});
+
+// PUT /api/v1/account/home/inventory/:itemId — confirm / dismiss
+router.put('/home/inventory/:itemId', async (req: Request, res: Response) => {
+  const { itemId } = req.params;
+  const body = req.body as { status?: 'pm_confirmed' | 'pm_corrected' | 'pm_dismissed' };
+  try {
+    const [item] = await db.select().from(propertyInventoryItems).where(eq(propertyInventoryItems.id, itemId)).limit(1);
+    if (!item || item.homeownerId !== req.homeownerId) {
+      res.status(404).json({ data: null, error: 'Item not found', meta: {} });
+      return;
+    }
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.status) {
+      updates.status = body.status;
+      if (body.status === 'pm_confirmed' || body.status === 'pm_corrected') {
+        updates.confirmedBy = req.homeownerId;
+        updates.confirmedAt = new Date();
+      }
+    }
+    const [updated] = await db.update(propertyInventoryItems).set(updates).where(eq(propertyInventoryItems.id, itemId)).returning();
+    res.json({ data: updated, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PUT /account/home/inventory/:itemId]');
+    res.status(500).json({ data: null, error: 'Failed to update item', meta: {} });
+  }
+});
+
+// GET /api/v1/account/home/scan-history
+router.get('/home/scan-history', async (req: Request, res: Response) => {
+  try {
+    const scans = await db.select().from(propertyScans)
+      .where(eq(propertyScans.homeownerId, req.homeownerId))
+      .orderBy(desc(propertyScans.createdAt)).limit(20);
+    res.json({ data: scans, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/home/scan-history]');
+    res.status(500).json({ data: null, error: 'Failed to load scan history', meta: {} });
+  }
+});
+
+// GET /api/v1/account/home/scan/room-targets — static per-room target lists
+router.get('/home/scan/room-targets', async (_req: Request, res: Response) => {
+  try {
+    const { ROOM_TARGETS } = await import('../services/property-scan-processor');
+    res.json({ data: { targets: ROOM_TARGETS }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/home/scan/room-targets]');
+    res.status(500).json({ data: null, error: 'Failed to load room targets', meta: {} });
   }
 });
 

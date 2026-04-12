@@ -690,6 +690,27 @@ export const accountService = {
   getBookings: () => fetchAPI<{ bookings: AccountBooking[] }>('/api/v1/account/bookings'),
   getHome: () => fetchAPI<HomeData>('/api/v1/account/home'),
   updateHome: (data: Partial<HomeData>) => fetchAPI<HomeData>('/api/v1/account/home', { method: 'PATCH', body: JSON.stringify(data) }),
+  // Consumer home scan
+  startHomeScan: (scanType: 'full' | 'quick' = 'full') =>
+    fetchAPI<PropertyScan>('/api/v1/account/home/scan', { method: 'POST', body: JSON.stringify({ scan_type: scanType }) }),
+  uploadHomeScanPhoto: (scanId: string, body: { image_data_url: string; room_hint?: string; notes?: string }) =>
+    fetchAPI<{ roomId: string; roomType: string; itemsDetected: Array<{ id: string; itemType: string; brand: string | null; modelNumber: string | null; confidence: number; status: string }>; maintenanceFlags: { description: string; severity: string }[] }>(
+      `/api/v1/account/home/scan/${scanId}/photos`, { method: 'POST', body: JSON.stringify(body) }),
+  completeHomeScan: (scanId: string) =>
+    fetchAPI<PropertyScan>(`/api/v1/account/home/scan/${scanId}/complete`, { method: 'POST' }),
+  getHomeScanCoaching: (scanId: string, body: { current_room: string; last_detected_items: Array<{ itemType: string; brand: string | null; confidence: number }> }) =>
+    fetchAPI<{ message: string; roomProgress: { roomType: string; expected: string[]; captured: string[]; remaining: string[] } }>(
+      `/api/v1/account/home/scan/${scanId}/coaching`, { method: 'POST', body: JSON.stringify(body) }),
+  getHomeInventory: () =>
+    fetchAPI<PropertyInventoryResponse>('/api/v1/account/home/inventory'),
+  deleteHomeInventoryItem: (itemId: string) =>
+    fetchAPI<{ deleted: boolean }>(`/api/v1/account/home/inventory/${itemId}`, { method: 'DELETE' }),
+  updateHomeInventoryItem: (itemId: string, body: { status?: 'pm_confirmed' | 'pm_corrected' | 'pm_dismissed' }) =>
+    fetchAPI<PropertyInventoryItem>(`/api/v1/account/home/inventory/${itemId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  getHomeScanHistory: () =>
+    fetchAPI<PropertyScan[]>('/api/v1/account/home/scan-history'),
+  getHomeRoomTargets: () =>
+    fetchAPI<{ targets: Record<string, string[]> }>('/api/v1/account/home/scan/room-targets'),
 };
 
 // ── businessService ─────────────────────────────────────────────────────────
