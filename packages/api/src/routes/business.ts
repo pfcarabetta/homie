@@ -1585,19 +1585,20 @@ router.post('/:workspaceId/dispatches/:jobId/reopen', requireWorkspace, requireW
       return;
     }
 
-    // If status is 'completed', verify there's no real booking row before
-    // reverting. We never want to silently break a confirmed booking.
+    // If status is 'completed', verify there's no ACTIVE booking row before
+    // reverting. We never want to silently break a confirmed booking, but
+    // cancelled bookings shouldn't block recovery.
     if (job.status === 'completed') {
       const [booking] = await db
-        .select({ id: bookings.id })
+        .select({ id: bookings.id, status: bookings.status })
         .from(bookings)
-        .where(eq(bookings.jobId, jobId))
+        .where(and(eq(bookings.jobId, jobId), ne(bookings.status, 'cancelled')))
         .limit(1);
       if (booking) {
         res.status(409).json({
           data: null,
-          error: 'This dispatch has a confirmed booking and cannot be re-opened. Cancel the booking first.',
-          meta: { bookingId: booking.id },
+          error: 'This dispatch has an active booking and cannot be re-opened. Cancel the booking first.',
+          meta: { bookingId: booking.id, bookingStatus: booking.status },
         });
         return;
       }

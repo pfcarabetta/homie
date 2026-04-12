@@ -761,20 +761,21 @@ router.post('/jobs/:jobIdOrPrefix/repair', async (req: Request, res: Response) =
     }
     changes.reparsedQuotes = reparsed;
 
-    // 2. If status is 'completed' but no real booking exists, revert to 'expired'
+    // 2. If status is 'completed' but no ACTIVE booking exists, revert to
+    // 'expired'. Cancelled bookings don't count — the job should be re-bookable.
     if (job.status === 'completed') {
       const [booking] = await db
-        .select({ id: bookings.id })
+        .select({ id: bookings.id, status: bookings.status })
         .from(bookings)
-        .where(eq(bookings.jobId, job.id))
+        .where(and(eq(bookings.jobId, job.id), sql`${bookings.status} <> 'cancelled'`))
         .limit(1);
       if (!booking) {
         await db.update(jobs).set({ status: 'expired' } as Record<string, unknown>).where(eq(jobs.id, job.id));
         changes.statusRevertedFrom = 'completed';
         changes.statusRevertedTo = 'expired';
-        logger.info({ jobId: job.id }, '[admin] Reverted phantom completed status to expired (no booking row)');
+        logger.info({ jobId: job.id }, '[admin] Reverted phantom completed status to expired (no active booking row)');
       } else {
-        changes.statusUnchanged = 'completed has matching booking row';
+        changes.statusUnchanged = `completed has ${booking.status} booking row`;
       }
     }
 
