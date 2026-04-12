@@ -393,7 +393,7 @@ export async function syncTrackReservationsForWorkspace(
   return { ...result, total: result.imported + result.updated };
 }
 
-const SYNC_INTERVAL = process.env.TRACK_SYNC_CRON || '*/30 * * * *'; // default every 30 minutes
+const SYNC_INTERVAL = process.env.PMS_SYNC_CRON || '0 */4 * * *'; // default every 4 hours
 
 export function startReservationSync() {
   logger.info({ schedule: SYNC_INTERVAL }, '[ReservationSync] scheduling reservation sync');
