@@ -82,6 +82,46 @@ async function start() {
     }
   }
 
+  // ── One-time data fix: Handy Mandy quote on job 6d4cba32 ────────────────
+  // Restores the correct $210-$280 range from "$70/hr 3hr min, possibly 4 hours"
+  // and reverts the phantom "completed" status (no active booking) to "expired"
+  // so the dispatch is bookable again. Idempotent — does nothing once applied.
+  try {
+    const { sql } = await import('drizzle-orm');
+    type Row = { id: string };
+    const updatedQuotes = await db.execute(sql`
+      UPDATE provider_responses pr
+      SET quoted_price = '$210-$280'
+      FROM providers p, jobs j
+      WHERE pr.provider_id = p.id
+        AND pr.job_id = j.id
+        AND j.id::text LIKE '6d4cba32%'
+        AND p.name ILIKE '%handy%mandy%'
+        AND (pr.quoted_price IS NULL OR pr.quoted_price <> '$210-$280')
+      RETURNING pr.id
+    `) as unknown as Row[];
+    if (updatedQuotes.length > 0) {
+      logger.info({ count: updatedQuotes.length }, '[startup-fix] Updated Handy Mandy quote on job 6d4cba32 to $210-$280');
+    }
+
+    // Revert phantom completed status (no active booking) → expired
+    const revertedJobs = await db.execute(sql`
+      UPDATE jobs
+      SET status = 'expired'
+      WHERE id::text LIKE '6d4cba32%'
+        AND status = 'completed'
+        AND id NOT IN (
+          SELECT job_id FROM bookings WHERE status <> 'cancelled'
+        )
+      RETURNING id
+    `) as unknown as Row[];
+    if (revertedJobs.length > 0) {
+      logger.info({ count: revertedJobs.length }, '[startup-fix] Reverted phantom completed status to expired on job 6d4cba32');
+    }
+  } catch (err) {
+    logger.warn({ err }, '[startup-fix] Handy Mandy quote fix failed (non-fatal)');
+  }
+
   const server = http.createServer(app);
 
   const wss = new WebSocketServer({ noServer: true });
