@@ -1085,7 +1085,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
             return (
             <div key={p.id} className="bp-prop-card" style={{
               background: '#fff', borderRadius: 12, border: isExpanded ? `2px solid ${O}` : '1px solid #E0DAD4', overflow: 'hidden',
-              opacity: p.active ? 1 : 0.5, cursor: 'pointer', transition: 'all 0.2s',
+              cursor: 'pointer', transition: 'all 0.2s',
               boxShadow: isExpanded ? `0 4px 20px ${O}10` : 'none',
             }} onClick={() => onSelectProperty ? onSelectProperty(p) : togglePropertyExpand(p.id)}>
               <div className="bp-prop-inner" style={{ display: 'flex' }}>
@@ -1117,13 +1117,6 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                       fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 500,
                     }}>Edit</button>
                   )}
-                  <span className="bp-prop-badge" style={{
-                    fontSize: 12, padding: '4px 10px', borderRadius: 20, fontWeight: 600,
-                    background: p.active ? '#F0FDF4' : '#F5F5F5',
-                    color: p.active ? '#16A34A' : '#9B9490',
-                  }}>
-                    {p.active ? 'Active' : 'Inactive'}
-                  </span>
                   <span className="bp-prop-badge bp-prop-type" style={{
                     fontSize: 12, padding: '4px 10px', borderRadius: 20,
                     background: '#EFF6FF', color: '#2563EB', fontWeight: 500,

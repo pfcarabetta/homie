@@ -531,18 +531,17 @@ router.patch('/:workspaceId/properties/:propertyId', requireWorkspace, requireWo
   }
 });
 
-// DELETE /:workspaceId/properties/:propertyId (soft delete)
+// DELETE /:workspaceId/properties/:propertyId
 router.delete('/:workspaceId/properties/:propertyId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
   try {
     await db
-      .update(properties)
-      .set({ active: false, updatedAt: new Date() })
+      .delete(properties)
       .where(and(eq(properties.id, req.params.propertyId), eq(properties.workspaceId, req.workspaceId)));
 
-    res.json({ data: { deactivated: true }, error: null, meta: {} });
+    res.json({ data: { deleted: true }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[DELETE /business/:id/properties/:pid]');
-    res.status(500).json({ data: null, error: 'Failed to deactivate property', meta: {} });
+    res.status(500).json({ data: null, error: 'Failed to delete property', meta: {} });
   }
 });
 
