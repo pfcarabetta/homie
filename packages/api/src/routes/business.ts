@@ -339,6 +339,8 @@ router.post('/:workspaceId/pms/:connectionId/sync-properties', requireWorkspace,
       for (const unit of units) {
         const externalId = String(unit.id ?? unit._id ?? '');
         if (!externalId) continue;
+        // Skip inactive/archived units (Track uses isActive boolean + status string)
+        if (unit.isActive === false || unit.active === false || unit.status === 'inactive' || unit.status === 'archived') { skipped++; continue; }
         const name = String(unit.name ?? unit.title ?? `Unit ${externalId}`);
         const addr = unit.address as Record<string, string> | undefined;
         const [ex] = await db.select({ id: properties.id }).from(properties)
