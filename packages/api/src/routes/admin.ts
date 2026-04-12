@@ -665,6 +665,7 @@ router.get('/business-accounts/:id', async (req: Request, res: Response) => {
         plan: workspaces.plan, stripeCustomerId: workspaces.stripeCustomerId,
         searchesUsed: workspaces.searchesUsed, searchesLimit: workspaces.searchesLimit,
         billingCycleStart: workspaces.billingCycleStart,
+        customPricing: workspaces.customPricing,
         ownerId: workspaces.ownerId, createdAt: workspaces.createdAt,
         ownerEmail: homeowners.email,
         ownerName: sql`COALESCE(${homeowners.firstName} || ' ' || ${homeowners.lastName}, ${homeowners.email})`,
@@ -725,26 +726,34 @@ router.get('/business-accounts/:id', async (req: Request, res: Response) => {
   }
 });
 
-// PATCH /api/v1/admin/business-accounts/:id — Update workspace (plan, credits)
+// PATCH /api/v1/admin/business-accounts/:id — Update workspace (plan, credits, custom pricing)
 router.patch('/business-accounts/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const body = req.body as { plan?: string; searches_limit?: number; searches_used?: number; add_credits?: number };
+  const body = req.body as {
+    plan?: string;
+    searches_limit?: number;
+    searches_used?: number;
+    add_credits?: number;
+    custom_pricing?: Record<string, unknown> | null;
+  };
 
   const updates: Record<string, unknown> = {};
 
   const validPlans = ['trial', 'starter', 'professional', 'business', 'enterprise'];
   if (body.plan && validPlans.includes(body.plan)) {
     updates.plan = body.plan;
-    // Auto-set limits based on plan
-    const planLimits: Record<string, number> = { trial: 5, starter: 2, professional: 3, business: 5, enterprise: 10 }; // per-property defaults
+    const planLimits: Record<string, number> = { trial: 5, starter: 2, professional: 3, business: 5, enterprise: 10 };
     updates.searchesLimit = planLimits[body.plan] ?? 10;
   }
   if (body.searches_limit != null) updates.searchesLimit = body.searches_limit;
   if (body.searches_used != null) updates.searchesUsed = body.searches_used;
   if (body.add_credits != null) {
-    // Add bonus credits by increasing the limit
     const [ws] = await db.select({ searchesLimit: workspaces.searchesLimit }).from(workspaces).where(eq(workspaces.id, id)).limit(1);
     if (ws) updates.searchesLimit = ws.searchesLimit + body.add_credits;
+  }
+  // Custom pricing: pass null to clear, or an object to set/update
+  if (body.custom_pricing !== undefined) {
+    updates.customPricing = body.custom_pricing;
   }
 
   updates.updatedAt = new Date();

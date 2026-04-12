@@ -1,5 +1,29 @@
-import { pgTable, uuid, text, timestamp, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, jsonb } from 'drizzle-orm/pg-core';
 import { homeowners } from './homeowners';
+
+/**
+ * Per-workspace pricing overrides. Any field set here takes precedence
+ * over the global PricingConfig for this workspace's plan. Null/missing
+ * fields fall through to the global default.
+ */
+export interface CustomPricing {
+  /** Custom plan label shown in the UI (e.g. "Enterprise — Acme Corp") */
+  planLabel?: string;
+  /** Monthly base fee in dollars */
+  base?: number;
+  /** Per-property monthly fee in dollars */
+  perProperty?: number;
+  /** Max properties allowed */
+  maxProperties?: number;
+  /** Max team members allowed */
+  maxTeamMembers?: number;
+  /** Fair-use searches per property per month */
+  searchesPerProperty?: number;
+  /** Promo base price (null = no promo) */
+  promoBase?: number | null;
+  /** Promo label (e.g. "Launch Special") */
+  promoLabel?: string | null;
+}
 
 export const workspaces = pgTable('workspaces', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -27,6 +51,8 @@ export const workspaces = pgTable('workspaces', {
   trackApiSecret: text('track_api_secret'),
   trackSyncEnabled: integer('track_sync_enabled').notNull().default(0),
   trackLastSyncAt: timestamp('track_last_sync_at', { withTimezone: true }),
+  /** Per-workspace pricing overrides — null means use global defaults */
+  customPricing: jsonb('custom_pricing').$type<CustomPricing>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

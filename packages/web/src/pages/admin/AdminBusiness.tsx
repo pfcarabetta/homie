@@ -13,12 +13,24 @@ interface BusinessAccount {
   createdAt: string;
 }
 
+interface CustomPricing {
+  planLabel?: string;
+  base?: number;
+  perProperty?: number;
+  maxProperties?: number;
+  maxTeamMembers?: number;
+  searchesPerProperty?: number;
+  promoBase?: number | null;
+  promoLabel?: string | null;
+}
+
 interface BusinessDetail {
   workspace: {
     id: string; name: string; slug: string; plan: string;
     searchesUsed: number; searchesLimit: number;
     billingCycleStart: string; createdAt: string;
     ownerEmail: string | null; ownerName: string | null; ownerPhone: string | null;
+    customPricing: CustomPricing | null;
   };
   members: Array<{ id: string; role: string; email: string; name: string }>;
   properties: Array<{ id: string; name: string; active: boolean }>;
@@ -244,7 +256,17 @@ export default function AdminBusiness() {
                         {detailLoading ? (
                           <div className="px-6 py-8 text-center text-dark/40">Loading details...</div>
                         ) : detail ? (
-                          <DetailView detail={detail} onChangePlan={p => changePlan(a.id, p)} onResetCredits={() => resetCredits(a.id)} onAddCredits={n => addCredits(a.id, n)} actionMsg={actionMsg} />
+                          <DetailView detail={detail} onChangePlan={p => changePlan(a.id, p)} onResetCredits={() => resetCredits(a.id)} onAddCredits={n => addCredits(a.id, n)}
+                            onUpdateCustomPricing={async (pricing) => {
+                              try {
+                                await adminService.updateBusiness(a.id, { custom_pricing: pricing as Record<string, unknown> | null });
+                                setActionMsg(pricing ? 'Custom pricing saved' : 'Custom pricing cleared — using defaults');
+                                // Refresh detail
+                                const res = await adminService.getBusinessDetail(a.id);
+                                if (res.data) setDetail(res.data);
+                              } catch (err) { setActionMsg(`Error: ${(err as Error).message}`); }
+                            }}
+                            actionMsg={actionMsg} />
                         ) : (
                           <div className="px-6 py-8 text-center text-dark/40">Failed to load details</div>
                         )}
@@ -262,16 +284,22 @@ export default function AdminBusiness() {
   );
 }
 
-function DetailView({ detail, onChangePlan, onResetCredits, onAddCredits, actionMsg }: {
+function DetailView({ detail, onChangePlan, onResetCredits, onAddCredits, onUpdateCustomPricing, actionMsg }: {
   detail: BusinessDetail;
   onChangePlan: (plan: string) => void;
   onResetCredits: () => void;
   onAddCredits: (n: number) => void;
+  onUpdateCustomPricing: (pricing: CustomPricing | null) => void;
   actionMsg: string;
 }) {
   const { workspace: ws, members, properties: props, stats } = detail;
   const [newPlan, setNewPlan] = useState(ws.plan);
   const [bonusCredits, setBonusCredits] = useState(5);
+
+  // Custom pricing state
+  const [customEnabled, setCustomEnabled] = useState(!!ws.customPricing && Object.keys(ws.customPricing).length > 0);
+  const [cp, setCp] = useState<CustomPricing>(ws.customPricing ?? {});
+  const [cpSaving, setCpSaving] = useState(false);
 
   // Calculate dynamic credit limit from property count
   const perPropCredits: Record<string, number> = { trial: 0, starter: 2, professional: 3, business: 5, enterprise: 10 };
@@ -346,6 +374,79 @@ function DetailView({ detail, onChangePlan, onResetCredits, onAddCredits, action
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Custom Pricing */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-dark">Custom Pricing</h3>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={customEnabled} onChange={e => {
+              setCustomEnabled(e.target.checked);
+              if (!e.target.checked) {
+                setCp({});
+                onUpdateCustomPricing(null);
+              }
+            }} className="w-4 h-4 accent-orange-500" />
+            <span className="text-xs font-semibold text-dark/50">{customEnabled ? 'Enabled' : 'Use defaults'}</span>
+          </label>
+        </div>
+        {customEnabled ? (
+          <div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-dark/40 uppercase tracking-wide mb-1">Plan Label</label>
+                <input value={cp.planLabel ?? ''} onChange={e => setCp(prev => ({ ...prev, planLabel: e.target.value || undefined }))}
+                  placeholder={`${ws.plan.charAt(0).toUpperCase() + ws.plan.slice(1)} (Custom)`}
+                  className="w-full px-2 py-1.5 rounded-lg border border-dark/10 text-sm outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-dark/40 uppercase tracking-wide mb-1">Base $/mo</label>
+                <input type="number" min={0} value={cp.base ?? ''} onChange={e => setCp(prev => ({ ...prev, base: e.target.value ? Number(e.target.value) : undefined }))}
+                  placeholder="Default" className="w-full px-2 py-1.5 rounded-lg border border-dark/10 text-sm outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-dark/40 uppercase tracking-wide mb-1">Per Property $/mo</label>
+                <input type="number" min={0} value={cp.perProperty ?? ''} onChange={e => setCp(prev => ({ ...prev, perProperty: e.target.value ? Number(e.target.value) : undefined }))}
+                  placeholder="Default" className="w-full px-2 py-1.5 rounded-lg border border-dark/10 text-sm outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-dark/40 uppercase tracking-wide mb-1">Max Properties</label>
+                <input type="number" min={1} value={cp.maxProperties ?? ''} onChange={e => setCp(prev => ({ ...prev, maxProperties: e.target.value ? Number(e.target.value) : undefined }))}
+                  placeholder="Default" className="w-full px-2 py-1.5 rounded-lg border border-dark/10 text-sm outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-dark/40 uppercase tracking-wide mb-1">Max Team Members</label>
+                <input type="number" min={1} value={cp.maxTeamMembers ?? ''} onChange={e => setCp(prev => ({ ...prev, maxTeamMembers: e.target.value ? Number(e.target.value) : undefined }))}
+                  placeholder="Default" className="w-full px-2 py-1.5 rounded-lg border border-dark/10 text-sm outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-dark/40 uppercase tracking-wide mb-1">Searches/Property</label>
+                <input type="number" min={0} value={cp.searchesPerProperty ?? ''} onChange={e => setCp(prev => ({ ...prev, searchesPerProperty: e.target.value ? Number(e.target.value) : undefined }))}
+                  placeholder="Default" className="w-full px-2 py-1.5 rounded-lg border border-dark/10 text-sm outline-none" />
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                setCpSaving(true);
+                // Strip empty/undefined fields
+                const clean: CustomPricing = {};
+                if (cp.planLabel) clean.planLabel = cp.planLabel;
+                if (cp.base !== undefined && cp.base !== null) clean.base = cp.base;
+                if (cp.perProperty !== undefined && cp.perProperty !== null) clean.perProperty = cp.perProperty;
+                if (cp.maxProperties) clean.maxProperties = cp.maxProperties;
+                if (cp.maxTeamMembers) clean.maxTeamMembers = cp.maxTeamMembers;
+                if (cp.searchesPerProperty !== undefined && cp.searchesPerProperty !== null) clean.searchesPerProperty = cp.searchesPerProperty;
+                onUpdateCustomPricing(Object.keys(clean).length > 0 ? clean : null);
+                setCpSaving(false);
+              }}
+              disabled={cpSaving}
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white hover:bg-orange-600 transition-colors disabled:opacity-50"
+            >{cpSaving ? 'Saving...' : 'Save Custom Pricing'}</button>
+          </div>
+        ) : (
+          <div className="text-xs text-dark/40">Using default pricing for the <span className="font-semibold capitalize">{ws.plan}</span> plan. Enable custom pricing to override base, per-property fees, limits, or set enterprise pricing.</div>
+        )}
       </div>
 
       {/* Usage Stats */}

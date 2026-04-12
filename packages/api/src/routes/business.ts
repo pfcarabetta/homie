@@ -240,6 +240,21 @@ router.post('/:workspaceId/properties', requireWorkspace, requireWorkspaceRole('
   }
 });
 
+// GET /:workspaceId/pricing — resolved pricing for this workspace (global merged with custom)
+router.get('/:workspaceId/pricing', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const [ws] = await db.select({ plan: workspaces.plan, customPricing: workspaces.customPricing })
+      .from(workspaces).where(eq(workspaces.id, req.workspaceId)).limit(1);
+    if (!ws) { res.status(404).json({ data: null, error: 'Workspace not found', meta: {} }); return; }
+    const { getWorkspacePlanConfig } = await import('../services/pricing');
+    const resolved = await getWorkspacePlanConfig(ws.plan, ws.customPricing as Record<string, unknown> | null);
+    res.json({ data: { plan: ws.plan, ...resolved }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/pricing]');
+    res.status(500).json({ data: null, error: 'Failed to load pricing', meta: {} });
+  }
+});
+
 // ── PMS Connections ──────────────────────────────────────────────────────────
 
 // GET /:workspaceId/pms/connections

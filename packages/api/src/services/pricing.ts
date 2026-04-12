@@ -61,3 +61,37 @@ export async function getPricingConfig(): Promise<PricingConfig> {
 export function invalidatePricingCache(): void {
   _cache = null;
 }
+
+/**
+ * Resolve the effective BusinessPlanConfig for a specific workspace.
+ * If the workspace has customPricing overrides, those fields take
+ * precedence over the global plan defaults. This is how enterprise
+ * and custom-deal workspaces get non-standard pricing.
+ *
+ * Resolution order per field:
+ *   workspace.customPricing.X  >  globalConfig[workspace.plan].X  >  DEFAULT_PRICING[plan].X
+ */
+export async function getWorkspacePlanConfig(
+  plan: string,
+  customPricing: Record<string, unknown> | null | undefined,
+): Promise<BusinessPlanConfig & { isCustom: boolean; planLabel: string }> {
+  const globalConfig = await getPricingConfig();
+  const base = globalConfig.business[plan] ?? DEFAULT_PRICING.business[plan] ?? DEFAULT_PRICING.business.starter;
+
+  if (!customPricing || Object.keys(customPricing).length === 0) {
+    return { ...base, isCustom: false, planLabel: plan.charAt(0).toUpperCase() + plan.slice(1) };
+  }
+
+  const cp = customPricing as Record<string, unknown>;
+  return {
+    base: typeof cp.base === 'number' ? cp.base : base.base,
+    perProperty: typeof cp.perProperty === 'number' ? cp.perProperty : base.perProperty,
+    promoBase: cp.promoBase !== undefined ? (cp.promoBase as number | null) : base.promoBase,
+    promoLabel: cp.promoLabel !== undefined ? (cp.promoLabel as string | null) : base.promoLabel,
+    searchesPerProperty: typeof cp.searchesPerProperty === 'number' ? cp.searchesPerProperty : base.searchesPerProperty,
+    maxProperties: typeof cp.maxProperties === 'number' ? cp.maxProperties : base.maxProperties,
+    maxTeamMembers: typeof cp.maxTeamMembers === 'number' ? cp.maxTeamMembers : base.maxTeamMembers,
+    isCustom: true,
+    planLabel: typeof cp.planLabel === 'string' ? cp.planLabel : `${plan.charAt(0).toUpperCase() + plan.slice(1)} (Custom)`,
+  };
+}

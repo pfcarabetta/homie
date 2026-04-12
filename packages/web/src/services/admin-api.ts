@@ -247,6 +247,7 @@ export const adminService = {
         searchesUsed: number; searchesLimit: number;
         billingCycleStart: string; createdAt: string;
         ownerEmail: string | null; ownerName: string | null; ownerPhone: string | null;
+        customPricing: Record<string, unknown> | null;
       };
       members: Array<{ id: string; role: string; email: string; name: string }>;
       properties: Array<{ id: string; name: string; active: boolean }>;
@@ -254,7 +255,7 @@ export const adminService = {
     }>(`/api/v1/admin/business-accounts/${id}`);
   },
 
-  async updateBusiness(id: string, data: { plan?: string; searches_limit?: number; searches_used?: number; add_credits?: number }) {
+  async updateBusiness(id: string, data: { plan?: string; searches_limit?: number; searches_used?: number; add_credits?: number; custom_pricing?: Record<string, unknown> | null }) {
     return fetchAdmin<Record<string, unknown>>(`/api/v1/admin/business-accounts/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),

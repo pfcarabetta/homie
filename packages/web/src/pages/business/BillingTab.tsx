@@ -15,10 +15,18 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
   } | null>(null);
   const [changingPlan, setChangingPlan] = useState<string | null>(null);
   const [showCancel, setShowCancel] = useState(false);
+  const [wsPricing, setWsPricing] = useState<{
+    plan: string; base: number; perProperty: number; maxProperties: number;
+    maxTeamMembers: number; searchesPerProperty: number;
+    isCustom: boolean; planLabel: string;
+  } | null>(null);
 
   useEffect(() => {
     businessService.getUsage(workspace.id).then(res => {
       if (res.data) setUsage(res.data);
+    }).catch(() => {});
+    businessService.getWorkspacePricing(workspace.id).then(res => {
+      if (res.data) setWsPricing(res.data);
     }).catch(() => {});
   }, [workspace.id]);
 
@@ -46,7 +54,12 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Plan</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: D, textTransform: 'capitalize' }}>{usage.plan}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
+                {wsPricing?.planLabel ?? usage.plan.charAt(0).toUpperCase() + usage.plan.slice(1)}
+                {wsPricing?.isCustom && (
+                  <span style={{ fontSize: 9, fontWeight: 700, background: `${O}15`, color: O, padding: '2px 6px', borderRadius: 100, marginLeft: 6, verticalAlign: 'middle' }}>CUSTOM</span>
+                )}
+              </div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Properties</div>
@@ -54,11 +67,11 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Per property</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>${pricing.business[usage.plan as keyof typeof pricing.business]?.perProperty ?? usage.per_property_price}/mo</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: D }}>${wsPricing?.perProperty ?? usage.per_property_price}/mo</div>
             </div>
             <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Est. monthly</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: O }}>${(pricing.business[usage.plan as keyof typeof pricing.business]?.promoBase ?? pricing.business[usage.plan as keyof typeof pricing.business]?.base ?? usage.base_price) + (pricing.business[usage.plan as keyof typeof pricing.business]?.perProperty ?? usage.per_property_price) * usage.property_count}/mo</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: O }}>${(wsPricing?.base ?? usage.base_price) + (wsPricing?.perProperty ?? usage.per_property_price) * usage.property_count}/mo</div>
             </div>
           </div>
 

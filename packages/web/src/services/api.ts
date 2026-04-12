@@ -1545,6 +1545,15 @@ export const businessService = {
   archiveDispatch: (workspaceId: string, jobId: string) =>
     fetchAPI<{ archived: boolean }>(`/api/v1/business/${workspaceId}/dispatches/${jobId}/archive`, { method: 'POST' }),
 
+  // Workspace-resolved pricing (global merged with custom overrides)
+  getWorkspacePricing: (workspaceId: string) =>
+    fetchAPI<{
+      plan: string; base: number; perProperty: number; maxProperties: number;
+      maxTeamMembers: number; searchesPerProperty: number;
+      promoBase: number | null; promoLabel: string | null;
+      isCustom: boolean; planLabel: string;
+    }>(`/api/v1/business/${workspaceId}/pricing`),
+
   // PMS Connections
   getPmsConnections: (workspaceId: string) =>
     fetchAPI<PmsConnection[]>(`/api/v1/business/${workspaceId}/pms/connections`),
