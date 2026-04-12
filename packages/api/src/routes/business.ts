@@ -240,6 +240,178 @@ router.post('/:workspaceId/properties', requireWorkspace, requireWorkspaceRole('
   }
 });
 
+// ── PMS Connections ──────────────────────────────────────────────────────────
+
+// GET /:workspaceId/pms/connections
+router.get('/:workspaceId/pms/connections', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const { workspacePmsConnections } = await import('../db/schema/pms-connections');
+    const connections = await db.select().from(workspacePmsConnections)
+      .where(eq(workspacePmsConnections.workspaceId, req.workspaceId))
+      .orderBy(workspacePmsConnections.createdAt);
+    const safe = connections.map(c => ({
+      id: c.id, pmsType: c.pmsType, status: c.status, lastError: c.lastError,
+      lastPropertySyncAt: c.lastPropertySyncAt, lastReservationSyncAt: c.lastReservationSyncAt,
+      propertiesSynced: c.propertiesSynced, reservationsSynced: c.reservationsSynced,
+      createdAt: c.createdAt, updatedAt: c.updatedAt,
+    }));
+    res.json({ data: safe, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/pms/connections]');
+    res.status(500).json({ data: null, error: 'Failed to load PMS connections', meta: {} });
+  }
+});
+
+// POST /:workspaceId/pms/connect
+router.post('/:workspaceId/pms/connect', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { pms_type, credentials, update_existing } = req.body as {
+    pms_type: 'track' | 'guesty';
+    credentials: Record<string, string>;
+    update_existing?: boolean;
+  };
+  if (!pms_type || !credentials) {
+    res.status(400).json({ data: null, error: 'pms_type and credentials are required', meta: {} });
+    return;
+  }
+  try {
+    const { workspacePmsConnections } = await import('../db/schema/pms-connections');
+    const [existing] = await db.select().from(workspacePmsConnections)
+      .where(and(eq(workspacePmsConnections.workspaceId, req.workspaceId), eq(workspacePmsConnections.pmsType, pms_type)))
+      .limit(1);
+    let connectionId: string;
+    if (existing) {
+      await db.update(workspacePmsConnections).set({
+        credentials, status: 'connected', lastError: null, updatedAt: new Date(),
+      }).where(eq(workspacePmsConnections.id, existing.id));
+      connectionId = existing.id;
+    } else {
+      const [created] = await db.insert(workspacePmsConnections).values({
+        workspaceId: req.workspaceId, pmsType: pms_type, credentials, status: 'connected',
+      }).returning({ id: workspacePmsConnections.id });
+      connectionId = created.id;
+    }
+    // Test the connection
+    if (pms_type === 'guesty') {
+      const { testGuestyConnection } = await import('../services/guesty');
+      const test = await testGuestyConnection(connectionId, credentials as unknown as import('../db/schema/pms-connections').GuestyCredentials);
+      res.json({ data: { connectionId, tested: true, listingCount: test.listingCount }, error: null, meta: {} });
+    } else {
+      const domain = credentials.domain || '';
+      const apiKey = credentials.apiKey || '';
+      const apiSecret = credentials.apiSecret || '';
+      const base = domain.startsWith('http') ? domain.replace(/\/$/, '') : `https://${domain.replace(/\/$/, '')}`;
+      const authHeader = 'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+      const testRes = await fetch(`${base}/pms/units?limit=1`, { headers: { Authorization: authHeader, Accept: 'application/json' } });
+      if (!testRes.ok) throw new Error(`Track API returned ${testRes.status}`);
+      res.json({ data: { connectionId, tested: true }, error: null, meta: {} });
+    }
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/pms/connect]');
+    res.status(500).json({ data: null, error: `Connection failed: ${(err as Error).message}`, meta: {} });
+  }
+});
+
+// POST /:workspaceId/pms/:connectionId/sync-properties
+router.post('/:workspaceId/pms/:connectionId/sync-properties', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { connectionId } = req.params;
+  const { update_existing } = req.body as { update_existing?: boolean };
+  try {
+    const { workspacePmsConnections } = await import('../db/schema/pms-connections');
+    const [conn] = await db.select().from(workspacePmsConnections)
+      .where(and(eq(workspacePmsConnections.id, connectionId), eq(workspacePmsConnections.workspaceId, req.workspaceId)))
+      .limit(1);
+    if (!conn) { res.status(404).json({ data: null, error: 'Connection not found', meta: {} }); return; }
+
+    if (conn.pmsType === 'guesty') {
+      const { importGuestyProperties } = await import('../services/guesty');
+      const result = await importGuestyProperties(connectionId, conn.credentials as unknown as import('../db/schema/pms-connections').GuestyCredentials, req.workspaceId, update_existing);
+      res.json({ data: result, error: null, meta: {} });
+    } else if (conn.pmsType === 'track') {
+      const creds = conn.credentials as Record<string, string>;
+      const domain = creds.domain || '';
+      const base = domain.startsWith('http') ? domain.replace(/\/$/, '') : `https://${domain.replace(/\/$/, '')}`;
+      const authHeader = 'Basic ' + Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
+      const unitsRes = await fetch(`${base}/pms/units`, { headers: { Authorization: authHeader, Accept: 'application/json' } });
+      if (!unitsRes.ok) throw new Error(`Track API returned ${unitsRes.status}`);
+      const unitsData = await unitsRes.json() as Record<string, unknown>;
+      const units = (Array.isArray(unitsData) ? unitsData : (unitsData._embedded as Record<string, unknown> | undefined)?.units ?? unitsData.contents ?? unitsData.results ?? unitsData.data ?? []) as Array<Record<string, unknown>>;
+      let imported = 0; let updated = 0; let skipped = 0;
+      for (const unit of units) {
+        const externalId = String(unit.id ?? unit._id ?? '');
+        if (!externalId) continue;
+        const name = String(unit.name ?? unit.title ?? `Unit ${externalId}`);
+        const addr = unit.address as Record<string, string> | undefined;
+        const [ex] = await db.select({ id: properties.id }).from(properties)
+          .where(and(eq(properties.workspaceId, req.workspaceId), eq(properties.pmsExternalId, externalId))).limit(1);
+        if (ex) {
+          if (update_existing) { await db.update(properties).set({ name, address: addr?.street ?? null, city: addr?.city ?? null, state: addr?.state ?? null, zipCode: addr?.zip ?? addr?.zipCode ?? addr?.postalCode ?? null, updatedAt: new Date() }).where(eq(properties.id, ex.id)); updated++; }
+          else skipped++;
+        } else {
+          await db.insert(properties).values({ workspaceId: req.workspaceId, name, address: addr?.street ?? null, city: addr?.city ?? null, state: addr?.state ?? null, zipCode: addr?.zip ?? addr?.zipCode ?? addr?.postalCode ?? null, propertyType: 'residential', unitCount: 1, pmsSource: 'track', pmsExternalId: externalId });
+          imported++;
+        }
+      }
+      await db.update(workspacePmsConnections).set({ propertiesSynced: imported + updated, lastPropertySyncAt: new Date(), status: 'connected', lastError: null, updatedAt: new Date() }).where(eq(workspacePmsConnections.id, connectionId));
+      res.json({ data: { imported, updated, skipped, total: units.length }, error: null, meta: {} });
+    } else {
+      res.status(400).json({ data: null, error: `Unsupported PMS type: ${conn.pmsType}`, meta: {} });
+    }
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/pms/:connId/sync-properties]');
+    try { const { workspacePmsConnections } = await import('../db/schema/pms-connections'); await db.update(workspacePmsConnections).set({ status: 'error', lastError: (err as Error).message, updatedAt: new Date() }).where(eq(workspacePmsConnections.id, connectionId)); } catch { /* ignore */ }
+    res.status(500).json({ data: null, error: `Sync failed: ${(err as Error).message}`, meta: {} });
+  }
+});
+
+// POST /:workspaceId/pms/:connectionId/sync-reservations
+router.post('/:workspaceId/pms/:connectionId/sync-reservations', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { connectionId } = req.params;
+  try {
+    const { workspacePmsConnections } = await import('../db/schema/pms-connections');
+    const [conn] = await db.select().from(workspacePmsConnections)
+      .where(and(eq(workspacePmsConnections.id, connectionId), eq(workspacePmsConnections.workspaceId, req.workspaceId)))
+      .limit(1);
+    if (!conn) { res.status(404).json({ data: null, error: 'Connection not found', meta: {} }); return; }
+
+    if (conn.pmsType === 'guesty') {
+      const { syncGuestyReservations } = await import('../services/guesty');
+      const result = await syncGuestyReservations(connectionId, conn.credentials as unknown as import('../db/schema/pms-connections').GuestyCredentials, req.workspaceId);
+      res.json({ data: result, error: null, meta: {} });
+    } else if (conn.pmsType === 'track') {
+      const creds = conn.credentials as Record<string, string>;
+      const { syncTrackReservationsForWorkspace } = await import('../services/reservation-sync');
+      const result = await syncTrackReservationsForWorkspace(req.workspaceId, creds.domain, creds.apiKey, creds.apiSecret);
+      await db.update(workspacePmsConnections).set({ reservationsSynced: result.imported + result.updated, lastReservationSyncAt: new Date(), status: 'connected', lastError: null, updatedAt: new Date() }).where(eq(workspacePmsConnections.id, connectionId));
+      res.json({ data: result, error: null, meta: {} });
+    } else {
+      res.status(400).json({ data: null, error: `Unsupported PMS type: ${conn.pmsType}`, meta: {} });
+    }
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/pms/:connId/sync-reservations]');
+    try { const { workspacePmsConnections } = await import('../db/schema/pms-connections'); await db.update(workspacePmsConnections).set({ status: 'error', lastError: (err as Error).message, updatedAt: new Date() }).where(eq(workspacePmsConnections.id, connectionId)); } catch { /* ignore */ }
+    res.status(500).json({ data: null, error: `Reservation sync failed: ${(err as Error).message}`, meta: {} });
+  }
+});
+
+// DELETE /:workspaceId/pms/:connectionId — disconnect
+router.delete('/:workspaceId/pms/:connectionId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  const { connectionId } = req.params;
+  try {
+    const { workspacePmsConnections } = await import('../db/schema/pms-connections');
+    const [conn] = await db.select({ id: workspacePmsConnections.id }).from(workspacePmsConnections)
+      .where(and(eq(workspacePmsConnections.id, connectionId), eq(workspacePmsConnections.workspaceId, req.workspaceId)))
+      .limit(1);
+    if (!conn) { res.status(404).json({ data: null, error: 'Connection not found', meta: {} }); return; }
+    await db.delete(workspacePmsConnections).where(eq(workspacePmsConnections.id, connectionId));
+    res.json({ data: { disconnected: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[DELETE /business/:id/pms/:connId]');
+    res.status(500).json({ data: null, error: 'Failed to disconnect PMS', meta: {} });
+  }
+});
+
+// ── Properties ──────────────────────────────────────────────────────────────
+
 // GET /:workspaceId/properties
 router.get('/:workspaceId/properties', requireWorkspace, async (req: Request, res: Response) => {
   try {

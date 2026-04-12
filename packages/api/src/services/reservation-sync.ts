@@ -305,7 +305,7 @@ async function syncAllReservations() {
   syncing = true;
 
   try {
-    // Find all workspaces with Track sync enabled and credentials stored
+    // ── Legacy path: workspaces with Track credentials in workspace columns ──
     const trackWorkspaces = await db
       .select({
         id: workspaces.id,
@@ -317,30 +317,80 @@ async function syncAllReservations() {
       .from(workspaces)
       .where(eq(workspaces.trackSyncEnabled, 1));
 
-    const eligible = trackWorkspaces.filter(w => w.trackDomain && w.trackApiKey && w.trackApiSecret);
+    const legacyEligible = trackWorkspaces.filter(w => w.trackDomain && w.trackApiKey && w.trackApiSecret);
 
-    if (eligible.length === 0) {
-      logger.info('[ReservationSync] no workspaces with Track sync enabled');
-      return;
-    }
-
-    logger.info({ count: eligible.length }, '[ReservationSync] starting sync for workspaces');
-
-    for (const ws of eligible) {
+    for (const ws of legacyEligible) {
       try {
         const result = await syncWorkspaceReservations(ws as {
           id: string; name: string; trackDomain: string; trackApiKey: string; trackApiSecret: string;
         });
-        logger.info({ workspaceId: ws.id, workspaceName: ws.name, ...result }, '[ReservationSync] workspace sync complete');
+        logger.info({ workspaceId: ws.id, workspaceName: ws.name, ...result }, '[ReservationSync] legacy Track sync complete');
       } catch (err) {
-        logger.error({ err, workspaceId: ws.id }, '[ReservationSync] workspace sync failed');
+        logger.error({ err, workspaceId: ws.id }, '[ReservationSync] legacy Track sync failed');
       }
+    }
+
+    // ── New path: DB-backed PMS connections (Track + Guesty) ──
+    try {
+      const { workspacePmsConnections } = await import('../db/schema/pms-connections');
+      type TCreds = { domain: string; apiKey: string; apiSecret: string };
+      type GCreds = { clientId: string; clientSecret: string; accessToken?: string; tokenExpiresAt?: string };
+      const connections = await db.select().from(workspacePmsConnections)
+        .where(eq(workspacePmsConnections.status, 'connected'));
+
+      for (const conn of connections) {
+        try {
+          if (conn.pmsType === 'track') {
+            const creds = conn.credentials as unknown as TCreds;
+            if (!creds.domain || !creds.apiKey || !creds.apiSecret) continue;
+            const result = await syncWorkspaceReservations({
+              id: conn.workspaceId, name: `ws-${conn.workspaceId.slice(0, 8)}`,
+              trackDomain: creds.domain, trackApiKey: creds.apiKey, trackApiSecret: creds.apiSecret,
+            });
+            await db.update(workspacePmsConnections).set({
+              reservationsSynced: result.imported + result.updated,
+              lastReservationSyncAt: new Date(), lastError: null, updatedAt: new Date(),
+            }).where(eq(workspacePmsConnections.id, conn.id));
+            logger.info({ connId: conn.id, ...result }, '[ReservationSync] Track (DB) sync complete');
+          } else if (conn.pmsType === 'guesty') {
+            const creds = conn.credentials as unknown as GCreds;
+            const { syncGuestyReservations } = await import('./guesty');
+            const result = await syncGuestyReservations(conn.id, creds, conn.workspaceId);
+            logger.info({ connId: conn.id, ...result }, '[ReservationSync] Guesty sync complete');
+          }
+        } catch (err) {
+          logger.error({ err, connId: conn.id, pmsType: conn.pmsType }, '[ReservationSync] PMS connection sync failed');
+          await db.update(workspacePmsConnections).set({
+            status: 'error', lastError: (err as Error).message, updatedAt: new Date(),
+          }).where(eq(workspacePmsConnections.id, conn.id));
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, '[ReservationSync] PMS connections sync failed');
     }
   } catch (err) {
     logger.error({ err }, '[ReservationSync] sync failed');
   } finally {
     syncing = false;
   }
+}
+
+/**
+ * Public wrapper so the PMS connection endpoints can trigger a Track
+ * reservation sync for a specific workspace using stored credentials.
+ */
+export async function syncTrackReservationsForWorkspace(
+  workspaceId: string,
+  domain: string,
+  apiKey: string,
+  apiSecret: string,
+): Promise<{ imported: number; updated: number; total: number }> {
+  const [ws] = await db.select({ id: workspaces.id, name: workspaces.name }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
+  if (!ws) throw new Error('Workspace not found');
+  const result = await syncWorkspaceReservations({
+    id: ws.id, name: ws.name, trackDomain: domain, trackApiKey: apiKey, trackApiSecret: apiSecret,
+  });
+  return { ...result, total: result.imported + result.updated };
 }
 
 const SYNC_INTERVAL = process.env.TRACK_SYNC_CRON || '*/30 * * * *'; // default every 30 minutes

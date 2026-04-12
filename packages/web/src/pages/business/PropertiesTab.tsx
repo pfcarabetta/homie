@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePricing } from '@/hooks/usePricing';
-import { businessService, type Property, type PropertyDetails, type BedConfig, type Reservation } from '@/services/api';
+import { businessService, type Property, type PropertyDetails, type BedConfig, type Reservation, type PmsConnection } from '@/services/api';
 import { O, G, D, W, PROPERTY_TYPES, BED_TYPES, MiniCalendar, getPlanPropertyLimit, getPlanTiersOrdered } from './constants';
 
 /* ── Add Property Modal ─────────────────────────────────────────────────── */
@@ -524,6 +524,304 @@ export function EditPropertyModal({ workspaceId, property, onClose, onUpdated, o
 
 /* ── Properties Tab ─────────────────────────────────────────────────────── */
 
+/* ── PMS Connection Card ──────────────────────────────────────────────── */
+
+const PMS_OPTIONS: { id: string; label: string; fields: { key: string; label: string; placeholder: string; type?: string }[] }[] = [
+  {
+    id: 'track', label: 'Track PMS',
+    fields: [
+      { key: 'domain', label: 'Track Domain', placeholder: 'yourcompany.trackhs.com' },
+      { key: 'apiKey', label: 'API Key', placeholder: 'Your Track API key' },
+      { key: 'apiSecret', label: 'API Secret', placeholder: 'Your Track API secret', type: 'password' },
+    ],
+  },
+  {
+    id: 'guesty', label: 'Guesty',
+    fields: [
+      { key: 'clientId', label: 'Client ID', placeholder: 'Your Guesty API client ID' },
+      { key: 'clientSecret', label: 'Client Secret', placeholder: 'Your Guesty API client secret', type: 'password' },
+    ],
+  },
+];
+
+function PmsConnectionCard({ workspaceId, plan, onPropertiesImported }: {
+  workspaceId: string; plan: string; onPropertiesImported: () => void;
+}) {
+  const [connections, setConnections] = useState<PmsConnection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const isPro = ['professional', 'business', 'enterprise'].includes(plan);
+
+  function loadConnections() {
+    businessService.getPmsConnections(workspaceId).then(res => {
+      if (res.data) setConnections(res.data);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }
+
+  useEffect(() => { loadConnections(); }, [workspaceId]);
+
+  async function handleSyncProperties(conn: PmsConnection) {
+    setSyncing(`props-${conn.id}`); setSyncResult(null);
+    try {
+      const res = await businessService.syncPmsProperties(workspaceId, conn.id, true);
+      if (res.data) {
+        setSyncResult(`${res.data.imported} imported, ${res.data.updated} updated`);
+        onPropertiesImported();
+      } else if (res.error) setSyncResult(res.error);
+    } catch (err) { setSyncResult((err as Error).message); }
+    setSyncing(null); loadConnections();
+  }
+
+  async function handleSyncReservations(conn: PmsConnection) {
+    setSyncing(`res-${conn.id}`); setSyncResult(null);
+    try {
+      const res = await businessService.syncPmsReservations(workspaceId, conn.id);
+      if (res.data) setSyncResult(`${res.data.imported} imported, ${res.data.updated} updated`);
+      else if (res.error) setSyncResult(res.error);
+    } catch (err) { setSyncResult((err as Error).message); }
+    setSyncing(null); loadConnections();
+  }
+
+  async function handleDisconnect(conn: PmsConnection) {
+    if (!window.confirm(`Disconnect ${PMS_OPTIONS.find(p => p.id === conn.pmsType)?.label || conn.pmsType}? Properties and reservations already imported will not be removed.`)) return;
+    try {
+      await businessService.disconnectPms(workspaceId, conn.id);
+      loadConnections();
+    } catch { alert('Failed to disconnect'); }
+  }
+
+  if (loading) return null;
+
+  if (connections.length === 0) {
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <div style={{
+          background: '#fff', borderRadius: 14, border: '1px dashed #E0DAD4', padding: 24,
+          display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+        }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: `${O}10`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={O} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, fontWeight: 700, color: D, marginBottom: 4 }}>Connect your PMS</div>
+            <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5 }}>
+              Import properties and sync reservations automatically from Track, Guesty, and more.
+            </div>
+          </div>
+          <button onClick={() => isPro ? setShowModal(true) : alert('Upgrade to Professional to connect a PMS')}
+            style={{
+              padding: '10px 22px', borderRadius: 100, border: 'none',
+              background: isPro ? O : '#E0DAD4', color: isPro ? '#fff' : '#9B9490',
+              fontSize: 14, fontWeight: 600, cursor: isPro ? 'pointer' : 'default',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>{isPro ? 'Connect PMS' : 'Connect PMS (Pro+)'}</button>
+        </div>
+        {showModal && <PmsConnectModal workspaceId={workspaceId} onClose={() => setShowModal(false)} onConnected={() => { setShowModal(false); loadConnections(); onPropertiesImported(); }} />}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {connections.map(conn => {
+        const pms = PMS_OPTIONS.find(p => p.id === conn.pmsType);
+        const isSyncingProps = syncing === `props-${conn.id}`;
+        const isSyncingRes = syncing === `res-${conn.id}`;
+        return (
+          <div key={conn.id} style={{
+            background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 18,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 10, height: 10, borderRadius: '50%',
+                  background: conn.status === 'connected' ? G : conn.status === 'error' ? '#DC2626' : '#9B9490',
+                }} />
+                <span style={{ fontFamily: "'Fraunces', serif", fontSize: 15, fontWeight: 700, color: D }}>
+                  {pms?.label || conn.pmsType}
+                </span>
+                {conn.status === 'error' && (
+                  <span style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>Error</span>
+                )}
+              </div>
+              <button onClick={() => handleDisconnect(conn)}
+                style={{ fontSize: 12, color: '#9B9490', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>Disconnect</button>
+            </div>
+            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#6B6560', marginBottom: 12, flexWrap: 'wrap' }}>
+              <span><strong style={{ color: D }}>{conn.propertiesSynced}</strong> properties</span>
+              <span>·</span>
+              <span><strong style={{ color: D }}>{conn.reservationsSynced}</strong> reservations</span>
+              {conn.lastPropertySyncAt && (
+                <>
+                  <span>·</span>
+                  <span>Last sync: {new Date(conn.lastPropertySyncAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                </>
+              )}
+            </div>
+            {conn.lastError && (
+              <div style={{ fontSize: 12, color: '#DC2626', marginBottom: 10, padding: '6px 10px', background: '#FEF2F2', borderRadius: 8 }}>
+                {conn.lastError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => handleSyncProperties(conn)} disabled={!!syncing}
+                style={{ padding: '7px 16px', borderRadius: 8, border: `1px solid ${O}40`, background: `${O}08`, color: O, fontSize: 12, fontWeight: 600, cursor: syncing ? 'default' : 'pointer', opacity: syncing ? 0.6 : 1 }}>
+                {isSyncingProps ? 'Syncing...' : 'Sync Properties'}
+              </button>
+              <button onClick={() => handleSyncReservations(conn)} disabled={!!syncing}
+                style={{ padding: '7px 16px', borderRadius: 8, border: `1px solid ${G}40`, background: `${G}08`, color: G, fontSize: 12, fontWeight: 600, cursor: syncing ? 'default' : 'pointer', opacity: syncing ? 0.6 : 1 }}>
+                {isSyncingRes ? 'Syncing...' : 'Sync Reservations'}
+              </button>
+              <button onClick={() => setShowModal(true)}
+                style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: '#6B6560', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                + Add PMS
+              </button>
+            </div>
+            {syncResult && (
+              <div style={{ marginTop: 10, fontSize: 12, color: G, fontWeight: 600 }}>{syncResult}</div>
+            )}
+          </div>
+        );
+      })}
+      {showModal && <PmsConnectModal workspaceId={workspaceId} onClose={() => setShowModal(false)} onConnected={() => { setShowModal(false); loadConnections(); onPropertiesImported(); }} />}
+    </div>
+  );
+}
+
+function PmsConnectModal({ workspaceId, onClose, onConnected }: { workspaceId: string; onClose: () => void; onConnected: () => void }) {
+  const [selectedPms, setSelectedPms] = useState<string>('');
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
+  const [connecting, setConnecting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState('');
+  const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; updated: number; total: number } | null>(null);
+
+  const pmsConfig = PMS_OPTIONS.find(p => p.id === selectedPms);
+
+  async function handleConnect() {
+    if (!selectedPms || !pmsConfig) return;
+    const missing = pmsConfig.fields.filter(f => !credentials[f.key]?.trim());
+    if (missing.length > 0) { setError(`${missing[0].label} is required`); return; }
+
+    setConnecting(true); setError('');
+    try {
+      const res = await businessService.connectPms(workspaceId, selectedPms, credentials);
+      if (res.error) { setError(res.error); setConnecting(false); return; }
+      if (res.data) {
+        setConnectionId(res.data.connectionId);
+        // Auto-import properties
+        setImporting(true);
+        try {
+          const importRes = await businessService.syncPmsProperties(workspaceId, res.data.connectionId, false);
+          if (importRes.data) setImportResult(importRes.data);
+        } catch (err) { setError((err as Error).message); }
+        setImporting(false);
+      }
+    } catch (err) { setError((err as Error).message); }
+    setConnecting(false);
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+      onClick={() => { if (!connecting && !importing) onClose(); }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
+        onClick={e => e.stopPropagation()}>
+
+        {importResult ? (
+          <div>
+            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 20, textAlign: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: D, marginBottom: 4 }}>
+                {importResult.imported > 0 && `${importResult.imported} imported`}
+                {importResult.imported > 0 && importResult.updated > 0 && ', '}
+                {importResult.updated > 0 && `${importResult.updated} updated`}
+                {importResult.imported === 0 && importResult.updated === 0 && 'No new properties found'}
+              </div>
+              <div style={{ fontSize: 13, color: '#9B9490' }}>{importResult.total} total in {pmsConfig?.label}</div>
+            </div>
+            <button onClick={onConnected} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: O, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <div>
+            <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 20, color: D, margin: '0 0 4px' }}>Connect your PMS</h3>
+            <p style={{ fontSize: 14, color: '#9B9490', marginBottom: 20 }}>Import your properties and sync reservations automatically.</p>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>Property Management System</label>
+              <select value={selectedPms} onChange={e => { setSelectedPms(e.target.value); setCredentials({}); setError(''); }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, outline: 'none', boxSizing: 'border-box', cursor: 'pointer', color: D }}>
+                <option value="">Select your PMS...</option>
+                {PMS_OPTIONS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </div>
+
+            {pmsConfig && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                {pmsConfig.fields.map(f => (
+                  <div key={f.key}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>{f.label}</label>
+                    <input
+                      type={f.type || 'text'}
+                      value={credentials[f.key] || ''}
+                      onChange={e => setCredentials(prev => ({ ...prev, [f.key]: e.target.value }))}
+                      placeholder={f.placeholder}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {error && (
+              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#B91C1C', marginBottom: 12 }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={onClose} disabled={connecting || importing}
+                style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: '1px solid #E0DAD4', background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleConnect}
+                disabled={connecting || importing || !selectedPms}
+                style={{
+                  flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  background: selectedPms ? O : '#E0DAD4', color: selectedPms ? '#fff' : '#9B9490',
+                  opacity: connecting || importing ? 0.7 : 1,
+                }}>
+                {connecting ? 'Connecting...' : importing ? 'Importing...' : 'Connect & Import'}
+              </button>
+            </div>
+
+            {selectedPms === 'guesty' && (
+              <div style={{ marginTop: 16, padding: '12px 14px', background: '#F9F5F2', borderRadius: 8, fontSize: 12, color: '#9B9490', lineHeight: 1.5 }}>
+                <strong style={{ color: '#6B6560' }}>Where to find your API credentials:</strong><br />
+                Go to your Guesty Dashboard → Marketplace → API → Create or manage API keys. Copy the Client ID and Client Secret.
+              </div>
+            )}
+            {selectedPms === 'track' && (
+              <div style={{ marginTop: 16, padding: '12px 14px', background: '#F9F5F2', borderRadius: 8, fontSize: 12, color: '#9B9490', lineHeight: 1.5 }}>
+                <strong style={{ color: '#6B6560' }}>Where to find your API credentials:</strong><br />
+                Contact your Track PMS administrator or Track support to obtain your API key and secret. Your domain is the URL you use to log into Track (e.g. yourcompany.trackhs.com).
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PropertiesTab({ workspaceId, role, plan, onSelectProperty, onEditProperty, editPropertyId, onEditHandled }: { workspaceId: string; role: string; plan: string; onSelectProperty?: (p: Property) => void; onEditProperty?: (p: Property) => void; editPropertyId?: string | null; onEditHandled?: () => void }) {
   const { pricing } = usePricing();
   const PLAN_TIERS_ORDERED = getPlanTiersOrdered(pricing);
@@ -531,7 +829,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
-  const [showTrackImport, setShowTrackImport] = useState(false);
+  const [showTrackImport, setShowTrackImport] = useState(false); // legacy — kept for backward compat
   const [showTierWarning, setShowTierWarning] = useState<{ adding: number; nextTier: typeof PLAN_TIERS_ORDERED[number] } | null>(null);
   const [trackDomain, setTrackDomain] = useState(() => localStorage.getItem('homie_track_domain') || '');
   const [trackKey, setTrackKey] = useState(() => localStorage.getItem('homie_track_key') || '');
@@ -631,25 +929,6 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
             </div>
           ) : (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {['professional', 'business', 'enterprise'].includes(plan) ? (
-                <>
-                  <button onClick={() => setShowTrackImport(true)}
-                    style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                    Import from Track
-                  </button>
-                  {properties.length > 0 && (
-                    <button onClick={() => setShowTrackImport(true)}
-                      style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${G}40`, background: `${G}08`, color: G, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                      Sync Reservations
-                    </button>
-                  )}
-                </>
-              ) : (
-                <button disabled title="Upgrade to Professional to import from PMS"
-                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: '#ccc', cursor: 'default', fontSize: 13, fontWeight: 600 }}>
-                  Import from Track (Pro+)
-                </button>
-              )}
               <button onClick={async () => {
                 try {
                   const csv = await businessService.exportPropertiesCsv(workspaceId);
@@ -710,6 +989,19 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
           )
         )}
       </div>
+
+      {/* PMS Connection Card */}
+      {canEdit && (
+        <PmsConnectionCard
+          workspaceId={workspaceId}
+          plan={plan}
+          onPropertiesImported={() => {
+            businessService.listProperties(workspaceId).then(res => {
+              if (res.data) setProperties(res.data.sort((a, b) => a.name.localeCompare(b.name)));
+            }).catch(() => {});
+          }}
+        />
+      )}
 
       {csvResult && (
         <div style={{ marginBottom: 16, padding: 16, borderRadius: 10, background: csvResult.errors.length > 0 && csvResult.imported === 0 && csvResult.updated === 0 ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${csvResult.errors.length > 0 && csvResult.imported === 0 && csvResult.updated === 0 ? '#FECACA' : '#BBF7D0'}` }}>

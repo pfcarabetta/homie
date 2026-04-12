@@ -740,6 +740,19 @@ export const accountService = {
 
 // ── businessService ─────────────────────────────────────────────────────────
 
+export interface PmsConnection {
+  id: string;
+  pmsType: string;
+  status: string;
+  lastError: string | null;
+  lastPropertySyncAt: string | null;
+  lastReservationSyncAt: string | null;
+  propertiesSynced: number;
+  reservationsSynced: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -1531,6 +1544,27 @@ export const businessService = {
       `/api/v1/business/${workspaceId}/dispatches/${jobId}/cancel`, { method: 'POST' }),
   archiveDispatch: (workspaceId: string, jobId: string) =>
     fetchAPI<{ archived: boolean }>(`/api/v1/business/${workspaceId}/dispatches/${jobId}/archive`, { method: 'POST' }),
+
+  // PMS Connections
+  getPmsConnections: (workspaceId: string) =>
+    fetchAPI<PmsConnection[]>(`/api/v1/business/${workspaceId}/pms/connections`),
+  connectPms: (workspaceId: string, pmsType: string, credentials: Record<string, string>) =>
+    fetchAPI<{ connectionId: string; tested: boolean; listingCount?: number }>(
+      `/api/v1/business/${workspaceId}/pms/connect`,
+      { method: 'POST', body: JSON.stringify({ pms_type: pmsType, credentials }) },
+    ),
+  syncPmsProperties: (workspaceId: string, connectionId: string, updateExisting?: boolean) =>
+    fetchAPI<{ imported: number; updated: number; skipped: number; total: number }>(
+      `/api/v1/business/${workspaceId}/pms/${connectionId}/sync-properties`,
+      { method: 'POST', body: JSON.stringify({ update_existing: updateExisting }) },
+    ),
+  syncPmsReservations: (workspaceId: string, connectionId: string) =>
+    fetchAPI<{ imported: number; updated: number; total: number }>(
+      `/api/v1/business/${workspaceId}/pms/${connectionId}/sync-reservations`,
+      { method: 'POST' },
+    ),
+  disconnectPms: (workspaceId: string, connectionId: string) =>
+    fetchAPI<{ disconnected: boolean }>(`/api/v1/business/${workspaceId}/pms/${connectionId}`, { method: 'DELETE' }),
   reopenDispatch: (workspaceId: string, jobId: string) =>
     fetchAPI<{ reopened: boolean; previousStatus: string; newStatus: string; reparsedQuotes: Array<{ id: string; before: string | null; after: string | null }> }>(
       `/api/v1/business/${workspaceId}/dispatches/${jobId}/reopen`, { method: 'POST' }),

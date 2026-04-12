@@ -204,6 +204,13 @@
       "when": 1776105600000,
       "tag": "0028_consumer_scans",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1776192000000,
+      "tag": "0029_pms_connections",
+      "breakpoints": true
     }
   ]
 }

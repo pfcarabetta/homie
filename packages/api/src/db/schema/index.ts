@@ -27,3 +27,4 @@ export * from './guest-auto-dispatch-rules';
 export * from './guest-reporter-settings';
 export * from './notifications';
 export * from './property-scans';
+export * from './pms-connections';
