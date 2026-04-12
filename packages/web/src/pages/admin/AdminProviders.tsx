@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { adminService } from '@/services/admin-api';
 
 interface Provider {
@@ -223,7 +224,10 @@ function ProviderDetailView({ detail }: { detail: NonNullable<Awaited<ReturnType
             {provider_responses.map(r => (
               <div key={r.id} className="bg-white rounded-lg border border-dark/5 p-3">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs text-dark/50">Job {r.jobId.slice(0, 8)} · via {r.channel}</span>
+                  <span className="text-xs text-dark/50">
+                    <Link to={`/admin/jobs?q=${r.jobId.slice(0, 8)}`} className="text-orange-500 hover:underline font-medium">Job {r.jobId.slice(0, 8)}</Link>
+                    {' '}· via {r.channel}
+                  </span>
                   {r.quotedPrice && <span className="text-sm font-bold text-orange-500">{r.quotedPrice}</span>}
                 </div>
                 {r.availability && <div className="text-xs text-dark/60">Availability: {r.availability}</div>}
@@ -243,7 +247,7 @@ function ProviderDetailView({ detail }: { detail: NonNullable<Awaited<ReturnType
             {bookings.map(b => (
               <div key={b.id} className="bg-green-50 rounded-lg border border-green-200 p-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-dark">Job {b.jobId.slice(0, 8)}</span>
+                  <Link to={`/admin/jobs?q=${b.jobId.slice(0, 8)}`} className="text-sm font-semibold text-orange-500 hover:underline">Job {b.jobId.slice(0, 8)}</Link>
                   <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${statusColors[b.status] ?? 'bg-dark/5 text-dark/50'}`}>{b.status}</span>
                 </div>
                 {b.serviceAddress && <div className="text-xs text-dark/60 mt-1">Address: {b.serviceAddress}</div>}
