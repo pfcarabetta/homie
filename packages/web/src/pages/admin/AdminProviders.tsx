@@ -272,7 +272,7 @@ function ProviderDetailView({ detail }: { detail: NonNullable<Awaited<ReturnType
             {bookings.map(b => (
               <div key={b.id} className="bg-green-50 rounded-lg border border-green-200 p-3">
                 <div className="flex justify-between items-center">
-                  <Link to={`/admin/jobs?q=${b.jobId.slice(0, 8)}`} className="text-sm font-semibold text-orange-500 hover:underline">Job {b.jobId.slice(0, 8)}</Link>
+                  <Link to={`/admin/bookings?q=${b.id.slice(0, 8)}`} className="text-sm font-semibold text-orange-500 hover:underline">Booking {b.id.slice(0, 8)}</Link>
                   <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${statusColors[b.status] ?? 'bg-dark/5 text-dark/50'}`}>{b.status}</span>
                 </div>
                 {b.serviceAddress && <div className="text-xs text-dark/60 mt-1">Address: {b.serviceAddress}</div>}
