@@ -3638,10 +3638,12 @@ router.get('/:workspaceId/dashboard/reservations', requireWorkspace, async (req:
       ))
       .orderBy(reservations.checkIn);
 
-    // Bucket them
+    // Bucket them — check-outs and check-ins are today only
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
     const occupied = allRes.filter(r => r.checkIn <= now && r.checkOut > now);
-    const checkouts = allRes.filter(r => r.checkOut > now && r.checkOut <= horizon);
-    const checkins = allRes.filter(r => r.checkIn > now && r.checkIn <= horizon);
+    const checkouts = allRes.filter(r => r.checkOut >= todayStart && r.checkOut < todayEnd);
+    const checkins = allRes.filter(r => r.checkIn >= todayStart && r.checkIn < todayEnd);
 
     // Pull dispatch schedule runs for any of these reservations (joined with schedule for title)
     const reservationIds = allRes.map(r => r.id);
