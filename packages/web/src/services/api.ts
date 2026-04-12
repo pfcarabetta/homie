@@ -1545,6 +1545,24 @@ export const businessService = {
   archiveDispatch: (workspaceId: string, jobId: string) =>
     fetchAPI<{ archived: boolean }>(`/api/v1/business/${workspaceId}/dispatches/${jobId}/archive`, { method: 'POST' }),
 
+  // Billing / Subscriptions
+  createBillingCheckout: (workspaceId: string, returnUrl?: string) =>
+    fetchAPI<{ checkoutUrl: string }>(`/api/v1/business/${workspaceId}/billing/checkout`, {
+      method: 'POST', body: JSON.stringify({ return_url: returnUrl }),
+    }),
+  openBillingPortal: (workspaceId: string, returnUrl?: string) =>
+    fetchAPI<{ portalUrl: string }>(`/api/v1/business/${workspaceId}/billing/portal`, {
+      method: 'POST', body: JSON.stringify({ return_url: returnUrl }),
+    }),
+  getBillingStatus: (workspaceId: string) =>
+    fetchAPI<{ hasSubscription: boolean; status: string | null; currentPeriodEnd: string | null; hasPaymentMethod: boolean }>(
+      `/api/v1/business/${workspaceId}/billing/status`),
+  getBillingInvoices: (workspaceId: string) =>
+    fetchAPI<{ invoices: Array<{ id: string; status: string | null; amountDue: number; amountPaid: number; created: number; hostedUrl: string | null; pdf: string | null }> }>(
+      `/api/v1/business/${workspaceId}/billing/invoices`),
+  syncBillingProperties: (workspaceId: string) =>
+    fetchAPI<{ synced: boolean; propertyCount: number }>(`/api/v1/business/${workspaceId}/billing/sync-properties`, { method: 'POST' }),
+
   // Workspace-resolved pricing (global merged with custom overrides)
   getWorkspacePricing: (workspaceId: string) =>
     fetchAPI<{

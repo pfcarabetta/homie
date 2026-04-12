@@ -103,3 +103,169 @@ export function constructWebhookEvent(body: Buffer, signature: string): Stripe.E
   const secret = process.env.STRIPE_WEBHOOK_SECRET ?? '';
   return getStripe().webhooks.constructEvent(body, signature, secret);
 }
+
+/* ── Workspace Subscription Billing ─────────────────────────────────────── */
+
+import { workspaces } from '../db/schema/workspaces';
+import { getWorkspacePlanConfig } from './pricing';
+import { properties } from '../db/schema/properties';
+import { count } from 'drizzle-orm';
+import logger from '../logger';
+
+/**
+ * Get or create a Stripe Customer for a workspace. Uses the workspace's
+ * stripeCustomerId if it exists, otherwise creates a new one.
+ */
+export async function getOrCreateWorkspaceCustomer(
+  workspaceId: string,
+  ownerEmail: string,
+  workspaceName: string,
+): Promise<string> {
+  const [ws] = await db.select({ stripeCustomerId: workspaces.stripeCustomerId }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
+  if (ws?.stripeCustomerId) return ws.stripeCustomerId;
+
+  const customer = await getStripe().customers.create({
+    email: ownerEmail,
+    name: workspaceName,
+    metadata: { workspace_id: workspaceId },
+  });
+
+  await db.update(workspaces).set({ stripeCustomerId: customer.id }).where(eq(workspaces.id, workspaceId));
+  return customer.id;
+}
+
+/**
+ * Create a Stripe Checkout Session for a workspace subscription.
+ * Uses two line items: base fee + per-property fee × property count.
+ * Pricing comes from the workspace's resolved config (global + custom).
+ */
+export async function createSubscriptionCheckout(
+  workspaceId: string,
+  plan: string,
+  customPricing: Record<string, unknown> | null,
+  customerId: string,
+  returnUrl: string,
+): Promise<string> {
+  const resolved = await getWorkspacePlanConfig(plan, customPricing);
+
+  // Count active properties
+  const [{ value: propCount }] = await db
+    .select({ value: count() })
+    .from(properties)
+    .where(eq(properties.workspaceId, workspaceId));
+
+  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+
+  // Base fee (skip if $0)
+  if (resolved.base > 0) {
+    lineItems.push({
+      price_data: {
+        currency: 'usd',
+        product_data: { name: `${resolved.planLabel} — Base Fee` },
+        unit_amount: Math.round(resolved.base * 100),
+        recurring: { interval: 'month' },
+      },
+      quantity: 1,
+    });
+  }
+
+  // Per-property fee
+  if (resolved.perProperty > 0 && propCount > 0) {
+    lineItems.push({
+      price_data: {
+        currency: 'usd',
+        product_data: { name: `Per-Property Fee (${propCount} properties)` },
+        unit_amount: Math.round(resolved.perProperty * 100),
+        recurring: { interval: 'month' },
+      },
+      quantity: propCount,
+    });
+  }
+
+  // If both are $0, add a $0 line item so the subscription still creates
+  if (lineItems.length === 0) {
+    lineItems.push({
+      price_data: {
+        currency: 'usd',
+        product_data: { name: `${resolved.planLabel} — Free Plan` },
+        unit_amount: 0,
+        recurring: { interval: 'month' },
+      },
+      quantity: 1,
+    });
+  }
+
+  const session = await getStripe().checkout.sessions.create({
+    customer: customerId,
+    mode: 'subscription',
+    line_items: lineItems,
+    subscription_data: {
+      metadata: { workspace_id: workspaceId, plan },
+    },
+    success_url: `${returnUrl}?session_id={CHECKOUT_SESSION_ID}&success=true`,
+    cancel_url: `${returnUrl}?canceled=true`,
+    metadata: { workspace_id: workspaceId, plan },
+  });
+
+  return session.url!;
+}
+
+/**
+ * Create a Stripe Customer Portal session so the workspace owner can
+ * manage their payment method, view invoices, or cancel.
+ */
+export async function createBillingPortalSession(
+  customerId: string,
+  returnUrl: string,
+): Promise<string> {
+  const session = await getStripe().billingPortal.sessions.create({
+    customer: customerId,
+    return_url: returnUrl,
+  });
+  return session.url;
+}
+
+/**
+ * Update the per-property quantity on an existing subscription.
+ * Uses proration_behavior: 'none' so the change takes effect on the
+ * next billing cycle — not mid-cycle.
+ */
+export async function updateSubscriptionPropertyCount(
+  subscriptionId: string,
+  propertyCount: number,
+): Promise<void> {
+  const stripe = getStripe();
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+  // Find the per-property line item (the one with quantity > 1 or name containing "Per-Property")
+  const perPropertyItem = subscription.items.data.find(
+    item => (item.quantity ?? 0) > 1 || item.price.nickname?.includes('Per-Property') || (item.price.unit_amount ?? 0) < 10000,
+  );
+
+  if (perPropertyItem) {
+    await stripe.subscriptions.update(subscriptionId, {
+      items: [{ id: perPropertyItem.id, quantity: Math.max(1, propertyCount) }],
+      proration_behavior: 'none',
+    });
+    logger.info({ subscriptionId, propertyCount }, '[stripe] Updated subscription property count');
+  }
+}
+
+/**
+ * List recent invoices for a Stripe customer.
+ */
+export async function listInvoices(
+  customerId: string,
+  limit = 12,
+): Promise<Array<{ id: string; status: string | null; amountDue: number; amountPaid: number; created: number; hostedUrl: string | null; pdf: string | null }>> {
+  const invoices = await getStripe().invoices.list({ customer: customerId, limit });
+  return invoices.data.map(inv => ({
+    id: inv.id,
+    status: inv.status ?? null,
+    amountDue: inv.amount_due,
+    amountPaid: inv.amount_paid,
+    created: inv.created,
+    hostedUrl: inv.hosted_invoice_url ?? null,
+    pdf: inv.invoice_pdf ?? null,
+  }));
+}

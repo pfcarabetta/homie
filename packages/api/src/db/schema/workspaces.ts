@@ -53,6 +53,12 @@ export const workspaces = pgTable('workspaces', {
   trackLastSyncAt: timestamp('track_last_sync_at', { withTimezone: true }),
   /** Per-workspace pricing overrides — null means use global defaults */
   customPricing: jsonb('custom_pricing').$type<CustomPricing>(),
+  /** Stripe Subscription ID for recurring billing */
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  /** active | past_due | canceled | trialing | incomplete | unpaid */
+  subscriptionStatus: text('subscription_status'),
+  /** End of the current billing period (next invoice date) */
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

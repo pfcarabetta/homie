@@ -218,6 +218,13 @@
       "when": 1776192100000,
       "tag": "0030_custom_pricing",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1776192200000,
+      "tag": "0031_stripe_subscriptions",
+      "breakpoints": true
     }
   ]
 }

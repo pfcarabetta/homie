@@ -240,6 +240,115 @@ router.post('/:workspaceId/properties', requireWorkspace, requireWorkspaceRole('
   }
 });
 
+// ── Billing / Subscriptions ──────────────────────────────────────────────────
+
+// POST /:workspaceId/billing/checkout — create a Stripe subscription checkout session
+router.post('/:workspaceId/billing/checkout', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  const { return_url } = req.body as { return_url?: string };
+  try {
+    const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, req.workspaceId)).limit(1);
+    if (!ws) { res.status(404).json({ data: null, error: 'Workspace not found', meta: {} }); return; }
+    if (ws.stripeSubscriptionId && ws.subscriptionStatus === 'active') {
+      res.status(400).json({ data: null, error: 'Workspace already has an active subscription. Use the billing portal to manage it.', meta: {} });
+      return;
+    }
+
+    const [owner] = await db.select({ email: homeowners.email }).from(homeowners).where(eq(homeowners.id, ws.ownerId)).limit(1);
+    const { getOrCreateWorkspaceCustomer, createSubscriptionCheckout } = await import('../services/stripe');
+    const customerId = await getOrCreateWorkspaceCustomer(req.workspaceId, owner?.email ?? '', ws.name);
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+    const checkoutUrl = await createSubscriptionCheckout(
+      req.workspaceId, ws.plan, ws.customPricing as Record<string, unknown> | null,
+      customerId, return_url || `${APP_URL}/business?tab=billing`,
+    );
+    res.json({ data: { checkoutUrl }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/billing/checkout]');
+    res.status(500).json({ data: null, error: `Checkout failed: ${(err as Error).message}`, meta: {} });
+  }
+});
+
+// POST /:workspaceId/billing/portal — open Stripe Customer Portal for self-service
+router.post('/:workspaceId/billing/portal', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  const { return_url } = req.body as { return_url?: string };
+  try {
+    const [ws] = await db.select({ stripeCustomerId: workspaces.stripeCustomerId }).from(workspaces).where(eq(workspaces.id, req.workspaceId)).limit(1);
+    if (!ws?.stripeCustomerId) {
+      res.status(400).json({ data: null, error: 'No billing account yet. Subscribe first.', meta: {} });
+      return;
+    }
+    const { createBillingPortalSession } = await import('../services/stripe');
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+    const portalUrl = await createBillingPortalSession(ws.stripeCustomerId, return_url || `${APP_URL}/business?tab=billing`);
+    res.json({ data: { portalUrl }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/billing/portal]');
+    res.status(500).json({ data: null, error: 'Failed to open billing portal', meta: {} });
+  }
+});
+
+// GET /:workspaceId/billing/invoices — list recent invoices
+router.get('/:workspaceId/billing/invoices', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const [ws] = await db.select({ stripeCustomerId: workspaces.stripeCustomerId }).from(workspaces).where(eq(workspaces.id, req.workspaceId)).limit(1);
+    if (!ws?.stripeCustomerId) {
+      res.json({ data: { invoices: [] }, error: null, meta: {} });
+      return;
+    }
+    const { listInvoices } = await import('../services/stripe');
+    const invoices = await listInvoices(ws.stripeCustomerId);
+    res.json({ data: { invoices }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/billing/invoices]');
+    res.status(500).json({ data: null, error: 'Failed to load invoices', meta: {} });
+  }
+});
+
+// POST /:workspaceId/billing/sync-properties — update subscription quantity to current property count
+router.post('/:workspaceId/billing/sync-properties', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const [ws] = await db.select({
+      stripeSubscriptionId: workspaces.stripeSubscriptionId,
+      subscriptionStatus: workspaces.subscriptionStatus,
+    }).from(workspaces).where(eq(workspaces.id, req.workspaceId)).limit(1);
+    if (!ws?.stripeSubscriptionId || ws.subscriptionStatus !== 'active') {
+      res.status(400).json({ data: null, error: 'No active subscription', meta: {} });
+      return;
+    }
+    const [{ value: propCount }] = await db.select({ value: count() }).from(properties).where(eq(properties.workspaceId, req.workspaceId));
+    const { updateSubscriptionPropertyCount } = await import('../services/stripe');
+    await updateSubscriptionPropertyCount(ws.stripeSubscriptionId, propCount);
+    res.json({ data: { synced: true, propertyCount: propCount }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/billing/sync-properties]');
+    res.status(500).json({ data: null, error: 'Failed to sync property count', meta: {} });
+  }
+});
+
+// GET /:workspaceId/billing/status — current subscription status
+router.get('/:workspaceId/billing/status', requireWorkspace, async (req: Request, res: Response) => {
+  try {
+    const [ws] = await db.select({
+      stripeSubscriptionId: workspaces.stripeSubscriptionId,
+      subscriptionStatus: workspaces.subscriptionStatus,
+      currentPeriodEnd: workspaces.currentPeriodEnd,
+      stripeCustomerId: workspaces.stripeCustomerId,
+    }).from(workspaces).where(eq(workspaces.id, req.workspaceId)).limit(1);
+    res.json({
+      data: {
+        hasSubscription: !!ws?.stripeSubscriptionId,
+        status: ws?.subscriptionStatus ?? null,
+        currentPeriodEnd: ws?.currentPeriodEnd?.toISOString() ?? null,
+        hasPaymentMethod: !!ws?.stripeCustomerId,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /business/:id/billing/status]');
+    res.status(500).json({ data: null, error: 'Failed to load billing status', meta: {} });
+  }
+});
+
 // GET /:workspaceId/pricing — resolved pricing for this workspace (global merged with custom)
 router.get('/:workspaceId/pricing', requireWorkspace, async (req: Request, res: Response) => {
   try {
