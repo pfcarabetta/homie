@@ -700,6 +700,91 @@ router.patch('/business-accounts/:id', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/admin/jobs/:jobIdOrPrefix/repair — Reparse provider quote text
+// and reset a stuck "completed" status if no booking actually exists.
+//
+// Accepts either a full job UUID or any unique prefix (e.g. "6d4cba32"). Useful
+// for fixing jobs whose quote was poorly parsed (e.g. "$70/hr 3 hour minimum"
+// stored as just "$70") or whose status was set to "completed" without a real
+// booking row. Returns the changes that were applied.
+router.post('/jobs/:jobIdOrPrefix/repair', async (req: Request, res: Response) => {
+  const { jobIdOrPrefix } = req.params;
+  if (!jobIdOrPrefix || jobIdOrPrefix.length < 4) {
+    res.status(400).json({ data: null, error: 'jobIdOrPrefix must be at least 4 characters', meta: {} });
+    return;
+  }
+
+  try {
+    // Find matching job(s) by prefix
+    const matches = await db
+      .select({ id: jobs.id, status: jobs.status })
+      .from(jobs)
+      .where(sql`${jobs.id}::text LIKE ${jobIdOrPrefix + '%'}`)
+      .limit(5);
+
+    if (matches.length === 0) {
+      res.status(404).json({ data: null, error: 'No job found matching that ID/prefix', meta: {} });
+      return;
+    }
+    if (matches.length > 1) {
+      res.status(400).json({
+        data: null,
+        error: `Ambiguous prefix — matches ${matches.length} jobs. Provide more characters.`,
+        meta: { matches: matches.map(m => m.id) },
+      });
+      return;
+    }
+
+    const job = matches[0];
+    const changes: Record<string, unknown> = { jobId: job.id };
+
+    // 1. Reparse provider responses on this job
+    const responses = await db
+      .select()
+      .from(providerResponses)
+      .where(eq(providerResponses.jobId, job.id));
+
+    const { formatQuotedPrice } = await import('../services/quote-parser');
+    const reparsed: Array<{ id: string; before: string | null; after: string | null }> = [];
+    for (const r of responses) {
+      // Reparse from message text (richer than the stored quotedPrice) if available
+      const sourceText = (r.message && r.message.length > (r.quotedPrice?.length ?? 0))
+        ? r.message
+        : r.quotedPrice;
+      const newPrice = formatQuotedPrice(sourceText);
+      if (newPrice && newPrice !== r.quotedPrice) {
+        await db.update(providerResponses)
+          .set({ quotedPrice: newPrice })
+          .where(eq(providerResponses.id, r.id));
+        reparsed.push({ id: r.id, before: r.quotedPrice, after: newPrice });
+      }
+    }
+    changes.reparsedQuotes = reparsed;
+
+    // 2. If status is 'completed' but no real booking exists, revert to 'expired'
+    if (job.status === 'completed') {
+      const [booking] = await db
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(eq(bookings.jobId, job.id))
+        .limit(1);
+      if (!booking) {
+        await db.update(jobs).set({ status: 'expired' } as Record<string, unknown>).where(eq(jobs.id, job.id));
+        changes.statusRevertedFrom = 'completed';
+        changes.statusRevertedTo = 'expired';
+        logger.info({ jobId: job.id }, '[admin] Reverted phantom completed status to expired (no booking row)');
+      } else {
+        changes.statusUnchanged = 'completed has matching booking row';
+      }
+    }
+
+    res.json({ data: changes, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/jobs/:jobIdOrPrefix/repair]');
+    res.status(500).json({ data: null, error: 'Failed to repair job', meta: {} });
+  }
+});
+
 // POST /api/v1/admin/jobs/:jobId/cancel — Force cancel a job
 router.post('/jobs/:jobId/cancel', async (req: Request, res: Response) => {
   const { jobId } = req.params;

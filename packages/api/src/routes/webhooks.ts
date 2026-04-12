@@ -18,6 +18,7 @@ import { jobs } from '../db/schema/jobs';
 import { homeowners } from '../db/schema/homeowners';
 import { sendEmail, sendSms } from '../services/notifications';
 import { notifyWorkspaceOfQuote } from '../services/quote-notifications';
+import { formatQuotedPrice } from '../services/quote-parser';
 import logger from '../logger';
 
 const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
@@ -139,81 +140,7 @@ function isWebTokenValid(attemptId: string, action: string, token: string): bool
   }
 }
 
-/** Normalize raw speech/text price into clean dollar format. "Charge about $220" → "~$220" */
-function formatQuotedPrice(raw: string | null): string | null {
-  if (!raw) return null;
-  const cleaned = raw.replace(/[.,!?]+$/g, '').trim();
-
-  // Already clean: "$150", "$150-200" — also fix double dollars
-  if (/^\$+\d/.test(cleaned)) return cleaned.replace(/^\$+/, '$');
-
-  // Plain number: "150", "150 dollars", "200 bucks"
-  const numMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|usd)?$/i);
-  if (numMatch) {
-    const n = parseFloat(numMatch[1]);
-    return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
-  }
-
-  // Range at start: "150 to 200", "150-200", "$150 - $200"
-  const rangeMatch = cleaned.match(/^[\$]?(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*[\$]?(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|usd)?$/i);
-  if (rangeMatch) {
-    const low = parseFloat(rangeMatch[1]);
-    const high = parseFloat(rangeMatch[2]);
-    return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
-  }
-
-  // Range with "between": "between 100 and 200", "Estimate between 400 and 550"
-  const betweenMatch = cleaned.match(/between\s+\$?(\d+(?:\.\d+)?)\s*(?:and|to|-|–)\s*\$?(\d+(?:\.\d+)?)/i);
-  if (betweenMatch) {
-    const low = parseFloat(betweenMatch[1]);
-    const high = parseFloat(betweenMatch[2]);
-    return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
-  }
-
-  // Range anywhere in text: "it would be 100 to 200", "charge 150-250"
-  const embeddedRange = cleaned.match(/(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*\$?(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?)?/i);
-  if (embeddedRange) {
-    const low = parseFloat(embeddedRange[1]);
-    const high = parseFloat(embeddedRange[2]);
-    if (high > low && low >= 10 && high <= 100000) {
-      return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
-    }
-  }
-
-  // Extract $XXX from anywhere in text: "Charge about $220", "it would be $350"
-  const embeddedDollar = cleaned.match(/\$(\d+(?:\.\d+)?)\s*(?:to|-|–)\s*\$?(\d+(?:\.\d+)?)/);
-  if (embeddedDollar) {
-    const low = parseFloat(embeddedDollar[1]);
-    const high = parseFloat(embeddedDollar[2]);
-    return `$${Number.isInteger(low) ? low : low.toFixed(2)}-$${Number.isInteger(high) ? high : high.toFixed(2)}`;
-  }
-  const singleDollar = cleaned.match(/\$(\d+(?:\.\d+)?)/);
-  if (singleDollar) {
-    const n = parseFloat(singleDollar[1]);
-    const hasApprox = /about|around|approximately|roughly|maybe|like|estimate/i.test(cleaned);
-    return hasApprox ? `~$${Number.isInteger(n) ? n : n.toFixed(2)}` : `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
-  }
-
-  // "about/around 150" at start
-  const approxMatch = cleaned.match(/^(?:about|around|approximately|roughly|maybe|like|charge about|charge around)\s+(\d+(?:\.\d+)?)/i);
-  if (approxMatch) {
-    const n = parseFloat(approxMatch[1]);
-    return `~$${Number.isInteger(n) ? n : n.toFixed(2)}`;
-  }
-
-  // Extract bare number from phrase: "charge 220", "it would be 350 dollars"
-  const embeddedNum = cleaned.match(/(?:charge|cost|price|estimate|quote|be|pay|is|are|run|runs)\s+(?:about|around|roughly)?\s*(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?)?/i);
-  if (embeddedNum) {
-    const n = parseFloat(embeddedNum[1]);
-    const hasApprox = /about|around|roughly/i.test(cleaned);
-    return hasApprox ? `~$${Number.isInteger(n) ? n : n.toFixed(2)}` : `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
-  }
-
-  // Fallback: starts with digit
-  if (/^\d/.test(cleaned)) return `$${cleaned.replace(/\s*(dollars?|bucks?|usd)\s*/gi, '')}`;
-
-  return cleaned;
-}
+// formatQuotedPrice has moved to ../services/quote-parser.ts and is imported above.
 
 const ACCEPT_REPLIES = new Set(['yes', 'y', '1', 'accept', 'ok', 'sure', 'yep', 'yeah']);
 const DECLINE_REPLIES = new Set(['no', 'n', '2', 'decline', 'busy', 'nope', 'pass', 'cant', "can't"]);
