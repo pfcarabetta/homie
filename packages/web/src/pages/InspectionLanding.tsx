@@ -212,7 +212,7 @@ export default function HomieInspectionLanding() {
           </div>
           <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
             <a href="#how-it-works" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500 }}>How it works</a>
-            <a href="#inspectors" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500 }}>For inspectors</a>
+            <a href="/inspect/inspectors" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500 }}>For inspectors</a>
             <button style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "9px 22px", cursor: "pointer" }}>Get started</button>
           </div>
         </div>
@@ -406,77 +406,17 @@ export default function HomieInspectionLanding() {
         </div>
       </section>
 
-      {/* FOR INSPECTORS */}
-      <section id="inspectors" style={{ background: `linear-gradient(165deg, ${C.white} 0%, ${C.warm} 100%)`, padding: "96px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      {/* INSPECTOR CTA BANNER (links to dedicated page) */}
+      <section style={{ background: `linear-gradient(165deg, ${C.white} 0%, ${C.warm} 100%)`, padding: "64px 24px" }}>
+        <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
           <FadeIn>
-            <div style={{ display: "flex", gap: 64, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 400px", minWidth: 300 }}>
-                <div style={{ display: "inline-block", background: C.greenLight, borderRadius: 100, padding: "6px 14px", marginBottom: 20 }}>
-                  <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.green }}>Inspector partner program</span>
-                </div>
-                <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "0 0 16px", lineHeight: 1.15 }}>Make your inspections more valuable</h2>
-                <p style={{ ...dm, fontSize: 16, color: C.darkMid, lineHeight: 1.65, margin: "0 0 32px" }}>Your clients love your inspections. They hate the part that comes after \u2014 calling around for quotes on every item you found. Homie eliminates that headache and you earn referral revenue on every dispatch.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 20, marginBottom: 32 }}>
-                  {[
-                    { icon: "\uD83D\uDCB0", title: "Increase your ticket by $99\u2013$129", desc: "Offer the Homie Report as a premium add-on to every inspection. You keep 60% of the add-on fee." },
-                    { icon: "\uD83D\uDD01", title: "Earn on every dispatch", desc: "When your client uses Homie to get quotes from your report, you earn 15\u201320% referral commission on each search." },
-                    { icon: "\u2B50", title: "Stand out from competitors", desc: "You're not just finding problems \u2014 you're delivering solutions. Clients remember the inspector who gave them an actionable plan, not just a list." },
-                    { icon: "\uD83E\uDD1D", title: "Free to join, always", desc: "No fees, no subscriptions. Upload reports, earn referrals, and make your clients happier. There's literally no downside." },
-                  ].map((item, i) => (
-                    <div key={i} style={{ display: "flex", gap: 14 }}>
-                      <span style={{ fontSize: 22, flexShrink: 0 }}>{item.icon}</span>
-                      <div>
-                        <div style={{ ...dm, fontSize: 15, fontWeight: 600, color: C.dark, marginBottom: 2 }}>{item.title}</div>
-                        <div style={{ ...dm, fontSize: 13, color: C.gray, lineHeight: 1.55 }}>{item.desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }} onMouseEnter={e => { e.currentTarget.style.background = "#168A68"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.background = C.green; e.currentTarget.style.transform = "translateY(0)"; }}>Join the Homie inspector network</button>
-              </div>
-
-              {/* Inspector revenue mockup */}
-              <div style={{ flex: "1 1 360px", minWidth: 300, maxWidth: 420 }}>
-                <FadeIn delay={0.15}>
-                  <div style={{ background: C.white, borderRadius: 24, padding: "28px 24px", border: `1px solid ${C.grayLight}`, boxShadow: "0 8px 40px rgba(0,0,0,0.06)" }}>
-                    <div style={{ ...dm, fontSize: 12, color: C.gray, fontWeight: 500, marginBottom: 16, textTransform: "uppercase", letterSpacing: 0.5 }}>Your monthly earnings with Homie</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[
-                        { label: "Inspections this month", value: "12" },
-                        { label: "Homie add-ons sold (60%)", value: "7" },
-                        { label: "Add-on revenue (@ $99 \u00D7 60%)", value: "$415" },
-                        { label: "Dispatches from your reports", value: "43" },
-                        { label: "Referral commissions", value: "$172" },
-                      ].map((row, i) => (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 4 ? `1px solid ${C.warm}` : "none" }}>
-                          <span style={{ ...dm, fontSize: 13, color: C.gray }}>{row.label}</span>
-                          <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.dark }}>{row.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ background: C.greenLight, borderRadius: 12, padding: "16px 20px", marginTop: 16, textAlign: "center" }}>
-                      <div style={{ ...dm, fontSize: 12, color: "#085041" }}>Extra monthly income</div>
-                      <div style={{ ...fr, fontSize: 36, fontWeight: 700, color: C.green }}>$587</div>
-                      <div style={{ ...dm, fontSize: 12, color: "#085041" }}>$7,044/year with zero additional work</div>
-                    </div>
-                  </div>
-                </FadeIn>
-              </div>
+            <div style={{ display: "inline-block", background: C.greenLight, borderRadius: 100, padding: "6px 14px", marginBottom: 16 }}>
+              <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.green }}>Inspector partner program</span>
             </div>
+            <h2 style={{ ...fr, fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, color: C.dark, margin: "0 0 12px" }}>Are you a home inspector?</h2>
+            <p style={{ ...dm, fontSize: 16, color: C.darkMid, lineHeight: 1.6, margin: "0 0 24px" }}>Earn referral revenue on every dispatch. Free to join, always.</p>
+            <a href="/inspect/inspectors" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", textDecoration: "none", display: "inline-block", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }}>Learn about the partner program →</a>
           </FadeIn>
-        </div>
-      </section>
-
-      {/* COMPATIBLE PLATFORMS */}
-      <section style={{ background: C.white, padding: "48px 24px", borderTop: `1px solid ${C.warm}` }}>
-        <div style={{ maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
-          <p style={{ ...dm, fontSize: 13, color: C.gray, fontWeight: 500, letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Works with your inspection software</p>
-          <div style={{ display: "flex", justifyContent: "center", gap: 48, flexWrap: "wrap", opacity: 0.4 }}>
-            {["Spectora", "HomeGauge", "Palm-Tech", "InspectIT", "PDF Upload"].map(name => (
-              <span key={name} style={{ ...dm, fontSize: 18, fontWeight: 700, color: C.dark }}>{name}</span>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -488,7 +428,7 @@ export default function HomieInspectionLanding() {
             <p style={{ ...dm, fontSize: 17, color: C.darkMid, lineHeight: 1.6, margin: "0 0 32px" }}>Upload your inspection report and get real quotes from local pros for every item \u2014 in hours, not weeks.</p>
             <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
               <button style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)" }} onMouseEnter={e => { e.currentTarget.style.background = C.orangeDark; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.transform = "translateY(0)"; }}>Upload your report</button>
-              <button style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.green, background: "transparent", border: `2px solid ${C.green}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => { e.currentTarget.style.background = C.green; e.currentTarget.style.color = C.white; }} onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.green; }}>I'm an inspector</button>
+              <a href="/inspect/inspectors" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.green, background: "transparent", border: `2px solid ${C.green}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s", textDecoration: "none", display: "inline-block" }}>I'm an inspector</a>
             </div>
             <p style={{ ...dm, fontSize: 13, color: C.gray, marginTop: 16 }}>No account required to upload. Inspector partnership is free forever.</p>
           </FadeIn>
