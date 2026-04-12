@@ -600,6 +600,10 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                                   {preferredProviderIds.has(r.provider.id) && (
                                     <span style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: O, padding: '2px 5px', borderRadius: 3, letterSpacing: '0.04em' }}>PREFERRED</span>
                                   )}
+                                  {r.is_late && (
+                                    <span title="Quote arrived after the dispatch auto-expired"
+                                      style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: '#D4A437', padding: '2px 5px', borderRadius: 3, letterSpacing: '0.04em' }}>LATE</span>
+                                  )}
                                 </div>
                                 <div style={{ color: '#9B9490', fontSize: 10, marginTop: 1 }}>
                                   ★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})

@@ -272,7 +272,7 @@ router.get('/:id/responses', async (req: Request, res: Response) => {
 
   try {
     const [job] = await db
-      .select({ status: jobs.status, homeownerId: jobs.homeownerId })
+      .select({ status: jobs.status, homeownerId: jobs.homeownerId, expiresAt: jobs.expiresAt })
       .from(jobs)
       .where(eq(jobs.id, id))
       .limit(1);
@@ -287,6 +287,8 @@ router.get('/:id/responses', async (req: Request, res: Response) => {
       return;
     }
 
+    // Quotes are returned regardless of job status — late responses on
+    // expired dispatches are intentionally surfaced so they can still be booked.
     const rows = await db
       .select({ response: providerResponses, provider: providers })
       .from(providerResponses)
@@ -299,8 +301,9 @@ router.get('/:id/responses', async (req: Request, res: Response) => {
       .from(outreachAttempts)
       .where(and(eq(outreachAttempts.jobId, id), eq(outreachAttempts.status, 'pending')));
 
-    const terminal = new Set(['completed', 'expired', 'refunded']);
+    const terminal = new Set(['completed', 'expired', 'refunded', 'archived']);
     const moreExpected = pendingCount > 0 && !terminal.has(job.status);
+    const expiresAtMs = job.expiresAt ? job.expiresAt.getTime() : null;
 
     const out: ApiResponse<JobResponsesResponse> = {
       data: {
@@ -320,6 +323,8 @@ router.get('/:id/responses', async (req: Request, res: Response) => {
           availability: r.availability,
           message: r.message,
           responded_at: r.createdAt.toISOString(),
+          // True if this response arrived after the dispatch's auto-expire window
+          is_late: expiresAtMs !== null && r.createdAt.getTime() > expiresAtMs,
         })),
         pending_count: pendingCount,
         more_expected: moreExpected,

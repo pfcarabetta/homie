@@ -172,6 +172,8 @@ export interface ProviderResponseItem {
   availability: string | null;
   message: string | null;
   responded_at: string;
+  /** True if this response arrived after the dispatch's auto-expire window */
+  is_late?: boolean;
 }
 
 export interface JobResponsesResponse {

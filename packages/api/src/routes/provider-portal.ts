@@ -11,6 +11,7 @@ import { bookings } from '../db/schema/bookings';
 import { homeowners } from '../db/schema/homeowners';
 import { suppressionList } from '../db/schema/suppression-list';
 import { recordProviderResponse } from '../services/providers/scores';
+import { notifyWorkspaceOfQuote } from '../services/quote-notifications';
 
 const router = Router();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -147,6 +148,10 @@ router.post('/jobs/:attemptId/respond', async (req: Request, res: Response) => {
         message: message ?? null,
         ratingAtTime: provider?.googleRating ?? null,
       });
+
+      // Workspace notification (Slack + in-app feed) — fire-and-forget.
+      // Late responses on expired dispatches are intentionally allowed.
+      void notifyWorkspaceOfQuote(attempt.jobId, req.providerId, message ?? null);
 
       // Emit tracking event
       try {
