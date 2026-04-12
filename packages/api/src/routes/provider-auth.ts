@@ -121,8 +121,21 @@ router.get('/verify', async (req: Request, res: Response) => {
       error: null,
       meta: {},
     });
-  } catch {
-    res.status(401).json({ data: null, error: 'Invalid or expired link', meta: {} });
+  } catch (err) {
+    // Distinguish expired from malformed/wrong-secret so the UI can show
+    // a more useful error and we get cleaner logs.
+    const e = err as Error & { name?: string };
+    if (e.name === 'TokenExpiredError') {
+      res.status(401).json({ data: null, error: 'This login link has expired. Ask the property manager to send a fresh one.', meta: { reason: 'expired' } });
+      return;
+    }
+    if (e.name === 'JsonWebTokenError') {
+      logger.warn({ err: e.message }, '[provider-auth/verify] Invalid token signature');
+      res.status(401).json({ data: null, error: 'This login link is invalid. Ask the property manager to send a fresh one.', meta: { reason: 'invalid_signature' } });
+      return;
+    }
+    logger.warn({ err: e.message }, '[provider-auth/verify] Verification failed');
+    res.status(401).json({ data: null, error: 'Could not verify this login link.', meta: { reason: 'unknown' } });
   }
 });
 

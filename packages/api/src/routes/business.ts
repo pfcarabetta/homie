@@ -1557,6 +1557,108 @@ router.post('/:workspaceId/dispatches/:jobId/archive', requireWorkspace, async (
   }
 });
 
+// POST /:workspaceId/dispatches/:jobId/resend-magic-link
+// Generates a fresh portal token for the given provider and texts/emails them
+// a working login link. Use when a previously sent magic link expired or
+// stopped working (e.g. JWT_SECRET rotation, link > 30 days old).
+router.post('/:workspaceId/dispatches/:jobId/resend-magic-link', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+  const { jobId } = req.params;
+  const { providerId, channel } = req.body as { providerId?: string; channel?: 'sms' | 'email' };
+
+  if (!providerId) {
+    res.status(400).json({ data: null, error: 'providerId is required', meta: {} });
+    return;
+  }
+
+  try {
+    // Verify the job belongs to this workspace
+    const [job] = await db.select({ id: jobs.id, workspaceId: jobs.workspaceId, diagnosis: jobs.diagnosis })
+      .from(jobs)
+      .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, req.workspaceId)))
+      .limit(1);
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Dispatch not found', meta: {} });
+      return;
+    }
+
+    // Look up the provider
+    const [provider] = await db
+      .select({ id: providers.id, name: providers.name, phone: providers.phone, email: providers.email })
+      .from(providers)
+      .where(eq(providers.id, providerId))
+      .limit(1);
+    if (!provider) {
+      res.status(404).json({ data: null, error: 'Provider not found', meta: {} });
+      return;
+    }
+
+    // Generate a fresh token + link
+    const { signProviderToken } = await import('../middleware/provider-auth');
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+    const token = signProviderToken(provider.id);
+    const link = `${APP_URL}/portal/login?token=${token}`;
+
+    // Decide channel: explicit > sms if phone available > email
+    const useSms = channel === 'sms' || (!channel && !!provider.phone);
+    const useEmail = channel === 'email' || (!useSms && !!provider.email);
+
+    const diagnosis = job.diagnosis as { category?: string } | null;
+    const cat = (diagnosis?.category || 'job').replace(/_/g, ' ');
+
+    const { sendSms, sendEmail } = await import('../services/notifications');
+    const sentVia: string[] = [];
+
+    if (useSms && provider.phone) {
+      try {
+        await sendSms(
+          provider.phone,
+          `Hey ${provider.name}! Here's a fresh link to view the ${cat} job in your Homie Pro portal: ${link}`,
+        );
+        sentVia.push('sms');
+      } catch (err) {
+        logger.warn({ err, providerId }, '[business] resend-magic-link: SMS failed');
+      }
+    }
+
+    if (useEmail && provider.email) {
+      try {
+        await sendEmail(
+          provider.email,
+          `Your Homie Pro portal link`,
+          `<div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+            <h1 style="color:#E8632B;font-size:24px;font-family:Georgia,serif">homie</h1>
+            <p style="color:#2D2926;font-size:16px">Hey ${provider.name}!</p>
+            <p style="color:#6B6560;font-size:15px;line-height:1.6">Here's a fresh link to view the ${cat} job in your Homie Pro portal:</p>
+            <p><a href="${link}" style="display:inline-block;background:#E8632B;color:white;padding:14px 32px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px;margin-top:16px">Open Portal</a></p>
+            <p style="color:#9B9490;font-size:12px;margin-top:24px">This link is valid for 30 days.</p>
+          </div>`,
+        );
+        sentVia.push('email');
+      } catch (err) {
+        logger.warn({ err, providerId }, '[business] resend-magic-link: email failed');
+      }
+    }
+
+    if (sentVia.length === 0) {
+      res.status(400).json({
+        data: null,
+        error: 'Could not send: provider has no phone/email on file or sending failed.',
+        meta: { providerName: provider.name },
+      });
+      return;
+    }
+
+    res.json({
+      data: { sent: true, sentVia, providerName: provider.name, link },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /business/:id/dispatches/:jobId/resend-magic-link]');
+    res.status(500).json({ data: null, error: 'Failed to resend magic link', meta: {} });
+  }
+});
+
 // POST /:workspaceId/dispatches/:jobId/reopen
 // Re-opens a completed or archived dispatch for booking. Use this when a job
 // got stuck in "completed" without an actual booking row, or when the user
