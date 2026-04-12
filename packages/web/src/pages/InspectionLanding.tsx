@@ -436,13 +436,42 @@ export default function HomieInspectionLanding() {
       </section>
 
       {/* FOOTER */}
-      <footer style={{ background: C.dark, padding: "40px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ ...fr, fontWeight: 700, fontSize: 22, color: C.orange }}>homie</span>
-            <span style={{ ...dm, fontSize: 12, color: C.gray }}>inspect</span>
+      <footer style={{ background: C.dark, padding: "64px 24px 40px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 40, marginBottom: 48 }}>
+            <div>
+              <span style={{ ...fr, fontWeight: 700, fontSize: 24, color: C.orange }}>homie</span>
+              <p style={{ ...dm, fontSize: 14, color: "#9B9490", lineHeight: 1.6, marginTop: 12 }}>AI-powered home services for property managers, hosts, and homeowners.</p>
+            </div>
+            <div>
+              <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: "#D3CEC9", letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Product</h4>
+              {[
+                { label: "For homeowners", href: "/" },
+                { label: "For business", href: "/business/landing" },
+                { label: "Homie Inspect", href: "/inspect" },
+                { label: "For inspectors", href: "/inspect/inspectors" },
+                { label: "Become a Homie Pro", href: "/portal/signup" },
+              ].map(l => (
+                <a key={l.label} href={l.href} style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>{l.label}</a>
+              ))}
+            </div>
+            <div>
+              <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: "#D3CEC9", letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Company</h4>
+              {["About", "Blog", "Careers", "Contact"].map(l => (
+                <a key={l} href="#" style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>{l}</a>
+              ))}
+            </div>
+            <div>
+              <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: "#D3CEC9", letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Legal</h4>
+              <a href="/privacy" style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>Privacy</a>
+              <a href="/terms" style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>Terms</a>
+              <a href="/security" style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>Security</a>
+            </div>
           </div>
-          <span style={{ ...dm, fontSize: 13, color: C.gray }}>{"\u00A9"} 2026 Homie. Your home's best friend.</span>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <span style={{ ...dm, fontSize: 13, color: "#9B9490" }}>&copy; {new Date().getFullYear()} Homie. Your home's best friend.</span>
+            <span style={{ ...dm, fontSize: 13, color: "#9B9490" }}>Made with love in San Diego 🌴</span>
+          </div>
         </div>
       </footer>
     </div>
