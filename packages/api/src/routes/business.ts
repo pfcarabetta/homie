@@ -299,7 +299,7 @@ router.post('/:workspaceId/pms/connect', requireWorkspace, requireWorkspaceRole(
       const domain = credentials.domain || '';
       const apiKey = credentials.apiKey || '';
       const apiSecret = credentials.apiSecret || '';
-      const base = domain.startsWith('http') ? domain.replace(/\/$/, '') : `https://${domain.replace(/\/$/, '')}`;
+      const base = domain.includes('/api') ? `https://${domain.replace(/\/$/, '')}` : `https://${domain.replace(/\/$/, '')}/api`;
       const authHeader = 'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
       const testRes = await fetch(`${base}/pms/units?limit=1`, { headers: { Authorization: authHeader, Accept: 'application/json' } });
       if (!testRes.ok) throw new Error(`Track API returned ${testRes.status}`);
@@ -329,7 +329,7 @@ router.post('/:workspaceId/pms/:connectionId/sync-properties', requireWorkspace,
     } else if (conn.pmsType === 'track') {
       const creds = conn.credentials as Record<string, string>;
       const domain = creds.domain || '';
-      const base = domain.startsWith('http') ? domain.replace(/\/$/, '') : `https://${domain.replace(/\/$/, '')}`;
+      const base = domain.includes('/api') ? `https://${domain.replace(/\/$/, '')}` : `https://${domain.replace(/\/$/, '')}/api`;
       const authHeader = 'Basic ' + Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
       const unitsRes = await fetch(`${base}/pms/units`, { headers: { Authorization: authHeader, Accept: 'application/json' } });
       if (!unitsRes.ok) throw new Error(`Track API returned ${unitsRes.status}`);
