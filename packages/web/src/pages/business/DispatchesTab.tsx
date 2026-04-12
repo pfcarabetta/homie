@@ -628,24 +628,6 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, gap: 8, flexWrap: 'wrap' }}>
                               <span style={{ fontSize: 11, color: '#9B9490' }}>via {r.channel} · {timeAgo(r.responded_at)}</span>
                               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      const res = await businessService.resendProviderMagicLink(workspaceId, j.id, r.provider.id);
-                                      if (res.error) { alert(res.error); return; }
-                                      const via = res.data?.sentVia.join(' + ') ?? 'message';
-                                      alert(`Fresh portal link sent to ${res.data?.providerName} via ${via}.`);
-                                    } catch (err) {
-                                      alert((err as Error).message || 'Failed to send link');
-                                    }
-                                  }}
-                                  title="Send a fresh portal login link to this provider"
-                                  style={{
-                                    background: 'none', border: 'none', padding: 0,
-                                    fontSize: 12, color: O, cursor: 'pointer', fontWeight: 600,
-                                  }}
-                                >🔗 Resend link</button>
                                 {r.provider.phone && (
                                   <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
                                 )}

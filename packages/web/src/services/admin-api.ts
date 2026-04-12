@@ -300,6 +300,10 @@ export const adminService = {
     return fetchAdmin<{ phone: string | null; website: string | null }>(`/api/v1/admin/google-place/${placeId}`);
   },
 
+  async sendProviderMagicLink(providerId: string) {
+    return fetchAdmin<{ sent: boolean; sentVia: string[]; link: string }>(`/api/v1/admin/providers/${providerId}/send-magic-link`, { method: 'POST' });
+  },
+
   async createBusinessAccount(data: { email: string; workspace_name: string; plan?: string }) {
     return fetchAdmin<{
       workspace: { id: string; name: string; slug: string; plan: string };

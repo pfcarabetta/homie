@@ -129,6 +129,19 @@ export default function AdminProviders() {
 
 function ProviderDetailView({ detail }: { detail: NonNullable<Awaited<ReturnType<typeof adminService.getProviderDetail>>['data']> }) {
   const { provider: p, scores, outreach_attempts, provider_responses, bookings, suppressed, suppression_reason } = detail;
+  const [sendingLink, setSendingLink] = useState(false);
+  const [linkResult, setLinkResult] = useState<string | null>(null);
+
+  async function handleSendPortalLink() {
+    setSendingLink(true);
+    setLinkResult(null);
+    try {
+      const res = await adminService.sendProviderMagicLink(p.id);
+      if (res.error) { setLinkResult(`Error: ${res.error}`); }
+      else if (res.data) { setLinkResult(`Sent via ${res.data.sentVia.join(' + ')}`); }
+    } catch (err) { setLinkResult(`Error: ${(err as Error).message}`); }
+    setSendingLink(false);
+  }
 
   const statusColors: Record<string, string> = {
     pending: 'bg-amber-100 text-amber-700',
@@ -162,6 +175,18 @@ function ProviderDetailView({ detail }: { detail: NonNullable<Awaited<ReturnType
             Suppressed: {suppression_reason ?? 'Unknown reason'}
           </div>
         )}
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            onClick={handleSendPortalLink}
+            disabled={sendingLink || (!p.phone && !p.email)}
+            className="px-4 py-1.5 rounded-lg border border-orange-300 bg-orange-50 text-orange-600 text-xs font-semibold hover:bg-orange-100 disabled:opacity-50 disabled:cursor-default"
+          >
+            {sendingLink ? 'Sending...' : '🔗 Send Portal Link'}
+          </button>
+          {linkResult && (
+            <span className={`text-xs font-medium ${linkResult.startsWith('Error') ? 'text-red-600' : 'text-green-600'}`}>{linkResult}</span>
+          )}
+        </div>
       </div>
 
       {/* Scores */}
