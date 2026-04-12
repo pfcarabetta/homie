@@ -341,15 +341,21 @@ router.post('/:workspaceId/pms/:connectionId/sync-properties', requireWorkspace,
         if (!externalId) continue;
         // Skip inactive/archived units (Track uses isActive boolean + status string)
         if (unit.isActive === false || unit.active === false || unit.status === 'inactive' || unit.status === 'archived') { skipped++; continue; }
-        const name = String(unit.name ?? unit.title ?? `Unit ${externalId}`);
+        const name = String(unit.name ?? unit.shortName ?? unit.title ?? `Unit ${externalId}`);
+        // Track puts address fields both at top level (streetAddress, locality,
+        // region, postal) and nested under unit.address — check both.
         const addr = unit.address as Record<string, string> | undefined;
+        const street = (unit.streetAddress ?? unit.street ?? addr?.street ?? addr?.full ?? null) as string | null;
+        const city = (unit.locality ?? unit.city ?? addr?.city ?? null) as string | null;
+        const state = (unit.region ?? unit.state ?? addr?.state ?? null) as string | null;
+        const zip = (unit.postal ?? unit.zip ?? unit.zipCode ?? addr?.zip ?? addr?.zipCode ?? addr?.postalCode ?? null) as string | null;
         const [ex] = await db.select({ id: properties.id }).from(properties)
           .where(and(eq(properties.workspaceId, req.workspaceId), eq(properties.pmsExternalId, externalId))).limit(1);
         if (ex) {
-          if (update_existing) { await db.update(properties).set({ name, address: addr?.street ?? null, city: addr?.city ?? null, state: addr?.state ?? null, zipCode: addr?.zip ?? addr?.zipCode ?? addr?.postalCode ?? null, updatedAt: new Date() }).where(eq(properties.id, ex.id)); updated++; }
+          if (update_existing) { await db.update(properties).set({ name, address: street, city, state, zipCode: zip, updatedAt: new Date() }).where(eq(properties.id, ex.id)); updated++; }
           else skipped++;
         } else {
-          await db.insert(properties).values({ workspaceId: req.workspaceId, name, address: addr?.street ?? null, city: addr?.city ?? null, state: addr?.state ?? null, zipCode: addr?.zip ?? addr?.zipCode ?? addr?.postalCode ?? null, propertyType: 'residential', unitCount: 1, pmsSource: 'track', pmsExternalId: externalId });
+          await db.insert(properties).values({ workspaceId: req.workspaceId, name, address: street, city, state, zipCode: zip, propertyType: 'residential', unitCount: 1, pmsSource: 'track', pmsExternalId: externalId });
           imported++;
         }
       }
