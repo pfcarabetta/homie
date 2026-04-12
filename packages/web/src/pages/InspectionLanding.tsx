@@ -35,52 +35,63 @@ interface QuoteInfo {
   provider: string; rating: number; price: string; time: string;
 }
 
+// Static data outside component to avoid closure/re-render issues
+const DEMO_REPORT_ITEMS: ReportItem[] = [
+  { id: 1, title: "Missing GFCI outlets in bathrooms", category: "Electrical", severity: "urgent", cost: "$150\u2013$280", icon: "\u26A1" },
+  { id: 2, title: "Water heater approaching end of life", category: "Plumbing", severity: "recommended", cost: "$1,200\u2013$1,800", icon: "\uD83D\uDD25" },
+  { id: 3, title: "Roof flashing lifted near chimney", category: "Roofing", severity: "urgent", cost: "$300\u2013$600", icon: "\uD83C\uDFE0" },
+  { id: 4, title: "Slow drain in master bathroom", category: "Plumbing", severity: "recommended", cost: "$125\u2013$250", icon: "\uD83D\uDCA7" },
+  { id: 5, title: "HVAC filter heavily soiled", category: "HVAC", severity: "recommended", cost: "$65\u2013$120", icon: "\u2744\uFE0F" },
+  { id: 6, title: "Cracked caulking around tub surround", category: "General", severity: "monitor", cost: "$80\u2013$150", icon: "\uD83D\uDD27" },
+];
+
+const DEMO_QUOTE_DATA: Record<number, QuoteInfo> = {
+  1: { provider: "Coastal Electric", rating: 4.8, price: "$195", time: "Wednesday AM" },
+  3: { provider: "SD Roofing Pros", rating: 4.7, price: "$425", time: "Friday PM" },
+  4: { provider: "Rodriguez Plumbing", rating: 4.9, price: "$175", time: "Tomorrow 9\u201311 AM" },
+};
+
 function InspectionDemo() {
   const [step, setStep] = useState(0);
   const [items, setItems] = useState<ReportItem[]>([]);
   const [dispatching, setDispatching] = useState<number | null>(null);
   const [quotes, setQuotes] = useState<Record<number, QuoteInfo>>({});
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const reportItems = [
-    { id: 1, title: "Missing GFCI outlets in bathrooms", category: "Electrical", severity: "urgent", cost: "$150\u2013$280", icon: "\u26A1" },
-    { id: 2, title: "Water heater approaching end of life", category: "Plumbing", severity: "recommended", cost: "$1,200\u2013$1,800", icon: "\uD83D\uDD25" },
-    { id: 3, title: "Roof flashing lifted near chimney", category: "Roofing", severity: "urgent", cost: "$300\u2013$600", icon: "\uD83C\uDFE0" },
-    { id: 4, title: "Slow drain in master bathroom", category: "Plumbing", severity: "recommended", cost: "$125\u2013$250", icon: "\uD83D\uDCA7" },
-    { id: 5, title: "HVAC filter heavily soiled", category: "HVAC", severity: "recommended", cost: "$65\u2013$120", icon: "\u2744\uFE0F" },
-    { id: 6, title: "Cracked caulking around tub surround", category: "General", severity: "monitor", cost: "$80\u2013$150", icon: "\uD83D\uDD27" },
-  ];
-
-  const quoteData: Record<number, QuoteInfo> = {
-    1: { provider: "Coastal Electric", rating: 4.8, price: "$195", time: "Wednesday AM" },
-    3: { provider: "SD Roofing Pros", rating: 4.7, price: "$425", time: "Friday PM" },
-    4: { provider: "Rodriguez Plumbing", rating: 4.9, price: "$175", time: "Tomorrow 9\u201311 AM" },
-  };
-
-  useEffect(() => { return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, []);
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (initialTimerRef.current) clearTimeout(initialTimerRef.current);
+    };
+  }, []);
 
   const parseReport = () => {
     setStep(1);
+    setItems([]);
     let i = 0;
     const addNext = () => {
-      if (i >= reportItems.length) { setStep(2); return; }
-      setItems(prev => [...prev, reportItems[i]]);
+      if (i >= DEMO_REPORT_ITEMS.length) { setStep(2); return; }
+      const item = DEMO_REPORT_ITEMS[i];
+      setItems(prev => [...prev, item]);
       i++;
       timerRef.current = setTimeout(addNext, 400);
     };
-    setTimeout(addNext, 600);
+    initialTimerRef.current = setTimeout(addNext, 600);
   };
 
   const getQuote = (id: number) => {
     setDispatching(id);
     setTimeout(() => {
       setDispatching(null);
-      if (quoteData[id]) setQuotes(prev => ({ ...prev, [id]: quoteData[id] }));
+      const q = DEMO_QUOTE_DATA[id];
+      if (q) setQuotes(prev => ({ ...prev, [id]: q }));
     }, 2000);
   };
 
   const reset = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (initialTimerRef.current) clearTimeout(initialTimerRef.current);
     setStep(0); setItems([]); setDispatching(null); setQuotes({});
   };
 
@@ -89,6 +100,11 @@ function InspectionDemo() {
 
   return (
     <section style={{ background: C.white, padding: "96px 24px" }}>
+      {/* Keyframes at section level so they persist across step changes */}
+      <style>{`
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+      `}</style>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <FadeIn>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
@@ -120,7 +136,7 @@ function InspectionDemo() {
                   <span style={{ ...dm, fontSize: 12, color: C.gray }}>{items.length} items found</span>
                 </div>
                 <div style={{ padding: "16px 20px" }}>
-                  {step === 1 && items.length < reportItems.length && (
+                  {step === 1 && items.length < DEMO_REPORT_ITEMS.length && (
                     <div style={{ textAlign: "center", padding: 12, ...dm, fontSize: 13, color: C.orange, fontWeight: 500 }}>
                       <span style={{ animation: "pulse 1.5s ease-in-out infinite", display: "inline-block" }}>Parsing inspection report...</span>
                     </div>
@@ -173,10 +189,6 @@ function InspectionDemo() {
               </div>
             )}
           </div>
-          <style>{`
-            @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-            @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-          `}</style>
         </FadeIn>
       </div>
     </section>
