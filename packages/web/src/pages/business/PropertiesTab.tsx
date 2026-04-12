@@ -544,12 +544,13 @@ const PMS_OPTIONS: { id: string; label: string; fields: { key: string; label: st
   },
 ];
 
-function PmsConnectionCard({ workspaceId, plan, onPropertiesImported }: {
-  workspaceId: string; plan: string; onPropertiesImported: () => void;
+function PmsConnectionCard({ workspaceId, plan, onPropertiesImported, properties: propList }: {
+  workspaceId: string; plan: string; onPropertiesImported: () => void; properties?: Property[];
 }) {
   const [connections, setConnections] = useState<PmsConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showModalPreselect, setShowModalPreselect] = useState<string>('');
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
@@ -562,6 +563,17 @@ function PmsConnectionCard({ workspaceId, plan, onPropertiesImported }: {
   }
 
   useEffect(() => { loadConnections(); }, [workspaceId]);
+
+  // Detect orphaned PMS properties (properties with pms_source but no matching connection row)
+  const connectedPmsTypes = new Set(connections.map(c => c.pmsType));
+  const orphanedPmsSources = new Set<string>();
+  if (propList) {
+    for (const p of propList) {
+      if (p.pmsSource && !connectedPmsTypes.has(p.pmsSource)) {
+        orphanedPmsSources.add(p.pmsSource);
+      }
+    }
+  }
 
   async function handleSyncProperties(conn: PmsConnection) {
     setSyncing(`props-${conn.id}`); setSyncResult(null);
@@ -596,32 +608,66 @@ function PmsConnectionCard({ workspaceId, plan, onPropertiesImported }: {
   if (loading) return null;
 
   if (connections.length === 0) {
+    // Detect if there are orphaned PMS properties that need reconnection
+    const orphanList = Array.from(orphanedPmsSources);
+    const hasOrphans = orphanList.length > 0;
+    const orphanLabels = orphanList.map(s => PMS_OPTIONS.find(p => p.id === s)?.label || s).join(', ');
+
     return (
       <div style={{ marginBottom: 20 }}>
         <div style={{
-          background: '#fff', borderRadius: 14, border: '1px dashed #E0DAD4', padding: 24,
+          background: '#fff', borderRadius: 14,
+          border: hasOrphans ? `1px solid #D4A43740` : '1px dashed #E0DAD4',
+          padding: 24,
           display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
         }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: `${O}10`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={O} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+          <div style={{
+            width: 44, height: 44, borderRadius: 12,
+            background: hasOrphans ? '#FFF8F0' : `${O}10`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            {hasOrphans ? (
+              <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#D4A437" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            ) : (
+              <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={O} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, fontWeight: 700, color: D, marginBottom: 4 }}>Connect your PMS</div>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, fontWeight: 700, color: D, marginBottom: 4 }}>
+              {hasOrphans ? `Reconnect ${orphanLabels}` : 'Connect your PMS'}
+            </div>
             <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5 }}>
-              Import properties and sync reservations automatically from Track, Guesty, and more.
+              {hasOrphans
+                ? `Your properties were imported from ${orphanLabels} but the connection credentials need to be re-entered for syncing to work. Your existing properties won't be duplicated.`
+                : 'Import properties and sync reservations automatically from Track, Guesty, and more.'}
             </div>
           </div>
-          <button onClick={() => isPro ? setShowModal(true) : alert('Upgrade to Professional to connect a PMS')}
+          <button onClick={() => {
+            if (!isPro) { alert('Upgrade to Professional to connect a PMS'); return; }
+            if (hasOrphans) setShowModalPreselect(orphanList[0]);
+            setShowModal(true);
+          }}
             style={{
               padding: '10px 22px', borderRadius: 100, border: 'none',
-              background: isPro ? O : '#E0DAD4', color: isPro ? '#fff' : '#9B9490',
+              background: isPro ? (hasOrphans ? '#D4A437' : O) : '#E0DAD4',
+              color: isPro ? '#fff' : '#9B9490',
               fontSize: 14, fontWeight: 600, cursor: isPro ? 'pointer' : 'default',
               fontFamily: "'DM Sans', sans-serif",
-            }}>{isPro ? 'Connect PMS' : 'Connect PMS (Pro+)'}</button>
+            }}>{hasOrphans ? `Reconnect ${orphanLabels}` : (isPro ? 'Connect PMS' : 'Connect PMS (Pro+)')}</button>
         </div>
-        {showModal && <PmsConnectModal workspaceId={workspaceId} onClose={() => setShowModal(false)} onConnected={() => { setShowModal(false); loadConnections(); onPropertiesImported(); }} />}
+        {showModal && (
+          <PmsConnectModal
+            workspaceId={workspaceId}
+            initialPmsType={showModalPreselect || undefined}
+            onClose={() => { setShowModal(false); setShowModalPreselect(''); }}
+            onConnected={() => { setShowModal(false); setShowModalPreselect(''); loadConnections(); onPropertiesImported(); }}
+          />
+        )}
       </div>
     );
   }
@@ -688,13 +734,13 @@ function PmsConnectionCard({ workspaceId, plan, onPropertiesImported }: {
           </div>
         );
       })}
-      {showModal && <PmsConnectModal workspaceId={workspaceId} onClose={() => setShowModal(false)} onConnected={() => { setShowModal(false); loadConnections(); onPropertiesImported(); }} />}
+      {showModal && <PmsConnectModal workspaceId={workspaceId} initialPmsType={showModalPreselect || undefined} onClose={() => { setShowModal(false); setShowModalPreselect(''); }} onConnected={() => { setShowModal(false); setShowModalPreselect(''); loadConnections(); onPropertiesImported(); }} />}
     </div>
   );
 }
 
-function PmsConnectModal({ workspaceId, onClose, onConnected }: { workspaceId: string; onClose: () => void; onConnected: () => void }) {
-  const [selectedPms, setSelectedPms] = useState<string>('');
+function PmsConnectModal({ workspaceId, onClose, onConnected, initialPmsType }: { workspaceId: string; onClose: () => void; onConnected: () => void; initialPmsType?: string }) {
+  const [selectedPms, setSelectedPms] = useState<string>(initialPmsType || '');
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [connecting, setConnecting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -995,6 +1041,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
         <PmsConnectionCard
           workspaceId={workspaceId}
           plan={plan}
+          properties={properties}
           onPropertiesImported={() => {
             businessService.listProperties(workspaceId).then(res => {
               if (res.data) setProperties(res.data.sort((a, b) => a.name.localeCompare(b.name)));
