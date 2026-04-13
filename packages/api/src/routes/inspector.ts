@@ -1110,10 +1110,13 @@ async function parseInspectionReportAsync(reportId: string): Promise<void> {
 
       if (report.reportFileUrl.startsWith('data:')) {
         // Data URL — decode directly
-        const match = report.reportFileUrl.match(/^data:([^;]+);base64,(.+)$/);
-        if (!match) throw new Error('Invalid data URL format');
-        contentType = match[1];
-        buffer = Buffer.from(match[2], 'base64');
+        const commaIdx = report.reportFileUrl.indexOf(',');
+        if (commaIdx === -1) throw new Error('Invalid data URL format');
+        const meta = report.reportFileUrl.slice(0, commaIdx); // e.g. "data:application/pdf;base64"
+        const base64Data = report.reportFileUrl.slice(commaIdx + 1);
+        contentType = meta.replace(/^data:/, '').replace(/;base64$/, '');
+        buffer = Buffer.from(base64Data, 'base64');
+        logger.info({ reportId, contentType, bufferLength: buffer.length }, '[inspector] Decoded data URL');
       } else {
         // Remote URL — download
         const fileRes = await fetch(report.reportFileUrl);
@@ -1139,8 +1142,10 @@ async function parseInspectionReportAsync(reportId: string): Promise<void> {
       }
     } catch (dlErr) {
       logger.warn({ err: dlErr, reportId }, '[inspector] Failed to download/parse report');
-      reportText = `[Report file at: ${report.reportFileUrl.startsWith('data:') ? 'data URL' : report.reportFileUrl}]`;
+      reportText = `[Report file at: ${report.reportFileUrl?.startsWith('data:') ? 'data URL' : report.reportFileUrl}]`;
     }
+
+    logger.info({ reportId, reportTextLength: reportText.length, reportTextPreview: reportText.slice(0, 200) }, '[inspector] Extracted report text');
 
     // Truncate to ~100k chars to stay within Claude's context
     if (reportText.length > 100000) {
@@ -1187,6 +1192,7 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
     }
 
     let raw = textBlock.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    logger.info({ reportId, rawResponseLength: raw.length, rawPreview: raw.slice(0, 300) }, '[inspector] AI response received');
     let parsedItems: Array<{
       title: string; description?: string; category: string; severity: string;
       location_in_property?: string; cost_estimate_low?: number; cost_estimate_high?: number; confidence?: number;
