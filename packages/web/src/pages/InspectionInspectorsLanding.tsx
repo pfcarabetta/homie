@@ -238,7 +238,7 @@ export default function InspectionInspectorsLanding() {
               <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: "#D3CEC9", letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Product</h4>
               {[
                 { label: "For homeowners", href: "/" },
-                { label: "For business", href: "/business/landing" },
+                { label: "For property managers/hosts", href: "/business/landing" },
                 { label: "Homie Inspect", href: "/inspect" },
                 { label: "For inspectors", href: "/inspect/inspectors" },
                 { label: "Become a Homie Pro", href: "/portal/signup" },
