@@ -48,6 +48,8 @@ export type NewInspectorPartner = typeof inspectorPartners.$inferInsert;
 export const inspectionReports = pgTable('inspection_reports', {
   id: uuid('id').defaultRandom().primaryKey(),
   inspectorPartnerId: uuid('inspector_partner_id').references(() => inspectorPartners.id, { onDelete: 'cascade' }),
+  /** Linked homeowner account (nullable — set when user creates account before checkout) */
+  homeownerId: uuid('homeowner_id'),
   propertyAddress: text('property_address').notNull(),
   propertyCity: text('property_city').notNull(),
   propertyState: text('property_state').notNull(),

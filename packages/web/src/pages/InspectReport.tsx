@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { inspectService, type InspectReportPublic, type InspectionItem } from '@/services/inspector-api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const O = '#E8632B';
 const G = '#1B9E77';
@@ -59,12 +60,17 @@ function formatDate(iso: string): string {
 
 export default function InspectReport() {
   const { token } = useParams<{ token: string }>();
+  const { homeowner, isAuthenticated, login, register } = useAuth();
   const [report, setReport] = useState<InspectReportPublic | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -153,13 +159,18 @@ export default function InspectReport() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [token, report?.items.length]);
 
-  async function handleCheckout() {
+  async function proceedToCheckout() {
     if (!token || !report || selectedItems.size === 0) return;
     setCheckingOut(true);
     try {
+      // Link report to homeowner account
+      if (homeowner?.id) {
+        await inspectService.claimReport(token, homeowner.id).catch(() => {});
+      }
       const ids = Array.from(selectedItems);
       const mode = ids.length >= 15 ? 'bundle' : 'per_item';
-      const res = await inspectService.checkout(token, mode, ids);
+      const email = homeowner?.email;
+      const res = await inspectService.checkout(token, mode, ids, email ?? undefined);
       if (res.data?.checkoutUrl) {
         window.location.href = res.data.checkoutUrl;
         return;
@@ -168,6 +179,45 @@ export default function InspectReport() {
       alert((err as Error).message || 'Checkout failed');
     } finally {
       setCheckingOut(false);
+    }
+  }
+
+  function handleCheckout() {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+    void proceedToCheckout();
+  }
+
+  async function handleAuthSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthLoading(true);
+    const form = new FormData(e.currentTarget);
+
+    try {
+      let err: string | null;
+      if (authMode === 'signup') {
+        err = await register({
+          firstName: form.get('firstName') as string,
+          lastName: form.get('lastName') as string,
+          email: form.get('email') as string,
+          password: form.get('password') as string,
+          zipCode: report?.propertyZip ?? '',
+        });
+      } else {
+        err = await login(form.get('email') as string, form.get('password') as string);
+      }
+      if (err) { setAuthError(err); return; }
+      setShowAuthModal(false);
+      // Auth successful — proceed to checkout
+      // Small delay to let auth state propagate
+      setTimeout(() => void proceedToCheckout(), 100);
+    } catch (err) {
+      setAuthError((err as Error).message);
+    } finally {
+      setAuthLoading(false);
     }
   }
 
@@ -552,6 +602,51 @@ export default function InspectReport() {
 
         <style>{`@keyframes inspect-spin { to { transform: rotate(360deg); } }`}</style>
       </div>
+
+      {/* Auth modal */}
+      {showAuthModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,41,38,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 32, maxWidth: 400, width: '100%', position: 'relative' }}>
+            <button onClick={() => setShowAuthModal(false)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9B9490' }}>&times;</button>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 22, color: D, marginBottom: 4 }}>
+                {authMode === 'signup' ? 'Create your account' : 'Welcome back'}
+              </div>
+              <div style={{ fontSize: 13, color: '#9B9490', lineHeight: 1.5 }}>
+                {authMode === 'signup'
+                  ? 'Save your report and get notified when quotes arrive'
+                  : 'Log in to continue to checkout'
+                }
+              </div>
+            </div>
+            <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {authMode === 'signup' && (
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input name="firstName" placeholder="First name" required style={{ flex: 1, padding: '12px 14px', borderRadius: 10, border: '1px solid #E0DAD4', fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: 'none' }} />
+                  <input name="lastName" placeholder="Last name" required style={{ flex: 1, padding: '12px 14px', borderRadius: 10, border: '1px solid #E0DAD4', fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: 'none' }} />
+                </div>
+              )}
+              <input name="email" type="email" placeholder="Email" required style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid #E0DAD4', fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: 'none' }} />
+              <input name="password" type="password" placeholder="Password" required minLength={6} style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid #E0DAD4', fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: 'none' }} />
+              {authError && <div style={{ fontSize: 13, color: '#E24B4A', textAlign: 'center' }}>{authError}</div>}
+              <button type="submit" disabled={authLoading} style={{
+                padding: '14px 0', background: O, color: '#fff', border: 'none', borderRadius: 10,
+                fontSize: 15, fontWeight: 600, cursor: authLoading ? 'not-allowed' : 'pointer',
+                fontFamily: "'DM Sans', sans-serif", opacity: authLoading ? 0.7 : 1,
+              }}>
+                {authLoading ? 'Please wait...' : authMode === 'signup' ? 'Create account & continue' : 'Log in & continue'}
+              </button>
+            </form>
+            <div style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: '#9B9490' }}>
+              {authMode === 'signup' ? (
+                <>Already have an account? <button onClick={() => { setAuthMode('login'); setAuthError(null); }} style={{ color: O, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>Log in</button></>
+              ) : (
+                <>New to Homie? <button onClick={() => { setAuthMode('signup'); setAuthError(null); }} style={{ color: O, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>Create account</button></>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sticky bottom bar */}
       {undispatchedItems.length > 0 && (

@@ -382,4 +382,11 @@ export const inspectService = {
       `/api/v1/inspect/${token}/status`,
     );
   },
+
+  claimReport(token: string, homeownerId: string) {
+    return fetchAPI<{ claimed: boolean }>(
+      `/api/v1/inspect/${token}/claim`,
+      { method: 'POST', body: JSON.stringify({ homeowner_id: homeownerId }) },
+    );
+  },
 };

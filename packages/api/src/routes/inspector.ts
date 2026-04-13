@@ -995,6 +995,34 @@ router.post('/:token/checkout', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/inspect/:token/claim — link report to a homeowner account
+router.post('/:token/claim', async (req: Request, res: Response) => {
+  const { homeowner_id } = req.body as { homeowner_id: string };
+  if (!homeowner_id) { res.status(400).json({ data: null, error: 'homeowner_id required', meta: {} }); return; }
+
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+
+    // Only claim if not already claimed by someone else
+    if (report.homeownerId && report.homeownerId !== homeowner_id) {
+      res.status(409).json({ data: null, error: 'Report already linked to another account', meta: {} });
+      return;
+    }
+
+    await db.update(inspectionReports).set({
+      homeownerId: homeowner_id,
+      updatedAt: new Date(),
+    }).where(eq(inspectionReports.id, report.id));
+
+    res.json({ data: { claimed: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspect/:token/claim]');
+    res.status(500).json({ data: null, error: 'Failed to link account', meta: {} });
+  }
+});
+
 // POST /api/v1/inspect/:token/cancel-pending — revert pending_dispatch items if checkout canceled
 router.post('/:token/cancel-pending', async (req: Request, res: Response) => {
   try {
