@@ -65,16 +65,22 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         const { inspectionReportItems, inspectionReports, inspectorEarnings } = await import('../db/schema/inspector');
         const { sql: drizzleSql } = await import('drizzle-orm');
 
-        // Get undispatched items
+        // Get items to dispatch — pending_dispatch (from checkout) or fall back to undispatched
         let items;
         if (itemIds.length > 0) {
           items = await db.select().from(inspectionReportItems)
             .where(eq(inspectionReportItems.reportId, reportId));
-          items = items.filter(i => itemIds.includes(i.id) && i.dispatchStatus === 'not_dispatched');
+          items = items.filter(i => itemIds.includes(i.id) && (i.dispatchStatus === 'not_dispatched' || i.dispatchStatus === 'pending_dispatch'));
         } else {
+          // First try pending_dispatch (set during checkout)
           items = await db.select().from(inspectionReportItems)
             .where(eq(inspectionReportItems.reportId, reportId));
-          items = items.filter(i => i.dispatchStatus === 'not_dispatched' && i.severity !== 'informational');
+          const pending = items.filter(i => i.dispatchStatus === 'pending_dispatch');
+          if (pending.length > 0) {
+            items = pending;
+          } else {
+            items = items.filter(i => i.dispatchStatus === 'not_dispatched' && i.severity !== 'informational');
+          }
         }
 
         const [report] = await db.select().from(inspectionReports).where(eq(inspectionReports.id, reportId)).limit(1);

@@ -88,14 +88,24 @@ export default function InspectReport() {
     const sessionId = params.get('session_id');
     const paymentSuccess = params.get('payment');
     if (paymentSuccess === 'success' && sessionId) {
-      const itemIdsParam = params.get('items');
-      const itemIds = itemIdsParam ? itemIdsParam.split(',').filter(Boolean) : undefined;
-      inspectService.dispatch(token, itemIds, sessionId).then(() => {
-        inspectService.getReport(token).then(res => {
-          if (res.data) setReport(res.data);
+      // Dispatch pending items (marked during checkout)
+      inspectService.dispatch(token, undefined, sessionId).then(() => {
+        inspectService.getReport(token).then(r => {
+          if (r.data) setReport(r.data);
         }).catch(() => {});
         window.history.replaceState({}, '', window.location.pathname);
-      }).catch(() => {});
+      }).catch(err => {
+        console.error('Dispatch failed:', err);
+        inspectService.getReport(token).then(r => {
+          if (r.data) setReport(r.data);
+        }).catch(() => {});
+        window.history.replaceState({}, '', window.location.pathname);
+      });
+    }
+    // If payment was canceled, revert pending items
+    if (params.get('payment') === 'canceled') {
+      fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}/api/v1/inspect/${token}/cancel-pending`, { method: 'POST' }).catch(() => {});
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, [token]);
 

@@ -958,14 +958,13 @@ router.post('/:token/checkout', async (req: Request, res: Response) => {
 
     const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
 
-    // Store selected item IDs on the report for retrieval after payment
-    // (Stripe metadata has a 500-char limit, can't fit all UUIDs)
-    await db.update(inspectionReports).set({
-      updatedAt: new Date(),
-    }).where(eq(inspectionReports.id, report.id));
-
-    // Store pending dispatch item IDs in a compact way via client_reference_id
-    const pendingKey = `inspect_${report.id}_${Date.now()}`;
+    // Mark selected items as pending_dispatch so the dispatch endpoint knows which ones to send
+    for (const item of itemsToDispatch) {
+      await db.update(inspectionReportItems).set({
+        dispatchStatus: 'pending_dispatch',
+        updatedAt: new Date(),
+      }).where(eq(inspectionReportItems.id, item.id));
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -984,9 +983,8 @@ router.post('/:token/checkout', async (req: Request, res: Response) => {
         item_count: String(itemsToDispatch.length),
         inspector_partner_id: report.inspectorPartnerId ?? '',
       },
-      client_reference_id: pendingKey,
       customer_email: client_email || report.clientEmail || undefined,
-      success_url: `${APP_URL}/inspect/${req.params.token}?payment=success&session_id={CHECKOUT_SESSION_ID}&items=${encodeURIComponent(itemsToDispatch.map(i => i.id).join(','))}`,
+      success_url: `${APP_URL}/inspect/${req.params.token}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/inspect/${req.params.token}?payment=canceled`,
     });
 
@@ -994,6 +992,25 @@ router.post('/:token/checkout', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[POST /inspect/:token/checkout]');
     res.status(500).json({ data: null, error: `Checkout failed: ${(err as Error).message}`, meta: {} });
+  }
+});
+
+// POST /api/v1/inspect/:token/cancel-pending — revert pending_dispatch items if checkout canceled
+router.post('/:token/cancel-pending', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+
+    await db.update(inspectionReportItems).set({
+      dispatchStatus: 'not_dispatched',
+      updatedAt: new Date(),
+    }).where(and(eq(inspectionReportItems.reportId, report.id), eq(inspectionReportItems.dispatchStatus, 'pending_dispatch')));
+
+    res.json({ data: { ok: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspect/:token/cancel-pending]');
+    res.status(500).json({ data: null, error: 'Failed', meta: {} });
   }
 });
 
@@ -1020,15 +1037,26 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
       }
     }
 
-    // Get items to dispatch
+    // Get items to dispatch — look for pending_dispatch (set during checkout) or not_dispatched
     let itemsToDispatch;
     if (item_ids && item_ids.length > 0) {
       itemsToDispatch = await db.select().from(inspectionReportItems)
         .where(and(eq(inspectionReportItems.reportId, report.id), sql`${inspectionReportItems.id} IN (${sql.join(item_ids.map(id => sql`${id}`), sql`, `)})`));
+      itemsToDispatch = itemsToDispatch.filter(i => i.dispatchStatus === 'not_dispatched' || i.dispatchStatus === 'pending_dispatch');
     } else {
+      // No item_ids: dispatch all items marked pending_dispatch (from checkout), or fall back to all undispatched
       itemsToDispatch = await db.select().from(inspectionReportItems)
-        .where(and(eq(inspectionReportItems.reportId, report.id), eq(inspectionReportItems.dispatchStatus, 'not_dispatched')));
-      itemsToDispatch = itemsToDispatch.filter(i => i.severity !== 'informational');
+        .where(and(eq(inspectionReportItems.reportId, report.id), eq(inspectionReportItems.dispatchStatus, 'pending_dispatch')));
+      if (itemsToDispatch.length === 0) {
+        itemsToDispatch = await db.select().from(inspectionReportItems)
+          .where(and(eq(inspectionReportItems.reportId, report.id), eq(inspectionReportItems.dispatchStatus, 'not_dispatched')));
+        itemsToDispatch = itemsToDispatch.filter(i => i.severity !== 'informational');
+      }
+    }
+
+    if (itemsToDispatch.length === 0) {
+      res.json({ data: { dispatched: [], totalDispatched: 0 }, error: null, meta: {} });
+      return;
     }
 
     // Record first action timestamp
@@ -1040,7 +1068,7 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
     const dispatched: Array<{ itemId: string; jobId: string }> = [];
 
     // Group items by category so each category becomes one job
-    const actionableItems = itemsToDispatch.filter(i => i.dispatchStatus === 'not_dispatched');
+    const actionableItems = itemsToDispatch.filter(i => i.dispatchStatus === 'not_dispatched' || i.dispatchStatus === 'pending_dispatch');
     const categoryGroups = new Map<string, typeof actionableItems>();
     for (const item of actionableItems) {
       const cat = item.category || 'general_repair';
