@@ -88,7 +88,9 @@ export default function InspectReport() {
     const sessionId = params.get('session_id');
     const paymentSuccess = params.get('payment');
     if (paymentSuccess === 'success' && sessionId) {
-      inspectService.dispatch(token, undefined, sessionId).then(() => {
+      const itemIdsParam = params.get('items');
+      const itemIds = itemIdsParam ? itemIdsParam.split(',').filter(Boolean) : undefined;
+      inspectService.dispatch(token, itemIds, sessionId).then(() => {
         inspectService.getReport(token).then(res => {
           if (res.data) setReport(res.data);
         }).catch(() => {});

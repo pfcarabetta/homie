@@ -54,11 +54,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       try {
         const reportId = session.metadata.report_id;
         const token = session.metadata.token;
-        const itemIdsCsv = session.metadata.item_ids;
         const inspectorPartnerId = session.metadata.inspector_partner_id;
+        // item_ids may be in metadata (legacy) or passed via frontend redirect
+        const itemIdsCsv = session.metadata.item_ids ?? '';
         const itemIds = itemIdsCsv ? itemIdsCsv.split(',').filter(Boolean) : [];
 
-        logger.info({ reportId, itemCount: itemIds.length }, '[Stripe webhook] Inspection payment confirmed — dispatching items');
+        logger.info({ reportId, itemCount: itemIds.length || 'all' }, '[Stripe webhook] Inspection payment confirmed — dispatching items');
 
         // Import dispatch logic from inspector routes
         const { inspectionReportItems, inspectionReports, inspectorEarnings } = await import('../db/schema/inspector');

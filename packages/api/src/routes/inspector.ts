@@ -958,6 +958,15 @@ router.post('/:token/checkout', async (req: Request, res: Response) => {
 
     const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
 
+    // Store selected item IDs on the report for retrieval after payment
+    // (Stripe metadata has a 500-char limit, can't fit all UUIDs)
+    await db.update(inspectionReports).set({
+      updatedAt: new Date(),
+    }).where(eq(inspectionReports.id, report.id));
+
+    // Store pending dispatch item IDs in a compact way via client_reference_id
+    const pendingKey = `inspect_${report.id}_${Date.now()}`;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{
@@ -972,11 +981,12 @@ router.post('/:token/checkout', async (req: Request, res: Response) => {
         report_id: report.id,
         token: req.params.token,
         mode,
-        item_ids: itemsToDispatch.map(i => i.id).join(','),
-        inspector_partner_id: report.inspectorPartnerId,
+        item_count: String(itemsToDispatch.length),
+        inspector_partner_id: report.inspectorPartnerId ?? '',
       },
+      client_reference_id: pendingKey,
       customer_email: client_email || report.clientEmail || undefined,
-      success_url: `${APP_URL}/inspect/${req.params.token}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${APP_URL}/inspect/${req.params.token}?payment=success&session_id={CHECKOUT_SESSION_ID}&items=${encodeURIComponent(itemsToDispatch.map(i => i.id).join(','))}`,
       cancel_url: `${APP_URL}/inspect/${req.params.token}?payment=canceled`,
     });
 
