@@ -311,20 +311,49 @@ export const inspectorService = {
 
 // ── Inspect Service (client-facing, public) ─────────────────────────────────
 
+export interface InspectPricing {
+  perItemCents: number;
+  bundlePriceCents: number;
+  bundleItemCount: number;
+  perItemTotal: number;
+  savings: number;
+}
+
+export interface InspectStatusItem {
+  id: string;
+  dispatchStatus: string;
+  quoteAmountCents: number | null;
+  providerName: string | null;
+  providerRating: string | null;
+  providerAvailability: string | null;
+}
+
 export const inspectService = {
   getReport(token: string) {
     return fetchAPI<InspectReportPublic>(`/api/v1/inspect/${token}`);
   },
 
-  dispatchItem(token: string, itemId: string) {
-    return fetchAPI<{ dispatched: boolean }>(`/api/v1/inspect/${token}/dispatch/${itemId}`, {
-      method: 'POST',
-    });
+  getPricing(token: string) {
+    return fetchAPI<InspectPricing>(`/api/v1/inspect/${token}/pricing`);
   },
 
-  dispatchAll(token: string) {
-    return fetchAPI<{ dispatched: boolean }>(`/api/v1/inspect/${token}/dispatch-all`, {
-      method: 'POST',
-    });
+  checkout(token: string, mode: 'bundle' | 'per_item', itemIds?: string[], clientEmail?: string) {
+    return fetchAPI<{ checkoutUrl: string; amountCents: number; itemCount: number }>(
+      `/api/v1/inspect/${token}/checkout`,
+      { method: 'POST', body: JSON.stringify({ mode, item_ids: itemIds, client_email: clientEmail }) },
+    );
+  },
+
+  dispatch(token: string, itemIds?: string[], sessionId?: string) {
+    return fetchAPI<{ dispatched: Array<{ itemId: string; jobId: string }>; totalDispatched: number }>(
+      `/api/v1/inspect/${token}/dispatch`,
+      { method: 'POST', body: JSON.stringify({ item_ids: itemIds, session_id: sessionId }) },
+    );
+  },
+
+  getStatus(token: string) {
+    return fetchAPI<{ itemsDispatched: number; itemsQuoted: number; totalQuoteValueCents: number; items: InspectStatusItem[] }>(
+      `/api/v1/inspect/${token}/status`,
+    );
   },
 };

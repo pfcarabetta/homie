@@ -55,4 +55,11 @@ export async function notifyWorkspaceOfQuote(jobId: string, providerId: string, 
   } catch (err) {
     logger.warn({ err, jobId }, '[quote-notifications] notifyWorkspaceOfQuote failed');
   }
+
+  // If this job originated from an inspection dispatch, sync the quote
+  // back to the inspection report item.
+  try {
+    const { syncInspectionQuote } = await import('./inspection-quote-sync');
+    void syncInspectionQuote(jobId, providerId, message);
+  } catch { /* silent */ }
 }

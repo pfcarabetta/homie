@@ -54,10 +54,14 @@ export default function InspectReport() {
     if (!token) return;
     setDispatchingItem(itemId);
     try {
-      await inspectService.dispatchItem(token, itemId);
-      setDispatchedItems(prev => new Set([...prev, itemId]));
-    } catch {
-      // silently fail
+      // Create Stripe checkout for single item
+      const res = await inspectService.checkout(token, 'per_item', [itemId]);
+      if (res.data?.checkoutUrl) {
+        window.location.href = res.data.checkoutUrl;
+        return;
+      }
+    } catch (err) {
+      alert((err as Error).message || 'Checkout failed');
     } finally {
       setDispatchingItem(null);
     }
@@ -67,15 +71,37 @@ export default function InspectReport() {
     if (!token || !report) return;
     setDispatchingAll(true);
     try {
-      await inspectService.dispatchAll(token);
-      const allIds = new Set(report.items.map(i => i.id));
-      setDispatchedItems(allIds);
-    } catch {
-      // silently fail
+      // Create Stripe checkout for bundle
+      const res = await inspectService.checkout(token, 'bundle');
+      if (res.data?.checkoutUrl) {
+        window.location.href = res.data.checkoutUrl;
+        return;
+      }
+    } catch (err) {
+      alert((err as Error).message || 'Checkout failed');
     } finally {
       setDispatchingAll(false);
     }
   }
+
+  // After returning from Stripe checkout, trigger dispatch
+  useEffect(() => {
+    if (!token) return;
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    const paymentSuccess = params.get('payment');
+    if (paymentSuccess === 'success' && sessionId) {
+      // Dispatch items after successful payment
+      inspectService.dispatch(token, undefined, sessionId).then(() => {
+        // Refresh report to show dispatched items
+        inspectService.getReport(token).then(res => {
+          if (res.data) setReport(res.data);
+        }).catch(() => {});
+        // Clean URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }).catch(() => {});
+    }
+  }, [token]);
 
   const activeItems = report?.items.filter(i => !dispatchedItems.has(i.id)) ?? [];
   const runningTotal = activeItems.length * (report?.perItemPrice ?? 9.99);

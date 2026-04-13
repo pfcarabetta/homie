@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import Stripe from 'stripe';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { eq, desc, and, sql, count } from 'drizzle-orm';
@@ -564,6 +565,290 @@ router.get('/:token', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /inspect/:token]');
     res.status(500).json({ data: null, error: 'Failed to load report', meta: {} });
+  }
+});
+
+// ── Pricing constants ─────────────────────────────────────────────────────
+
+const PER_ITEM_PRICE_CENTS = 999;        // $9.99
+const BUNDLE_SMALL_PRICE_CENTS = 9900;   // $99 for up to 15 items
+const BUNDLE_LARGE_PRICE_CENTS = 14900;  // $149 for 16+ items
+const BUNDLE_THRESHOLD = 15;
+
+function getBundlePrice(itemCount: number): number {
+  return itemCount <= BUNDLE_THRESHOLD ? BUNDLE_SMALL_PRICE_CENTS : BUNDLE_LARGE_PRICE_CENTS;
+}
+
+// POST /api/v1/inspect/:token/checkout — create Stripe checkout for dispatches
+router.post('/:token/checkout', async (req: Request, res: Response) => {
+  const { mode, item_ids, client_email } = req.body as {
+    mode: 'bundle' | 'per_item';
+    item_ids?: string[];     // required for per_item
+    client_email?: string;   // for Stripe receipt
+  };
+
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+    if (new Date() > report.expiresAt) { res.status(410).json({ data: null, error: 'Report expired', meta: {} }); return; }
+
+    // Get items to dispatch
+    const allItems = await db.select().from(inspectionReportItems)
+      .where(and(eq(inspectionReportItems.reportId, report.id), eq(inspectionReportItems.dispatchStatus, 'not_dispatched')))
+      .orderBy(inspectionReportItems.sortOrder);
+
+    let itemsToDispatch = allItems;
+    let amountCents: number;
+    let description: string;
+
+    if (mode === 'per_item') {
+      if (!item_ids || item_ids.length === 0) {
+        res.status(400).json({ data: null, error: 'item_ids required for per_item mode', meta: {} });
+        return;
+      }
+      itemsToDispatch = allItems.filter(i => item_ids.includes(i.id));
+      amountCents = itemsToDispatch.length * PER_ITEM_PRICE_CENTS;
+      description = `Homie Inspect: ${itemsToDispatch.length} item${itemsToDispatch.length === 1 ? '' : 's'} — ${report.propertyAddress}`;
+    } else {
+      // Bundle: all undispatched non-informational items
+      itemsToDispatch = allItems.filter(i => i.severity !== 'informational');
+      amountCents = getBundlePrice(itemsToDispatch.length);
+      description = `Homie Inspect Bundle: ${itemsToDispatch.length} items — ${report.propertyAddress}`;
+    }
+
+    if (itemsToDispatch.length === 0) {
+      res.status(400).json({ data: null, error: 'No items to dispatch', meta: {} });
+      return;
+    }
+
+    // Create Stripe Checkout Session
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
+      apiVersion: '2025-01-27.acacia' as Stripe.LatestApiVersion,
+    });
+
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: description },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      }],
+      metadata: {
+        report_id: report.id,
+        token: req.params.token,
+        mode,
+        item_ids: itemsToDispatch.map(i => i.id).join(','),
+        inspector_partner_id: report.inspectorPartnerId,
+      },
+      customer_email: client_email || report.clientEmail || undefined,
+      success_url: `${APP_URL}/inspect/${req.params.token}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_URL}/inspect/${req.params.token}?payment=canceled`,
+    });
+
+    res.json({ data: { checkoutUrl: session.url, amountCents, itemCount: itemsToDispatch.length }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspect/:token/checkout]');
+    res.status(500).json({ data: null, error: `Checkout failed: ${(err as Error).message}`, meta: {} });
+  }
+});
+
+// POST /api/v1/inspect/:token/dispatch — called after successful payment to dispatch items
+// This can also be called by the Stripe webhook after payment confirmation.
+router.post('/:token/dispatch', async (req: Request, res: Response) => {
+  const { item_ids, session_id } = req.body as { item_ids?: string[]; session_id?: string };
+
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+
+    // Verify Stripe payment if session_id provided
+    if (session_id) {
+      const Stripe = (await import('stripe')).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
+        apiVersion: '2025-01-27.acacia' as Stripe.LatestApiVersion,
+      });
+      const session = await stripe.checkout.sessions.retrieve(session_id);
+      if (session.payment_status !== 'paid') {
+        res.status(402).json({ data: null, error: 'Payment not completed', meta: {} });
+        return;
+      }
+    }
+
+    // Get items to dispatch
+    let itemsToDispatch;
+    if (item_ids && item_ids.length > 0) {
+      itemsToDispatch = await db.select().from(inspectionReportItems)
+        .where(and(eq(inspectionReportItems.reportId, report.id), sql`${inspectionReportItems.id} IN (${sql.join(item_ids.map(id => sql`${id}`), sql`, `)})`));
+    } else {
+      itemsToDispatch = await db.select().from(inspectionReportItems)
+        .where(and(eq(inspectionReportItems.reportId, report.id), eq(inspectionReportItems.dispatchStatus, 'not_dispatched')));
+      itemsToDispatch = itemsToDispatch.filter(i => i.severity !== 'informational');
+    }
+
+    // Record first action timestamp
+    if (!report.clientFirstActionAt) {
+      await db.update(inspectionReports).set({ clientFirstActionAt: new Date(), updatedAt: new Date() })
+        .where(eq(inspectionReports.id, report.id));
+    }
+
+    const dispatched: Array<{ itemId: string; jobId: string }> = [];
+
+    for (const item of itemsToDispatch) {
+      if (item.dispatchStatus !== 'not_dispatched') continue;
+
+      try {
+        // Create a job in the main Homie outreach system
+        const { jobs: jobsTable } = await import('../db/schema/jobs');
+        const diagnosis = {
+          category: item.category || 'general',
+          severity: item.severity === 'safety_hazard' ? 'high' : item.severity === 'urgent' ? 'high' : item.severity === 'recommended' ? 'medium' : 'low',
+          summary: `${item.title}${item.description ? '. ' + item.description : ''}`,
+          recommendedActions: [`Address: ${item.title}`],
+          source: 'inspection_report',
+          inspectionReportId: report.id,
+          inspectionItemId: item.id,
+        };
+
+        const budgetStr = item.aiCostEstimateLowCents && item.aiCostEstimateHighCents
+          ? `$${Math.round(item.aiCostEstimateLowCents / 100)}-$${Math.round(item.aiCostEstimateHighCents / 100)}`
+          : 'flexible';
+
+        const [job] = await db.execute(sql`
+          INSERT INTO jobs (id, homeowner_id, diagnosis, zip_code, preferred_timing, budget, tier, status, payment_status, expires_at, created_at, updated_at)
+          VALUES (gen_random_uuid(), NULL, ${JSON.stringify(diagnosis)}::jsonb, ${report.propertyZip}, 'this_week', ${budgetStr}, 'standard', 'dispatching', 'paid', ${new Date(Date.now() + 24 * 60 * 60 * 1000)}, NOW(), NOW())
+          RETURNING id
+        `) as unknown as Array<{ id: string }>;
+
+        // Update the inspection item with the job ID
+        await db.update(inspectionReportItems).set({
+          dispatchStatus: 'dispatched',
+          dispatchId: job.id,
+          updatedAt: new Date(),
+        }).where(eq(inspectionReportItems.id, item.id));
+
+        dispatched.push({ itemId: item.id, jobId: job.id });
+
+        // Fire outreach asynchronously
+        try {
+          const { dispatchJob } = await import('../services/orchestration');
+          void dispatchJob(job.id);
+        } catch (dispatchErr) {
+          logger.warn({ err: dispatchErr, jobId: job.id }, '[inspect/dispatch] Outreach dispatch failed');
+        }
+      } catch (itemErr) {
+        logger.error({ err: itemErr, itemId: item.id }, '[inspect/dispatch] Failed to dispatch item');
+      }
+    }
+
+    // Update report stats
+    const [{ value: totalDispatched }] = await db.select({ value: count() })
+      .from(inspectionReportItems)
+      .where(and(eq(inspectionReportItems.reportId, report.id), sql`${inspectionReportItems.dispatchStatus} != 'not_dispatched'`));
+
+    await db.update(inspectionReports).set({
+      itemsDispatched: totalDispatched,
+      updatedAt: new Date(),
+    }).where(eq(inspectionReports.id, report.id));
+
+    // Create referral commission for the inspector
+    if (report.inspectorPartnerId && dispatched.length > 0) {
+      const commissionPerItem = Math.round(PER_ITEM_PRICE_CENTS * 0.175); // 17.5% average
+      const totalCommission = commissionPerItem * dispatched.length;
+      const now = new Date();
+      const periodMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+
+      await db.insert(inspectorEarnings).values({
+        inspectorPartnerId: report.inspectorPartnerId,
+        reportId: report.id,
+        earningType: 'referral_commission',
+        amountCents: totalCommission,
+        description: `Referral: ${dispatched.length} item${dispatched.length === 1 ? '' : 's'} dispatched from ${report.propertyAddress}`,
+        periodMonth,
+      });
+
+      // Update report earnings total
+      await db.update(inspectionReports).set({
+        inspectorEarningsCents: sql`${inspectionReports.inspectorEarningsCents} + ${totalCommission}`,
+      }).where(eq(inspectionReports.id, report.id));
+    }
+
+    res.json({
+      data: { dispatched, totalDispatched: dispatched.length },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspect/:token/dispatch]');
+    res.status(500).json({ data: null, error: 'Dispatch failed', meta: {} });
+  }
+});
+
+// GET /api/v1/inspect/:token/status — poll for quote updates
+router.get('/:token/status', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+
+    const items = await db.select().from(inspectionReportItems)
+      .where(eq(inspectionReportItems.reportId, report.id))
+      .orderBy(inspectionReportItems.sortOrder);
+
+    res.json({
+      data: {
+        itemsDispatched: report.itemsDispatched,
+        itemsQuoted: report.itemsQuoted,
+        totalQuoteValueCents: report.totalQuoteValueCents,
+        items: items.map(i => ({
+          id: i.id,
+          dispatchStatus: i.dispatchStatus,
+          quoteAmountCents: i.quoteAmountCents,
+          providerName: i.providerName,
+          providerRating: i.providerRating,
+          providerAvailability: i.providerAvailability,
+        })),
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /inspect/:token/status]');
+    res.status(500).json({ data: null, error: 'Failed to load status', meta: {} });
+  }
+});
+
+// GET /api/v1/inspect/:token/pricing — returns pricing options for this report
+router.get('/:token/pricing', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+
+    const undispatchedItems = await db.select({ id: inspectionReportItems.id, severity: inspectionReportItems.severity })
+      .from(inspectionReportItems)
+      .where(and(eq(inspectionReportItems.reportId, report.id), eq(inspectionReportItems.dispatchStatus, 'not_dispatched')));
+
+    const actionableItems = undispatchedItems.filter(i => i.severity !== 'informational');
+    const bundlePrice = getBundlePrice(actionableItems.length);
+
+    res.json({
+      data: {
+        perItemCents: PER_ITEM_PRICE_CENTS,
+        bundlePriceCents: bundlePrice,
+        bundleItemCount: actionableItems.length,
+        perItemTotal: actionableItems.length * PER_ITEM_PRICE_CENTS,
+        savings: (actionableItems.length * PER_ITEM_PRICE_CENTS) - bundlePrice,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /inspect/:token/pricing]');
+    res.status(500).json({ data: null, error: 'Failed to load pricing', meta: {} });
   }
 });
 
