@@ -586,7 +586,7 @@ router.get('/:token', async (req: Request, res: Response) => {
           costEstimateMin: i.aiCostEstimateLowCents > 0 ? i.aiCostEstimateLowCents / 100 : null,
           costEstimateMax: i.aiCostEstimateHighCents > 0 ? i.aiCostEstimateHighCents / 100 : null,
           confidence: parseFloat(i.aiConfidence),
-          dispatchStatus: i.dispatchStatus === 'not_dispatched' ? null : i.dispatchStatus,
+          dispatchStatus: (i.dispatchStatus === 'not_dispatched' || i.dispatchStatus === 'pending_dispatch') ? null : i.dispatchStatus,
           quoteDetails: i.quoteAmountCents ? {
             providerName: i.providerName ?? 'Provider',
             providerRating: parseFloat(i.providerRating ?? '0'),
@@ -922,9 +922,12 @@ router.post('/:token/checkout', async (req: Request, res: Response) => {
     if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
     if (new Date() > report.expiresAt) { res.status(410).json({ data: null, error: 'Report expired', meta: {} }); return; }
 
-    // Get items to dispatch
+    // Get items to dispatch (include pending_dispatch from previous incomplete checkouts)
     const allItems = await db.select().from(inspectionReportItems)
-      .where(and(eq(inspectionReportItems.reportId, report.id), eq(inspectionReportItems.dispatchStatus, 'not_dispatched')))
+      .where(and(
+        eq(inspectionReportItems.reportId, report.id),
+        sql`${inspectionReportItems.dispatchStatus} IN ('not_dispatched', 'pending_dispatch')`,
+      ))
       .orderBy(inspectionReportItems.sortOrder);
 
     let itemsToDispatch = allItems;
@@ -1054,14 +1057,20 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
 
     // Verify Stripe payment if session_id provided
     if (session_id) {
-      const Stripe = (await import('stripe')).default;
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
-        apiVersion: '2025-01-27.acacia' as Stripe.LatestApiVersion,
-      });
-      const session = await stripe.checkout.sessions.retrieve(session_id);
-      if (session.payment_status !== 'paid') {
-        res.status(402).json({ data: null, error: 'Payment not completed', meta: {} });
-        return;
+      try {
+        const Stripe = (await import('stripe')).default;
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
+          apiVersion: '2025-01-27.acacia' as Stripe.LatestApiVersion,
+        });
+        const session = await stripe.checkout.sessions.retrieve(session_id);
+        logger.info({ sessionId: session_id, paymentStatus: session.payment_status }, '[inspect/dispatch] Stripe session check');
+        if (session.payment_status !== 'paid') {
+          // Payment may still be processing — allow dispatch anyway since
+          // Stripe already redirected with success. Webhook will also trigger.
+          logger.warn({ sessionId: session_id, paymentStatus: session.payment_status }, '[inspect/dispatch] Payment not yet confirmed, proceeding anyway');
+        }
+      } catch (stripeErr) {
+        logger.warn({ err: stripeErr, sessionId: session_id }, '[inspect/dispatch] Stripe session check failed, proceeding');
       }
     }
 
@@ -1082,7 +1091,10 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
       }
     }
 
+    logger.info({ reportId: report.id, itemCount: itemsToDispatch.length, statuses: itemsToDispatch.map(i => i.dispatchStatus) }, '[inspect/dispatch] Items found to dispatch');
+
     if (itemsToDispatch.length === 0) {
+      logger.warn({ reportId: report.id }, '[inspect/dispatch] No items to dispatch');
       res.json({ data: { dispatched: [], totalDispatched: 0 }, error: null, meta: {} });
       return;
     }

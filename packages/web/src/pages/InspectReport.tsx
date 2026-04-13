@@ -163,13 +163,20 @@ export default function InspectReport() {
     if (!token || !report || selectedItems.size === 0) return;
     setCheckingOut(true);
     try {
+      // Read homeowner from localStorage (most up-to-date after auth)
+      let currentHomeowner = homeowner;
+      try {
+        const stored = localStorage.getItem('homie_homeowner');
+        if (stored) currentHomeowner = JSON.parse(stored);
+      } catch { /* use state */ }
+
       // Link report to homeowner account
-      if (homeowner?.id) {
-        await inspectService.claimReport(token, homeowner.id).catch(() => {});
+      if (currentHomeowner?.id) {
+        await inspectService.claimReport(token, currentHomeowner.id).catch(() => {});
       }
       const ids = Array.from(selectedItems);
       const mode = ids.length >= 15 ? 'bundle' : 'per_item';
-      const email = homeowner?.email;
+      const email = currentHomeowner?.email;
       const res = await inspectService.checkout(token, mode, ids, email ?? undefined);
       if (res.data?.checkoutUrl) {
         window.location.href = res.data.checkoutUrl;
