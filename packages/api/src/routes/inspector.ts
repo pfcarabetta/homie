@@ -593,16 +593,20 @@ router.post('/upload', async (req: Request, res: Response) => {
   try {
     // Upload file to Cloudinary (PDFs need resource_type 'auto', not 'image')
     let reportFileUrl: string | null = null;
+    let uploadError: string | null = null;
     try {
       const { uploadFile } = await import('../services/image-upload');
       const result = await uploadFile(body.report_file_data_url, 'homie/inspection-reports');
       if (result) reportFileUrl = result.url;
+      else uploadError = 'uploadFile returned null (Cloudinary may not be configured)';
     } catch (err) {
+      uploadError = (err as Error).message ?? String(err);
       logger.warn({ err }, '[inspect/upload] File upload failed');
     }
 
     if (!reportFileUrl) {
-      res.status(400).json({ data: null, error: 'Failed to upload report file', meta: {} });
+      logger.warn({ uploadError, hasDataUrl: !!body.report_file_data_url, dataUrlLength: body.report_file_data_url?.length }, '[inspect/upload] No file URL');
+      res.status(400).json({ data: null, error: `Failed to upload report file: ${uploadError}`, meta: {} });
       return;
     }
 
