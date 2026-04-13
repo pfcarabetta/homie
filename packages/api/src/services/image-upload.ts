@@ -18,10 +18,15 @@ let configured = false;
 
 function ensureConfigured(): boolean {
   if (configured) return true;
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+  const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
+  const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
   if (!cloudName || !apiKey || !apiSecret) {
+    logger.warn({
+      hasCloudName: !!cloudName,
+      hasApiKey: !!apiKey,
+      hasApiSecret: !!apiSecret,
+    }, '[image-upload] Cloudinary missing env vars');
     return false;
   }
   cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
@@ -82,8 +87,7 @@ export async function uploadImage(dataUrl: string, folder = 'homie/jobs'): Promi
  */
 export async function uploadFile(dataUrl: string, folder = 'homie/jobs'): Promise<{ url: string; publicId: string } | null> {
   if (!ensureConfigured()) {
-    logger.warn('[image-upload] Cloudinary not configured — skipping upload');
-    return null;
+    throw new Error(`Cloudinary not configured — CLOUD_NAME:${!!process.env.CLOUDINARY_CLOUD_NAME} API_KEY:${!!process.env.CLOUDINARY_API_KEY} API_SECRET:${!!process.env.CLOUDINARY_API_SECRET}`);
   }
 
   try {
