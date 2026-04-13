@@ -1141,8 +1141,10 @@ async function parseInspectionReportAsync(reportId: string): Promise<void> {
         reportText = `[Report file with content-type: ${contentType}]`;
       }
     } catch (dlErr) {
-      logger.warn({ err: dlErr, reportId }, '[inspector] Failed to download/parse report');
-      reportText = `[Report file at: ${report.reportFileUrl?.startsWith('data:') ? 'data URL' : report.reportFileUrl}]`;
+      const errMsg = (dlErr as Error).message ?? String(dlErr);
+      const errStack = (dlErr as Error).stack ?? '';
+      logger.warn({ err: errMsg, stack: errStack, reportId }, '[inspector] Failed to download/parse report');
+      reportText = `[Report file could not be parsed. Error: ${errMsg}]`;
     }
 
     logger.info({ reportId, reportTextLength: reportText.length, reportTextPreview: reportText.slice(0, 200) }, '[inspector] Extracted report text');
