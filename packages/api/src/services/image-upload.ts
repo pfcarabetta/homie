@@ -98,7 +98,7 @@ export async function uploadFile(dataUrl: string, folder = 'homie/jobs'): Promis
     return { url: result.secure_url, publicId: result.public_id };
   } catch (err) {
     logger.error({ err }, '[image-upload] Cloudinary file upload failed');
-    return null;
+    throw err;
   }
 }
 
