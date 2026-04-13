@@ -695,6 +695,25 @@ router.get('/upload/:reportId/status', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/inspect/:token/debug — show item statuses (temporary debug endpoint)
+router.get('/:token/debug', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    if (!report) { res.status(404).json({ error: 'not found' }); return; }
+    const items = await db.select({
+      id: inspectionReportItems.id,
+      title: inspectionReportItems.title,
+      category: inspectionReportItems.category,
+      dispatchStatus: inspectionReportItems.dispatchStatus,
+      dispatchId: inspectionReportItems.dispatchId,
+    }).from(inspectionReportItems).where(eq(inspectionReportItems.reportId, report.id));
+    res.json({ reportId: report.id, homeownerId: report.homeownerId, itemCount: items.length, items });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // GET /api/v1/inspect/provider/:providerToken — provider views inspection items for quoting
 router.get('/provider/:providerToken', async (req: Request, res: Response) => {
   try {
