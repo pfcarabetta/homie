@@ -77,6 +77,28 @@ export async function uploadImage(dataUrl: string, folder = 'homie/jobs'): Promi
 }
 
 /**
+ * Upload any file (PDF, HTML, image) to Cloudinary.
+ * Uses resource_type 'auto' so Cloudinary detects the type.
+ */
+export async function uploadFile(dataUrl: string, folder = 'homie/jobs'): Promise<{ url: string; publicId: string } | null> {
+  if (!ensureConfigured()) {
+    logger.warn('[image-upload] Cloudinary not configured — skipping upload');
+    return null;
+  }
+
+  try {
+    const result = await cloudinary.uploader.upload(dataUrl, {
+      folder,
+      resource_type: 'auto',
+    });
+    return { url: result.secure_url, publicId: result.public_id };
+  } catch (err) {
+    logger.error({ err }, '[image-upload] Cloudinary file upload failed');
+    return null;
+  }
+}
+
+/**
  * Upload multiple base64 data-URL images in parallel.
  * Skips any that fail individually and returns the successful ones.
  */
