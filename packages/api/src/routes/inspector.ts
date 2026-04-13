@@ -714,6 +714,21 @@ router.get('/:token/debug', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/inspect/:token/reset — reset all items to not_dispatched (debug/admin only)
+router.post('/:token/reset', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    if (!report) { res.status(404).json({ error: 'not found' }); return; }
+    await db.update(inspectionReportItems).set({
+      dispatchStatus: 'not_dispatched', dispatchId: null, updatedAt: new Date(),
+    }).where(eq(inspectionReportItems.reportId, report.id));
+    res.json({ data: { ok: true, reset: true }, error: null, meta: {} });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // GET /api/v1/inspect/provider/:providerToken — provider views inspection items for quoting
 router.get('/provider/:providerToken', async (req: Request, res: Response) => {
   try {
@@ -1173,11 +1188,25 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
           ? `$${Math.round(totalLow / 100)}-$${Math.round(totalHigh / 100)}`
           : 'flexible';
 
-        const [job] = await db.execute(sql`
-          INSERT INTO jobs (id, homeowner_id, diagnosis, zip_code, preferred_timing, budget, tier, status, payment_status, expires_at, created_at, updated_at)
-          VALUES (gen_random_uuid(), NULL, ${JSON.stringify(diagnosis)}::jsonb, ${report.propertyZip}, 'this_week', ${budgetStr}, 'standard', 'dispatching', 'paid', ${new Date(Date.now() + 24 * 60 * 60 * 1000)}, NOW(), NOW())
-          RETURNING id
-        `) as unknown as Array<{ id: string }>;
+        // homeowner_id is NOT NULL in jobs table — use report's homeowner or create a placeholder
+        const homeownerId = report.homeownerId;
+        if (!homeownerId) {
+          logger.error({ reportId: report.id, category }, '[inspect/dispatch] No homeowner linked to report — cannot create job');
+          continue;
+        }
+
+        const { jobs: jobsTable } = await import('../db/schema/jobs');
+        const [job] = await db.insert(jobsTable).values({
+          homeownerId,
+          diagnosis: diagnosis as never,
+          zipCode: report.propertyZip,
+          preferredTiming: 'this_week',
+          budget: budgetStr,
+          tier: 'standard',
+          status: 'dispatching',
+          paymentStatus: 'paid',
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        }).returning({ id: jobsTable.id });
 
         // Update all items in this category group with the shared job ID
         for (const item of items) {
