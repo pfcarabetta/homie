@@ -55,6 +55,14 @@ const CATEGORY_TO_GOOGLE_TYPE: Record<string, string> = {
   // Remodeling
   kitchen_remodel: 'general_contractor',
   bathroom_remodel: 'general_contractor',
+  // Inspection report categories
+  safety: 'general_contractor',
+  general_repair: 'general_contractor',
+  cosmetic: 'general_contractor',
+  fireplace: 'general_contractor',
+  foundation: 'general_contractor',
+  structural: 'general_contractor',
+  windows_doors: 'general_contractor',
   // Other
   window_door_install: 'general_contractor',
   deck_patio: 'general_contractor',
@@ -121,6 +129,14 @@ const CATEGORY_KEYWORD_OVERRIDE: Record<string, string> = {
   bathroom_remodel: 'bathroom remodeling',
   window_door_install: 'window door installation',
   junk_removal: 'junk removal hauling',
+  // Inspection report categories
+  safety: 'handyman',
+  general_repair: 'handyman',
+  cosmetic: 'handyman',
+  fireplace: 'fireplace chimney contractor',
+  foundation: 'foundation repair contractor',
+  structural: 'structural repair contractor',
+  windows_doors: 'window door repair',
   photography: 'real estate photographer',
 };
 
