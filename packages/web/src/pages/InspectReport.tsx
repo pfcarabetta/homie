@@ -94,22 +94,24 @@ export default function InspectReport() {
     const sessionId = params.get('session_id');
     const paymentSuccess = params.get('payment');
     if (paymentSuccess === 'success' && sessionId) {
+      setLoading(true);
       // Dispatch pending items (marked during checkout)
-      inspectService.dispatch(token, undefined, sessionId).then(() => {
-        inspectService.getReport(token).then(r => {
-          if (r.data) setReport(r.data);
-        }).catch(() => {});
-        window.history.replaceState({}, '', window.location.pathname);
-      }).catch(err => {
-        console.error('Dispatch failed:', err);
-        inspectService.getReport(token).then(r => {
-          if (r.data) setReport(r.data);
-        }).catch(() => {});
-        window.history.replaceState({}, '', window.location.pathname);
-      });
-    }
-    // If payment was canceled, revert pending items
-    if (params.get('payment') === 'canceled') {
+      inspectService.dispatch(token, undefined, sessionId)
+        .then(dispatchRes => {
+          console.log('[inspect] Dispatch response:', dispatchRes);
+          return inspectService.getReport(token);
+        })
+        .then(r => { if (r.data) setReport(r.data); })
+        .catch(err => {
+          console.error('[inspect] Dispatch failed:', err);
+          alert(`Dispatch error: ${(err as Error).message}. Your payment was processed — we're working on dispatching your items.`);
+          return inspectService.getReport(token).then(r => { if (r.data) setReport(r.data); });
+        })
+        .finally(() => {
+          setLoading(false);
+          window.history.replaceState({}, '', window.location.pathname);
+        });
+    } else if (params.get('payment') === 'canceled') {
       fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}/api/v1/inspect/${token}/cancel-pending`, { method: 'POST' }).catch(() => {});
       window.history.replaceState({}, '', window.location.pathname);
     }
