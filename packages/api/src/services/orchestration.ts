@@ -478,8 +478,41 @@ export async function dispatchJob(jobId: string): Promise<void> {
   }
 
   if (eligible.length === 0) {
-    logger.warn(`[orchestration] dispatchJob: no eligible providers for job ${jobId} even at expanded radius`);
-    return;
+    if (TEST_MODE && TEST_PHONE) {
+      // In test mode, upsert a test provider so outreach can proceed to the test phone
+      logger.info(`[orchestration] TEST MODE: no providers found, using test provider for job ${jobId}`);
+      const TEST_PROVIDER_ID = '00000000-0000-0000-0000-000000000001';
+      const [existing] = await db.select({ id: providers.id }).from(providers).where(eq(providers.id, TEST_PROVIDER_ID)).limit(1);
+      if (!existing) {
+        await db.execute(sql`
+          INSERT INTO providers (id, name, phone, categories, created_at, updated_at)
+          VALUES (${TEST_PROVIDER_ID}, 'Test Provider', ${TEST_PHONE}, ARRAY[${diagnosis.category}], NOW(), NOW())
+          ON CONFLICT (id) DO NOTHING
+        `);
+      }
+      eligible.push({
+        id: TEST_PROVIDER_ID,
+        name: 'Test Provider',
+        phone: TEST_PHONE,
+        email: null,
+        website: null,
+        google_place_id: null,
+        google_rating: '5.0',
+        review_count: 0,
+        categories: [diagnosis.category],
+        distance_miles: 0,
+        rank_score: 100,
+        homie_score: { acceptance_rate: 0, completion_rate: 0, avg_homeowner_rating: 0, avg_response_sec: 0, total_jobs: 0 },
+        channels_available: ['sms'],
+        open_now: null,
+        last_contacted: null,
+        suppressed: false,
+        rate_limited: false,
+      });
+    } else {
+      logger.warn(`[orchestration] dispatchJob: no eligible providers for job ${jobId} even at expanded radius`);
+      return;
+    }
   }
 
   // Test mode: only contact the first provider

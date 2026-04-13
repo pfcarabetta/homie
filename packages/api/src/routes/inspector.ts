@@ -1440,7 +1440,11 @@ Rules:
 - Informational: included sparingly for awareness only
 - For photo_descriptions: describe what is physically visible in each photo related to this item. Include details about condition, damage, location, and any visible brand/model info. If a photo shows multiple issues, include the description under each relevant item.
 
-Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
+Return a JSON object with two keys:
+- "property": an object with { "address", "city", "state", "zip", "inspection_date" } extracted from the report header/cover page. Use null for any field you cannot find.
+- "items": the array of deficiency items described above.
+
+No preamble, no markdown code fences. Return ONLY the JSON object.`;
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -1458,38 +1462,85 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
     let raw = textBlock.text.trim();
     logger.info({ reportId, rawResponseLength: raw.length, rawPreview: raw.slice(0, 500) }, '[inspector] AI response received');
 
-    // Extract JSON array from response — handle markdown fences, preamble text, etc.
+    // Extract JSON from response — handle markdown fences, preamble text, etc.
     raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-    // If Claude added text before/after the JSON array, extract just the array
-    const arrayStart = raw.indexOf('[');
-    const arrayEnd = raw.lastIndexOf(']');
-    if (arrayStart !== -1 && arrayEnd > arrayStart) {
-      raw = raw.slice(arrayStart, arrayEnd + 1);
+
+    // Find the outermost JSON structure (object or array)
+    const objStart = raw.indexOf('{');
+    const arrStart = raw.indexOf('[');
+    let jsonStr: string;
+    if (objStart !== -1 && (arrStart === -1 || objStart < arrStart)) {
+      // Object format: { property: ..., items: [...] }
+      const objEnd = raw.lastIndexOf('}');
+      jsonStr = objEnd > objStart ? raw.slice(objStart, objEnd + 1) : raw;
+    } else if (arrStart !== -1) {
+      // Legacy array format: [...]
+      const arrEnd = raw.lastIndexOf(']');
+      jsonStr = arrEnd > arrStart ? raw.slice(arrStart, arrEnd + 1) : raw;
+    } else {
+      jsonStr = raw;
     }
 
-    let parsedItems: Array<{
+    type ParsedItem = {
       title: string; description?: string; photo_descriptions?: string[]; category: string; severity: string;
       location_in_property?: string; cost_estimate_low?: number; cost_estimate_high?: number; confidence?: number;
-    }>;
+    };
+    let parsedItems: ParsedItem[];
+    let extractedProperty: { address?: string; city?: string; state?: string; zip?: string; inspection_date?: string } | null = null;
 
     try {
-      parsedItems = JSON.parse(raw);
+      const parsed = JSON.parse(jsonStr);
+      if (Array.isArray(parsed)) {
+        parsedItems = parsed;
+      } else if (parsed.items && Array.isArray(parsed.items)) {
+        parsedItems = parsed.items;
+        extractedProperty = parsed.property ?? null;
+      } else {
+        parsedItems = [];
+      }
     } catch {
-      const lastComplete = raw.lastIndexOf('},');
+      // Try to repair truncated JSON
+      const lastComplete = jsonStr.lastIndexOf('},');
       if (lastComplete > 0) {
-        const repaired = raw.slice(0, lastComplete + 1) + ']';
-        try {
-          parsedItems = JSON.parse(repaired);
-          logger.info({ reportId, repairedCount: parsedItems.length }, '[inspector] Repaired truncated JSON');
-        } catch (repairErr) {
-          logger.warn({ reportId, parseError: (repairErr as Error).message, rawTail: raw.slice(-200) }, '[inspector] JSON repair also failed');
-          await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: 'AI response was truncated and could not be repaired' }).where(eq(inspectionReports.id, reportId));
+        // Find the items array start
+        const itemsStart = jsonStr.indexOf('"items"');
+        const arrOpen = itemsStart !== -1 ? jsonStr.indexOf('[', itemsStart) : jsonStr.indexOf('[');
+        if (arrOpen !== -1 && lastComplete > arrOpen) {
+          const repaired = jsonStr.slice(arrOpen, lastComplete + 1) + ']';
+          try {
+            parsedItems = JSON.parse(repaired);
+            logger.info({ reportId, repairedCount: parsedItems.length }, '[inspector] Repaired truncated JSON');
+          } catch {
+            await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: 'AI response was truncated and could not be repaired' }).where(eq(inspectionReports.id, reportId));
+            return;
+          }
+        } else {
+          await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: 'Failed to parse AI response' }).where(eq(inspectionReports.id, reportId));
           return;
         }
       } else {
-        logger.warn({ reportId, rawTail: raw.slice(-200) }, '[inspector] JSON parse failed, no repairable content');
+        logger.warn({ reportId, rawTail: jsonStr.slice(-200) }, '[inspector] JSON parse failed');
         await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: 'Failed to parse AI response' }).where(eq(inspectionReports.id, reportId));
         return;
+      }
+    }
+
+    // Update report with extracted property info if the report has placeholder data
+    if (extractedProperty) {
+      const updates: Record<string, unknown> = {};
+      if (extractedProperty.address && (!report.propertyAddress || report.propertyAddress === 'Address pending')) {
+        updates.propertyAddress = extractedProperty.address;
+      }
+      if (extractedProperty.city && !report.propertyCity) updates.propertyCity = extractedProperty.city;
+      if (extractedProperty.state && !report.propertyState) updates.propertyState = extractedProperty.state;
+      if (extractedProperty.zip && !report.propertyZip) updates.propertyZip = extractedProperty.zip;
+      if (extractedProperty.inspection_date && report.inspectionDate === new Date().toISOString().slice(0, 10)) {
+        updates.inspectionDate = extractedProperty.inspection_date;
+      }
+      if (Object.keys(updates).length > 0) {
+        updates.updatedAt = new Date();
+        await db.update(inspectionReports).set(updates).where(eq(inspectionReports.id, reportId));
+        logger.info({ reportId, updates: Object.keys(updates) }, '[inspector] Updated report with extracted property info');
       }
     }
 
