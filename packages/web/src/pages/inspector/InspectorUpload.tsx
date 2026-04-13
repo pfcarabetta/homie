@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect, type FormEvent, type DragEvent } from 'react';
+import { useState, useRef, type DragEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { inspectorService, type InspectionReport, type InspectionItem } from '@/services/inspector-api';
 
 const O = '#E8632B';
-const G = '#1B9E77';
 const D = '#2D2926';
 const W = '#F9F5F2';
 
@@ -18,12 +17,11 @@ const labelStyle: React.CSSProperties = {
   fontFamily: "'DM Sans', sans-serif",
 };
 
-type Step = 'upload' | 'client' | 'addon' | 'processing';
+type Step = 'upload' | 'client' | 'processing';
 
 const STEPS: { key: Step; label: string }[] = [
   { key: 'upload', label: 'Upload' },
   { key: 'client', label: 'Client Details' },
-  { key: 'addon', label: 'Add-on' },
   { key: 'processing', label: 'Processing' },
 ];
 
@@ -46,10 +44,6 @@ export default function InspectorUpload() {
   const [propertyZip, setPropertyZip] = useState('');
   const [inspectionDate, setInspectionDate] = useState('');
   const [inspectionType, setInspectionType] = useState('pre-purchase');
-
-  // Add-on state
-  const [addonEnabled, setAddonEnabled] = useState(false);
-  const [addonFee, setAddonFee] = useState('49');
 
   // Processing state
   const [processing, setProcessing] = useState(false);
@@ -90,9 +84,6 @@ export default function InspectorUpload() {
     formData.append('propertyZip', propertyZip);
     formData.append('inspectionDate', inspectionDate);
     formData.append('inspectionType', inspectionType);
-    if (addonEnabled) {
-      formData.append('addonFee', addonFee);
-    }
 
     try {
       const res = await inspectorService.createReport(formData);
@@ -116,11 +107,6 @@ export default function InspectorUpload() {
     safety_hazard: '#E24B4A', urgent: '#E24B4A', recommended: '#EF9F27',
     monitor: '#9B9490', informational: '#D3CEC9',
   };
-
-  const revenueSplit = addonEnabled ? {
-    inspector: Math.round(Number(addonFee) * 0.7 * 100) / 100,
-    homie: Math.round(Number(addonFee) * 0.3 * 100) / 100,
-  } : null;
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", maxWidth: 640, margin: '0 auto' }}>
@@ -268,7 +254,7 @@ export default function InspectorUpload() {
               background: '#F5F0EB', color: '#6B6560', border: 'none', borderRadius: 10, cursor: 'pointer',
             }}>Back</button>
             <button
-              onClick={() => setStep('addon')}
+              onClick={handleSubmit}
               disabled={!clientName || !propertyAddress || !propertyCity || !propertyState || !propertyZip || !inspectionDate}
               style={{
                 flex: 2, padding: '12px 0', fontSize: 15, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
@@ -276,99 +262,12 @@ export default function InspectorUpload() {
                 color: '#fff', border: 'none', borderRadius: 10,
                 cursor: (clientName && propertyAddress && propertyCity && propertyState && propertyZip && inspectionDate) ? 'pointer' : 'not-allowed',
               }}
-            >Continue</button>
+            >Process Report</button>
           </div>
         </div>
       )}
 
-      {/* Step 3: Add-on */}
-      {step === 'addon' && (
-        <div style={{ background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 24 }}>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: D, marginBottom: 8 }}>
-              Add-on Service Fee
-            </div>
-            <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 16 }}>
-              Charge your client an add-on fee for the enhanced digital report with instant quotes.
-              You keep 70% of the add-on fee.
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <button
-                onClick={() => setAddonEnabled(!addonEnabled)}
-                style={{
-                  width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
-                  background: addonEnabled ? G : '#E0DAD4', position: 'relative',
-                  transition: 'background 0.2s',
-                }}
-              >
-                <div style={{
-                  width: 20, height: 20, borderRadius: '50%', background: '#fff',
-                  position: 'absolute', top: 3,
-                  left: addonEnabled ? 25 : 3, transition: 'left 0.2s',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                }} />
-              </button>
-              <span style={{ fontSize: 14, fontWeight: 600, color: D }}>
-                {addonEnabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </div>
-
-            {addonEnabled && (
-              <>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={labelStyle}>Add-on price ($)</label>
-                  <input
-                    style={{ ...inputStyle, maxWidth: 120 }}
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={addonFee}
-                    onChange={e => setAddonFee(e.target.value)}
-                  />
-                </div>
-
-                {revenueSplit && (
-                  <div style={{
-                    background: W, borderRadius: 10, padding: 16,
-                    display: 'flex', gap: 24,
-                  }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
-                        Your revenue (70%)
-                      </div>
-                      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: G }}>
-                        ${revenueSplit.inspector.toFixed(2)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
-                        Platform fee (30%)
-                      </div>
-                      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: '#9B9490' }}>
-                        ${revenueSplit.homie.toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={() => setStep('client')} style={{
-              flex: 1, padding: '12px 0', fontSize: 15, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
-              background: '#F5F0EB', color: '#6B6560', border: 'none', borderRadius: 10, cursor: 'pointer',
-            }}>Back</button>
-            <button onClick={handleSubmit} style={{
-              flex: 2, padding: '12px 0', fontSize: 15, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
-              background: O, color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer',
-            }}>Process Report</button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 4: Processing */}
+      {/* Step 3: Processing */}
       {step === 'processing' && (
         <div style={{ background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 24 }}>
           {processing && !error && processedItems.length === 0 && (
@@ -388,7 +287,7 @@ export default function InspectorUpload() {
             <div style={{ textAlign: 'center', padding: 40 }}>
               <div style={{ fontSize: 15, fontWeight: 600, color: '#E24B4A', marginBottom: 8 }}>Processing failed</div>
               <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 16 }}>{error}</div>
-              <button onClick={() => { setStep('addon'); setError(null); setProcessedItems([]); }} style={{
+              <button onClick={() => { setStep('client'); setError(null); setProcessedItems([]); }} style={{
                 padding: '10px 24px', background: O, color: '#fff', border: 'none',
                 borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
               }}>Try again</button>

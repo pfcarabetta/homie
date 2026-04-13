@@ -45,9 +45,6 @@ export default function InspectorSettings() {
   // Inspection software
   const [inspectionSoftware, setInspectionSoftware] = useState('');
 
-  // Pricing
-  const [addonFeePercent, setAddonFeePercent] = useState(70);
-
   // Payout
   const [payoutMethod, setPayoutMethod] = useState('');
 
@@ -72,7 +69,6 @@ export default function InspectorSettings() {
       setCertifications(inspector.certifications?.join(', ') ?? '');
       setServiceZipCodes(inspector.serviceZipCodes?.join(', ') ?? '');
       setInspectionSoftware(inspector.inspectionSoftware ?? '');
-      setAddonFeePercent(inspector.addonFeePercent);
       setPayoutMethod(inspector.payoutMethod ?? '');
       if (inspector.notificationPreferences) {
         setNotifNewLead(inspector.notificationPreferences.newLead !== false);
@@ -95,7 +91,6 @@ export default function InspectorSettings() {
         certifications: certifications ? certifications.split(',').map(s => s.trim()).filter(Boolean) : [],
         serviceZipCodes: serviceZipCodes ? serviceZipCodes.split(',').map(s => s.trim()).filter(Boolean) : [],
         inspectionSoftware: inspectionSoftware || null,
-        addonFeePercent,
         payoutMethod: payoutMethod || null,
         notificationPreferences: {
           newLead: notifNewLead,
@@ -187,29 +182,6 @@ export default function InspectorSettings() {
         <input style={inputStyle} value={inspectionSoftware} onChange={e => setInspectionSoftware(e.target.value)} placeholder="e.g., Spectora, HomeGauge, ISN" />
         <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>
           Connect your inspection software for automatic report imports.
-        </div>
-      </div>
-
-      {/* Pricing */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Pricing</div>
-        <label style={labelStyle}>Your revenue share (%)</label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <input
-            type="range"
-            min={50}
-            max={90}
-            step={5}
-            value={addonFeePercent}
-            onChange={e => setAddonFeePercent(Number(e.target.value))}
-            style={{ flex: 1, accentColor: O }}
-          />
-          <span style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: G, minWidth: 50, textAlign: 'right' }}>
-            {addonFeePercent}%
-          </span>
-        </div>
-        <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>
-          You keep {addonFeePercent}% of add-on fees. Homie receives {100 - addonFeePercent}%.
         </div>
       </div>
 

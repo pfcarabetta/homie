@@ -147,7 +147,7 @@ router.get('/profile', requireInspectorAuth, async (req: Request, res: Response)
 router.put('/profile', requireInspectorAuth, async (req: Request, res: Response) => {
   const body = req.body as Record<string, unknown>;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
-  const allowed = ['companyName', 'companyLogoUrl', 'website', 'phone', 'licenseNumber', 'certifications', 'serviceAreaZips', 'inspectionSoftware', 'addonPriceCents', 'acceptsInboundLeads', 'payoutMethod', 'partnerSlug'];
+  const allowed = ['companyName', 'companyLogoUrl', 'website', 'phone', 'licenseNumber', 'certifications', 'serviceAreaZips', 'inspectionSoftware', 'acceptsInboundLeads', 'payoutMethod', 'partnerSlug'];
   for (const key of allowed) {
     const snakeKey = key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
     if (body[key] !== undefined) updates[key] = body[key];
@@ -173,7 +173,6 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
     client_name: string; client_email: string; client_phone?: string;
     inspection_date: string; inspection_type?: string;
     report_file_data_url?: string; // base64 data URL for the report file
-    addon_sold?: boolean; addon_price_cents?: number;
   };
 
   if (!body.property_address || !body.client_name || !body.client_email || !body.inspection_date) {
@@ -210,27 +209,10 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
       inspectionType: body.inspection_type || 'general',
       reportFileUrl,
       source: 'manual_upload',
-      addonSold: body.addon_sold || false,
-      addonPriceCents: body.addon_price_cents || null,
       parsingStatus: reportFileUrl ? 'processing' : 'uploading',
       clientAccessToken,
       expiresAt,
     }).returning();
-
-    // If addon was sold, create the earnings record (60% of addon price)
-    if (body.addon_sold && body.addon_price_cents) {
-      const earningAmount = Math.round(body.addon_price_cents * 0.6);
-      const now = new Date();
-      const periodMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      await db.insert(inspectorEarnings).values({
-        inspectorPartnerId: req.inspectorId,
-        reportId: report.id,
-        earningType: 'addon_fee',
-        amountCents: earningAmount,
-        description: `Add-on fee: ${body.property_address}`,
-        periodMonth,
-      });
-    }
 
     // Kick off async parsing if file was uploaded
     if (reportFileUrl) {

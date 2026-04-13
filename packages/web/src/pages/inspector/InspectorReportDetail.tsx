@@ -462,13 +462,8 @@ export default function InspectorReportDetail() {
         </h3>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            {report.addonFee !== null && report.addonFee > 0 && (
-              <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 4 }}>
-                Add-on fee: {formatCurrency(report.addonFee)}
-              </div>
-            )}
             <div style={{ fontSize: 13, color: '#6B6560' }}>
-              Referral earnings from {report.dispatchedCount} dispatched items
+              Referral commissions from {report.dispatchedCount} dispatched items
             </div>
           </div>
           <div style={{ fontFamily: 'Fraunces, serif', fontSize: 28, fontWeight: 700, color: G }}>

@@ -77,9 +77,9 @@ export default function InspectionInspectorsLanding() {
           <FadeIn delay={0.45}>
             <div style={{ display: "flex", gap: 40, marginTop: 56, flexWrap: "wrap" }}>
               {[
-                ["$587/mo", "average extra income for partners"],
-                ["60%", "of add-on fee goes to you"],
+                ["$347/mo", "average referral income for partners"],
                 ["15–20%", "referral commission per dispatch"],
+                ["FREE", "report parsing — no cost to you or clients"],
                 ["$0", "cost to join — free forever"],
               ].map(([stat, label], i) => (
                 <div key={i} style={{ display: "flex", flexDirection: "column" }}>
@@ -103,8 +103,8 @@ export default function InspectionInspectorsLanding() {
           </FadeIn>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
             {[
-              { num: "1", title: "Sell the Homie add-on", desc: "Offer the Homie Report as a premium add-on to every inspection ($99–$129). You keep 60% of the fee. That's $59–$77 per inspection with zero extra work.", color: C.green },
-              { num: "2", title: "Earn on every dispatch", desc: "When your client uses Homie to get quotes from your report, you earn 15–20% referral commission on each search. Clients love the convenience — your earnings compound.", color: C.orange },
+              { num: "1", title: "Stand out from competitors", desc: "Include Homie Inspect with every inspection at no extra cost. Your clients get an actionable digital report with real quotes — not just a list of problems. That makes you the inspector they recommend.", color: C.green },
+              { num: "2", title: "Earn on every dispatch", desc: "When your client uses Homie to get quotes from your report, you earn 15–20% referral commission on each dispatch ($9.99/item). Clients love the convenience — your earnings compound.", color: C.orange },
               { num: "3", title: "Get inbound leads", desc: "Homeowners searching for inspectors on Homie get matched to partners in their area. You receive qualified leads and earn a $25 bonus when they convert to a booking.", color: C.green },
             ].map((s, i) => (
               <FadeIn key={i} delay={i * 0.1}>
@@ -128,9 +128,9 @@ export default function InspectionInspectorsLanding() {
                 <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "0 0 24px", lineHeight: 1.15 }}>Why inspectors love Homie</h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {[
-                    { icon: "\uD83D\uDCB0", title: "Increase your ticket by $99–$129", desc: "Offer the Homie Report as a premium add-on to every inspection. You keep 60% of the add-on fee." },
-                    { icon: "\uD83D\uDD01", title: "Earn on every dispatch", desc: "When your client uses Homie to get quotes from your report, you earn 15–20% referral commission on each search." },
-                    { icon: "\u2B50", title: "Stand out from competitors", desc: "You're not just finding problems — you're delivering solutions. Clients remember the inspector who gave them an actionable plan, not just a list." },
+                    { icon: "\u2B50", title: "Stand out from competitors", desc: "Include Homie Inspect with every inspection — free for you and your clients. You deliver solutions, not just a list of problems." },
+                    { icon: "\uD83D\uDD01", title: "Earn on every dispatch", desc: "When your client uses Homie to get quotes from your report, you earn 15–20% referral commission on each dispatch." },
+                    { icon: "\uD83D\uDCB0", title: "Passive referral revenue", desc: "Your clients get actionable quotes, and you earn commission every time they dispatch an item. No selling required." },
                     { icon: "\uD83D\uDCCA", title: "Track your earnings in real time", desc: "Your partner dashboard shows every earning, dispatch, and client action. Know exactly how much Homie is adding to your bottom line." },
                     { icon: "\uD83E\uDD1D", title: "Free to join, always", desc: "No fees, no subscriptions. Upload reports, earn referrals, and make your clients happier. There's literally no downside." },
                   ].map((item, i) => (
@@ -153,12 +153,11 @@ export default function InspectionInspectorsLanding() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       {[
                         { label: "Inspections this month", value: "12" },
-                        { label: "Homie add-ons sold (60%)", value: "7" },
-                        { label: "Add-on revenue (@ $99 × 60%)", value: "$415" },
+                        { label: "Reports uploaded to Homie", value: "12" },
                         { label: "Dispatches from your reports", value: "43" },
-                        { label: "Referral commissions", value: "$172" },
+                        { label: "Referral commissions (15-20%)", value: "$347" },
                       ].map((row, i) => (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 4 ? `1px solid ${C.warm}` : "none" }}>
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 3 ? `1px solid ${C.warm}` : "none" }}>
                           <span style={{ ...dm, fontSize: 13, color: C.gray }}>{row.label}</span>
                           <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.dark }}>{row.value}</span>
                         </div>
@@ -166,8 +165,8 @@ export default function InspectionInspectorsLanding() {
                     </div>
                     <div style={{ background: C.greenLight, borderRadius: 12, padding: "16px 20px", marginTop: 16, textAlign: "center" }}>
                       <div style={{ ...dm, fontSize: 12, color: "#085041" }}>Extra monthly income</div>
-                      <div style={{ ...fr, fontSize: 36, fontWeight: 700, color: C.green }}>$587</div>
-                      <div style={{ ...dm, fontSize: 12, color: "#085041" }}>$7,044/year with zero additional work</div>
+                      <div style={{ ...fr, fontSize: 36, fontWeight: 700, color: C.green }}>$347</div>
+                      <div style={{ ...dm, fontSize: 12, color: "#085041" }}>$4,164/year with zero additional work</div>
                     </div>
                   </div>
                 </FadeIn>
@@ -197,7 +196,7 @@ export default function InspectionInspectorsLanding() {
         <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
           <FadeIn>
             <p style={{ ...fr, fontSize: "clamp(22px, 2.5vw, 32px)", fontWeight: 400, color: C.white, lineHeight: 1.55, margin: "0 0 28px", fontStyle: "italic" }}>
-              "I added Homie as a $99 add-on and 60% of my clients take it. That's an extra $400-500/month in add-on revenue alone — plus the referral commissions add another $150-200. It literally pays for my coffee subscription and then some."
+              "I include Homie Inspect with every inspection now — it's free for me and my clients love it. The referral commissions from dispatches add up to $300-400/month without me doing anything extra. It's the easiest way I've found to stand out and earn more."
             </p>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
               <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.green, display: "flex", alignItems: "center", justifyContent: "center" }}>

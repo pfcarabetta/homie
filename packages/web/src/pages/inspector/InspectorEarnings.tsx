@@ -6,9 +6,11 @@ const G = '#1B9E77';
 const D = '#2D2926';
 
 const TYPE_STYLES: Record<string, { label: string; bg: string; color: string }> = {
-  addon_fee: { label: 'Add-on Fee', bg: '#E3F2FD', color: '#1565C0' },
-  referral: { label: 'Referral', bg: '#E8F5E9', color: G },
+  referral_commission: { label: 'Referral Commission', bg: '#E8F5E9', color: G },
+  referral: { label: 'Referral Commission', bg: '#E8F5E9', color: G },
+  inbound_lead_bonus: { label: 'Lead Bonus', bg: '#F3E8FF', color: '#7C3AED' },
   lead_bonus: { label: 'Lead Bonus', bg: '#F3E8FF', color: '#7C3AED' },
+  partner_referral_bonus: { label: 'Partner Referral', bg: '#E3F2FD', color: '#1565C0' },
 };
 
 function formatCurrency(amount: number): string {

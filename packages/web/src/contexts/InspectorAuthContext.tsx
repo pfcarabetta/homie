@@ -43,7 +43,7 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
           inspectionSoftware: null,
           logoUrl: (p.companyLogoUrl as string) ?? null,
           partnerUrl: (p.partnerSlug as string) ? `/inspector/partner/${p.partnerSlug}` : null,
-          addonFeePercent: 60, payoutMethod: 'stripe',
+          payoutMethod: 'stripe',
           notificationPreferences: {},
           createdAt: new Date().toISOString(),
         };
@@ -80,7 +80,7 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
               certifications: data.certifications ?? [],
               serviceZipCodes: data.serviceZipCodes ?? [],
               inspectionSoftware: data.inspectionSoftware ?? null,
-              logoUrl: null, partnerUrl: null, addonFeePercent: 60,
+              logoUrl: null, partnerUrl: null,
               payoutMethod: 'stripe', notificationPreferences: {}, createdAt: new Date().toISOString(),
             };
             localStorage.setItem(INSPECTOR_KEY, JSON.stringify(minimal));
@@ -94,7 +94,7 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
             website: data.website ?? null, licenseNumber: data.licenseNumber ?? null,
             certifications: data.certifications ?? [], serviceZipCodes: data.serviceZipCodes ?? [],
             inspectionSoftware: data.inspectionSoftware ?? null, logoUrl: null, partnerUrl: null,
-            addonFeePercent: 60, payoutMethod: 'stripe', notificationPreferences: {},
+            payoutMethod: 'stripe', notificationPreferences: {},
             createdAt: new Date().toISOString(),
           };
           localStorage.setItem(INSPECTOR_KEY, JSON.stringify(minimal));

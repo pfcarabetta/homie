@@ -17,7 +17,6 @@ export interface InspectorProfile {
   inspectionSoftware: string | null;
   logoUrl: string | null;
   partnerUrl: string | null;
-  addonFeePercent: number;
   payoutMethod: string | null;
   notificationPreferences: Record<string, boolean>;
   createdAt: string;
@@ -48,7 +47,6 @@ export interface InspectionReport {
   inspectionDate: string;
   inspectionType: string;
   status: 'processing' | 'ready' | 'sent' | 'active' | 'completed';
-  addonFee: number | null;
   items: InspectionItem[];
   itemCount: number;
   dispatchedCount: number;
@@ -80,7 +78,7 @@ export interface QuoteDetails {
 
 export interface Earning {
   id: string;
-  type: 'addon_fee' | 'referral' | 'lead_bonus';
+  type: 'referral_commission' | 'referral' | 'inbound_lead_bonus' | 'lead_bonus' | 'partner_referral_bonus';
   description: string;
   amount: number;
   reportId: string | null;

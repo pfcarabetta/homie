@@ -18,7 +18,7 @@ export const inspectorPartners = pgTable('inspector_partners', {
   inspectionSoftware: text('inspection_software'),
   spectoraConnected: boolean('spectora_connected').notNull().default(false),
   homegaugeConnected: boolean('homegauge_connected').notNull().default(false),
-  /** What the inspector charges clients for the Homie add-on (cents) */
+  /** @deprecated No longer used — add-on fee model removed. Column kept for migration compatibility. */
   addonPriceCents: integer('addon_price_cents').notNull().default(9900),
   /** URL slug: /partner/[slug] */
   partnerSlug: text('partner_slug').unique().notNull(),
@@ -129,7 +129,7 @@ export const inspectorEarnings = pgTable('inspector_earnings', {
   inspectorPartnerId: uuid('inspector_partner_id').notNull().references(() => inspectorPartners.id, { onDelete: 'cascade' }),
   reportId: uuid('report_id').references(() => inspectionReports.id, { onDelete: 'set null' }),
   leadId: uuid('lead_id'),
-  /** addon_fee | referral_commission | inbound_lead_bonus | partner_referral_bonus */
+  /** referral_commission | inbound_lead_bonus | partner_referral_bonus */
   earningType: text('earning_type').notNull(),
   amountCents: integer('amount_cents').notNull(),
   description: text('description'),
