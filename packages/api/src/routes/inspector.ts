@@ -591,24 +591,17 @@ router.post('/upload', async (req: Request, res: Response) => {
   }
 
   try {
-    // Upload file to Cloudinary (PDFs need resource_type 'auto', not 'image')
+    // Try Cloudinary first; fall back to storing the data URL directly
     let reportFileUrl: string | null = null;
-    let uploadError: string | null = null;
     try {
       const { uploadFile } = await import('../services/image-upload');
       const result = await uploadFile(body.report_file_data_url, 'homie/inspection-reports');
       if (result) reportFileUrl = result.url;
-      else uploadError = 'uploadFile returned null (Cloudinary may not be configured)';
     } catch (err) {
-      uploadError = (err as Error).message ?? String(err);
-      logger.warn({ err }, '[inspect/upload] File upload failed');
+      logger.warn({ err }, '[inspect/upload] Cloudinary upload failed, using data URL directly');
     }
-
-    if (!reportFileUrl) {
-      logger.warn({ uploadError, hasDataUrl: !!body.report_file_data_url, dataUrlLength: body.report_file_data_url?.length }, '[inspect/upload] No file URL');
-      res.status(400).json({ data: null, error: `Failed to upload report file: ${uploadError}`, meta: {} });
-      return;
-    }
+    // Fall back to the raw data URL — the parser can handle it
+    if (!reportFileUrl) reportFileUrl = body.report_file_data_url;
 
     const clientAccessToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
@@ -1109,36 +1102,44 @@ async function parseInspectionReportAsync(reportId: string): Promise<void> {
 
     const client = new Anthropic({ apiKey });
 
-    // Download the PDF and extract text
+    // Download/decode the file and extract text
     let reportText = '';
     try {
-      const fileRes = await fetch(report.reportFileUrl);
-      if (!fileRes.ok) throw new Error(`Failed to download report: ${fileRes.status}`);
-      const contentType = fileRes.headers.get('content-type') || '';
+      let buffer: Buffer;
+      let contentType = '';
+
+      if (report.reportFileUrl.startsWith('data:')) {
+        // Data URL — decode directly
+        const match = report.reportFileUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (!match) throw new Error('Invalid data URL format');
+        contentType = match[1];
+        buffer = Buffer.from(match[2], 'base64');
+      } else {
+        // Remote URL — download
+        const fileRes = await fetch(report.reportFileUrl);
+        if (!fileRes.ok) throw new Error(`Failed to download report: ${fileRes.status}`);
+        contentType = fileRes.headers.get('content-type') || '';
+        buffer = Buffer.from(await fileRes.arrayBuffer());
+      }
 
       if (contentType.includes('pdf')) {
         // PDF: extract text using pdf-parse
         const pdfParseModule = await import('pdf-parse');
-        const pdfParse = (pdfParseModule.default ?? pdfParseModule) as unknown as (buffer: Buffer) => Promise<{ text: string; numpages: number }>;
-        const buffer = Buffer.from(await fileRes.arrayBuffer());
+        const pdfParse = (pdfParseModule.default ?? pdfParseModule) as unknown as (buf: Buffer) => Promise<{ text: string; numpages: number }>;
         const pdfData = await pdfParse(buffer);
         reportText = pdfData.text;
         if (!reportText || reportText.trim().length < 100) {
-          // PDF might be image-based (scanned) — fall back to URL reference
-          reportText = `[PDF with ${pdfData.numpages} pages, minimal extractable text. Report URL: ${report.reportFileUrl}]`;
+          reportText = `[PDF with ${pdfData.numpages} pages, minimal extractable text.]`;
         }
       } else if (contentType.includes('html')) {
-        // HTML: use raw text
-        reportText = await fileRes.text();
-        // Strip HTML tags for cleaner AI input
+        reportText = buffer.toString('utf-8');
         reportText = reportText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       } else {
-        // Unknown format — pass the URL
-        reportText = `[Report file at: ${report.reportFileUrl}]`;
+        reportText = `[Report file with content-type: ${contentType}]`;
       }
     } catch (dlErr) {
-      logger.warn({ err: dlErr, reportId }, '[inspector] Failed to download/parse PDF, using URL reference');
-      reportText = `[Report file at: ${report.reportFileUrl}]`;
+      logger.warn({ err: dlErr, reportId }, '[inspector] Failed to download/parse report');
+      reportText = `[Report file at: ${report.reportFileUrl.startsWith('data:') ? 'data URL' : report.reportFileUrl}]`;
     }
 
     // Truncate to ~100k chars to stay within Claude's context
@@ -1223,9 +1224,12 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
       });
     }
 
+    // Clear data URL from DB after successful parse to avoid bloat
+    const isDataUrl = report.reportFileUrl?.startsWith('data:');
     await db.update(inspectionReports).set({
       itemsParsed: parsedItems.length,
       parsingStatus: hasLowConfidence ? 'review_pending' : 'parsed',
+      ...(isDataUrl ? { reportFileUrl: null } : {}),
       updatedAt: new Date(),
     }).where(eq(inspectionReports.id, reportId));
 
