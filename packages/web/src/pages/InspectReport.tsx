@@ -146,7 +146,7 @@ export default function InspectReport() {
     setCheckingOut(true);
     try {
       const ids = Array.from(selectedItems);
-      const mode = ids.length >= report.items.length ? 'bundle' : (ids.length === 1 ? 'per_item' : 'bundle');
+      const mode = ids.length >= 15 ? 'bundle' : 'per_item';
       const res = await inspectService.checkout(token, mode, ids);
       if (res.data?.checkoutUrl) {
         window.location.href = res.data.checkoutUrl;
@@ -176,6 +176,20 @@ export default function InspectReport() {
     } else {
       setSelectedItems(new Set(undispatched.map(i => i.id)));
     }
+  }
+
+  function toggleCategory(cat: string) {
+    if (!report) return;
+    const catItems = report.items.filter(i => i.category === cat && (!i.dispatchStatus || i.dispatchStatus === 'pending'));
+    const allCatSelected = catItems.every(i => selectedItems.has(i.id));
+    setSelectedItems(prev => {
+      const next = new Set(prev);
+      for (const item of catItems) {
+        if (allCatSelected) next.delete(item.id);
+        else next.add(item.id);
+      }
+      return next;
+    });
   }
 
   if (loading) {
@@ -219,10 +233,10 @@ export default function InspectReport() {
   const undispatchedItems = report.items.filter(i => !i.dispatchStatus || i.dispatchStatus === 'pending');
   const allSelected = selectedItems.size === undispatchedItems.length && undispatchedItems.length > 0;
 
-  // Pricing for selected items
+  // Pricing for selected items — bundle kicks in at 15+ items
   const selectedCount = selectedItems.size;
-  const allItemsCount = report.items.length;
-  const useBundle = selectedCount >= allItemsCount;
+  const BUNDLE_THRESHOLD = 15;
+  const useBundle = selectedCount >= BUNDLE_THRESHOLD;
   const selectedPrice = useBundle ? bundlePrice : selectedCount * perItemPrice;
 
   // Severity summary
@@ -363,14 +377,32 @@ export default function InspectReport() {
         )}
 
         {/* Items grouped by category */}
-        {groupEntries.map(([cat, items]) => (
+        {groupEntries.map(([cat, items]) => {
+          const catUndispatched = items.filter(i => !i.dispatchStatus || i.dispatchStatus === 'pending');
+          const catAllSelected = catUndispatched.length > 0 && catUndispatched.every(i => selectedItems.has(i.id));
+          const catSomeSelected = catUndispatched.some(i => selectedItems.has(i.id));
+          return (
           <div key={cat} style={{ marginBottom: 24 }}>
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 2px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: '0 2px',
             }}>
-              <span style={{ fontSize: 16 }}>{CATEGORY_ICONS[cat] ?? '🔧'}</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: D }}>{CATEGORY_LABELS[cat] ?? cat}</span>
-              <span style={{ fontSize: 12, color: '#9B9490' }}>({items.length})</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>{CATEGORY_ICONS[cat] ?? '🔧'}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: D }}>{CATEGORY_LABELS[cat] ?? cat}</span>
+                <span style={{ fontSize: 12, color: '#9B9490' }}>({items.length})</span>
+              </div>
+              {catUndispatched.length > 0 && (
+                <button
+                  onClick={() => toggleCategory(cat)}
+                  style={{
+                    fontSize: 12, fontWeight: 600, color: catAllSelected ? '#9B9490' : O,
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif", padding: 0,
+                  }}
+                >
+                  {catAllSelected ? 'Deselect all' : catSomeSelected ? 'Select all' : 'Select all'}
+                </button>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -503,7 +535,8 @@ export default function InspectReport() {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         <style>{`@keyframes inspect-spin { to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -522,7 +555,9 @@ export default function InspectReport() {
               </div>
               <div style={{ fontSize: 12, color: '#9B9490' }}>
                 {useBundle ? (
-                  <>Bundle: <span style={{ color: G, fontWeight: 600 }}>{formatCurrency(bundlePrice)}</span> <span style={{ textDecoration: 'line-through' }}>{formatCurrency(selectedCount * perItemPrice)}</span></>
+                  <>Bundle: <span style={{ color: G, fontWeight: 600 }}>{formatCurrency(bundlePrice)}</span>{' '}<span style={{ textDecoration: 'line-through' }}>{formatCurrency(selectedCount * perItemPrice)}</span>{' '}<span style={{ color: G }}>Save {formatCurrency(selectedCount * perItemPrice - bundlePrice)}</span></>
+                ) : selectedCount > 0 && selectedCount >= BUNDLE_THRESHOLD - 3 ? (
+                  <>{formatCurrency(perItemPrice)}/item · <span style={{ fontWeight: 600 }}>{formatCurrency(selectedPrice)}</span> · <span style={{ color: O }}>Add {BUNDLE_THRESHOLD - selectedCount} more for bundle pricing</span></>
                 ) : selectedCount > 0 ? (
                   <>{formatCurrency(perItemPrice)}/item · <span style={{ fontWeight: 600 }}>{formatCurrency(selectedPrice)}</span></>
                 ) : null}
