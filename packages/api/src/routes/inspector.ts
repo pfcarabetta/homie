@@ -523,6 +523,17 @@ router.post('/leads/:id/converted', requireInspectorAuth, async (req: Request, r
   }
 });
 
+// ── Pricing constants ─────────────────────────────────────────────────────
+
+const PER_ITEM_PRICE_CENTS = 999;        // $9.99
+const BUNDLE_SMALL_PRICE_CENTS = 9900;   // $99 for up to 15 items
+const BUNDLE_LARGE_PRICE_CENTS = 14900;  // $149 for 16+ items
+const BUNDLE_THRESHOLD = 15;
+
+function getBundlePrice(itemCount: number): number {
+  return itemCount <= BUNDLE_THRESHOLD ? BUNDLE_SMALL_PRICE_CENTS : BUNDLE_LARGE_PRICE_CENTS;
+}
+
 // ── Client-facing (token-based, no auth) ──────────────────────────────────
 
 // GET /api/v1/inspect/:token — client views their report
@@ -546,21 +557,42 @@ router.get('/:token', async (req: Request, res: Response) => {
         }).from(inspectorPartners).where(eq(inspectorPartners.id, report.inspectorPartnerId)).limit(1)
       : [null];
 
+    const itemCount = items.length;
+    const perItemPriceCents = PER_ITEM_PRICE_CENTS;
+    const bundlePriceCents = getBundlePrice(itemCount);
+
     res.json({
       data: {
-        report: {
-          propertyAddress: report.propertyAddress,
-          propertyCity: report.propertyCity,
-          propertyState: report.propertyState,
-          inspectionDate: report.inspectionDate,
-          clientName: report.clientName,
-          itemsParsed: report.itemsParsed,
-          itemsDispatched: report.itemsDispatched,
-          itemsQuoted: report.itemsQuoted,
-          totalQuoteValueCents: report.totalQuoteValueCents,
-        },
-        inspector: inspector ?? null,
-        items,
+        id: report.id,
+        inspectorCompanyName: inspector?.companyName ?? null,
+        inspectorLogoUrl: inspector?.companyLogoUrl ?? null,
+        propertyAddress: report.propertyAddress,
+        propertyCity: report.propertyCity,
+        propertyState: report.propertyState,
+        propertyZip: report.propertyZip,
+        inspectionDate: report.inspectionDate,
+        inspectionType: report.inspectionType,
+        perItemPrice: perItemPriceCents / 100,
+        bundlePrice: bundlePriceCents / 100,
+        items: items.map(i => ({
+          id: i.id,
+          reportId: i.reportId,
+          title: i.title,
+          description: i.description,
+          severity: i.severity,
+          category: i.category,
+          location: i.locationInProperty,
+          costEstimateMin: i.aiCostEstimateLowCents > 0 ? i.aiCostEstimateLowCents / 100 : null,
+          costEstimateMax: i.aiCostEstimateHighCents > 0 ? i.aiCostEstimateHighCents / 100 : null,
+          confidence: parseFloat(i.aiConfidence),
+          dispatchStatus: i.dispatchStatus === 'not_dispatched' ? null : i.dispatchStatus,
+          quoteDetails: i.quoteAmountCents ? {
+            providerName: i.providerName ?? 'Provider',
+            providerRating: parseFloat(i.providerRating ?? '0'),
+            price: i.quoteAmountCents / 100,
+            availability: i.providerAvailability ?? '',
+          } : null,
+        })),
       },
       error: null, meta: {},
     });
@@ -661,17 +693,6 @@ router.get('/upload/:reportId/status', async (req: Request, res: Response) => {
     res.status(500).json({ data: null, error: 'Failed to load status', meta: {} });
   }
 });
-
-// ── Pricing constants ─────────────────────────────────────────────────────
-
-const PER_ITEM_PRICE_CENTS = 999;        // $9.99
-const BUNDLE_SMALL_PRICE_CENTS = 9900;   // $99 for up to 15 items
-const BUNDLE_LARGE_PRICE_CENTS = 14900;  // $149 for 16+ items
-const BUNDLE_THRESHOLD = 15;
-
-function getBundlePrice(itemCount: number): number {
-  return itemCount <= BUNDLE_THRESHOLD ? BUNDLE_SMALL_PRICE_CENTS : BUNDLE_LARGE_PRICE_CENTS;
-}
 
 // GET /api/v1/inspect/:token/pdf — generate summary PDF for the report
 router.get('/:token/pdf', async (req: Request, res: Response) => {

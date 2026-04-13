@@ -65,7 +65,7 @@ export interface InspectionItem {
   costEstimateMin: number | null;
   costEstimateMax: number | null;
   confidence: number;
-  dispatchStatus: 'pending' | 'dispatched' | 'quoted' | 'booked' | null;
+  dispatchStatus: 'pending' | 'dispatched' | 'quotes_received' | 'quoted' | 'booked' | 'completed' | null;
   quoteDetails: QuoteDetails | null;
 }
 
