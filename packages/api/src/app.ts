@@ -52,7 +52,7 @@ app.use(
 // Stripe webhook needs raw body — mount BEFORE express.json()
 app.post('/api/v1/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhookHandler);
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 // Twilio sends webhooks as application/x-www-form-urlencoded
 app.use(express.urlencoded({ extended: false }));
 

@@ -591,12 +591,15 @@ router.post('/upload', async (req: Request, res: Response) => {
   }
 
   try {
-    // Upload file to Cloudinary
+    // Upload file to Cloudinary (PDFs need resource_type 'auto', not 'image')
     let reportFileUrl: string | null = null;
     try {
-      const { uploadImage } = await import('../services/image-upload');
-      const result = await uploadImage(body.report_file_data_url, 'homie/inspection-reports');
-      if (result) reportFileUrl = result.url;
+      const { v2: cloudinary } = await import('cloudinary');
+      const result = await cloudinary.uploader.upload(body.report_file_data_url, {
+        folder: 'homie/inspection-reports',
+        resource_type: 'auto',
+      });
+      reportFileUrl = result.secure_url;
     } catch (err) {
       logger.warn({ err }, '[inspect/upload] File upload failed');
     }
