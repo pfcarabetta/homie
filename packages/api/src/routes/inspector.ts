@@ -872,11 +872,44 @@ async function parseInspectionReportAsync(reportId: string): Promise<void> {
 
     const client = new Anthropic({ apiKey });
 
-    // For now, use the report URL as context. In production, would download and extract text/images from PDF.
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      system: `You are analyzing a home inspection report. Extract every deficiency, concern, or recommended repair item. For each item, provide:
+    // Download the PDF and extract text
+    let reportText = '';
+    try {
+      const fileRes = await fetch(report.reportFileUrl);
+      if (!fileRes.ok) throw new Error(`Failed to download report: ${fileRes.status}`);
+      const contentType = fileRes.headers.get('content-type') || '';
+
+      if (contentType.includes('pdf')) {
+        // PDF: extract text using pdf-parse
+        const pdfParseModule = await import('pdf-parse');
+        const pdfParse = (pdfParseModule.default ?? pdfParseModule) as unknown as (buffer: Buffer) => Promise<{ text: string; numpages: number }>;
+        const buffer = Buffer.from(await fileRes.arrayBuffer());
+        const pdfData = await pdfParse(buffer);
+        reportText = pdfData.text;
+        if (!reportText || reportText.trim().length < 100) {
+          // PDF might be image-based (scanned) — fall back to URL reference
+          reportText = `[PDF with ${pdfData.numpages} pages, minimal extractable text. Report URL: ${report.reportFileUrl}]`;
+        }
+      } else if (contentType.includes('html')) {
+        // HTML: use raw text
+        reportText = await fileRes.text();
+        // Strip HTML tags for cleaner AI input
+        reportText = reportText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      } else {
+        // Unknown format — pass the URL
+        reportText = `[Report file at: ${report.reportFileUrl}]`;
+      }
+    } catch (dlErr) {
+      logger.warn({ err: dlErr, reportId }, '[inspector] Failed to download/parse PDF, using URL reference');
+      reportText = `[Report file at: ${report.reportFileUrl}]`;
+    }
+
+    // Truncate to ~100k chars to stay within Claude's context
+    if (reportText.length > 100000) {
+      reportText = reportText.slice(0, 100000) + '\n\n[Report truncated — remaining pages omitted]';
+    }
+
+    const systemPrompt = `You are analyzing a home inspection report. Extract every deficiency, concern, or recommended repair item. For each item, provide:
 - title: a concise description (under 80 characters)
 - description: the full inspector's notes for this item
 - category: one of [plumbing, electrical, hvac, roofing, structural, general_repair, pest_control, safety, cosmetic, landscaping, appliance, insulation, foundation, windows_doors, fireplace]
@@ -886,11 +919,26 @@ async function parseInspectionReportAsync(reportId: string): Promise<void> {
 - cost_estimate_high: high end cost estimate in dollars
 - confidence: your confidence (0.0-1.0) that you've correctly identified and categorized this item
 
-Only extract items that require action. Do NOT include items noted as functional or satisfactory.
-Return ONLY a JSON array of items. No preamble, no markdown.`,
+Rules:
+- Only extract items that require action (repair, replacement, further evaluation, or monitoring)
+- Do NOT extract items noted as functional, satisfactory, or within normal parameters
+- Separate compound items: if the inspector found issues in multiple locations, note the primary location
+- Cost estimates should reflect the local market based on ${report.propertyCity}, ${report.propertyState}
+- Safety hazards: electrical hazards, gas leaks, structural failures, fire risks, CO risks, fall hazards
+- Urgent: active leaks, non-functioning critical systems, significant roof/structural damage
+- Recommended: items to address within 6-12 months
+- Monitor: items to watch that may need future attention
+- Informational: included sparingly for awareness only
+
+Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 8192,
+      system: systemPrompt,
       messages: [{
         role: 'user',
-        content: `Analyze this inspection report for the property at ${report.propertyAddress}, ${report.propertyCity}, ${report.propertyState} ${report.propertyZip}. Inspection type: ${report.inspectionType}. Inspection date: ${report.inspectionDate}.\n\nReport URL: ${report.reportFileUrl}\n\nExtract all actionable items as a JSON array.`,
+        content: `Analyze this inspection report for the property at ${report.propertyAddress}, ${report.propertyCity}, ${report.propertyState} ${report.propertyZip}.\nInspection type: ${report.inspectionType}. Date: ${report.inspectionDate}.\n\n--- BEGIN REPORT ---\n${reportText}\n--- END REPORT ---\n\nExtract all actionable items as a JSON array.`,
       }],
     });
 

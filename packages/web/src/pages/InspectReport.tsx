@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { inspectService, type InspectReportPublic, type InspectionItem } from '@/services/inspector-api';
 
@@ -102,6 +102,52 @@ export default function InspectReport() {
       }).catch(() => {});
     }
   }, [token]);
+
+  // Poll for quote updates every 10 seconds when items are dispatched
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (!token || !report) return;
+    const hasDispatched = report.items.some(i => i.dispatchStatus === 'dispatched' || dispatchedItems.size > 0);
+    if (!hasDispatched) return;
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await inspectService.getStatus(token);
+        if (res.data) {
+          // Update items with new quote data
+          setReport(prev => {
+            if (!prev) return prev;
+            const updatedItems = prev.items.map(item => {
+              const statusItem = res.data!.items.find(s => s.id === item.id);
+              if (statusItem && statusItem.dispatchStatus === 'quotes_received' && statusItem.quoteAmountCents) {
+                return {
+                  ...item,
+                  dispatchStatus: 'quoted' as const,
+                  quoteDetails: {
+                    providerName: statusItem.providerName ?? 'Provider',
+                    providerRating: parseFloat(statusItem.providerRating ?? '0'),
+                    price: (statusItem.quoteAmountCents ?? 0) / 100,
+                    availability: statusItem.providerAvailability ?? '',
+                  },
+                };
+              }
+              return item;
+            });
+            return { ...prev, items: updatedItems };
+          });
+
+          // Stop polling if all dispatched items have quotes
+          const allQuoted = res.data.items.every(i => i.dispatchStatus !== 'dispatched');
+          if (allQuoted && pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+        }
+      } catch { /* ignore polling errors */ }
+    }, 10000);
+
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [token, report?.items.length, dispatchedItems.size]);
 
   const activeItems = report?.items.filter(i => !dispatchedItems.has(i.id)) ?? [];
   const runningTotal = activeItems.length * (report?.perItemPrice ?? 9.99);

@@ -49,10 +49,106 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       return;
     }
 
+    // Inspection report checkout — dispatch items after payment confirmed
+    if (session.metadata?.report_id && session.metadata?.token) {
+      try {
+        const reportId = session.metadata.report_id;
+        const token = session.metadata.token;
+        const itemIdsCsv = session.metadata.item_ids;
+        const inspectorPartnerId = session.metadata.inspector_partner_id;
+        const itemIds = itemIdsCsv ? itemIdsCsv.split(',').filter(Boolean) : [];
+
+        logger.info({ reportId, itemCount: itemIds.length }, '[Stripe webhook] Inspection payment confirmed — dispatching items');
+
+        // Import dispatch logic from inspector routes
+        const { inspectionReportItems, inspectionReports, inspectorEarnings } = await import('../db/schema/inspector');
+        const { sql: drizzleSql } = await import('drizzle-orm');
+
+        // Get undispatched items
+        let items;
+        if (itemIds.length > 0) {
+          items = await db.select().from(inspectionReportItems)
+            .where(eq(inspectionReportItems.reportId, reportId));
+          items = items.filter(i => itemIds.includes(i.id) && i.dispatchStatus === 'not_dispatched');
+        } else {
+          items = await db.select().from(inspectionReportItems)
+            .where(eq(inspectionReportItems.reportId, reportId));
+          items = items.filter(i => i.dispatchStatus === 'not_dispatched' && i.severity !== 'informational');
+        }
+
+        const [report] = await db.select().from(inspectionReports).where(eq(inspectionReports.id, reportId)).limit(1);
+        if (!report) { res.status(200).json({ received: true }); return; }
+
+        // Record first action
+        if (!report.clientFirstActionAt) {
+          await db.update(inspectionReports).set({ clientFirstActionAt: new Date(), updatedAt: new Date() }).where(eq(inspectionReports.id, reportId));
+        }
+
+        let dispatchedCount = 0;
+        for (const item of items) {
+          try {
+            const diagnosis = {
+              category: item.category || 'general',
+              severity: item.severity === 'safety_hazard' || item.severity === 'urgent' ? 'high' : item.severity === 'recommended' ? 'medium' : 'low',
+              summary: `${item.title}${item.description ? '. ' + item.description : ''}`,
+              recommendedActions: [`Address: ${item.title}`],
+              source: 'inspection_report',
+              inspectionReportId: reportId,
+              inspectionItemId: item.id,
+            };
+            const budgetStr = item.aiCostEstimateLowCents && item.aiCostEstimateHighCents
+              ? `$${Math.round(item.aiCostEstimateLowCents / 100)}-$${Math.round(item.aiCostEstimateHighCents / 100)}`
+              : 'flexible';
+
+            const [job] = await db.execute(drizzleSql`
+              INSERT INTO jobs (id, homeowner_id, diagnosis, zip_code, preferred_timing, budget, tier, status, payment_status, expires_at, created_at, updated_at)
+              VALUES (gen_random_uuid(), NULL, ${JSON.stringify(diagnosis)}::jsonb, ${report.propertyZip}, 'this_week', ${budgetStr}, 'standard', 'dispatching', 'paid', ${new Date(Date.now() + 24 * 60 * 60 * 1000)}, NOW(), NOW())
+              RETURNING id
+            `) as unknown as Array<{ id: string }>;
+
+            await db.update(inspectionReportItems).set({
+              dispatchStatus: 'dispatched', dispatchId: job.id, updatedAt: new Date(),
+            }).where(eq(inspectionReportItems.id, item.id));
+
+            dispatchedCount++;
+            void dispatchJob(job.id).catch(err => logger.warn({ err, jobId: job.id }, '[Stripe webhook] Inspection outreach failed'));
+          } catch (itemErr) {
+            logger.error({ err: itemErr, itemId: item.id }, '[Stripe webhook] Failed to dispatch inspection item');
+          }
+        }
+
+        // Update report stats
+        const { count } = await import('drizzle-orm');
+        const [{ value: totalDispatched }] = await db.select({ value: count() })
+          .from(inspectionReportItems)
+          .where(drizzleSql`${inspectionReportItems.reportId} = ${reportId} AND ${inspectionReportItems.dispatchStatus} != 'not_dispatched'`);
+        await db.update(inspectionReports).set({ itemsDispatched: totalDispatched, updatedAt: new Date() }).where(eq(inspectionReports.id, reportId));
+
+        // Create referral commission for inspector
+        if (inspectorPartnerId && dispatchedCount > 0) {
+          const commissionPerItem = Math.round(999 * 0.175);
+          const now = new Date();
+          await db.insert(inspectorEarnings).values({
+            inspectorPartnerId,
+            reportId,
+            earningType: 'referral_commission',
+            amountCents: commissionPerItem * dispatchedCount,
+            description: `Referral: ${dispatchedCount} item${dispatchedCount === 1 ? '' : 's'} from ${report.propertyAddress}`,
+            periodMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+          });
+        }
+
+        logger.info({ reportId, dispatchedCount }, '[Stripe webhook] Inspection items dispatched');
+      } catch (err) {
+        logger.error({ err }, '[Stripe webhook] Inspection dispatch failed');
+      }
+      res.status(200).json({ received: true });
+      return;
+    }
+
     // Consumer job payment checkout
     const jobId = session.metadata?.job_id;
     if (!jobId) {
-      logger.error('[Stripe webhook] Missing job_id in session %s', session.id);
       res.status(200).json({ received: true });
       return;
     }
