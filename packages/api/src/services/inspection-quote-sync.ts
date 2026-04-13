@@ -25,8 +25,14 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
     const diag = job.diagnosis as Record<string, unknown> | null;
     if (!diag || diag.source !== 'inspection_report') return;
 
-    const itemId = diag.inspectionItemId as string | undefined;
-    if (!itemId) return;
+    // Support both single-item (legacy) and grouped dispatches
+    const itemIds: string[] = [];
+    if (Array.isArray(diag.inspectionItemIds)) {
+      itemIds.push(...(diag.inspectionItemIds as string[]));
+    } else if (diag.inspectionItemId) {
+      itemIds.push(diag.inspectionItemId as string);
+    }
+    if (itemIds.length === 0) return;
 
     // Get provider info
     const [provider] = await db.select({
@@ -42,18 +48,7 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
       if (!isNaN(parsed)) priceCents = Math.round(parsed * 100);
     }
 
-    // Get current item to append to quotes array
-    const [currentItem] = await db.select({
-      quotes: inspectionReportItems.quotes,
-      quoteAmountCents: inspectionReportItems.quoteAmountCents,
-    }).from(inspectionReportItems).where(eq(inspectionReportItems.id, itemId)).limit(1);
-
-    const existingQuotes = (currentItem?.quotes ?? []) as Array<{
-      providerId: string; providerName: string; providerRating: string | null;
-      amountCents: number; availability: string | null; receivedAt: string;
-    }>;
-
-    // Add new quote to the array
+    // Build the new quote object
     const newQuote = {
       providerId,
       providerName: provider?.name ?? 'Provider',
@@ -62,34 +57,45 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
       availability: null as string | null,
       receivedAt: new Date().toISOString(),
     };
-    const allQuotes = [...existingQuotes, newQuote];
 
-    // Best quote = lowest price (excluding $0)
-    const validQuotes = allQuotes.filter(q => q.amountCents > 0);
-    const best = validQuotes.length > 0
-      ? validQuotes.reduce((a, b) => a.amountCents <= b.amountCents ? a : b)
-      : newQuote;
+    // Update all items in this group (single item for legacy, multiple for category groups)
+    let reportId: string | null = null;
+    for (const itemId of itemIds) {
+      const [currentItem] = await db.select({
+        quotes: inspectionReportItems.quotes,
+        reportId: inspectionReportItems.reportId,
+      }).from(inspectionReportItems).where(eq(inspectionReportItems.id, itemId)).limit(1);
+      if (!currentItem) continue;
 
-    // Update the inspection item with all quotes + best quote as primary
-    await db.update(inspectionReportItems).set({
-      dispatchStatus: 'quotes_received',
-      quotes: allQuotes,
-      quoteAmountCents: best.amountCents || priceCents,
-      providerName: best.providerName,
-      providerRating: best.providerRating,
-      updatedAt: new Date(),
-    }).where(eq(inspectionReportItems.id, itemId));
+      reportId = currentItem.reportId;
 
-    // Get the report ID from the item and update report totals
-    const [item] = await db.select({ reportId: inspectionReportItems.reportId })
-      .from(inspectionReportItems).where(eq(inspectionReportItems.id, itemId)).limit(1);
+      const existingQuotes = (currentItem.quotes ?? []) as Array<{
+        providerId: string; providerName: string; providerRating: string | null;
+        amountCents: number; availability: string | null; receivedAt: string;
+      }>;
+      const allQuotes = [...existingQuotes, newQuote];
 
-    if (item?.reportId) {
-      // Recount quoted items and total value
+      const validQuotes = allQuotes.filter(q => q.amountCents > 0);
+      const best = validQuotes.length > 0
+        ? validQuotes.reduce((a, b) => a.amountCents <= b.amountCents ? a : b)
+        : newQuote;
+
+      await db.update(inspectionReportItems).set({
+        dispatchStatus: 'quotes_received',
+        quotes: allQuotes,
+        quoteAmountCents: best.amountCents || priceCents,
+        providerName: best.providerName,
+        providerRating: best.providerRating,
+        updatedAt: new Date(),
+      }).where(eq(inspectionReportItems.id, itemId));
+    }
+
+    // Update report totals
+    if (reportId) {
       const quotedItems = await db.select({
         quoteAmountCents: inspectionReportItems.quoteAmountCents,
       }).from(inspectionReportItems).where(
-        and(eq(inspectionReportItems.reportId, item.reportId), eq(inspectionReportItems.dispatchStatus, 'quotes_received'))
+        and(eq(inspectionReportItems.reportId, reportId), eq(inspectionReportItems.dispatchStatus, 'quotes_received'))
       );
 
       const totalQuoteCents = quotedItems.reduce((sum, i) => sum + (i.quoteAmountCents ?? 0), 0);
@@ -98,29 +104,31 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
         itemsQuoted: quotedItems.length,
         totalQuoteValueCents: totalQuoteCents,
         updatedAt: new Date(),
-      }).where(eq(inspectionReports.id, item.reportId));
+      }).where(eq(inspectionReports.id, reportId));
 
-      // Send email notification to client
+      // Send one email notification per category group quote
       try {
         const [report] = await db.select({
           clientEmail: inspectionReports.clientEmail,
           clientName: inspectionReports.clientName,
           propertyAddress: inspectionReports.propertyAddress,
           clientAccessToken: inspectionReports.clientAccessToken,
-        }).from(inspectionReports).where(eq(inspectionReports.id, item.reportId)).limit(1);
+        }).from(inspectionReports).where(eq(inspectionReports.id, reportId)).limit(1);
 
         if (report?.clientEmail) {
-          const [fullItem] = await db.select({ title: inspectionReportItems.title })
-            .from(inspectionReportItems).where(eq(inspectionReportItems.id, itemId)).limit(1);
+          const itemTitles = await db.select({ title: inspectionReportItems.title })
+            .from(inspectionReportItems).where(sql`${inspectionReportItems.id} IN (${sql.join(itemIds.map(id => sql`${id}`), sql`, `)})`);
 
+          const category = (diag.category as string ?? 'repair').replace(/_/g, ' ');
           const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
           const reportUrl = `${APP_URL}/inspect/${report.clientAccessToken}`;
           const priceDisplay = priceCents ? `$${(priceCents / 100).toFixed(0)}` : 'See details';
+          const itemList = itemTitles.map(i => `• ${i.title}`).join('<br>');
 
           const { sendEmail } = await import('./notifications');
           await sendEmail(
             report.clientEmail,
-            `Quote received: ${fullItem?.title ?? 'Inspection item'} — ${priceDisplay} from ${provider?.name ?? 'a provider'}`,
+            `Quote received: ${itemIds.length} ${category} item${itemIds.length !== 1 ? 's' : ''} — ${priceDisplay} from ${provider?.name ?? 'a provider'}`,
             `<div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;background:#F9F5F2">
               <div style="background:#2D2926;padding:20px 32px;text-align:center">
                 <span style="color:#E8632B;font-size:24px;font-weight:bold;font-family:Georgia,serif">homie</span>
@@ -128,11 +136,12 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
               </div>
               <div style="background:white;padding:32px">
                 <p style="color:#2D2926;font-size:18px;font-weight:600;margin:0 0 4px">Quote received!</p>
-                <p style="color:#9B9490;font-size:14px;margin:0 0 20px">${report.propertyAddress}</p>
+                <p style="color:#9B9490;font-size:14px;margin:0 0 20px">${report.propertyAddress} · ${category}</p>
                 <div style="background:#E1F5EE;border-radius:12px;padding:16px;margin-bottom:20px">
-                  <p style="color:#2D2926;font-size:15px;font-weight:600;margin:0 0 4px">${fullItem?.title ?? 'Item'}</p>
+                  <p style="color:#2D2926;font-size:15px;font-weight:600;margin:0 0 8px">${itemIds.length} ${category} item${itemIds.length !== 1 ? 's' : ''}</p>
+                  <p style="color:#6B6560;font-size:13px;margin:0 0 8px;line-height:1.5">${itemList}</p>
                   <p style="color:#1B9E77;font-size:22px;font-weight:700;margin:4px 0">${priceDisplay}</p>
-                  <p style="color:#6B6560;font-size:13px;margin:0">${provider?.name ?? 'Provider'} · ${provider?.googleRating ? provider.googleRating + ' stars' : ''}</p>
+                  <p style="color:#6B6560;font-size:13px;margin:0">${provider?.name ?? 'Provider'}${provider?.googleRating ? ' · ' + provider.googleRating + ' stars' : ''}</p>
                 </div>
                 <div style="text-align:center">
                   <a href="${reportUrl}" style="display:inline-block;background:#E8632B;color:white;padding:14px 32px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View all quotes</a>
@@ -142,11 +151,11 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
           );
         }
       } catch (emailErr) {
-        logger.warn({ err: emailErr, itemId }, '[inspection-quote-sync] Client email notification failed');
+        logger.warn({ err: emailErr, itemIds }, '[inspection-quote-sync] Client email notification failed');
       }
     }
 
-    logger.info({ jobId, itemId, providerId, priceCents }, '[inspection-quote-sync] Quote synced to inspection item');
+    logger.info({ jobId, itemIds, providerId, priceCents }, '[inspection-quote-sync] Quote synced to inspection items');
   } catch (err) {
     logger.warn({ err, jobId }, '[inspection-quote-sync] Failed to sync quote');
   }

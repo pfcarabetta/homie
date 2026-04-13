@@ -950,26 +950,45 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
 
     const dispatched: Array<{ itemId: string; jobId: string }> = [];
 
-    for (const item of itemsToDispatch) {
-      if (item.dispatchStatus !== 'not_dispatched') continue;
+    // Group items by category so each category becomes one job
+    const actionableItems = itemsToDispatch.filter(i => i.dispatchStatus === 'not_dispatched');
+    const categoryGroups = new Map<string, typeof actionableItems>();
+    for (const item of actionableItems) {
+      const cat = item.category || 'general_repair';
+      if (!categoryGroups.has(cat)) categoryGroups.set(cat, []);
+      categoryGroups.get(cat)!.push(item);
+    }
 
+    for (const [category, items] of categoryGroups) {
       try {
-        // Create a job in the main Homie outreach system
-        const { jobs: jobsTable } = await import('../db/schema/jobs');
-        const photoDescs = (item.inspectorPhotos as string[] | null) ?? [];
+        // Build a combined diagnosis for all items in this category
+        const highestSeverity = items.some(i => i.severity === 'safety_hazard' || i.severity === 'urgent') ? 'high'
+          : items.some(i => i.severity === 'recommended') ? 'medium' : 'low';
+
+        const itemSummaries = items.map((item, idx) => {
+          const photoDescs = (item.inspectorPhotos as string[] | null) ?? [];
+          const photoStr = photoDescs.length ? ` [Photos: ${photoDescs.join('; ')}]` : '';
+          return `${idx + 1}. ${item.title}${item.description ? ' — ' + item.description : ''}${photoStr}`;
+        });
+
+        const allPhotoDescs = items.flatMap(item => (item.inspectorPhotos as string[] | null) ?? []);
+
         const diagnosis = {
-          category: item.category || 'general',
-          severity: item.severity === 'safety_hazard' ? 'high' : item.severity === 'urgent' ? 'high' : item.severity === 'recommended' ? 'medium' : 'low',
-          summary: `${item.title}${item.description ? '. ' + item.description : ''}${photoDescs.length ? '\n\nInspection photos: ' + photoDescs.join('; ') : ''}`,
-          recommendedActions: [`Address: ${item.title}`],
+          category,
+          severity: highestSeverity,
+          summary: `Inspection report — ${items.length} ${category.replace(/_/g, ' ')} item${items.length !== 1 ? 's' : ''} at ${report.propertyAddress}, ${report.propertyCity} ${report.propertyState}:\n${itemSummaries.join('\n')}`,
+          recommendedActions: items.map(i => `Address: ${i.title}`),
           source: 'inspection_report',
           inspectionReportId: report.id,
-          inspectionItemId: item.id,
-          photoDescriptions: photoDescs,
+          inspectionItemIds: items.map(i => i.id),
+          photoDescriptions: allPhotoDescs,
         };
 
-        const budgetStr = item.aiCostEstimateLowCents && item.aiCostEstimateHighCents
-          ? `$${Math.round(item.aiCostEstimateLowCents / 100)}-$${Math.round(item.aiCostEstimateHighCents / 100)}`
+        // Budget range: sum of all items' estimates
+        const totalLow = items.reduce((sum, i) => sum + (i.aiCostEstimateLowCents ?? 0), 0);
+        const totalHigh = items.reduce((sum, i) => sum + (i.aiCostEstimateHighCents ?? 0), 0);
+        const budgetStr = totalLow > 0 && totalHigh > 0
+          ? `$${Math.round(totalLow / 100)}-$${Math.round(totalHigh / 100)}`
           : 'flexible';
 
         const [job] = await db.execute(sql`
@@ -978,24 +997,27 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
           RETURNING id
         `) as unknown as Array<{ id: string }>;
 
-        // Update the inspection item with the job ID
-        await db.update(inspectionReportItems).set({
-          dispatchStatus: 'dispatched',
-          dispatchId: job.id,
-          updatedAt: new Date(),
-        }).where(eq(inspectionReportItems.id, item.id));
+        // Update all items in this category group with the shared job ID
+        for (const item of items) {
+          await db.update(inspectionReportItems).set({
+            dispatchStatus: 'dispatched',
+            dispatchId: job.id,
+            updatedAt: new Date(),
+          }).where(eq(inspectionReportItems.id, item.id));
+          dispatched.push({ itemId: item.id, jobId: job.id });
+        }
 
-        dispatched.push({ itemId: item.id, jobId: job.id });
-
-        // Fire outreach asynchronously
+        // Fire outreach asynchronously — one dispatch per category
         try {
           const { dispatchJob } = await import('../services/orchestration');
           void dispatchJob(job.id);
         } catch (dispatchErr) {
           logger.warn({ err: dispatchErr, jobId: job.id }, '[inspect/dispatch] Outreach dispatch failed');
         }
-      } catch (itemErr) {
-        logger.error({ err: itemErr, itemId: item.id }, '[inspect/dispatch] Failed to dispatch item');
+
+        logger.info({ jobId: job.id, category, itemCount: items.length }, '[inspect/dispatch] Category group dispatched');
+      } catch (groupErr) {
+        logger.error({ err: groupErr, category, itemCount: items.length }, '[inspect/dispatch] Failed to dispatch category group');
       }
     }
 
