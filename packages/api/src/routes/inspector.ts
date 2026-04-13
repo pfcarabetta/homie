@@ -1193,8 +1193,18 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
       return;
     }
 
-    let raw = textBlock.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-    logger.info({ reportId, rawResponseLength: raw.length, rawPreview: raw.slice(0, 300) }, '[inspector] AI response received');
+    let raw = textBlock.text.trim();
+    logger.info({ reportId, rawResponseLength: raw.length, rawPreview: raw.slice(0, 500) }, '[inspector] AI response received');
+
+    // Extract JSON array from response — handle markdown fences, preamble text, etc.
+    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    // If Claude added text before/after the JSON array, extract just the array
+    const arrayStart = raw.indexOf('[');
+    const arrayEnd = raw.lastIndexOf(']');
+    if (arrayStart !== -1 && arrayEnd > arrayStart) {
+      raw = raw.slice(arrayStart, arrayEnd + 1);
+    }
+
     let parsedItems: Array<{
       title: string; description?: string; category: string; severity: string;
       location_in_property?: string; cost_estimate_low?: number; cost_estimate_high?: number; confidence?: number;
@@ -1202,8 +1212,9 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
 
     try {
       parsedItems = JSON.parse(raw);
-    } catch {
-      await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: 'Failed to parse AI response' }).where(eq(inspectionReports.id, reportId));
+    } catch (parseErr) {
+      logger.warn({ reportId, parseError: (parseErr as Error).message, rawPreview: raw.slice(0, 500) }, '[inspector] JSON parse failed');
+      await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: `Failed to parse AI response: ${(parseErr as Error).message}` }).where(eq(inspectionReports.id, reportId));
       return;
     }
 
