@@ -695,6 +695,85 @@ router.get('/upload/:reportId/status', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/inspect/provider/:providerToken — provider views inspection items for quoting
+router.get('/provider/:providerToken', async (req: Request, res: Response) => {
+  try {
+    // Find the job with this provider view token in its diagnosis
+    const [job] = await db.execute(sql`
+      SELECT id, diagnosis, zip_code, budget, created_at
+      FROM jobs
+      WHERE diagnosis->>'providerViewToken' = ${req.params.providerToken}
+        AND diagnosis->>'source' = 'inspection_report'
+      LIMIT 1
+    `) as unknown as Array<{ id: string; diagnosis: Record<string, unknown>; zip_code: string; budget: string; created_at: Date }>;
+
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Report not found or link expired', meta: {} });
+      return;
+    }
+
+    const diag = job.diagnosis;
+    const reportId = diag.inspectionReportId as string;
+    const itemIds = (diag.inspectionItemIds ?? (diag.inspectionItemId ? [diag.inspectionItemId] : [])) as string[];
+
+    if (!reportId || itemIds.length === 0) {
+      res.status(404).json({ data: null, error: 'No items found', meta: {} });
+      return;
+    }
+
+    // Get report info
+    const [report] = await db.select({
+      propertyAddress: inspectionReports.propertyAddress,
+      propertyCity: inspectionReports.propertyCity,
+      propertyState: inspectionReports.propertyState,
+      propertyZip: inspectionReports.propertyZip,
+      inspectionDate: inspectionReports.inspectionDate,
+      inspectionType: inspectionReports.inspectionType,
+    }).from(inspectionReports).where(eq(inspectionReports.id, reportId)).limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    // Get the items for this category group
+    const items = await db.select().from(inspectionReportItems)
+      .where(sql`${inspectionReportItems.id} IN (${sql.join(itemIds.map(id => sql`${id}`), sql`, `)})`)
+      .orderBy(inspectionReportItems.sortOrder);
+
+    res.json({
+      data: {
+        jobId: job.id,
+        category: (diag.category as string).replace(/_/g, ' '),
+        budget: job.budget,
+        property: {
+          address: report.propertyAddress,
+          city: report.propertyCity,
+          state: report.propertyState,
+          zip: report.propertyZip,
+          inspectionDate: report.inspectionDate,
+          inspectionType: report.inspectionType,
+        },
+        items: items.map(i => ({
+          id: i.id,
+          title: i.title,
+          description: i.description,
+          severity: i.severity,
+          category: i.category,
+          location: i.locationInProperty,
+          photoDescriptions: (i.inspectorPhotos as string[] | null) ?? [],
+          costEstimateMin: i.aiCostEstimateLowCents > 0 ? i.aiCostEstimateLowCents / 100 : null,
+          costEstimateMax: i.aiCostEstimateHighCents > 0 ? i.aiCostEstimateHighCents / 100 : null,
+        })),
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /inspect/provider/:providerToken]');
+    res.status(500).json({ data: null, error: 'Failed to load report', meta: {} });
+  }
+});
+
 // GET /api/v1/inspect/:token/pdf — generate summary PDF for the report
 router.get('/:token/pdf', async (req: Request, res: Response) => {
   try {
@@ -973,15 +1052,21 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
 
         const allPhotoDescs = items.flatMap(item => (item.inspectorPhotos as string[] | null) ?? []);
 
+        // Generate a provider view token for the magic link
+        const providerViewToken = crypto.randomBytes(24).toString('hex');
+        const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+        const providerReportUrl = `${APP_URL}/inspect/provider/${providerViewToken}`;
+
         const diagnosis = {
           category,
           severity: highestSeverity,
-          summary: `Inspection report — ${items.length} ${category.replace(/_/g, ' ')} item${items.length !== 1 ? 's' : ''} at ${report.propertyAddress}, ${report.propertyCity} ${report.propertyState}:\n${itemSummaries.join('\n')}`,
+          summary: `Inspection report — ${items.length} ${category.replace(/_/g, ' ')} item${items.length !== 1 ? 's' : ''} at ${report.propertyAddress}, ${report.propertyCity} ${report.propertyState}:\n${itemSummaries.join('\n')}\n\nView full details & photos: ${providerReportUrl}`,
           recommendedActions: items.map(i => `Address: ${i.title}`),
           source: 'inspection_report',
           inspectionReportId: report.id,
           inspectionItemIds: items.map(i => i.id),
           photoDescriptions: allPhotoDescs,
+          providerViewToken,
         };
 
         // Budget range: sum of all items' estimates
