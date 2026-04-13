@@ -428,10 +428,10 @@ function Footer() {
             <h4 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, color: COLORS.grayLight, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Product</h4>
             {[
               { label: "For homeowners", href: "/" },
-              { label: "For business", href: "/business/landing" },
+              { label: "For property managers/hosts", href: "/business/landing" },
+              { label: "Homie Inspect", href: "/inspect" },
+              { label: "For inspectors", href: "/inspect/inspectors" },
               { label: "Become a Homie Pro", href: "/portal/signup" },
-              { label: "Pricing", href: "#pricing" },
-              { label: "How it works", href: "#how-it-works" },
             ].map(l => (
               <a key={l.label} href={l.href} style={{ display: "block", fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.gray, textDecoration: "none", marginBottom: 10, transition: "color 0.2s" }} onMouseEnter={e => (e.target as HTMLElement).style.color = COLORS.white} onMouseLeave={e => (e.target as HTMLElement).style.color = COLORS.gray}>{l.label}</a>
             ))}
