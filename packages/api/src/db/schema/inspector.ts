@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, numeric, date, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, numeric, date, boolean, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // ── Inspector Partners ────────────────────────────────────────────────────
 export const inspectorPartners = pgTable('inspector_partners', {
@@ -106,10 +106,13 @@ export const inspectionReportItems = pgTable('inspection_report_items', {
   /** not_dispatched | dispatched | quotes_received | booked | completed */
   dispatchStatus: text('dispatch_status').notNull().default('not_dispatched'),
   dispatchId: uuid('dispatch_id'),
+  /** Best quote (lowest price) — for quick display */
   quoteAmountCents: integer('quote_amount_cents'),
   providerName: text('provider_name'),
   providerRating: numeric('provider_rating', { precision: 2, scale: 1 }),
   providerAvailability: text('provider_availability'),
+  /** All quotes received as JSONB array */
+  quotes: jsonb('quotes').$type<Array<{ providerId: string; providerName: string; providerRating: string | null; amountCents: number; availability: string | null; receivedAt: string }>>(),
   sortOrder: integer('sort_order').notNull().default(0),
   inspectorAdjusted: boolean('inspector_adjusted').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

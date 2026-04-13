@@ -197,9 +197,85 @@ function InspectionDemo() {
 
 export default function HomieInspectionLanding() {
   const [audience, setAudience] = useState("buyer");
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFileUpload(file: File) {
+    if (file.size > 50 * 1024 * 1024) { alert('File too large (max 50MB)'); return; }
+    setUploading(true);
+    setUploadStatus('Uploading report...');
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+
+      setUploadStatus('Processing with AI...');
+      const { inspectService } = await import('@/services/inspector-api');
+      const res = await inspectService.uploadReport({ report_file_data_url: dataUrl });
+      if (!res.data) { setUploadStatus(null); setUploading(false); alert('Upload failed'); return; }
+
+      // Poll for parsing completion
+      const reportId = res.data.reportId;
+      const token = res.data.token;
+      setUploadStatus('Parsing inspection items...');
+
+      const poll = async () => {
+        for (let i = 0; i < 60; i++) { // max 5 minutes
+          await new Promise(r => setTimeout(r, 5000));
+          try {
+            const status = await inspectService.getUploadStatus(reportId);
+            if (status.data?.parsingStatus === 'parsed' || status.data?.parsingStatus === 'review_pending') {
+              setUploadStatus(`${status.data.itemsParsed} items found! Redirecting...`);
+              setTimeout(() => { window.location.href = `/inspect/${token}`; }, 1500);
+              return;
+            }
+            if (status.data?.parsingStatus === 'failed') {
+              setUploadStatus(null); setUploading(false);
+              alert(status.data.parsingError || 'Failed to parse report');
+              return;
+            }
+            if (status.data?.itemsParsed && status.data.itemsParsed > 0) {
+              setUploadStatus(`Found ${status.data.itemsParsed} items so far...`);
+            }
+          } catch { /* keep polling */ }
+        }
+        setUploadStatus(null); setUploading(false);
+        alert('Parsing is taking longer than expected. Check back shortly.');
+      };
+      void poll();
+    } catch (err) {
+      setUploadStatus(null); setUploading(false);
+      alert((err as Error).message || 'Upload failed');
+    }
+  }
 
   return (
     <div style={{ ...dm, background: C.white, minHeight: "100vh" }}>
+      {/* Hidden file input for upload */}
+      <input
+        id="inspect-file-upload"
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.html"
+        style={{ position: 'fixed', top: -9999, left: -9999, opacity: 0 }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; }}
+      />
+
+      {/* Upload progress overlay */}
+      {uploading && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,41,38,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: C.white, borderRadius: 20, padding: '48px 56px', textAlign: 'center', maxWidth: 420 }}>
+            <div style={{ width: 48, height: 48, border: `4px solid ${C.warm}`, borderTopColor: C.orange, borderRadius: '50%', margin: '0 auto 24px', animation: 'homie-spin 0.8s linear infinite' }} />
+            <p style={{ ...dm, fontSize: 18, fontWeight: 600, color: C.dark, margin: '0 0 8px' }}>{uploadStatus ?? 'Processing...'}</p>
+            <p style={{ ...dm, fontSize: 14, color: C.gray, margin: 0 }}>This usually takes 30–60 seconds</p>
+          </div>
+          <style>{`@keyframes homie-spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
       <SEO title="Homie Inspect — Real quotes from your inspection report" description="Upload your home inspection report. Homie's AI parses every item and gets you real quotes from local pros — not estimates, actuals. Negotiate with real numbers." canonical="/inspect" />
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
@@ -213,7 +289,7 @@ export default function HomieInspectionLanding() {
           <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
             <a href="#how-it-works" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500 }}>How it works</a>
             <a href="/inspect/inspectors" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500 }}>For inspectors</a>
-            <button style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "9px 22px", cursor: "pointer" }}>Get started</button>
+            <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "9px 22px", cursor: "pointer", display: "inline-block" }}>Get started</label>
           </div>
         </div>
       </nav>
@@ -246,9 +322,9 @@ export default function HomieInspectionLanding() {
           </FadeIn>
           <FadeIn delay={0.3}>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              <button style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)" }} onMouseEnter={e => { e.currentTarget.style.background = C.orangeDark; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.transform = "translateY(0)"; }}>
+              <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)", display: "inline-block" }} onMouseEnter={e => { e.currentTarget.style.background = C.orangeDark; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.transform = "translateY(0)"; }}>
                 {audience === "buyer" ? "Upload your inspection report" : "Get your pre-listing quotes"}
-              </button>
+              </label>
               <button style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.dark, background: "transparent", border: `2px solid ${C.grayLight}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.borderColor = C.orange} onMouseLeave={e => e.currentTarget.style.borderColor = C.grayLight}>
                 {audience === "buyer" ? "Find a Homie inspector" : "How it works"}
               </button>

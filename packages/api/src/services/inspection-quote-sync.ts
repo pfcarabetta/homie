@@ -42,12 +42,41 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
       if (!isNaN(parsed)) priceCents = Math.round(parsed * 100);
     }
 
-    // Update the inspection item
+    // Get current item to append to quotes array
+    const [currentItem] = await db.select({
+      quotes: inspectionReportItems.quotes,
+      quoteAmountCents: inspectionReportItems.quoteAmountCents,
+    }).from(inspectionReportItems).where(eq(inspectionReportItems.id, itemId)).limit(1);
+
+    const existingQuotes = (currentItem?.quotes ?? []) as Array<{
+      providerId: string; providerName: string; providerRating: string | null;
+      amountCents: number; availability: string | null; receivedAt: string;
+    }>;
+
+    // Add new quote to the array
+    const newQuote = {
+      providerId,
+      providerName: provider?.name ?? 'Provider',
+      providerRating: provider?.googleRating ?? null,
+      amountCents: priceCents ?? 0,
+      availability: null as string | null,
+      receivedAt: new Date().toISOString(),
+    };
+    const allQuotes = [...existingQuotes, newQuote];
+
+    // Best quote = lowest price (excluding $0)
+    const validQuotes = allQuotes.filter(q => q.amountCents > 0);
+    const best = validQuotes.length > 0
+      ? validQuotes.reduce((a, b) => a.amountCents <= b.amountCents ? a : b)
+      : newQuote;
+
+    // Update the inspection item with all quotes + best quote as primary
     await db.update(inspectionReportItems).set({
       dispatchStatus: 'quotes_received',
-      quoteAmountCents: priceCents,
-      providerName: provider?.name ?? null,
-      providerRating: provider?.googleRating ?? null,
+      quotes: allQuotes,
+      quoteAmountCents: best.amountCents || priceCents,
+      providerName: best.providerName,
+      providerRating: best.providerRating,
       updatedAt: new Date(),
     }).where(eq(inspectionReportItems.id, itemId));
 

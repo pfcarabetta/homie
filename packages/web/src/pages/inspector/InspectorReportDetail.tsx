@@ -293,17 +293,35 @@ export default function InspectorReportDetail() {
             <div style={{ fontSize: 15, fontWeight: 600, color: D, marginBottom: 4 }}>Ready to send to client?</div>
             <div style={{ fontSize: 13, color: '#6B6560' }}>Review items below, then send the report to your client.</div>
           </div>
-          <button
-            onClick={handleSendToClient}
-            disabled={sending}
-            style={{
-              padding: '10px 24px', background: O, color: '#fff', border: 'none',
-              borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer',
-              fontFamily: "'DM Sans', sans-serif", opacity: sending ? 0.7 : 1, whiteSpace: 'nowrap',
-            }}
-          >
-            {sending ? 'Sending...' : 'Send to Client'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {(report as unknown as { clientAccessToken?: string }).clientAccessToken && (
+              <a
+                href={`${import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}/api/v1/inspect/${(report as unknown as { clientAccessToken?: string }).clientAccessToken}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: '10px 16px', background: 'transparent', color: O, border: `1px solid ${O}`,
+                  borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif", textDecoration: 'none', whiteSpace: 'nowrap',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 2v8m0 0l-3-3m3 3l3-3M3 13h10" /></svg>
+                PDF
+              </a>
+            )}
+            <button
+              onClick={handleSendToClient}
+              disabled={sending}
+              style={{
+                padding: '10px 24px', background: O, color: '#fff', border: 'none',
+                borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer',
+                fontFamily: "'DM Sans', sans-serif", opacity: sending ? 0.7 : 1, whiteSpace: 'nowrap',
+              }}
+            >
+              {sending ? 'Sending...' : 'Send to Client'}
+            </button>
+          </div>
         </div>
       )}
 

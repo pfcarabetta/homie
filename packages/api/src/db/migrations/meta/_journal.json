@@ -232,6 +232,13 @@
       "when": 1776192300000,
       "tag": "0032_inspector_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1776192400000,
+      "tag": "0033_multiple_quotes",
+      "breakpoints": true
     }
   ]
 }

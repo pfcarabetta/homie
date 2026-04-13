@@ -568,6 +568,101 @@ router.get('/:token', async (req: Request, res: Response) => {
   }
 });
 
+// ── Homeowner self-upload (Path A — no inspector, no auth) ────────────────
+
+// POST /api/v1/inspect/upload — homeowner uploads their own report
+router.post('/upload', async (req: Request, res: Response) => {
+  const body = req.body as {
+    report_file_data_url?: string;
+    property_address: string;
+    property_city?: string;
+    property_state?: string;
+    property_zip?: string;
+    client_name?: string;
+    client_email?: string;
+    inspection_date?: string;
+  };
+
+  if (!body.report_file_data_url) {
+    res.status(400).json({ data: null, error: 'report_file_data_url is required', meta: {} });
+    return;
+  }
+
+  try {
+    // Upload file to Cloudinary
+    let reportFileUrl: string | null = null;
+    try {
+      const { uploadImage } = await import('../services/image-upload');
+      const result = await uploadImage(body.report_file_data_url, 'homie/inspection-reports');
+      if (result) reportFileUrl = result.url;
+    } catch (err) {
+      logger.warn({ err }, '[inspect/upload] File upload failed');
+    }
+
+    if (!reportFileUrl) {
+      res.status(400).json({ data: null, error: 'Failed to upload report file', meta: {} });
+      return;
+    }
+
+    const clientAccessToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+
+    const [report] = await db.insert(inspectionReports).values({
+      inspectorPartnerId: null as unknown as string, // No inspector for self-uploads
+      propertyAddress: body.property_address || 'Address pending',
+      propertyCity: body.property_city || '',
+      propertyState: body.property_state || '',
+      propertyZip: body.property_zip || '',
+      clientName: body.client_name || 'Homeowner',
+      clientEmail: body.client_email || '',
+      inspectionDate: body.inspection_date || new Date().toISOString().slice(0, 10),
+      inspectionType: 'general',
+      reportFileUrl,
+      source: 'homeowner_upload',
+      parsingStatus: 'processing',
+      clientAccessToken,
+      expiresAt,
+    } as Record<string, unknown>).returning();
+
+    // Kick off async parsing
+    void parseInspectionReportAsync(report.id).catch(err =>
+      logger.error({ err, reportId: report.id }, '[inspect/upload] Async parsing failed'),
+    );
+
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+
+    res.status(201).json({
+      data: {
+        reportId: report.id,
+        token: clientAccessToken,
+        reportUrl: `${APP_URL}/inspect/${clientAccessToken}`,
+        parsingStatus: 'processing',
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspect/upload]');
+    res.status(500).json({ data: null, error: 'Failed to process upload', meta: {} });
+  }
+});
+
+// GET /api/v1/inspect/upload/:reportId/status — poll parsing progress for self-uploads
+router.get('/upload/:reportId/status', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select({
+      parsingStatus: inspectionReports.parsingStatus,
+      parsingError: inspectionReports.parsingError,
+      itemsParsed: inspectionReports.itemsParsed,
+      clientAccessToken: inspectionReports.clientAccessToken,
+    }).from(inspectionReports).where(eq(inspectionReports.id, req.params.reportId)).limit(1);
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+    res.json({ data: report, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /inspect/upload/:reportId/status]');
+    res.status(500).json({ data: null, error: 'Failed to load status', meta: {} });
+  }
+});
+
 // ── Pricing constants ─────────────────────────────────────────────────────
 
 const PER_ITEM_PRICE_CENTS = 999;        // $9.99
@@ -578,6 +673,140 @@ const BUNDLE_THRESHOLD = 15;
 function getBundlePrice(itemCount: number): number {
   return itemCount <= BUNDLE_THRESHOLD ? BUNDLE_SMALL_PRICE_CENTS : BUNDLE_LARGE_PRICE_CENTS;
 }
+
+// GET /api/v1/inspect/:token/pdf — generate summary PDF for the report
+router.get('/:token/pdf', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+
+    const items = await db.select().from(inspectionReportItems)
+      .where(eq(inspectionReportItems.reportId, report.id))
+      .orderBy(inspectionReportItems.sortOrder);
+
+    const [inspector] = report.inspectorPartnerId
+      ? await db.select({ companyName: inspectorPartners.companyName })
+          .from(inspectorPartners).where(eq(inspectorPartners.id, report.inspectorPartnerId)).limit(1)
+      : [null];
+
+    // Dynamic import pdfkit
+    const PDFDocument = (await import('pdfkit')).default;
+
+    const doc = new PDFDocument({ size: 'LETTER', margins: { top: 50, bottom: 50, left: 50, right: 50 } });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    const pdfDone = new Promise<Buffer>((resolve) => {
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+
+    // ── Header ──
+    doc.fontSize(24).fillColor('#E8632B').font('Helvetica-Bold').text('homie', 50, 50, { continued: true });
+    doc.fontSize(14).fillColor('#9B9490').font('Helvetica').text(' inspect', { baseline: 'alphabetic' });
+    doc.moveDown(0.3);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#E8E4E0').stroke();
+    doc.moveDown(0.6);
+
+    // ── Property info ──
+    doc.fontSize(18).fillColor('#2D2926').font('Helvetica-Bold')
+      .text(`${report.propertyAddress}`);
+    doc.fontSize(12).fillColor('#6B6560').font('Helvetica')
+      .text(`${report.propertyCity}, ${report.propertyState} ${report.propertyZip}`);
+    doc.moveDown(0.3);
+    const metaParts: string[] = [];
+    if (report.inspectionDate) metaParts.push(`Inspection: ${new Date(report.inspectionDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`);
+    if (inspector?.companyName) metaParts.push(`Inspector: ${inspector.companyName}`);
+    if (report.clientName) metaParts.push(`Client: ${report.clientName}`);
+    if (metaParts.length) doc.fontSize(10).fillColor('#9B9490').text(metaParts.join('  |  '));
+    doc.moveDown(1);
+
+    // ── Summary bar ──
+    const totalItems = items.length;
+    const quotedItems = items.filter(i => i.quoteAmountCents && i.quoteAmountCents > 0);
+    const totalQuoteCents = quotedItems.reduce((s, i) => s + (i.quoteAmountCents ?? 0), 0);
+    const totalEstLowCents = items.reduce((s, i) => s + i.aiCostEstimateLowCents, 0);
+    const totalEstHighCents = items.reduce((s, i) => s + i.aiCostEstimateHighCents, 0);
+    const fmt = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+    const summaryY = doc.y;
+    doc.roundedRect(50, summaryY, 512, 52, 6).fillAndStroke('#F9F5F2', '#E8E4E0');
+    doc.fontSize(10).fillColor('#9B9490').font('Helvetica')
+      .text('Items', 70, summaryY + 10)
+      .font('Helvetica-Bold').fillColor('#2D2926').fontSize(16)
+      .text(`${totalItems}`, 70, summaryY + 24);
+    doc.fontSize(10).fillColor('#9B9490').font('Helvetica')
+      .text('Estimated range', 200, summaryY + 10)
+      .font('Helvetica-Bold').fillColor('#2D2926').fontSize(16)
+      .text(`${fmt(totalEstLowCents)} – ${fmt(totalEstHighCents)}`, 200, summaryY + 24);
+    if (quotedItems.length > 0) {
+      doc.fontSize(10).fillColor('#9B9490').font('Helvetica')
+        .text('Quoted total', 410, summaryY + 10)
+        .font('Helvetica-Bold').fillColor('#1B9E77').fontSize(16)
+        .text(fmt(totalQuoteCents), 410, summaryY + 24);
+    }
+    doc.y = summaryY + 64;
+
+    // ── Severity helpers ──
+    const sevColors: Record<string, string> = { safety_hazard: '#E24B4A', urgent: '#E24B4A', recommended: '#EF9F27', monitor: '#9B9490', informational: '#D3CEC9' };
+    const sevLabels: Record<string, string> = { safety_hazard: 'Safety Hazard', urgent: 'Urgent', recommended: 'Recommended', monitor: 'Monitor', informational: 'Info' };
+
+    // ── Item rows ──
+    for (const item of items) {
+      if (doc.y > 660) doc.addPage();
+
+      const rowY = doc.y;
+      const sevColor = sevColors[item.severity] ?? '#9B9490';
+
+      // Severity badge
+      doc.roundedRect(50, rowY, 4, 44, 2).fill(sevColor);
+
+      // Title + category
+      doc.fontSize(12).fillColor('#2D2926').font('Helvetica-Bold')
+        .text(item.title, 62, rowY + 2, { width: 340 });
+      const titleBottom = doc.y;
+      doc.fontSize(9).fillColor('#9B9490').font('Helvetica')
+        .text(`${sevLabels[item.severity] ?? item.severity}  •  ${item.category}${item.locationInProperty ? `  •  ${item.locationInProperty}` : ''}`, 62, titleBottom + 1, { width: 340 });
+
+      // Cost column (right side)
+      if (item.quoteAmountCents && item.quoteAmountCents > 0) {
+        doc.fontSize(14).fillColor('#1B9E77').font('Helvetica-Bold')
+          .text(fmt(item.quoteAmountCents), 420, rowY + 2, { width: 130, align: 'right' });
+        if (item.providerName) {
+          doc.fontSize(9).fillColor('#9B9490').font('Helvetica')
+            .text(item.providerName, 420, rowY + 20, { width: 130, align: 'right' });
+        }
+      } else if (item.aiCostEstimateLowCents > 0) {
+        doc.fontSize(11).fillColor('#6B6560').font('Helvetica')
+          .text(`${fmt(item.aiCostEstimateLowCents)} – ${fmt(item.aiCostEstimateHighCents)}`, 420, rowY + 6, { width: 130, align: 'right' });
+      }
+
+      doc.y = Math.max(doc.y, rowY + 48);
+      doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#F0ECE8').stroke();
+      doc.y += 8;
+    }
+
+    // ── Footer ──
+    if (doc.y > 680) doc.addPage();
+    doc.moveDown(1);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#E8E4E0').stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(9).fillColor('#9B9490').font('Helvetica')
+      .text(`Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} by Homie Inspect  •  homiepro.ai/inspect`, 50, doc.y, { align: 'center', width: 512 });
+
+    doc.end();
+    const pdfBuffer = await pdfDone;
+
+    const addrSlug = slugify(report.propertyAddress).slice(0, 40);
+    const filename = `homie-inspect-${addrSlug}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err) {
+    logger.error({ err }, '[GET /inspect/:token/pdf]');
+    res.status(500).json({ data: null, error: 'Failed to generate PDF', meta: {} });
+  }
+});
 
 // POST /api/v1/inspect/:token/checkout — create Stripe checkout for dispatches
 router.post('/:token/checkout', async (req: Request, res: Response) => {
@@ -812,6 +1041,8 @@ router.get('/:token/status', async (req: Request, res: Response) => {
           providerName: i.providerName,
           providerRating: i.providerRating,
           providerAvailability: i.providerAvailability,
+          quoteCount: Array.isArray(i.quotes) ? (i.quotes as unknown[]).length : 0,
+          quotes: i.quotes ?? [],
         })),
       },
       error: null, meta: {},

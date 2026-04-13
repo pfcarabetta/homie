@@ -319,6 +319,15 @@ export interface InspectPricing {
   savings: number;
 }
 
+export interface InspectQuote {
+  providerId: string;
+  providerName: string;
+  providerRating: string | null;
+  amountCents: number;
+  availability: string | null;
+  receivedAt: string;
+}
+
 export interface InspectStatusItem {
   id: string;
   dispatchStatus: string;
@@ -326,9 +335,25 @@ export interface InspectStatusItem {
   providerName: string | null;
   providerRating: string | null;
   providerAvailability: string | null;
+  quoteCount: number;
+  quotes: InspectQuote[];
 }
 
 export const inspectService = {
+  /** Homeowner self-upload — no auth required */
+  uploadReport(data: { report_file_data_url: string; property_address?: string; property_city?: string; property_state?: string; property_zip?: string; client_name?: string; client_email?: string }) {
+    return fetchAPI<{ reportId: string; token: string; reportUrl: string; parsingStatus: string }>(
+      '/api/v1/inspect/upload', { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
+
+  /** Poll parsing progress for self-uploads */
+  getUploadStatus(reportId: string) {
+    return fetchAPI<{ parsingStatus: string; parsingError: string | null; itemsParsed: number; clientAccessToken: string }>(
+      `/api/v1/inspect/upload/${reportId}/status`,
+    );
+  },
+
   getReport(token: string) {
     return fetchAPI<InspectReportPublic>(`/api/v1/inspect/${token}`);
   },

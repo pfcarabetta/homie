@@ -220,8 +220,26 @@ export default function InspectReport() {
           <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 4 }}>
             {report.propertyCity}, {report.propertyState} {report.propertyZip}
           </div>
-          <div style={{ fontSize: 12, color: '#9B9490' }}>
-            Inspected {formatDate(report.inspectionDate)} | {report.inspectionType}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 12, color: '#9B9490' }}>
+              Inspected {formatDate(report.inspectionDate)} | {report.inspectionType}
+            </div>
+            <a
+              href={`${import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}/api/v1/inspect/${token}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 12, fontWeight: 600, color: O, textDecoration: 'none',
+                padding: '4px 10px', borderRadius: 6, border: `1px solid ${O}`,
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = O; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = O; }}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 2v8m0 0l-3-3m3 3l3-3M3 13h10" /></svg>
+              PDF
+            </a>
           </div>
         </div>
 
