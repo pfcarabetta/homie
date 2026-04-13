@@ -432,6 +432,22 @@ export default function InspectReport() {
                           </div>
                         )}
 
+                        {/* Photo descriptions from inspection report */}
+                        {item.photoDescriptions?.length > 0 && (
+                          <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {item.photoDescriptions.map((desc, pi) => (
+                              <div key={pi} style={{
+                                display: 'flex', gap: 8, alignItems: 'flex-start',
+                                fontSize: 12, color: '#6B6560', background: '#F5F0EB',
+                                padding: '8px 12px', borderRadius: 8, lineHeight: 1.5,
+                              }}>
+                                <span style={{ fontSize: 14, lineHeight: '18px' }}>📷</span>
+                                <span style={{ fontStyle: 'italic' }}>{desc}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         {/* Cost estimate */}
                         {(item.costEstimateMin != null && item.costEstimateMin > 0) && (
                           <div style={{

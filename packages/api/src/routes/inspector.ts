@@ -582,6 +582,7 @@ router.get('/:token', async (req: Request, res: Response) => {
           severity: i.severity,
           category: i.category,
           location: i.locationInProperty,
+          photoDescriptions: i.inspectorPhotos ?? [],
           costEstimateMin: i.aiCostEstimateLowCents > 0 ? i.aiCostEstimateLowCents / 100 : null,
           costEstimateMax: i.aiCostEstimateHighCents > 0 ? i.aiCostEstimateHighCents / 100 : null,
           confidence: parseFloat(i.aiConfidence),
@@ -955,14 +956,16 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
       try {
         // Create a job in the main Homie outreach system
         const { jobs: jobsTable } = await import('../db/schema/jobs');
+        const photoDescs = (item.inspectorPhotos as string[] | null) ?? [];
         const diagnosis = {
           category: item.category || 'general',
           severity: item.severity === 'safety_hazard' ? 'high' : item.severity === 'urgent' ? 'high' : item.severity === 'recommended' ? 'medium' : 'low',
-          summary: `${item.title}${item.description ? '. ' + item.description : ''}`,
+          summary: `${item.title}${item.description ? '. ' + item.description : ''}${photoDescs.length ? '\n\nInspection photos: ' + photoDescs.join('; ') : ''}`,
           recommendedActions: [`Address: ${item.title}`],
           source: 'inspection_report',
           inspectionReportId: report.id,
           inspectionItemId: item.id,
+          photoDescriptions: photoDescs,
         };
 
         const budgetStr = item.aiCostEstimateLowCents && item.aiCostEstimateHighCents
@@ -1123,65 +1126,72 @@ async function parseInspectionReportAsync(reportId: string): Promise<void> {
 
     const client = new Anthropic({ apiKey });
 
-    // Download/decode the file and extract text
-    let reportText = '';
-    try {
-      let buffer: Buffer;
-      let contentType = '';
+    // Get the file as a buffer + content type
+    let buffer: Buffer;
+    let contentType = '';
 
+    try {
       if (report.reportFileUrl.startsWith('data:')) {
-        // Data URL — decode directly
         const commaIdx = report.reportFileUrl.indexOf(',');
         if (commaIdx === -1) throw new Error('Invalid data URL format');
-        const meta = report.reportFileUrl.slice(0, commaIdx); // e.g. "data:application/pdf;base64"
+        const meta = report.reportFileUrl.slice(0, commaIdx);
         const base64Data = report.reportFileUrl.slice(commaIdx + 1);
         contentType = meta.replace(/^data:/, '').replace(/;base64$/, '');
         buffer = Buffer.from(base64Data, 'base64');
-        logger.info({ reportId, contentType, bufferLength: buffer.length }, '[inspector] Decoded data URL');
       } else {
-        // Remote URL — download
         const fileRes = await fetch(report.reportFileUrl);
         if (!fileRes.ok) throw new Error(`Failed to download report: ${fileRes.status}`);
         contentType = fileRes.headers.get('content-type') || '';
         buffer = Buffer.from(await fileRes.arrayBuffer());
       }
-
-      if (contentType.includes('pdf')) {
-        // PDF: extract text using pdf-parse
-        const pdfParseModule = await import('pdf-parse');
-        const pdfParse = (pdfParseModule.default ?? pdfParseModule) as unknown as (buf: Buffer) => Promise<{ text: string; numpages: number }>;
-        const pdfData = await pdfParse(buffer);
-        reportText = pdfData.text;
-        if (!reportText || reportText.trim().length < 100) {
-          reportText = `[PDF with ${pdfData.numpages} pages, minimal extractable text.]`;
-        }
-      } else if (contentType.includes('html')) {
-        reportText = buffer.toString('utf-8');
-        reportText = reportText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      } else {
-        reportText = `[Report file with content-type: ${contentType}]`;
-      }
     } catch (dlErr) {
       const errMsg = (dlErr as Error).message ?? String(dlErr);
-      const errStack = (dlErr as Error).stack ?? '';
-      logger.warn({ err: errMsg, stack: errStack, reportId }, '[inspector] Failed to download/parse report');
-      reportText = `[Report file could not be parsed. Error: ${errMsg}]`;
+      logger.error({ err: errMsg, reportId }, '[inspector] Failed to get report file');
+      await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: `File download failed: ${errMsg}` }).where(eq(inspectionReports.id, reportId));
+      return;
     }
 
-    logger.info({ reportId, reportTextLength: reportText.length, reportTextPreview: reportText.slice(0, 200) }, '[inspector] Extracted report text');
+    logger.info({ reportId, contentType, bufferLength: buffer.length }, '[inspector] Got report file');
 
-    // Truncate to ~100k chars to stay within Claude's context
-    if (reportText.length > 100000) {
-      reportText = reportText.slice(0, 100000) + '\n\n[Report truncated — remaining pages omitted]';
+    // Build the message content — use Claude's native document support for PDFs
+    const isPdf = contentType.includes('pdf');
+    const base64File = buffer.toString('base64');
+
+    type ContentBlock = { type: 'document'; source: { type: 'base64'; media_type: string; data: string } }
+      | { type: 'text'; text: string };
+    const userContent: ContentBlock[] = [];
+
+    if (isPdf) {
+      // Send the PDF directly to Claude Vision — it sees layout, photos, tables, everything
+      userContent.push({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: base64File },
+      });
+    } else {
+      // HTML or other: extract text as fallback
+      let reportText = buffer.toString('utf-8');
+      if (contentType.includes('html')) {
+        reportText = reportText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+      if (reportText.length > 100000) {
+        reportText = reportText.slice(0, 100000) + '\n[truncated]';
+      }
+      userContent.push({ type: 'text', text: `--- BEGIN REPORT ---\n${reportText}\n--- END REPORT ---` });
     }
+
+    userContent.push({
+      type: 'text',
+      text: `Analyze this inspection report for the property at ${report.propertyAddress}, ${report.propertyCity}, ${report.propertyState} ${report.propertyZip}.\nInspection type: ${report.inspectionType}. Date: ${report.inspectionDate}.\n\nExtract all actionable items as a JSON array.`,
+    });
 
     const systemPrompt = `You are analyzing a home inspection report. Extract every deficiency, concern, or recommended repair item. For each item, provide:
 - title: a concise description (under 80 characters)
-- description: the full inspector's notes for this item
+- description: the full inspector's notes for this item, including what is visible in any associated photos
+- photo_descriptions: an array of strings describing each photo associated with this item (e.g. "Close-up of corroded copper pipe joint under kitchen sink showing green patina and active drip"). If no photos are associated, return an empty array []. Be specific about what the photo shows — a contractor will use this description to understand the issue without seeing the photo.
 - category: one of [plumbing, electrical, hvac, roofing, structural, general_repair, pest_control, safety, cosmetic, landscaping, appliance, insulation, foundation, windows_doors, fireplace]
 - severity: one of [safety_hazard, urgent, recommended, monitor, informational]
 - location_in_property: where in the property this issue exists
-- cost_estimate_low: low end cost estimate in dollars based on typical repair costs in ${report.propertyCity}, ${report.propertyState}
+- cost_estimate_low: low end cost estimate in dollars based on typical repair costs in ${report.propertyCity || 'the area'}, ${report.propertyState || 'US'}
 - cost_estimate_high: high end cost estimate in dollars
 - confidence: your confidence (0.0-1.0) that you've correctly identified and categorized this item
 
@@ -1189,12 +1199,13 @@ Rules:
 - Only extract items that require action (repair, replacement, further evaluation, or monitoring)
 - Do NOT extract items noted as functional, satisfactory, or within normal parameters
 - Separate compound items: if the inspector found issues in multiple locations, note the primary location
-- Cost estimates should reflect the local market based on ${report.propertyCity}, ${report.propertyState}
+- Cost estimates should reflect the local market
 - Safety hazards: electrical hazards, gas leaks, structural failures, fire risks, CO risks, fall hazards
 - Urgent: active leaks, non-functioning critical systems, significant roof/structural damage
 - Recommended: items to address within 6-12 months
 - Monitor: items to watch that may need future attention
 - Informational: included sparingly for awareness only
+- For photo_descriptions: describe what is physically visible in each photo related to this item. Include details about condition, damage, location, and any visible brand/model info. If a photo shows multiple issues, include the description under each relevant item.
 
 Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
 
@@ -1202,10 +1213,7 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
       model: 'claude-sonnet-4-6',
       max_tokens: 16384,
       system: systemPrompt,
-      messages: [{
-        role: 'user',
-        content: `Analyze this inspection report for the property at ${report.propertyAddress}, ${report.propertyCity}, ${report.propertyState} ${report.propertyZip}.\nInspection type: ${report.inspectionType}. Date: ${report.inspectionDate}.\n\n--- BEGIN REPORT ---\n${reportText}\n--- END REPORT ---\n\nExtract all actionable items as a JSON array.`,
-      }],
+      messages: [{ role: 'user', content: userContent as never }],
     });
 
     const textBlock = response.content.find(b => b.type === 'text');
@@ -1227,15 +1235,13 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
     }
 
     let parsedItems: Array<{
-      title: string; description?: string; category: string; severity: string;
+      title: string; description?: string; photo_descriptions?: string[]; category: string; severity: string;
       location_in_property?: string; cost_estimate_low?: number; cost_estimate_high?: number; confidence?: number;
     }>;
 
     try {
       parsedItems = JSON.parse(raw);
     } catch {
-      // Response may have been truncated — try to salvage complete items
-      // Find the last complete object by finding the last "}," or "}" before end
       const lastComplete = raw.lastIndexOf('},');
       if (lastComplete > 0) {
         const repaired = raw.slice(0, lastComplete + 1) + ']';
@@ -1272,6 +1278,7 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
         category: item.category || 'general_repair',
         severity: item.severity || 'recommended',
         locationInProperty: item.location_in_property || null,
+        inspectorPhotos: item.photo_descriptions?.length ? item.photo_descriptions : null,
         aiCostEstimateLowCents: Math.round((item.cost_estimate_low ?? 0) * 100),
         aiCostEstimateHighCents: Math.round((item.cost_estimate_high ?? 0) * 100),
         aiConfidence: confidence.toFixed(2),

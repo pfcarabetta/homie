@@ -62,6 +62,7 @@ export interface InspectionItem {
   severity: 'safety_hazard' | 'urgent' | 'recommended' | 'monitor' | 'informational';
   category: string;
   location: string | null;
+  photoDescriptions: string[];
   costEstimateMin: number | null;
   costEstimateMax: number | null;
   confidence: number;
