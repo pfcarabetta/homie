@@ -1179,7 +1179,7 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 8192,
+      max_tokens: 16384,
       system: systemPrompt,
       messages: [{
         role: 'user',
@@ -1212,10 +1212,25 @@ Return ONLY a JSON array of items. No preamble, no markdown code fences.`;
 
     try {
       parsedItems = JSON.parse(raw);
-    } catch (parseErr) {
-      logger.warn({ reportId, parseError: (parseErr as Error).message, rawPreview: raw.slice(0, 500) }, '[inspector] JSON parse failed');
-      await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: `Failed to parse AI response: ${(parseErr as Error).message}` }).where(eq(inspectionReports.id, reportId));
-      return;
+    } catch {
+      // Response may have been truncated — try to salvage complete items
+      // Find the last complete object by finding the last "}," or "}" before end
+      const lastComplete = raw.lastIndexOf('},');
+      if (lastComplete > 0) {
+        const repaired = raw.slice(0, lastComplete + 1) + ']';
+        try {
+          parsedItems = JSON.parse(repaired);
+          logger.info({ reportId, repairedCount: parsedItems.length }, '[inspector] Repaired truncated JSON');
+        } catch (repairErr) {
+          logger.warn({ reportId, parseError: (repairErr as Error).message, rawTail: raw.slice(-200) }, '[inspector] JSON repair also failed');
+          await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: 'AI response was truncated and could not be repaired' }).where(eq(inspectionReports.id, reportId));
+          return;
+        }
+      } else {
+        logger.warn({ reportId, rawTail: raw.slice(-200) }, '[inspector] JSON parse failed, no repairable content');
+        await db.update(inspectionReports).set({ parsingStatus: 'failed', parsingError: 'Failed to parse AI response' }).where(eq(inspectionReports.id, reportId));
+        return;
+      }
     }
 
     if (!Array.isArray(parsedItems) || parsedItems.length === 0) {
