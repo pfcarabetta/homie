@@ -47,7 +47,7 @@ export type NewInspectorPartner = typeof inspectorPartners.$inferInsert;
 // ── Inspection Reports ────────────────────────────────────────────────────
 export const inspectionReports = pgTable('inspection_reports', {
   id: uuid('id').defaultRandom().primaryKey(),
-  inspectorPartnerId: uuid('inspector_partner_id').notNull().references(() => inspectorPartners.id, { onDelete: 'cascade' }),
+  inspectorPartnerId: uuid('inspector_partner_id').references(() => inspectorPartners.id, { onDelete: 'cascade' }),
   propertyAddress: text('property_address').notNull(),
   propertyCity: text('property_city').notNull(),
   propertyState: text('property_state').notNull(),

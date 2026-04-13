@@ -538,11 +538,13 @@ router.get('/:token', async (req: Request, res: Response) => {
     const items = await db.select().from(inspectionReportItems)
       .where(eq(inspectionReportItems.reportId, report.id))
       .orderBy(inspectionReportItems.sortOrder);
-    const [inspector] = await db.select({
-      companyName: inspectorPartners.companyName,
-      companyLogoUrl: inspectorPartners.companyLogoUrl,
-      certifications: inspectorPartners.certifications,
-    }).from(inspectorPartners).where(eq(inspectorPartners.id, report.inspectorPartnerId)).limit(1);
+    const [inspector] = report.inspectorPartnerId
+      ? await db.select({
+          companyName: inspectorPartners.companyName,
+          companyLogoUrl: inspectorPartners.companyLogoUrl,
+          certifications: inspectorPartners.certifications,
+        }).from(inspectorPartners).where(eq(inspectorPartners.id, report.inspectorPartnerId)).limit(1)
+      : [null];
 
     res.json({
       data: {
@@ -608,7 +610,7 @@ router.post('/upload', async (req: Request, res: Response) => {
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
     const [report] = await db.insert(inspectionReports).values({
-      inspectorPartnerId: null as unknown as string, // No inspector for self-uploads
+      inspectorPartnerId: null,
       propertyAddress: body.property_address || 'Address pending',
       propertyCity: body.property_city || '',
       propertyState: body.property_state || '',
@@ -622,7 +624,7 @@ router.post('/upload', async (req: Request, res: Response) => {
       parsingStatus: 'processing',
       clientAccessToken,
       expiresAt,
-    } as Record<string, unknown>).returning();
+    }).returning();
 
     // Kick off async parsing
     void parseInspectionReportAsync(report.id).catch(err =>
