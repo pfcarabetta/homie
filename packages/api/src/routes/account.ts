@@ -758,6 +758,29 @@ router.get('/reports', async (req: Request, res: Response) => {
   }
 });
 
+// DELETE /api/v1/account/reports/:reportId — delete a report and its items
+router.delete('/reports/:reportId', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select({ id: inspectionReports.id })
+      .from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    // Items cascade-delete via FK constraint
+    await db.delete(inspectionReports).where(eq(inspectionReports.id, report.id));
+
+    res.json({ data: { deleted: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[DELETE /account/reports/:reportId]');
+    res.status(500).json({ data: null, error: 'Failed to delete report', meta: {} });
+  }
+});
+
 // Per-report pricing tiers
 const REPORT_TIER_PRICES: Record<string, { cents: number; label: string }> = {
   essential: { cents: 9900, label: 'Essential' },

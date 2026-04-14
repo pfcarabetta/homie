@@ -55,12 +55,25 @@ export default function ReportsTab({ onNavigate, reports, onReportsChange }: Rep
     return <ReportDetail reportId={selectedReportId} reports={reports} onBack={backToList} onReportsChange={onReportsChange} onNavigate={onNavigate} />;
   }
 
-  return <ReportList reports={reports} onUpload={() => setView('upload')} onOpen={openReport} />;
+  return <ReportList reports={reports} onUpload={() => setView('upload')} onOpen={openReport} onReportsChange={onReportsChange} />;
 }
 
 // ── Report List ─────────────────────────────────────────────────────────────
 
-function ReportList({ reports, onUpload, onOpen }: { reports: PortalReport[]; onUpload: () => void; onOpen: (id: string) => void }) {
+function ReportList({ reports, onUpload, onOpen, onReportsChange }: { reports: PortalReport[]; onUpload: () => void; onOpen: (id: string) => void; onReportsChange: () => void }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete(id: string) {
+    setDeleting(true);
+    try {
+      await inspectService.deleteReport(id);
+      setConfirmDeleteId(null);
+      onReportsChange();
+    } catch { /* ignore */ }
+    setDeleting(false);
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -100,43 +113,100 @@ function ReportList({ reports, onUpload, onOpen }: { reports: PortalReport[]; on
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {reports.map(r => (
-            <button key={r.id} onClick={() => onOpen(r.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 16, padding: '18px 22px',
+            <div key={r.id} style={{
+              display: 'flex', alignItems: 'center', gap: 0,
               background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
-              cursor: 'pointer', textAlign: 'left', width: '100%',
-              transition: 'border-color 0.15s',
+              transition: 'border-color 0.15s', overflow: 'hidden',
             }}
             onMouseOver={e => (e.currentTarget.style.borderColor = ACCENT)}
             onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--bp-border)')}
             >
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: `${ACCENT}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                {'\uD83C\uDFE0'}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {r.propertyAddress}
+              {/* Report card — clickable */}
+              <button onClick={() => onOpen(r.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 16, padding: '18px 22px',
+                background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 0,
+              }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: `${ACCENT}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                  {'\uD83C\uDFE0'}
                 </div>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>
-                  {r.propertyCity}, {r.propertyState} &middot; {formatDate(r.inspectionDate || r.createdAt)}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {r.propertyAddress}
+                  </div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>
+                    {r.propertyCity}, {r.propertyState} &middot; {formatDate(r.inspectionDate || r.createdAt)}
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                {r.parsingStatus === 'processing' ? (
-                  <StatusBadge label="Processing" color="#3B82F6" pulse />
-                ) : r.pricingTier ? (
-                  <StatusBadge label={r.pricingTier.charAt(0).toUpperCase() + r.pricingTier.slice(1)} color="#10B981" />
-                ) : r.parsingStatus === 'parsed' || r.parsingStatus === 'review_pending' || r.parsingStatus === 'sent_to_client' ? (
-                  <StatusBadge label="Ready" color="#10B981" />
-                ) : r.parsingStatus === 'failed' ? (
-                  <StatusBadge label="Failed" color="#EF4444" />
-                ) : null}
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', minWidth: 60, textAlign: 'right' }}>
-                  {r.itemCount} item{r.itemCount !== 1 ? 's' : ''}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  {r.parsingStatus === 'processing' ? (
+                    <StatusBadge label="Processing" color="#3B82F6" pulse />
+                  ) : r.pricingTier ? (
+                    <StatusBadge label={r.pricingTier.charAt(0).toUpperCase() + r.pricingTier.slice(1)} color="#10B981" />
+                  ) : r.parsingStatus === 'parsed' || r.parsingStatus === 'review_pending' || r.parsingStatus === 'sent_to_client' ? (
+                    <StatusBadge label="Ready" color="#10B981" />
+                  ) : r.parsingStatus === 'failed' ? (
+                    <StatusBadge label="Failed" color="#EF4444" />
+                  ) : null}
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', minWidth: 60, textAlign: 'right' }}>
+                    {r.itemCount} item{r.itemCount !== 1 ? 's' : ''}
+                  </div>
+                  <svg width={16} height={16} viewBox="0 0 20 20" fill="none" stroke="var(--bp-subtle)" strokeWidth="2" strokeLinecap="round"><path d="M8 4l6 6-6 6" /></svg>
                 </div>
-                <svg width={16} height={16} viewBox="0 0 20 20" fill="none" stroke="var(--bp-subtle)" strokeWidth="2" strokeLinecap="round"><path d="M8 4l6 6-6 6" /></svg>
-              </div>
-            </button>
+              </button>
+
+              {/* Delete button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(r.id); }}
+                title="Delete report"
+                style={{
+                  padding: '18px 14px', background: 'none', border: 'none', borderLeft: '1px solid var(--bp-border)',
+                  cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center',
+                  opacity: 0.4, transition: 'opacity 0.15s',
+                }}
+                onMouseOver={e => (e.currentTarget.style.opacity = '1')}
+                onMouseOut={e => (e.currentTarget.style.opacity = '0.4')}
+              >
+                <svg width={16} height={16} viewBox="0 0 20 20" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round">
+                  <path d="M3 6h14M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2M5 6v11a2 2 0 002 2h6a2 2 0 002-2V6" />
+                </svg>
+              </button>
+            </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDeleteId && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}
+        onClick={() => setConfirmDeleteId(null)}
+        >
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--bp-card)', borderRadius: 16, padding: '28px 24px',
+            maxWidth: 400, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+          }}>
+            <h3 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 17, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 8px' }}>
+              Delete Report?
+            </h3>
+            <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: '0 0 20px' }}>
+              This will permanently delete this report and all its parsed items. This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmDeleteId(null)} style={{
+                padding: '8px 18px', borderRadius: 8, border: '1px solid var(--bp-border)',
+                background: 'transparent', color: 'var(--bp-text)', cursor: 'pointer',
+                fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+              }}>Cancel</button>
+              <button onClick={() => handleDelete(confirmDeleteId)} disabled={deleting} style={{
+                padding: '8px 18px', borderRadius: 8, border: 'none',
+                background: '#EF4444', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer',
+                fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+                opacity: deleting ? 0.7 : 1,
+              }}>{deleting ? 'Deleting...' : 'Delete'}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

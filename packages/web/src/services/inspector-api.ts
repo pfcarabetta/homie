@@ -397,6 +397,11 @@ export const inspectService = {
     return fetchAPI<{ reports: PortalReport[] }>('/api/v1/account/reports');
   },
 
+  /** Authenticated: delete a report */
+  deleteReport(reportId: string) {
+    return fetchAPI<{ deleted: boolean }>(`/api/v1/account/reports/${reportId}`, { method: 'DELETE' });
+  },
+
   /** Authenticated: checkout for portal report tier */
   portalCheckout(reportId: string, tier: 'essential' | 'professional' | 'premium') {
     return fetchAPI<{ checkoutUrl: string; amountCents: number; tier: string }>(

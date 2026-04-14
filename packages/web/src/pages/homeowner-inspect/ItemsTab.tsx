@@ -39,6 +39,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [activeSeverity, setActiveSeverity] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [dispatching, setDispatching] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<string | null>(null);
 
@@ -80,10 +81,21 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
 
   const filteredItems = useMemo(() => {
     let items = fullItems;
+    if (activeReportId) items = items.filter(i => i._reportId === activeReportId);
     if (activeSeverity) items = items.filter(i => i.severity === activeSeverity);
     if (activeCategory) items = items.filter(i => i.category === activeCategory);
     return items;
-  }, [fullItems, activeSeverity, activeCategory]);
+  }, [fullItems, activeReportId, activeSeverity, activeCategory]);
+
+  // Unique reports for filter
+  const reportOptions = useMemo(() => {
+    const seen = new Map<string, { id: string; address: string; count: number }>();
+    for (const item of fullItems) {
+      const existing = seen.get(item._reportId);
+      if (existing) { existing.count++; } else { seen.set(item._reportId, { id: item._reportId, address: item._reportAddress, count: 1 }); }
+    }
+    return Array.from(seen.values());
+  }, [fullItems]);
 
   const categories = useMemo(() => {
     const map = new Map<string, number>();
@@ -269,6 +281,30 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
               color: selectedCount === 0 ? ACCENT : 'var(--bp-subtle)', cursor: 'pointer',
             }}>Deselect All</button>
           </div>
+        </div>
+      )}
+
+      {/* Report filter */}
+      {reportOptions.length > 1 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', padding: '5px 0', marginRight: 4 }}>Report:</span>
+          <button onClick={() => setActiveReportId(null)} style={{
+            fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
+            borderRadius: 20, border: `1px solid ${!activeReportId ? ACCENT : 'var(--bp-border)'}`,
+            background: !activeReportId ? `${ACCENT}10` : 'transparent',
+            color: !activeReportId ? ACCENT : 'var(--bp-subtle)', cursor: 'pointer',
+          }}>All Reports</button>
+          {reportOptions.map(r => (
+            <button key={r.id} onClick={() => setActiveReportId(activeReportId === r.id ? null : r.id)} style={{
+              fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
+              borderRadius: 20, border: `1px solid ${activeReportId === r.id ? ACCENT : 'var(--bp-border)'}`,
+              background: activeReportId === r.id ? `${ACCENT}10` : 'transparent',
+              color: activeReportId === r.id ? ACCENT : 'var(--bp-subtle)', cursor: 'pointer',
+              maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {r.address} ({r.count})
+            </button>
+          ))}
         </div>
       )}
 
