@@ -476,6 +476,17 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                     </div>
                   )}
 
+                  {/* Photo descriptions */}
+                  {item.photoDescriptions && item.photoDescriptions.length > 0 && (
+                    <div style={{ marginTop: 4, marginBottom: 4, padding: '6px 10px', background: 'var(--bp-bg)', borderRadius: 6 }}>
+                      {item.photoDescriptions.map((desc, i) => (
+                        <div key={i} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)', marginBottom: i < item.photoDescriptions.length - 1 ? 3 : 0 }}>
+                          <span style={{ opacity: 0.5 }}>Photo {i + 1}:</span> {desc}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Report address */}
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)', opacity: 0.7 }}>
                     {item._reportAddress}
