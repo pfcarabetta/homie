@@ -47,6 +47,7 @@ import InspectorMarketing from '@/pages/inspector/InspectorMarketing';
 import InspectorSettings from '@/pages/inspector/InspectorSettings';
 import InspectReport from '@/pages/InspectReport';
 import InspectProviderView from '@/pages/InspectProviderView';
+import InspectPortal from '@/pages/homeowner-inspect';
 import TrackingStatus from '@/pages/TrackingStatus';
 import GuestReporterPage from '@/pages/GuestReporter';
 import LoadingDemo from '@/pages/LoadingDemo';
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="/account" element={<Account />} />
           <Route path="/business" element={<BusinessPortal />} />
           <Route path="/business/landing" element={<BusinessLanding />} />
+          <Route path="/inspect-portal" element={<InspectPortal />} />
           <Route path="/inspect" element={<InspectionLanding />} />
           <Route path="/inspect/inspectors" element={<InspectionInspectorsLanding />} />
           <Route path="/business/chat" element={<BusinessChat />} />
