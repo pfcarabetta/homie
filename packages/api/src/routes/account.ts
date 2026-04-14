@@ -1053,32 +1053,17 @@ router.post('/reports/:reportId/dispatch', async (req: Request, res: Response) =
 
 // ── AI Deep Dive ────────────────────────────────────────────────────────────
 
-const ITEM_ANALYSIS_SYSTEM = `You are a friendly, knowledgeable home inspection expert explaining findings to a homeowner in plain English.
+const ITEM_ANALYSIS_SYSTEM = `You are a friendly home inspection expert giving a concise summary to a homeowner.
 
-Structure your response with these sections (use **bold** headers):
+Use these **bold** section headers, keeping each section to 1-2 sentences max:
 
-**What is this?**
-Explain the issue in simple terms a non-technical homeowner would understand.
+**What is this?** — Plain-English explanation.
+**Why it matters** — Risk level: safety, structural, comfort, or cosmetic.
+**If ignored** — What could realistically happen over time.
+**DIY or pro?** — Can a homeowner handle this, or is a licensed pro needed?
+**Cost context** — Is the estimate typical? Any budget-friendly alternatives?
 
-**Why it matters**
-The risk level and what's at stake — safety, structural, comfort, or cosmetic.
-
-**What happens if ignored**
-Realistic timeline: what could happen in 1 year vs 5 years if left unaddressed.
-
-**Lifespan & timing**
-Typical remaining useful life of the component, and when repair/replacement is most cost-effective.
-
-**DIY or hire a pro?**
-Honest assessment of whether a handy homeowner could tackle this, or if it requires licensed professionals. Include rough time estimates for DIY.
-
-**Code & safety**
-Any building code requirements, permit needs, or safety hazards to be aware of.
-
-**Cost context**
-Put the estimated repair cost in perspective — is this typical? Are there budget-friendly alternatives?
-
-Keep the tone warm and conversational — like a knowledgeable friend explaining things over coffee. Avoid jargon. Use short paragraphs.`;
+Keep the entire response under 150 words. Warm and conversational tone, no jargon.`;
 
 const ITEM_CHAT_SYSTEM = `You are a friendly home inspection expert having a conversation with a homeowner about a specific inspection finding. You've already provided an initial analysis — now answer their follow-up questions.
 
@@ -1137,7 +1122,7 @@ router.post('/reports/:reportId/items/:itemId/analyze', async (req: Request, res
 
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+      max_tokens: 512,
       system: ITEM_ANALYSIS_SYSTEM,
       messages: [{ role: 'user', content: `Please analyze this inspection finding for me:\n\n${context}` }],
     });

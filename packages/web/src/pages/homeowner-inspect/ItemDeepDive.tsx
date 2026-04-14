@@ -20,17 +20,19 @@ export default function ItemDeepDive({ reportId, itemId, itemTitle }: ItemDeepDi
   const abortRef = useRef<AbortController | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Auto-trigger analysis on mount (run once)
+  // Auto-trigger analysis on mount (run once), buffer and show when complete
   const startedRef = useRef(false);
+  const bufferRef = useRef('');
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
     setAnalyzing(true);
     setError(null);
+    bufferRef.current = '';
 
     const callbacks: StreamCallbacks = {
-      onToken: (token) => setAnalysis(prev => prev + token),
-      onDone: () => { setAnalyzing(false); setAnalyzed(true); },
+      onToken: (token) => { bufferRef.current += token; },
+      onDone: () => { setAnalysis(bufferRef.current); setAnalyzing(false); setAnalyzed(true); },
       onError: (err) => { setAnalyzing(false); setError(err.message); },
     };
 
@@ -119,7 +121,6 @@ export default function ItemDeepDive({ reportId, itemId, itemTitle }: ItemDeepDi
         {analysis && (
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-text)', lineHeight: 1.7 }}>
             <MarkdownLite text={analysis} />
-            {analyzing && <TypingCursor />}
           </div>
         )}
 
