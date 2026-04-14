@@ -852,7 +852,7 @@ function ItemCard({ item }: { item: InspectionItem }) {
         </div>
         {(item.costEstimateMin || item.costEstimateMax) && (
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', textAlign: 'right' }}>
-            {formatCurrency((item.costEstimateMin ?? 0) / 100)} - {formatCurrency((item.costEstimateMax ?? 0) / 100)}
+            {formatCurrency(item.costEstimateMin ?? 0)} - {formatCurrency(item.costEstimateMax ?? 0)}
           </div>
         )}
       </div>

@@ -488,10 +488,10 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                 {(item.costEstimateMin || item.costEstimateMax) && (
                   <div style={{ flexShrink: 0, textAlign: 'right' }}>
                     <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: 'var(--bp-text)' }}>
-                      {formatCurrency((item.costEstimateMin ?? 0) / 100)}
+                      {formatCurrency(item.costEstimateMin ?? 0)}
                     </div>
                     <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)' }}>
-                      to {formatCurrency((item.costEstimateMax ?? 0) / 100)}
+                      to {formatCurrency(item.costEstimateMax ?? 0)}
                     </div>
                   </div>
                 )}
