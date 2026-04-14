@@ -82,6 +82,15 @@ async function start() {
     }
   }
 
+  // ── Schema patches — add columns that may be missing from older migrations ──
+  try {
+    const { sql } = await import('drizzle-orm');
+    await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS pricing_tier text`);
+    logger.info('Schema patch: pricing_tier column ensured');
+  } catch (patchErr) {
+    logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');
+  }
+
   // ── One-time data fix: Handy Mandy quote on job 6d4cba32 ────────────────
   // Restores the correct $210-$280 range from "$70/hr 3hr min, possibly 4 hours"
   // and reverts the phantom "completed" status (no active booking) to "expired"
