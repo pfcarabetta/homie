@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { inspectService, type PortalReport, type InspectReportPublic, type InspectionItem, type InspectStatusItem } from '@/services/inspector-api';
 import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate } from './constants';
 import type { Tab } from './constants';
+import ItemDeepDive from './ItemDeepDive';
 
 interface ReportsTabProps {
   onNavigate: (tab: Tab) => void;
@@ -484,6 +485,7 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [pricingTier, setPricingTier] = useState<string | null>(portalReport?.pricingTier ?? null);
   const [checkingPayment, setCheckingPayment] = useState(false);
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load full report via token — if portalReport isn't in the list yet
@@ -693,7 +695,14 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
           {/* Item cards */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {filteredItems.map(item => (
-              <ItemCard key={item.id} item={item} />
+              <ItemCard
+                key={item.id}
+                item={item}
+                expanded={expandedItemId === item.id}
+                onToggleExpand={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
+                reportId={reportId}
+                showDeepDive={!isLocked}
+              />
             ))}
           </div>
         </div>
@@ -822,16 +831,29 @@ function PricingModal({ reportId, itemCount }: { reportId: string; itemCount: nu
 
 // ── Item Card ───────────────────────────────────────────────────────────────
 
-function ItemCard({ item }: { item: InspectionItem }) {
+function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive }: {
+  item: InspectionItem;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  reportId?: string;
+  showDeepDive?: boolean;
+}) {
   const sevColor = SEVERITY_COLORS[item.severity] ?? '#9B9490';
   const catLabel = CATEGORY_LABELS[item.category] ?? item.category;
   const catIcon = CATEGORY_ICONS[item.category] ?? '';
+  const canExpand = showDeepDive && onToggleExpand && reportId;
 
   return (
-    <div style={{
-      background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
-      padding: '18px 20px',
-    }}>
+    <div
+      onClick={canExpand ? onToggleExpand : undefined}
+      style={{
+        background: 'var(--bp-card)', borderRadius: 14,
+        border: `1px solid ${expanded ? ACCENT : 'var(--bp-border)'}`,
+        padding: '18px 20px',
+        cursor: canExpand ? 'pointer' : 'default',
+        transition: 'border-color 0.15s',
+      }}
+    >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
         <div style={{ flex: 1 }}>
@@ -845,6 +867,15 @@ function ItemCard({ item }: { item: InspectionItem }) {
             <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)' }}>
               {catIcon} {catLabel}
             </span>
+            {canExpand && (
+              <span style={{
+                fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
+                padding: '2px 6px', borderRadius: 4, background: `${ACCENT}12`, color: ACCENT,
+                marginLeft: 'auto',
+              }}>
+                AI {expanded ? '\u25B2' : '\u25BC'}
+              </span>
+            )}
           </div>
           <h4 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 600, color: 'var(--bp-text)', margin: 0 }}>
             {item.title}
@@ -908,6 +939,11 @@ function ItemCard({ item }: { item: InspectionItem }) {
           <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: ACCENT, animation: 'pulse 1.5s ease-in-out infinite' }} />
           Waiting for quotes...
         </div>
+      )}
+
+      {/* AI Deep Dive — expanded view */}
+      {expanded && reportId && (
+        <ItemDeepDive reportId={reportId} itemId={item.id} itemTitle={item.title} />
       )}
     </div>
   );

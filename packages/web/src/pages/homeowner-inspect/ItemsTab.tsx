@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { inspectService, type PortalReport, type InspectionItem } from '@/services/inspector-api';
 import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency } from './constants';
 import type { Tab } from './constants';
+import ItemDeepDive from './ItemDeepDive';
 
 const ACCENT = '#2563EB';
 
@@ -42,6 +43,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [dispatching, setDispatching] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<string | null>(null);
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
   // Fetch full items from all reports
   useState(() => {
@@ -448,6 +450,18 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                         borderRadius: 10, background: '#10B98115', color: '#10B981',
                       }}>Quoted</span>
                     )}
+                    {(item._pricingTier === 'professional' || item._pricingTier === 'premium' || item._pricingTier === 'essential') && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setExpandedItemId(expandedItemId === item.id ? null : item.id); }}
+                        style={{
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
+                          padding: '2px 6px', borderRadius: 4, background: `${ACCENT}12`, color: ACCENT,
+                          border: 'none', cursor: 'pointer', marginLeft: 'auto',
+                        }}
+                      >
+                        AI {expandedItemId === item.id ? '\u25B2' : '\u25BC'}
+                      </button>
+                    )}
                   </div>
 
                   {/* Title */}
@@ -496,6 +510,11 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                   </div>
                 )}
               </div>
+
+              {/* AI Deep Dive */}
+              {expandedItemId === item.id && (
+                <ItemDeepDive reportId={item._reportId} itemId={item.id} itemTitle={item.title} />
+              )}
             </div>
           );
         })}

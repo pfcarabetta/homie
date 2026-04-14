@@ -1,4 +1,4 @@
-import { fetchAPI, type ApiResponse } from '@/services/api';
+import { fetchAPI, getToken, type ApiResponse } from '@/services/api';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const TOKEN_KEY = 'homie_inspector_token';
@@ -426,6 +426,95 @@ export const inspectService = {
     );
   },
 };
+
+// ── SSE streaming helpers for AI deep dive ────────────────────────────────
+
+export interface StreamCallbacks {
+  onToken: (token: string) => void;
+  onDone: () => void;
+  onError: (err: Error) => void;
+}
+
+function streamSSE(
+  path: string,
+  body: Record<string, unknown>,
+  callbacks: StreamCallbacks,
+): AbortController {
+  const controller = new AbortController();
+  const token = getToken();
+
+  (async () => {
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        const text = await res.text();
+        callbacks.onError(new Error(text || `SSE failed: ${res.status}`));
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+
+          if (payload === '[DONE]') {
+            callbacks.onDone();
+            return;
+          }
+
+          try {
+            const data = JSON.parse(payload) as { token?: string; error?: string };
+            if (data.error) { callbacks.onError(new Error(data.error)); return; }
+            if (data.token) callbacks.onToken(data.token);
+          } catch { /* skip malformed lines */ }
+        }
+      }
+
+      callbacks.onDone();
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        callbacks.onError(err as Error);
+      }
+    }
+  })();
+
+  return controller;
+}
+
+/** Stream AI analysis for an inspection item */
+export function analyzeItem(reportId: string, itemId: string, callbacks: StreamCallbacks): AbortController {
+  return streamSSE(`/api/v1/account/reports/${reportId}/items/${itemId}/analyze`, {}, callbacks);
+}
+
+/** Stream AI follow-up chat about an inspection item */
+export function chatItem(
+  reportId: string,
+  itemId: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  callbacks: StreamCallbacks,
+): AbortController {
+  return streamSSE(`/api/v1/account/reports/${reportId}/items/${itemId}/chat`, { messages }, callbacks);
+}
 
 // ── Portal types ──────────────────────────────────────────────────────────
 

@@ -1051,4 +1051,186 @@ router.post('/reports/:reportId/dispatch', async (req: Request, res: Response) =
   }
 });
 
+// ── AI Deep Dive ────────────────────────────────────────────────────────────
+
+const ITEM_ANALYSIS_SYSTEM = `You are a friendly, knowledgeable home inspection expert explaining findings to a homeowner in plain English.
+
+Structure your response with these sections (use **bold** headers):
+
+**What is this?**
+Explain the issue in simple terms a non-technical homeowner would understand.
+
+**Why it matters**
+The risk level and what's at stake — safety, structural, comfort, or cosmetic.
+
+**What happens if ignored**
+Realistic timeline: what could happen in 1 year vs 5 years if left unaddressed.
+
+**Lifespan & timing**
+Typical remaining useful life of the component, and when repair/replacement is most cost-effective.
+
+**DIY or hire a pro?**
+Honest assessment of whether a handy homeowner could tackle this, or if it requires licensed professionals. Include rough time estimates for DIY.
+
+**Code & safety**
+Any building code requirements, permit needs, or safety hazards to be aware of.
+
+**Cost context**
+Put the estimated repair cost in perspective — is this typical? Are there budget-friendly alternatives?
+
+Keep the tone warm and conversational — like a knowledgeable friend explaining things over coffee. Avoid jargon. Use short paragraphs.`;
+
+const ITEM_CHAT_SYSTEM = `You are a friendly home inspection expert having a conversation with a homeowner about a specific inspection finding. You've already provided an initial analysis — now answer their follow-up questions.
+
+Be concise, helpful, and honest. If you don't know something specific to their home, say so and suggest who they could ask (inspector, contractor, etc). Keep responses focused and under 200 words unless the question warrants more detail.`;
+
+function buildItemContext(item: { title: string; description: string | null; severity: string; category: string; locationInProperty: string | null; inspectorPhotos: string[] | null; aiCostEstimateLowCents: number; aiCostEstimateHighCents: number; aiConfidence: string | number }, reportAddress: string): string {
+  const photos = (item.inspectorPhotos as string[] | null) ?? [];
+  return `Inspection Item: ${item.title}
+Category: ${item.category.replace(/_/g, ' ')}
+Severity: ${item.severity.replace(/_/g, ' ')}
+Location: ${item.locationInProperty || 'Not specified'}
+Property: ${reportAddress}
+
+Inspector Notes: ${item.description || 'None provided'}
+
+${photos.length > 0 ? `Photo Descriptions:\n${photos.map((p, i) => `${i + 1}. ${p}`).join('\n')}` : ''}
+
+Estimated Repair Cost: $${Math.round(item.aiCostEstimateLowCents / 100)} – $${Math.round(item.aiCostEstimateHighCents / 100)}
+AI Confidence: ${Math.round(Number(item.aiConfidence) * 100)}%`;
+}
+
+// POST /api/v1/account/reports/:reportId/items/:itemId/analyze — SSE stream AI analysis
+router.post('/reports/:reportId/items/:itemId/analyze', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select({
+      id: inspectionReports.id,
+      propertyAddress: inspectionReports.propertyAddress,
+      propertyCity: inspectionReports.propertyCity,
+      propertyState: inspectionReports.propertyState,
+    }).from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+
+    const [item] = await db.select().from(inspectionReportItems)
+      .where(and(eq(inspectionReportItems.id, req.params.itemId), eq(inspectionReportItems.reportId, report.id)))
+      .limit(1);
+
+    if (!item) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) { res.status(500).json({ data: null, error: 'AI service not configured', meta: {} }); return; }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic({ apiKey });
+    const address = `${report.propertyAddress}, ${report.propertyCity} ${report.propertyState}`;
+    const context = buildItemContext(item, address);
+
+    const stream = client.messages.stream({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      system: ITEM_ANALYSIS_SYSTEM,
+      messages: [{ role: 'user', content: `Please analyze this inspection finding for me:\n\n${context}` }],
+    });
+
+    for await (const event of stream) {
+      if (req.socket.destroyed) break;
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        res.write(`data: ${JSON.stringify({ token: event.delta.text })}\n\n`);
+      }
+    }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/items/:itemId/analyze]');
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: 'Analysis interrupted' })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ data: null, error: 'Analysis failed', meta: {} });
+    }
+  }
+});
+
+// POST /api/v1/account/reports/:reportId/items/:itemId/chat — SSE stream follow-up chat
+router.post('/reports/:reportId/items/:itemId/chat', async (req: Request, res: Response) => {
+  const { messages: chatMessages } = req.body as { messages: Array<{ role: 'user' | 'assistant'; content: string }> };
+
+  if (!chatMessages || chatMessages.length === 0) {
+    res.status(400).json({ data: null, error: 'messages required', meta: {} });
+    return;
+  }
+
+  try {
+    const [report] = await db.select({
+      id: inspectionReports.id,
+      propertyAddress: inspectionReports.propertyAddress,
+      propertyCity: inspectionReports.propertyCity,
+      propertyState: inspectionReports.propertyState,
+    }).from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
+
+    const [item] = await db.select().from(inspectionReportItems)
+      .where(and(eq(inspectionReportItems.id, req.params.itemId), eq(inspectionReportItems.reportId, report.id)))
+      .limit(1);
+
+    if (!item) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) { res.status(500).json({ data: null, error: 'AI service not configured', meta: {} }); return; }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic({ apiKey });
+    const address = `${report.propertyAddress}, ${report.propertyCity} ${report.propertyState}`;
+    const context = buildItemContext(item, address);
+
+    const systemPrompt = `${ITEM_CHAT_SYSTEM}\n\nItem Context:\n${context}`;
+
+    const stream = client.messages.stream({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: chatMessages,
+    });
+
+    for await (const event of stream) {
+      if (req.socket.destroyed) break;
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        res.write(`data: ${JSON.stringify({ token: event.delta.text })}\n\n`);
+      }
+    }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/items/:itemId/chat]');
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: 'Chat interrupted' })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ data: null, error: 'Chat failed', meta: {} });
+    }
+  }
+});
+
 export default router;
