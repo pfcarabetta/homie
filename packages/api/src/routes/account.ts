@@ -300,7 +300,12 @@ router.get('/jobs', async (req: Request, res: Response) => {
     const rows = await db
       .select()
       .from(jobs)
-      .where(and(eq(jobs.homeownerId, req.homeownerId), isNull(jobs.workspaceId)))
+      .where(and(
+        eq(jobs.homeownerId, req.homeownerId),
+        isNull(jobs.workspaceId),
+        // Exclude inspection report dispatches — those belong in the inspect view
+        sql`(${jobs.diagnosis}->>'source' IS NULL OR ${jobs.diagnosis}->>'source' != 'inspection_report')`,
+      ))
       .orderBy(desc(jobs.createdAt));
 
     // Find which jobs already have a booking
