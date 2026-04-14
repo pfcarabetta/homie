@@ -567,7 +567,7 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange }: {
       </div>
 
       {/* Content area - blurred if locked */}
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', overflow: isLocked ? 'hidden' : 'visible', maxHeight: isLocked ? 600 : 'none' }}>
         <div style={{
           filter: isLocked ? 'blur(6px)' : 'none',
           pointerEvents: isLocked ? 'none' : 'auto',
@@ -705,11 +705,11 @@ function PricingModal({ reportId, itemCount }: { reportId: string; itemCount: nu
 
   return (
     <div style={{
-      position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-      zIndex: 10, padding: '40px 20px',
+      position: 'absolute', top: 0, left: 0, right: 0,
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      zIndex: 10, padding: '20px 20px',
     }}>
       <div style={{
-        position: 'sticky', top: 40,
         background: 'var(--bp-card)', borderRadius: 20, border: '1px solid var(--bp-border)',
         padding: '32px 28px', maxWidth: 720, width: '100%',
         boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
