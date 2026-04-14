@@ -450,18 +450,6 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                         borderRadius: 10, background: '#10B98115', color: '#10B981',
                       }}>Quoted</span>
                     )}
-                    {(item._pricingTier === 'professional' || item._pricingTier === 'premium' || item._pricingTier === 'essential') && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setExpandedItemId(expandedItemId === item.id ? null : item.id); }}
-                        style={{
-                          fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
-                          padding: '2px 6px', borderRadius: 4, background: `${ACCENT}12`, color: ACCENT,
-                          border: 'none', cursor: 'pointer', marginLeft: 'auto',
-                        }}
-                      >
-                        AI {expandedItemId === item.id ? '\u25B2' : '\u25BC'}
-                      </button>
-                    )}
                   </div>
 
                   {/* Title */}
@@ -522,7 +510,26 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                 )}
               </div>
 
-              {/* AI Deep Dive */}
+              {/* AI Deep Dive button */}
+              {(item._pricingTier === 'professional' || item._pricingTier === 'premium' || item._pricingTier === 'essential') && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setExpandedItemId(expandedItemId === item.id ? null : item.id); }}
+                  style={{
+                    width: '100%', marginTop: 10, padding: '9px 0', borderRadius: 8,
+                    border: `1px solid ${expandedItemId === item.id ? ACCENT : `${ACCENT}30`}`,
+                    background: expandedItemId === item.id ? `${ACCENT}08` : 'transparent',
+                    color: ACCENT, cursor: 'pointer',
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>{expandedItemId === item.id ? '\u2715' : '\u2728'}</span>
+                  {expandedItemId === item.id ? 'Close AI Analysis' : 'AI Deep Dive'}
+                </button>
+              )}
+
+              {/* AI Deep Dive expanded content */}
               {expandedItemId === item.id && (
                 <ItemDeepDive reportId={item._reportId} itemId={item.id} itemTitle={item.title} />
               )}
