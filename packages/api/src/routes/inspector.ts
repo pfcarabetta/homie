@@ -535,6 +535,75 @@ function getBundlePrice(itemCount: number): number {
   return itemCount <= BUNDLE_THRESHOLD ? BUNDLE_SMALL_PRICE_CENTS : BUNDLE_LARGE_PRICE_CENTS;
 }
 
+// ── Home Value Impact ────────────────────────────────────────────────────
+
+// ROI multipliers by category — how much home value increases per dollar spent
+const ROI_MULTIPLIERS: Record<string, { low: number; high: number }> = {
+  roofing:       { low: 1.2, high: 1.6 },   // Roof repairs have strong ROI
+  structural:    { low: 1.3, high: 1.8 },   // Structural = high buyer concern
+  foundation:    { low: 1.2, high: 1.7 },
+  electrical:    { low: 1.1, high: 1.5 },   // Safety items appraise well
+  plumbing:      { low: 1.0, high: 1.4 },
+  hvac:          { low: 1.1, high: 1.5 },   // HVAC is a top buyer priority
+  windows_doors: { low: 0.9, high: 1.3 },
+  insulation:    { low: 0.8, high: 1.2 },
+  safety:        { low: 1.0, high: 1.3 },
+  fireplace:     { low: 0.7, high: 1.1 },
+  appliance:     { low: 0.5, high: 0.8 },   // Appliances depreciate
+  pest_control:  { low: 1.0, high: 1.4 },   // Pest = deal breaker for lenders
+  general_repair:{ low: 0.6, high: 1.0 },
+  cosmetic:      { low: 0.3, high: 0.6 },   // Cosmetic has lowest ROI
+  landscaping:   { low: 0.4, high: 0.8 },
+};
+
+// FHA/VA minimum property requirements — items that can kill a deal
+const FHA_VA_CATEGORIES = new Set(['roofing', 'structural', 'foundation', 'electrical', 'plumbing', 'safety', 'pest_control']);
+const FHA_VA_SEVERITIES = new Set(['safety_hazard', 'urgent']);
+
+interface ValueImpact {
+  /** Estimated value increase from fixing (low end) */
+  roiLow: number;
+  /** Estimated value increase from fixing (high end) */
+  roiHigh: number;
+  /** ROI multiplier midpoint */
+  roiMultiplier: number;
+  /** Could block FHA/VA loan approval */
+  lenderFlag: boolean;
+  /** Display label */
+  lenderFlagType: 'fha_va_required' | 'lender_concern' | null;
+}
+
+function computeValueImpact(category: string, severity: string, costLowCents: number, costHighCents: number): ValueImpact | null {
+  // Skip informational and monitor items — no meaningful ROI
+  if (severity === 'informational' || severity === 'monitor') return null;
+  // Skip items with no cost estimate
+  if (costLowCents <= 0 && costHighCents <= 0) return null;
+
+  const avgCost = (costLowCents + costHighCents) / 2;
+  const mult = ROI_MULTIPLIERS[category] ?? { low: 0.5, high: 0.9 };
+  const roiMultiplier = (mult.low + mult.high) / 2;
+
+  // Only show ROI badge if it's actually a positive return
+  if (roiMultiplier < 0.7) return null;
+
+  const roiLow = Math.round((avgCost * mult.low) / 100);
+  const roiHigh = Math.round((avgCost * mult.high) / 100);
+
+  // FHA/VA flag: safety/urgent items in structural/mechanical categories
+  const isFhaVaCategory = FHA_VA_CATEGORIES.has(category);
+  const isFhaVaSeverity = FHA_VA_SEVERITIES.has(severity);
+  const lenderFlag = isFhaVaCategory && isFhaVaSeverity;
+  const lenderConcern = isFhaVaCategory && severity === 'recommended';
+
+  return {
+    roiLow,
+    roiHigh,
+    roiMultiplier,
+    lenderFlag: lenderFlag || lenderConcern,
+    lenderFlagType: lenderFlag ? 'fha_va_required' : lenderConcern ? 'lender_concern' : null,
+  };
+}
+
 // ── Client-facing (token-based, no auth) ──────────────────────────────────
 
 // GET /api/v1/inspect/:token — client views their report
@@ -594,6 +663,7 @@ router.get('/:token', async (req: Request, res: Response) => {
             price: i.quoteAmountCents / 100,
             availability: i.providerAvailability ?? '',
           } : null,
+          valueImpact: computeValueImpact(i.category, i.severity, i.aiCostEstimateLowCents, i.aiCostEstimateHighCents),
         })),
       },
       error: null, meta: {},

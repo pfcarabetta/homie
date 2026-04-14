@@ -495,6 +495,30 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                       </span>
                     </div>
                   )}
+
+                  {/* Value Impact */}
+                  {item.valueImpact && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                      <span style={{
+                        fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 600, padding: '2px 8px',
+                        borderRadius: 6, background: '#8B5CF615', color: '#7C3AED', display: 'inline-flex', alignItems: 'center', gap: 3,
+                      }}>
+                        {'\u2191'} ~{formatCurrency(item.valueImpact.roiLow)}-{formatCurrency(item.valueImpact.roiHigh)} value
+                      </span>
+                      {item.valueImpact.lenderFlagType === 'fha_va_required' && (
+                        <span style={{
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 600, padding: '2px 8px',
+                          borderRadius: 6, background: '#EF444415', color: '#DC2626',
+                        }}>FHA/VA Required</span>
+                      )}
+                      {item.valueImpact.lenderFlagType === 'lender_concern' && (
+                        <span style={{
+                          fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 600, padding: '2px 8px',
+                          borderRadius: 6, background: '#F59E0B15', color: '#D97706',
+                        }}>Lender Concern</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Cost estimate */}

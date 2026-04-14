@@ -913,6 +913,35 @@ function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive }: {
         </div>
       )}
 
+      {/* Value Impact */}
+      {item.valueImpact && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+          <span style={{
+            fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, padding: '3px 10px',
+            borderRadius: 8, background: '#8B5CF615', color: '#7C3AED', display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}>
+            <span style={{ fontSize: 12 }}>{'\u2191'}</span>
+            ~{formatCurrency(item.valueImpact.roiLow)}-{formatCurrency(item.valueImpact.roiHigh)} value increase
+          </span>
+          {item.valueImpact.lenderFlagType === 'fha_va_required' && (
+            <span style={{
+              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, padding: '3px 10px',
+              borderRadius: 8, background: '#EF444415', color: '#DC2626',
+            }}>
+              FHA/VA Required
+            </span>
+          )}
+          {item.valueImpact.lenderFlagType === 'lender_concern' && (
+            <span style={{
+              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, padding: '3px 10px',
+              borderRadius: 8, background: '#F59E0B15', color: '#D97706',
+            }}>
+              Lender Concern
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Quote display */}
       {item.quoteDetails && (
         <div style={{

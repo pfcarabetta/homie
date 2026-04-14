@@ -68,6 +68,15 @@ export interface InspectionItem {
   confidence: number;
   dispatchStatus: 'pending' | 'dispatched' | 'quotes_received' | 'quoted' | 'booked' | 'completed' | null;
   quoteDetails: QuoteDetails | null;
+  valueImpact: ValueImpact | null;
+}
+
+export interface ValueImpact {
+  roiLow: number;
+  roiHigh: number;
+  roiMultiplier: number;
+  lenderFlag: boolean;
+  lenderFlagType: 'fha_va_required' | 'lender_concern' | null;
 }
 
 export interface QuoteDetails {
