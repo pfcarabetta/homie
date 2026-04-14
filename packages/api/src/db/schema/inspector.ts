@@ -65,6 +65,8 @@ export const inspectionReports = pgTable('inspection_reports', {
   source: text('source').notNull().default('manual_upload'),
   addonSold: boolean('addon_sold').notNull().default(false),
   addonPriceCents: integer('addon_price_cents'),
+  /** essential | professional | premium — null means unpaid */
+  pricingTier: text('pricing_tier'),
   /** uploading | processing | parsed | review_pending | sent_to_client | failed */
   parsingStatus: text('parsing_status').notNull().default('uploading'),
   parsingError: text('parsing_error'),

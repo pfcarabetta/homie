@@ -253,6 +253,13 @@
       "when": 1776364800000,
       "tag": "0035_inspection_homeowner_id",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1776146769271,
+      "tag": "0036_living_sphinx",
+      "breakpoints": true
     }
   ]
 }

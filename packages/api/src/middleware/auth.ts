@@ -31,6 +31,23 @@ export function signToken(homeownerId: string): string {
  * Validates `Authorization: Bearer <token>` and attaches `req.homeownerId`.
  * Returns 401 if the token is missing, malformed, or expired.
  */
+/**
+ * Like requireAuth but non-blocking — attaches `req.homeownerId` if a valid
+ * token is present, otherwise silently continues. Used for endpoints that
+ * work with or without authentication (e.g. homeowner self-upload).
+ */
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) { next(); return; }
+  const secret = process.env.JWT_SECRET;
+  if (!secret) { next(); return; }
+  try {
+    const payload = jwt.verify(header.slice(7), secret, { algorithms: ['HS256'] }) as JwtPayload;
+    req.homeownerId = payload.sub;
+  } catch { /* ignore invalid tokens */ }
+  next();
+}
+
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const secret = process.env.JWT_SECRET;
   if (!secret) {

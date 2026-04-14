@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
+import Stripe from 'stripe';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { eq, desc, and, ne, isNull, inArray, sql } from 'drizzle-orm';
+import { eq, desc, and, ne, isNull, inArray, sql, count } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
@@ -9,6 +11,7 @@ import { bookings } from '../db/schema/bookings';
 import { providers } from '../db/schema/providers';
 import { providerResponses } from '../db/schema/provider-responses';
 import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/schema/property-scans';
+import { inspectionReports, inspectionReportItems } from '../db/schema/inspector';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -648,6 +651,373 @@ router.get('/home/scan/room-targets', async (_req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /account/home/scan/room-targets]');
     res.status(500).json({ data: null, error: 'Failed to load room targets', meta: {} });
+  }
+});
+
+// ── Inspection Reports ──────────────────────────────────────────────────────
+
+// GET /api/v1/account/reports — list homeowner's inspection reports with item summaries
+router.get('/reports', async (req: Request, res: Response) => {
+  try {
+    const reports = await db.select({
+      id: inspectionReports.id,
+      propertyAddress: inspectionReports.propertyAddress,
+      propertyCity: inspectionReports.propertyCity,
+      propertyState: inspectionReports.propertyState,
+      propertyZip: inspectionReports.propertyZip,
+      inspectionDate: inspectionReports.inspectionDate,
+      inspectionType: inspectionReports.inspectionType,
+      parsingStatus: inspectionReports.parsingStatus,
+      clientAccessToken: inspectionReports.clientAccessToken,
+      pricingTier: inspectionReports.pricingTier,
+      itemsParsed: inspectionReports.itemsParsed,
+      itemsDispatched: inspectionReports.itemsDispatched,
+      itemsQuoted: inspectionReports.itemsQuoted,
+      totalQuoteValueCents: inspectionReports.totalQuoteValueCents,
+      createdAt: inspectionReports.createdAt,
+    }).from(inspectionReports)
+      .where(eq(inspectionReports.homeownerId, req.homeownerId))
+      .orderBy(desc(inspectionReports.createdAt));
+
+    // Fetch items for each report
+    const reportIds = reports.map(r => r.id);
+    const items = reportIds.length > 0
+      ? await db.select({
+          id: inspectionReportItems.id,
+          reportId: inspectionReportItems.reportId,
+          title: inspectionReportItems.title,
+          severity: inspectionReportItems.severity,
+          category: inspectionReportItems.category,
+          aiCostEstimateLowCents: inspectionReportItems.aiCostEstimateLowCents,
+          aiCostEstimateHighCents: inspectionReportItems.aiCostEstimateHighCents,
+          dispatchStatus: inspectionReportItems.dispatchStatus,
+          quoteAmountCents: inspectionReportItems.quoteAmountCents,
+        }).from(inspectionReportItems)
+          .where(inArray(inspectionReportItems.reportId, reportIds))
+      : [];
+
+    // Group items by report and build response
+    const itemsByReport = new Map<string, typeof items>();
+    for (const item of items) {
+      const list = itemsByReport.get(item.reportId) ?? [];
+      list.push(item);
+      itemsByReport.set(item.reportId, list);
+    }
+
+    const data = reports.map(r => {
+      const reportItems = itemsByReport.get(r.id) ?? [];
+      let totalEstimateLow = 0;
+      let totalEstimateHigh = 0;
+      let totalQuoteValue = 0;
+      let dispatchedCount = 0;
+      let quotedCount = 0;
+
+      for (const item of reportItems) {
+        totalEstimateLow += item.aiCostEstimateLowCents ?? 0;
+        totalEstimateHigh += item.aiCostEstimateHighCents ?? 0;
+        totalQuoteValue += item.quoteAmountCents ?? 0;
+        if (item.dispatchStatus === 'dispatched' || item.dispatchStatus === 'quotes_received' || item.dispatchStatus === 'booked' || item.dispatchStatus === 'completed') dispatchedCount++;
+        if (item.quoteAmountCents) quotedCount++;
+      }
+
+      return {
+        id: r.id,
+        propertyAddress: r.propertyAddress,
+        propertyCity: r.propertyCity,
+        propertyState: r.propertyState,
+        propertyZip: r.propertyZip,
+        inspectionDate: r.inspectionDate,
+        inspectionType: r.inspectionType,
+        parsingStatus: r.parsingStatus,
+        clientAccessToken: r.clientAccessToken,
+        pricingTier: r.pricingTier,
+        itemCount: reportItems.length,
+        dispatchedCount,
+        quotedCount,
+        totalEstimateLow,
+        totalEstimateHigh,
+        totalQuoteValue,
+        createdAt: r.createdAt,
+        items: reportItems.map(i => ({
+          id: i.id,
+          title: i.title,
+          severity: i.severity,
+          category: i.category,
+          costEstimateMin: i.aiCostEstimateLowCents,
+          costEstimateMax: i.aiCostEstimateHighCents,
+          dispatchStatus: i.dispatchStatus,
+          quoteAmount: i.quoteAmountCents,
+        })),
+      };
+    });
+
+    res.json({ data: { reports: data }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/reports]');
+    res.status(500).json({ data: null, error: 'Failed to load reports', meta: {} });
+  }
+});
+
+// Per-report pricing tiers
+const REPORT_TIER_PRICES: Record<string, { cents: number; label: string }> = {
+  essential: { cents: 9900, label: 'Essential' },
+  professional: { cents: 19900, label: 'Professional' },
+  premium: { cents: 29900, label: 'Premium' },
+};
+
+// POST /api/v1/account/reports/:reportId/checkout — create Stripe checkout for a report tier
+router.post('/reports/:reportId/checkout', async (req: Request, res: Response) => {
+  const { tier } = req.body as { tier: string };
+
+  if (!tier || !REPORT_TIER_PRICES[tier]) {
+    res.status(400).json({ data: null, error: 'Invalid tier. Must be essential, professional, or premium', meta: {} });
+    return;
+  }
+
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    if (report.pricingTier) {
+      res.status(400).json({ data: null, error: 'Report already has a pricing tier', meta: {} });
+      return;
+    }
+
+    const tierConfig = REPORT_TIER_PRICES[tier];
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
+      apiVersion: '2025-01-27.acacia' as Stripe.LatestApiVersion,
+    });
+
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+
+    // Look up homeowner email for Stripe receipt
+    const [homeowner] = await db.select({ email: homeowners.email }).from(homeowners)
+      .where(eq(homeowners.id, req.homeownerId)).limit(1);
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: `Homie Inspect ${tierConfig.label} — ${report.propertyAddress}` },
+          unit_amount: tierConfig.cents,
+        },
+        quantity: 1,
+      }],
+      metadata: {
+        report_id: report.id,
+        tier,
+        homeowner_id: req.homeownerId,
+        type: 'inspect_report_tier',
+      },
+      customer_email: homeowner?.email ?? undefined,
+      success_url: `${APP_URL}/inspect-portal?tab=reports&report=${report.id}&payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_URL}/inspect-portal?tab=reports&report=${report.id}&payment=canceled`,
+    });
+
+    res.json({ data: { checkoutUrl: session.url, amountCents: tierConfig.cents, tier }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/checkout]');
+    res.status(500).json({ data: null, error: `Checkout failed: ${(err as Error).message}`, meta: {} });
+  }
+});
+
+// POST /api/v1/account/reports/:reportId/confirm-payment — confirm Stripe payment and set tier
+router.post('/reports/:reportId/confirm-payment', async (req: Request, res: Response) => {
+  const { session_id } = req.body as { session_id: string };
+  if (!session_id) {
+    res.status(400).json({ data: null, error: 'session_id is required', meta: {} });
+    return;
+  }
+
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    // Verify Stripe session
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
+      apiVersion: '2025-01-27.acacia' as Stripe.LatestApiVersion,
+    });
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+
+    if (session.metadata?.report_id !== report.id) {
+      res.status(400).json({ data: null, error: 'Session does not match report', meta: {} });
+      return;
+    }
+
+    const tier = session.metadata?.tier;
+    if (!tier || !REPORT_TIER_PRICES[tier]) {
+      res.status(400).json({ data: null, error: 'Invalid tier in session', meta: {} });
+      return;
+    }
+
+    // Set the pricing tier
+    await db.update(inspectionReports).set({
+      pricingTier: tier,
+      updatedAt: new Date(),
+    }).where(eq(inspectionReports.id, report.id));
+
+    // If professional or premium, mark all non-informational items as pending_dispatch
+    if (tier === 'professional' || tier === 'premium') {
+      await db.update(inspectionReportItems).set({
+        dispatchStatus: 'pending_dispatch',
+        updatedAt: new Date(),
+      }).where(and(
+        eq(inspectionReportItems.reportId, report.id),
+        eq(inspectionReportItems.dispatchStatus, 'not_dispatched'),
+        sql`${inspectionReportItems.severity} != 'informational'`,
+      ));
+    }
+
+    res.json({ data: { tier, confirmed: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/confirm-payment]');
+    res.status(500).json({ data: null, error: 'Payment confirmation failed', meta: {} });
+  }
+});
+
+// POST /api/v1/account/reports/:reportId/dispatch — dispatch items after payment
+router.post('/reports/:reportId/dispatch', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    if (report.pricingTier !== 'professional' && report.pricingTier !== 'premium') {
+      res.status(400).json({ data: null, error: 'Dispatch requires Professional or Premium tier', meta: {} });
+      return;
+    }
+
+    // Get items to dispatch
+    const itemsToDispatch = await db.select().from(inspectionReportItems)
+      .where(and(
+        eq(inspectionReportItems.reportId, report.id),
+        sql`${inspectionReportItems.dispatchStatus} IN ('not_dispatched', 'pending_dispatch')`,
+        sql`${inspectionReportItems.severity} != 'informational'`,
+      ));
+
+    if (itemsToDispatch.length === 0) {
+      res.json({ data: { dispatched: [], totalDispatched: 0 }, error: null, meta: {} });
+      return;
+    }
+
+    // Record first action
+    if (!report.clientFirstActionAt) {
+      await db.update(inspectionReports).set({ clientFirstActionAt: new Date(), updatedAt: new Date() })
+        .where(eq(inspectionReports.id, report.id));
+    }
+
+    const dispatched: Array<{ itemId: string; jobId: string }> = [];
+
+    // Group by category — one job per category
+    const categoryGroups = new Map<string, typeof itemsToDispatch>();
+    for (const item of itemsToDispatch) {
+      const cat = item.category || 'general_repair';
+      if (!categoryGroups.has(cat)) categoryGroups.set(cat, []);
+      categoryGroups.get(cat)!.push(item);
+    }
+
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+
+    for (const [category, items] of categoryGroups) {
+      try {
+        const highestSeverity = items.some(i => i.severity === 'safety_hazard' || i.severity === 'urgent') ? 'high'
+          : items.some(i => i.severity === 'recommended') ? 'medium' : 'low';
+
+        const itemSummaries = items.map((item, idx) => {
+          const photoDescs = (item.inspectorPhotos as string[] | null) ?? [];
+          const photoStr = photoDescs.length ? ` [Photos: ${photoDescs.join('; ')}]` : '';
+          return `${idx + 1}. ${item.title}${item.description ? ' — ' + item.description : ''}${photoStr}`;
+        });
+
+        const allPhotoDescs = items.flatMap(item => (item.inspectorPhotos as string[] | null) ?? []);
+        const providerViewToken = crypto.randomBytes(24).toString('hex');
+        const providerReportUrl = `${APP_URL}/inspect/provider/${providerViewToken}`;
+
+        const diagnosis = {
+          category,
+          severity: highestSeverity,
+          summary: `Inspection report — ${items.length} ${category.replace(/_/g, ' ')} item${items.length !== 1 ? 's' : ''} at ${report.propertyAddress}, ${report.propertyCity} ${report.propertyState}:\n${itemSummaries.join('\n')}\n\nView full details & photos: ${providerReportUrl}`,
+          recommendedActions: items.map(i => `Address: ${i.title}`),
+          source: 'inspection_report',
+          inspectionReportId: report.id,
+          inspectionItemIds: items.map(i => i.id),
+          photoDescriptions: allPhotoDescs,
+          providerViewToken,
+        };
+
+        const totalLow = items.reduce((sum, i) => sum + (i.aiCostEstimateLowCents ?? 0), 0);
+        const totalHigh = items.reduce((sum, i) => sum + (i.aiCostEstimateHighCents ?? 0), 0);
+        const budgetStr = totalLow > 0 && totalHigh > 0
+          ? `$${Math.round(totalLow / 100)}-$${Math.round(totalHigh / 100)}`
+          : 'flexible';
+
+        const { jobs: jobsTable } = await import('../db/schema/jobs');
+        const [job] = await db.insert(jobsTable).values({
+          homeownerId: req.homeownerId,
+          diagnosis: diagnosis as never,
+          zipCode: report.propertyZip,
+          preferredTiming: 'this_week',
+          budget: budgetStr,
+          tier: report.pricingTier === 'premium' ? 'priority' : 'standard',
+          status: 'dispatching',
+          paymentStatus: 'paid',
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        }).returning({ id: jobsTable.id });
+
+        for (const item of items) {
+          await db.update(inspectionReportItems).set({
+            dispatchStatus: 'dispatched',
+            dispatchId: job.id,
+            updatedAt: new Date(),
+          }).where(eq(inspectionReportItems.id, item.id));
+          dispatched.push({ itemId: item.id, jobId: job.id });
+        }
+
+        try {
+          const { dispatchJob } = await import('../services/orchestration');
+          void dispatchJob(job.id);
+        } catch (dispatchErr) {
+          logger.warn({ err: dispatchErr, jobId: job.id }, '[account/reports/dispatch] Outreach failed');
+        }
+
+        logger.info({ jobId: job.id, category, itemCount: items.length }, '[account/reports/dispatch] Category dispatched');
+      } catch (groupErr) {
+        logger.error({ err: groupErr, category }, '[account/reports/dispatch] Failed to dispatch category');
+      }
+    }
+
+    // Update report stats
+    const [{ value: totalDispatchedCount }] = await db.select({ value: count() })
+      .from(inspectionReportItems)
+      .where(and(eq(inspectionReportItems.reportId, report.id), sql`${inspectionReportItems.dispatchStatus} != 'not_dispatched'`));
+
+    await db.update(inspectionReports).set({
+      itemsDispatched: totalDispatchedCount,
+      updatedAt: new Date(),
+    }).where(eq(inspectionReports.id, report.id));
+
+    res.json({ data: { dispatched, totalDispatched: dispatched.length }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/dispatch]');
+    res.status(500).json({ data: null, error: 'Dispatch failed', meta: {} });
   }
 });
 

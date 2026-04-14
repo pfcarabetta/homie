@@ -14,6 +14,7 @@ import {
   inspectorInboundLeads,
 } from '../db/schema/inspector';
 import { requireInspectorAuth, signInspectorToken } from '../middleware/inspector-auth';
+import { optionalAuth } from '../middleware/auth';
 
 const router = Router();
 const BCRYPT_ROUNDS = 12;
@@ -606,7 +607,8 @@ router.get('/:token', async (req: Request, res: Response) => {
 // ── Homeowner self-upload (Path A — no inspector, no auth) ────────────────
 
 // POST /api/v1/inspect/upload — homeowner uploads their own report
-router.post('/upload', async (req: Request, res: Response) => {
+// optionalAuth: if a valid homeowner JWT is present, auto-links the report to their account
+router.post('/upload', optionalAuth, async (req: Request, res: Response) => {
   const body = req.body as {
     report_file_data_url?: string;
     property_address: string;
@@ -655,6 +657,13 @@ router.post('/upload', async (req: Request, res: Response) => {
       clientAccessToken,
       expiresAt,
     }).returning();
+
+    // Auto-link to homeowner account if authenticated
+    if (req.homeownerId) {
+      await db.update(inspectionReports)
+        .set({ homeownerId: req.homeownerId })
+        .where(eq(inspectionReports.id, report.id));
+    }
 
     // Kick off async parsing
     void parseInspectionReportAsync(report.id).catch(err =>

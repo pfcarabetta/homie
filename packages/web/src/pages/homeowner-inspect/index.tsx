@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { inspectService, type PortalReport } from '@/services/inspector-api';
 import { TABS, type Tab, useThemeMode } from './constants';
 import { getStoredNav, setStoredNav } from './nav-storage';
 import InspectLayout from './InspectLayout';
@@ -33,6 +34,7 @@ export default function InspectPortal() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState<PortalReport[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('hi_sidebar_collapsed') === 'true';
   });
@@ -43,12 +45,17 @@ export default function InspectPortal() {
     localStorage.setItem('hi_sidebar_collapsed', String(v));
   }
 
+  const fetchReports = useCallback(() => {
+    inspectService.getMyReports()
+      .then(res => { if (res.data) setReports(res.data.reports); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   useEffect(() => {
     if (!homeowner) { navigate('/login?redirect=/inspect-portal'); return; }
-    // Simulate loading — will be replaced with real data fetch
-    const t = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(t);
-  }, [homeowner, navigate]);
+    fetchReports();
+  }, [homeowner, navigate, fetchReports]);
 
   useEffect(() => {
     setStoredNav('tab', tab);
@@ -95,9 +102,9 @@ export default function InspectPortal() {
   function renderTab() {
     switch (tab) {
       case 'dashboard':
-        return <DashboardTab reports={[]} loading={loading} onNavigate={handleNavigate} />;
+        return <DashboardTab reports={reports} loading={loading} onNavigate={handleNavigate} />;
       case 'reports':
-        return <ReportsTab onNavigate={handleNavigate} />;
+        return <ReportsTab onNavigate={handleNavigate} reports={reports} onReportsChange={fetchReports} />;
       case 'items':
         return <ItemsTab />;
       case 'quotes':
@@ -111,7 +118,7 @@ export default function InspectPortal() {
       case 'settings':
         return <SettingsTab resolvedTheme={resolvedTheme} themeMode={themeMode} onThemeChange={setTheme} />;
       default:
-        return <DashboardTab reports={[]} loading={loading} onNavigate={handleNavigate} />;
+        return <DashboardTab reports={reports} loading={loading} onNavigate={handleNavigate} />;
     }
   }
 

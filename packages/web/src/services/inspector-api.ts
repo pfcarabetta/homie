@@ -389,4 +389,69 @@ export const inspectService = {
       { method: 'POST', body: JSON.stringify({ homeowner_id: homeownerId }) },
     );
   },
+
+  // ── Portal (authenticated) methods ──────────────────────────────────────
+
+  /** Authenticated: list homeowner's reports */
+  getMyReports() {
+    return fetchAPI<{ reports: PortalReport[] }>('/api/v1/account/reports');
+  },
+
+  /** Authenticated: checkout for portal report tier */
+  portalCheckout(reportId: string, tier: 'essential' | 'professional' | 'premium') {
+    return fetchAPI<{ checkoutUrl: string; amountCents: number; tier: string }>(
+      `/api/v1/account/reports/${reportId}/checkout`,
+      { method: 'POST', body: JSON.stringify({ tier }) },
+    );
+  },
+
+  /** Authenticated: confirm payment and set tier */
+  confirmPayment(reportId: string, sessionId: string) {
+    return fetchAPI<{ tier: string; confirmed: boolean }>(
+      `/api/v1/account/reports/${reportId}/confirm-payment`,
+      { method: 'POST', body: JSON.stringify({ session_id: sessionId }) },
+    );
+  },
+
+  /** Authenticated: dispatch items after payment */
+  portalDispatch(reportId: string) {
+    return fetchAPI<{ dispatched: Array<{ itemId: string; jobId: string }>; totalDispatched: number }>(
+      `/api/v1/account/reports/${reportId}/dispatch`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+  },
 };
+
+// ── Portal types ──────────────────────────────────────────────────────────
+
+export interface PortalReportItem {
+  id: string;
+  title: string;
+  severity: string;
+  category: string;
+  costEstimateMin: number | null;
+  costEstimateMax: number | null;
+  dispatchStatus: string | null;
+  quoteAmount: number | null;
+}
+
+export interface PortalReport {
+  id: string;
+  propertyAddress: string;
+  propertyCity: string;
+  propertyState: string;
+  propertyZip: string;
+  inspectionDate: string;
+  inspectionType: string;
+  parsingStatus: string;
+  clientAccessToken: string;
+  pricingTier: string | null;
+  itemCount: number;
+  dispatchedCount: number;
+  quotedCount: number;
+  totalEstimateLow: number;
+  totalEstimateHigh: number;
+  totalQuoteValue: number;
+  createdAt: string;
+  items: PortalReportItem[];
+}
