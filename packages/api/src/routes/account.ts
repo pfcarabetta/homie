@@ -890,6 +890,8 @@ router.post('/reports/:reportId/confirm-payment', async (req: Request, res: Resp
 
 // POST /api/v1/account/reports/:reportId/dispatch — dispatch items after payment
 router.post('/reports/:reportId/dispatch', async (req: Request, res: Response) => {
+  const { item_ids } = req.body as { item_ids?: string[] };
+
   try {
     const [report] = await db.select().from(inspectionReports)
       .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
@@ -905,13 +907,18 @@ router.post('/reports/:reportId/dispatch', async (req: Request, res: Response) =
       return;
     }
 
-    // Get items to dispatch
-    const itemsToDispatch = await db.select().from(inspectionReportItems)
+    // Get items to dispatch — filter by item_ids if provided
+    let itemsToDispatch = await db.select().from(inspectionReportItems)
       .where(and(
         eq(inspectionReportItems.reportId, report.id),
         sql`${inspectionReportItems.dispatchStatus} IN ('not_dispatched', 'pending_dispatch')`,
         sql`${inspectionReportItems.severity} != 'informational'`,
       ));
+
+    if (item_ids && item_ids.length > 0) {
+      const idSet = new Set(item_ids);
+      itemsToDispatch = itemsToDispatch.filter(i => idSet.has(i.id));
+    }
 
     if (itemsToDispatch.length === 0) {
       res.json({ data: { dispatched: [], totalDispatched: 0 }, error: null, meta: {} });

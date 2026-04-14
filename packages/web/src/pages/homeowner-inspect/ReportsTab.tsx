@@ -52,7 +52,7 @@ export default function ReportsTab({ onNavigate, reports, onReportsChange }: Rep
   }
 
   if (view === 'detail' && selectedReportId) {
-    return <ReportDetail reportId={selectedReportId} reports={reports} onBack={backToList} onReportsChange={onReportsChange} />;
+    return <ReportDetail reportId={selectedReportId} reports={reports} onBack={backToList} onReportsChange={onReportsChange} onNavigate={onNavigate} />;
   }
 
   return <ReportList reports={reports} onUpload={() => setView('upload')} onOpen={openReport} />;
@@ -401,11 +401,12 @@ function UploadWizard({ onBack, onComplete }: { onBack: () => void; onComplete: 
 
 // ── Report Detail with Paywall ──────────────────────────────────────────────
 
-function ReportDetail({ reportId, reports, onBack, onReportsChange }: {
+function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }: {
   reportId: string;
   reports: PortalReport[];
   onBack: () => void;
   onReportsChange: () => void;
+  onNavigate: (tab: Tab) => void;
 }) {
   const portalReport = reports.find(r => r.id === reportId);
   const [fullReport, setFullReport] = useState<InspectReportPublic | null>(null);
@@ -413,8 +414,6 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange }: {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [pricingTier, setPricingTier] = useState<string | null>(portalReport?.pricingTier ?? null);
   const [checkingPayment, setCheckingPayment] = useState(false);
-  const [dispatching, setDispatching] = useState(false);
-  const [dispatched, setDispatched] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load full report via token — if portalReport isn't in the list yet
@@ -497,21 +496,6 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange }: {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [portalReport?.clientAccessToken, pricingTier, fullReport?.items.length]);
 
-  async function handleDispatch() {
-    setDispatching(true);
-    try {
-      await inspectService.portalDispatch(reportId);
-      setDispatched(true);
-      onReportsChange();
-      // Refresh report
-      if (portalReport?.clientAccessToken) {
-        const res = await inspectService.getReport(portalReport.clientAccessToken);
-        if (res.data) setFullReport(res.data);
-      }
-    } catch { /* ignore */ }
-    setDispatching(false);
-  }
-
   if (loading || checkingPayment) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 0' }}>
@@ -592,37 +576,27 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange }: {
             })}
           </div>
 
-          {/* Dispatch CTA for professional/premium */}
-          {canDispatch && hasUndispatched && !dispatched && (
+          {/* Navigate to Items tab for quote selection */}
+          {canDispatch && hasUndispatched && (
             <div style={{
               background: `${ACCENT}0A`, border: `1px solid ${ACCENT}30`, borderRadius: 14,
               padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div>
                 <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, color: 'var(--bp-text)' }}>
-                  Get quotes from local professionals
+                  Ready to get quotes?
                 </div>
                 <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>
-                  We'll match your items with verified service providers in your area
+                  Select specific items and categories to dispatch to local professionals
                 </div>
               </div>
-              <button onClick={handleDispatch} disabled={dispatching} style={{
+              <button onClick={() => onNavigate('items')} style={{
                 padding: '10px 20px', borderRadius: 10, border: 'none', background: ACCENT, color: '#fff',
-                cursor: dispatching ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 600,
-                fontFamily: "'DM Sans',sans-serif", opacity: dispatching ? 0.7 : 1, whiteSpace: 'nowrap',
+                cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                fontFamily: "'DM Sans',sans-serif", whiteSpace: 'nowrap',
               }}>
-                {dispatching ? 'Dispatching...' : 'Get Quotes'}
+                Select Items for Quotes
               </button>
-            </div>
-          )}
-
-          {dispatched && (
-            <div style={{
-              background: '#10B98118', border: '1px solid #10B98130', borderRadius: 14,
-              padding: '14px 20px', marginBottom: 16,
-              fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: '#10B981', fontWeight: 600,
-            }}>
-              Items dispatched! Quotes will appear below as providers respond (refreshing automatically).
             </div>
           )}
 

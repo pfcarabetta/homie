@@ -413,11 +413,11 @@ export const inspectService = {
     );
   },
 
-  /** Authenticated: dispatch items after payment */
-  portalDispatch(reportId: string) {
+  /** Authenticated: dispatch items after payment. Pass itemIds to dispatch specific items only. */
+  portalDispatch(reportId: string, itemIds?: string[]) {
     return fetchAPI<{ dispatched: Array<{ itemId: string; jobId: string }>; totalDispatched: number }>(
       `/api/v1/account/reports/${reportId}/dispatch`,
-      { method: 'POST', body: JSON.stringify({}) },
+      { method: 'POST', body: JSON.stringify(itemIds ? { item_ids: itemIds } : {}) },
     );
   },
 };
