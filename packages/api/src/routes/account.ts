@@ -303,8 +303,10 @@ router.get('/jobs', async (req: Request, res: Response) => {
       .where(and(
         eq(jobs.homeownerId, req.homeownerId),
         isNull(jobs.workspaceId),
-        // Exclude inspection report dispatches — those belong in the inspect view
-        sql`(${jobs.diagnosis}->>'source' IS NULL OR ${jobs.diagnosis}->>'source' != 'inspection_report')`,
+        isNull(jobs.propertyId),
+        // Exclude non-consumer sources
+        sql`(${jobs.diagnosis}->>'source' IS DISTINCT FROM 'inspection_report')`,
+        sql`(${jobs.diagnosis}->>'source' IS DISTINCT FROM 'guest_issue')`,
       ))
       .orderBy(desc(jobs.createdAt));
 
