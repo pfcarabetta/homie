@@ -20,9 +20,11 @@ export default function ItemDeepDive({ reportId, itemId, itemTitle }: ItemDeepDi
   const abortRef = useRef<AbortController | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Auto-trigger analysis on mount
+  // Auto-trigger analysis on mount (run once)
+  const startedRef = useRef(false);
   useEffect(() => {
-    if (analyzed || analyzing) return;
+    if (startedRef.current) return;
+    startedRef.current = true;
     setAnalyzing(true);
     setError(null);
 
@@ -33,9 +35,7 @@ export default function ItemDeepDive({ reportId, itemId, itemTitle }: ItemDeepDi
     };
 
     abortRef.current = analyzeItem(reportId, itemId, callbacks);
-
-    return () => { abortRef.current?.abort(); };
-  }, [reportId, itemId, analyzed, analyzing]);
+  }, [reportId, itemId]);
 
   // Auto-scroll during streaming
   useEffect(() => {
