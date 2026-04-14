@@ -417,14 +417,20 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange }: {
   const [dispatched, setDispatched] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load full report via token
+  // Load full report via token — if portalReport isn't in the list yet
+  // (race after upload), wait for reports to refresh and retry
   useEffect(() => {
-    if (!portalReport?.clientAccessToken) { setLoading(false); return; }
+    if (!portalReport?.clientAccessToken) {
+      // Reports list may not have refreshed yet — don't show "not found" immediately
+      if (!portalReport) return;
+      setLoading(false);
+      return;
+    }
     inspectService.getReport(portalReport.clientAccessToken)
       .then(res => { if (res.data) setFullReport(res.data); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [portalReport?.clientAccessToken]);
+  }, [portalReport?.clientAccessToken, portalReport]);
 
   // Handle payment return
   useEffect(() => {
@@ -699,10 +705,11 @@ function PricingModal({ reportId, itemCount }: { reportId: string; itemCount: nu
 
   return (
     <div style={{
-      position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 10, padding: 20,
+      position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      zIndex: 10, padding: '40px 20px',
     }}>
       <div style={{
+        position: 'sticky', top: 40,
         background: 'var(--bp-card)', borderRadius: 20, border: '1px solid var(--bp-border)',
         padding: '32px 28px', maxWidth: 720, width: '100%',
         boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
