@@ -1712,12 +1712,12 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
       });
     }
 
-    // Clear data URL from DB after successful parse to avoid bloat
-    const isDataUrl = report.reportFileUrl?.startsWith('data:');
+    // Keep reportFileUrl (both Cloudinary URLs and data URL fallback) so page citations
+    // and PDF re-access work later. Data URLs can be large but they're a fallback when
+    // Cloudinary uploads fail — losing them breaks features that reference the source PDF.
     await db.update(inspectionReports).set({
       itemsParsed: parsedItems.length,
       parsingStatus: hasLowConfidence ? 'review_pending' : 'parsed',
-      ...(isDataUrl ? { reportFileUrl: null } : {}),
       updatedAt: new Date(),
     }).where(eq(inspectionReports.id, reportId));
 
