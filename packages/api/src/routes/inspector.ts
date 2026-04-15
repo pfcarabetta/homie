@@ -726,6 +726,8 @@ router.get('/:token', async (req: Request, res: Response) => {
           } : null,
           valueImpact: computeValueImpact(i.category, i.severity, i.aiCostEstimateLowCents, i.aiCostEstimateHighCents),
           sourcePages: i.sourcePages ?? null,
+          sourceDocumentId: i.sourceDocumentId ?? null,
+          crossReferencedItemIds: i.crossReferencedItemIds ?? [],
           ...(function(){ const s = computeSellerAction(i.category, i.severity, i.aiCostEstimateLowCents ?? 0, i.aiCostEstimateHighCents ?? 0); return { sellerAction: s.action, sellerActionReason: s.reason }; })(),
         })),
       },

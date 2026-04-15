@@ -14,6 +14,7 @@ import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/sche
 import { inspectionReports, inspectionReportItems, inspectionSupportingDocuments, inspectionCrossReferenceInsights } from '../db/schema/inspector';
 import { computeSellerAction } from './inspector';
 import { parseSupportingDoc } from '../services/document-parsers';
+import { extractItemsFromDoc } from '../services/doc-item-extractor';
 import { generateCrossReferenceInsights } from '../services/cross-reference';
 import { ApiResponse } from '../types/api';
 
@@ -709,6 +710,8 @@ router.get('/reports', async (req: Request, res: Response) => {
           repairRequestCustomAmountCents: inspectionReportItems.repairRequestCustomAmountCents,
           sourcePages: inspectionReportItems.sourcePages,
           maintenanceCompletedAt: inspectionReportItems.maintenanceCompletedAt,
+          sourceDocumentId: inspectionReportItems.sourceDocumentId,
+          crossReferencedItemIds: inspectionReportItems.crossReferencedItemIds,
         }).from(inspectionReportItems)
           .where(inArray(inspectionReportItems.reportId, reportIds))
       : [];
@@ -785,6 +788,8 @@ router.get('/reports', async (req: Request, res: Response) => {
             maintenanceCompletedAt: i.maintenanceCompletedAt?.toISOString() ?? null,
             sellerAction: sa.action,
             sellerActionReason: sa.reason,
+            sourceDocumentId: i.sourceDocumentId,
+            crossReferencedItemIds: i.crossReferencedItemIds ?? [],
           };
         }),
       };
@@ -2084,7 +2089,13 @@ async function parseSupportingDocAsync(docId: string): Promise<void> {
     await db.update(inspectionSupportingDocuments)
       .set({ parsingStatus: 'parsed', parsedSummary: summary as never, updatedAt: new Date() })
       .where(eq(inspectionSupportingDocuments.id, docId));
-    // Trigger cross-reference insight regeneration
+    // Extract items from the parsed doc so they can be quoted/negotiated
+    try {
+      await extractItemsFromDoc(docId);
+    } catch (err) {
+      logger.error({ err, docId }, '[supporting-doc] Item extraction failed');
+    }
+    // Trigger cross-reference insight + item-link regeneration
     void generateCrossReferenceInsights(doc.reportId).catch(err =>
       logger.error({ err, reportId: doc.reportId }, '[supporting-doc] Cross-ref generation failed'),
     );
@@ -2198,6 +2209,13 @@ router.delete('/reports/:reportId/documents/:docId', async (req: Request, res: R
       res.status(404).json({ data: null, error: 'Report not found', meta: {} });
       return;
     }
+    // Delete items extracted from this doc first (the FK is ON DELETE SET NULL,
+    // but doc-sourced items don't make sense without the source doc)
+    await db.delete(inspectionReportItems)
+      .where(and(
+        eq(inspectionReportItems.reportId, req.params.reportId),
+        eq(inspectionReportItems.sourceDocumentId, req.params.docId),
+      ));
     const result = await db.delete(inspectionSupportingDocuments)
       .where(and(
         eq(inspectionSupportingDocuments.id, req.params.docId),
@@ -2207,7 +2225,7 @@ router.delete('/reports/:reportId/documents/:docId', async (req: Request, res: R
       res.status(404).json({ data: null, error: 'Document not found', meta: {} });
       return;
     }
-    // Regenerate insights without this doc
+    // Regenerate insights + cross-refs without this doc's items
     void generateCrossReferenceInsights(req.params.reportId).catch(err =>
       logger.error({ err }, '[supporting-doc/delete] Cross-ref regen failed'),
     );
