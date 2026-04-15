@@ -706,6 +706,7 @@ router.get('/reports', async (req: Request, res: Response) => {
           repairRequestSource: inspectionReportItems.repairRequestSource,
           repairRequestCustomAmountCents: inspectionReportItems.repairRequestCustomAmountCents,
           sourcePages: inspectionReportItems.sourcePages,
+          maintenanceCompletedAt: inspectionReportItems.maintenanceCompletedAt,
         }).from(inspectionReportItems)
           .where(inArray(inspectionReportItems.reportId, reportIds))
       : [];
@@ -779,6 +780,7 @@ router.get('/reports', async (req: Request, res: Response) => {
             repairRequestSource: i.repairRequestSource,
             repairRequestCustomAmountCents: i.repairRequestCustomAmountCents,
             sourcePages: i.sourcePages,
+            maintenanceCompletedAt: i.maintenanceCompletedAt?.toISOString() ?? null,
             sellerAction: sa.action,
             sellerActionReason: sa.reason,
           };
@@ -1592,6 +1594,49 @@ router.patch('/reports/:reportId/items/:itemId/negotiation', async (req: Request
   } catch (err) {
     logger.error({ err }, '[PATCH /account/reports/:reportId/items/:itemId/negotiation]');
     res.status(500).json({ data: null, error: 'Failed to update negotiation', meta: {} });
+  }
+});
+
+// PATCH /api/v1/account/reports/:reportId/items/:itemId/maintenance — toggle maintenance completion
+router.patch('/reports/:reportId/items/:itemId/maintenance', async (req: Request, res: Response) => {
+  const body = req.body as { maintenanceCompletedAt?: string | null };
+
+  try {
+    const [report] = await db.select({ id: inspectionReports.id })
+      .from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.maintenanceCompletedAt !== undefined) {
+      updates.maintenanceCompletedAt = body.maintenanceCompletedAt ? new Date(body.maintenanceCompletedAt) : null;
+    }
+
+    const [updated] = await db.update(inspectionReportItems)
+      .set(updates)
+      .where(and(eq(inspectionReportItems.id, req.params.itemId), eq(inspectionReportItems.reportId, report.id)))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ data: null, error: 'Item not found', meta: {} });
+      return;
+    }
+
+    res.json({
+      data: {
+        id: updated.id,
+        maintenanceCompletedAt: updated.maintenanceCompletedAt?.toISOString() ?? null,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /account/reports/:reportId/items/:itemId/maintenance]');
+    res.status(500).json({ data: null, error: 'Failed to update maintenance', meta: {} });
   }
 });
 

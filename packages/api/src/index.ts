@@ -95,6 +95,7 @@ async function start() {
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS repair_request_custom_amount_cents integer`);
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS source_pages integer[]`);
     await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS report_mode text NOT NULL DEFAULT 'buyer'`);
+    await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS maintenance_completed_at timestamp with time zone`);
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');
