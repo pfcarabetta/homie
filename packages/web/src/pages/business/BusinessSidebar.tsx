@@ -145,13 +145,13 @@ export default function BusinessSidebar({
 
   const accountMenuItemStyle: React.CSSProperties = {
     width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-    fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
+    fontSize: 14, color: 'var(--bp-text)', cursor: 'pointer', textAlign: 'left',
     fontFamily: "'DM Sans', sans-serif",
   };
 
   const mobileMenuItemStyle: React.CSSProperties = {
     width: '100%', padding: '16px 20px', background: 'none', border: 'none',
-    fontSize: 16, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
+    fontSize: 16, color: 'var(--bp-text)', cursor: 'pointer', textAlign: 'left',
     fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
     borderBottom: '1px solid #F5F0EB',
   };
@@ -373,8 +373,8 @@ export default function BusinessSidebar({
                     fontSize: 16, fontWeight: 700, color: '#fff', flexShrink: 0,
                   }}>{userInitials || 'U'}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: '#2D2926', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName || homeowner.email}</div>
-                    <div style={{ fontSize: 13, color: '#9B9490', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{homeowner.email}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--bp-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName || homeowner.email}</div>
+                    <div style={{ fontSize: 13, color: 'var(--bp-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{homeowner.email}</div>
                   </div>
                 </div>
               )}
@@ -407,11 +407,11 @@ export default function BusinessSidebar({
                     fontSize: 20, flexShrink: 0,
                   }}>{'\uD83C\uDFE0'}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2926', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--bp-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, color: '#E8632B' }}>homie</span>
                       <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Personal</span>
                     </div>
-                    <div style={{ fontSize: 11, color: '#6B6560', marginTop: 2 }}>Home services for your own home</div>
+                    <div style={{ fontSize: 11, color: 'var(--bp-muted)', marginTop: 2 }}>Home services for your own home</div>
                   </div>
                   <span style={{ color: '#E8632B', fontSize: 18, flexShrink: 0 }}>{'\u2192'}</span>
                 </button>
@@ -441,8 +441,8 @@ export default function BusinessSidebar({
           >
             {homeowner && (
               <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#2D2926' }}>{userName || homeowner.email}</div>
-                <div style={{ fontSize: 12, color: '#9B9490' }}>{homeowner.email}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bp-text)' }}>{userName || homeowner.email}</div>
+                <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>{homeowner.email}</div>
               </div>
             )}
             <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={accountMenuItemStyle}
@@ -485,11 +485,11 @@ export default function BusinessSidebar({
                   fontSize: 16, flexShrink: 0,
                 }}>{'\uD83C\uDFE0'}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#2D2926', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontFamily: 'Fraunces, serif', fontSize: 13, color: '#E8632B' }}>homie</span>
                     <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Personal</span>
                   </div>
-                  <div style={{ fontSize: 10, color: '#6B6560', marginTop: 1 }}>Home services for your own home</div>
+                  <div style={{ fontSize: 10, color: 'var(--bp-muted)', marginTop: 1 }}>Home services for your own home</div>
                 </div>
                 <span style={{ color: '#E8632B', fontSize: 15, flexShrink: 0 }}>{'\u2192'}</span>
               </button>

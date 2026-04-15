@@ -44,13 +44,13 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
     }).catch(() => setLoading(false));
   }, [workspaceId]);
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading bookings...</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading bookings...</div>;
 
   if (bookingsList.length === 0) return (
     <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No bookings yet</div>
-      <div style={{ fontSize: 14, color: '#9B9490' }}>When you book a provider from a dispatch, it will appear here.</div>
+      <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>When you book a provider from a dispatch, it will appear here.</div>
     </div>
   );
 
@@ -101,16 +101,16 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
         <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} style={selectStyle} title="To date" />
         {hasFilters && (
           <button onClick={() => { setFilterStatus(''); setFilterCategory(''); setFilterProperty(''); setFilterSeverity(''); setFilterDateFrom(''); setFilterDateTo(''); }}
-            style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: '#F5F5F5', color: '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: '#F5F5F5', color: 'var(--bp-subtle)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             Clear filters
           </button>
         )}
-        <span style={{ fontSize: 12, color: '#9B9490', marginLeft: 'auto' }}>{filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}</span>
+        <span style={{ fontSize: 12, color: 'var(--bp-subtle)', marginLeft: 'auto' }}>{filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}</span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {filteredBookings.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9B9490', fontSize: 14 }}>No bookings match the selected filters</div>
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--bp-subtle)', fontSize: 14 }}>No bookings match the selected filters</div>
         ) : null}
         {(() => {
           let lastDateLabel = '';
@@ -126,7 +126,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
 
         return (<div key={b.id}>
           {showHeader && (
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-subtle)', padding: '14px 0 6px', letterSpacing: '0.03em' }}>
               {dateLabel}
             </div>
           )}
@@ -154,7 +154,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
                       <span style={{ background: sc.bg, color: sc.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0, textTransform: 'capitalize' }}>{b.status}</span>
                       {b.diagnosis?.source === 'inspection_report' && <span style={{ background: '#EFF6FF', color: '#2563EB', padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0 }}>Inspect</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 11, color: 'var(--bp-subtle)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 500 }}>{b.providerName}</span>
                       {b.propertyName && <span>🏠 {b.propertyName}</span>}
                       <span>{new Date(b.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
@@ -164,7 +164,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
                     {b.quotedPrice ? (
                       <>
                         <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: O }}>{b.quotedPrice}</div>
-                        <div style={{ fontSize: 9, color: '#9B9490' }}>quoted</div>
+                        <div style={{ fontSize: 9, color: 'var(--bp-subtle)' }}>quoted</div>
                       </>
                     ) : (
                       <div style={{ fontSize: 10, fontWeight: 600, color: G }}>Booked</div>
@@ -180,7 +180,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
 
                   {/* Summary */}
                   {b.diagnosis?.summary && (
-                    <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, marginBottom: 14, paddingTop: 12 }}>
+                    <div style={{ fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6, marginBottom: 14, paddingTop: 12 }}>
                       {renderBold(b.diagnosis.summary)}
                     </div>
                   )}
@@ -198,7 +198,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
                       { label: 'Timing', value: b.preferredTiming ?? 'ASAP' },
                     ].map((item, i) => (
                       <div key={i} style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
-                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+                        <div style={{ fontSize: 9, color: 'var(--bp-subtle)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: (item as { color?: string }).color ?? D }}>{item.value}</div>
                       </div>
                     ))}
@@ -314,7 +314,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
                   <span style={{ fontSize: 22 }}>⚠️</span>
                 </div>
                 <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: '0 0 8px' }}>Cancel this booking?</h3>
-                <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, margin: 0 }}>
+                <p style={{ fontSize: 14, color: 'var(--bp-muted)', lineHeight: 1.6, margin: 0 }}>
                   {booking?.providerName} will be notified of the cancellation via SMS and email.
                 </p>
               </div>

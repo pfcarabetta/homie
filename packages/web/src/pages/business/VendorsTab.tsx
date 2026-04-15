@@ -127,7 +127,7 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
   }
 
   const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
-  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 };
 
   const showDetails = mode === 'create' || selectedProvider;
 
@@ -155,7 +155,7 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
             <label style={labelStyle}>Search Providers</label>
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Type provider name..."
               style={{ ...inputStyle, marginBottom: 8 }} />
-            {searching && <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>Searching...</div>}
+            {searching && <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginBottom: 8 }}>Searching...</div>}
 
             <div style={{ maxHeight: 300, overflow: 'auto' }}>
               {results.map(p => (
@@ -173,15 +173,15 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
                   onMouseOver={e => (e.currentTarget.style.background = '#FAFAF8')}
                   onMouseOut={e => (e.currentTarget.style.background = 'var(--bp-card)')}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{p.name}</div>
-                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4, display: 'flex', gap: 12 }}>
+                  <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 4, display: 'flex', gap: 12 }}>
                     {p.googleRating && <span>Rating: {p.googleRating} ({p.reviewCount})</span>}
                     {p.phone && <span>{p.phone}</span>}
                   </div>
-                  {p.categories && <div style={{ fontSize: 12, color: '#6B6560', marginTop: 4 }}>{p.categories.join(', ')}</div>}
+                  {p.categories && <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginTop: 4 }}>{p.categories.join(', ')}</div>}
                 </div>
               ))}
               {query.length >= 2 && !searching && results.length === 0 && (
-                <div style={{ textAlign: 'center', padding: 20, color: '#9B9490', fontSize: 14 }}>
+                <div style={{ textAlign: 'center', padding: 20, color: 'var(--bp-subtle)', fontSize: 14 }}>
                   No providers found. <button onClick={() => { setMode('create'); setNewName(query); }}
                     style={{ background: 'none', border: 'none', color: O, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
                     Create new provider
@@ -197,12 +197,12 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{selectedProvider.name}</div>
-                <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>
+                <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>
                   {selectedProvider.phone || selectedProvider.email || 'No contact info'}
                 </div>
               </div>
               <button onClick={() => setSelectedProvider(null)}
-                style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, cursor: 'pointer', color: '#6B6560' }}>
+                style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, cursor: 'pointer', color: 'var(--bp-muted)' }}>
                 Change
               </button>
             </div>
@@ -261,7 +261,7 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
             </div>
 
             {/* Operating Hours */}
-            <label style={labelStyle}>Operating Hours <span style={{ fontWeight: 400, color: '#9B9490' }}>(optional)</span></label>
+            <label style={labelStyle}>Operating Hours <span style={{ fontWeight: 400, color: 'var(--bp-subtle)' }}>(optional)</span></label>
             <SchedulePicker schedule={schedule} onChange={setSchedule} />
             <div style={{ marginBottom: 16 }} />
 
@@ -286,7 +286,7 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
               </div>
 
               {assignMode === 'all' && (
-                <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>
+                <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginBottom: 8 }}>
                   This provider will be available for dispatch to any property in your workspace.
                 </div>
               )}
@@ -296,7 +296,7 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
                   {/* City filter */}
                   {cities.length > 1 && (
                     <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, color: '#9B9490', fontWeight: 600 }}>Filter:</span>
+                      <span style={{ fontSize: 12, color: 'var(--bp-subtle)', fontWeight: 600 }}>Filter:</span>
                       <button onClick={() => setCityFilter('')}
                         style={{ padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: 500, cursor: 'pointer',
                           border: !cityFilter ? `2px solid ${O}` : '1px solid #E0DAD4',
@@ -322,7 +322,7 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
                     </button>
                     <span style={{ color: '#E0DAD4' }}>|</span>
                     <button onClick={deselectAllFiltered}
-                      style={{ fontSize: 12, color: '#9B9490', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
+                      style={{ fontSize: 12, color: 'var(--bp-subtle)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
                       Deselect all{cityFilter ? ` in ${cityFilter}` : ''}
                     </button>
                     {selectedPropertyIds.length > 0 && (
@@ -345,13 +345,13 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
                             style={{ width: 16, height: 16, accentColor: O, flexShrink: 0 }} />
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 500, color: D }}>{p.name}</div>
-                            {p.city && <div style={{ fontSize: 12, color: '#9B9490' }}>{p.city}{p.state ? `, ${p.state}` : ''}</div>}
+                            {p.city && <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>{p.city}{p.state ? `, ${p.state}` : ''}</div>}
                           </div>
                         </label>
                       );
                     })}
                     {filteredProperties.length === 0 && (
-                      <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: '#9B9490' }}>No properties found</div>
+                      <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: 'var(--bp-subtle)' }}>No properties found</div>
                     )}
                   </div>
                 </>
@@ -494,7 +494,7 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
   }
 
   const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
-  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -533,7 +533,7 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
         </div>
 
         {/* Operating Hours */}
-        <label style={labelStyle}>Operating Hours <span style={{ fontWeight: 400, color: '#9B9490' }}>(optional)</span></label>
+        <label style={labelStyle}>Operating Hours <span style={{ fontWeight: 400, color: 'var(--bp-subtle)' }}>(optional)</span></label>
         <SchedulePicker schedule={schedule} onChange={setSchedule} />
         <div style={{ marginBottom: 16 }} />
 
@@ -558,7 +558,7 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
           </div>
 
           {assignMode === 'all' && (
-            <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginBottom: 8 }}>
               This provider will be available for dispatch to any property in your workspace.
             </div>
           )}
@@ -567,7 +567,7 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
             <>
               {cities.length > 1 && (
                 <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: '#9B9490', fontWeight: 600 }}>Filter:</span>
+                  <span style={{ fontSize: 12, color: 'var(--bp-subtle)', fontWeight: 600 }}>Filter:</span>
                   <button onClick={() => setCityFilter('')}
                     style={{ padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: 500, cursor: 'pointer',
                       border: !cityFilter ? `2px solid ${O}` : '1px solid #E0DAD4',
@@ -592,7 +592,7 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
                 </button>
                 <span style={{ color: '#E0DAD4' }}>|</span>
                 <button onClick={deselectAllFiltered}
-                  style={{ fontSize: 12, color: '#9B9490', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  style={{ fontSize: 12, color: 'var(--bp-subtle)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
                   Deselect all{cityFilter ? ` in ${cityFilter}` : ''}
                 </button>
                 {selectedPropertyIds.length > 0 && (
@@ -614,13 +614,13 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
                         style={{ width: 16, height: 16, accentColor: O, flexShrink: 0 }} />
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 500, color: D }}>{p.name}</div>
-                        {p.city && <div style={{ fontSize: 12, color: '#9B9490' }}>{p.city}{p.state ? `, ${p.state}` : ''}</div>}
+                        {p.city && <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>{p.city}{p.state ? `, ${p.state}` : ''}</div>}
                       </div>
                     </label>
                   );
                 })}
                 {filteredProperties.length === 0 && (
-                  <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: '#9B9490' }}>No properties found</div>
+                  <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: 'var(--bp-subtle)' }}>No properties found</div>
                 )}
               </div>
             </>
@@ -631,7 +631,7 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, padding: '12px 14px', background: skipQuote ? '#EFF6FF' : W, borderRadius: 10, border: `1px solid ${skipQuote ? 'rgba(37,99,235,0.15)' : 'rgba(0,0,0,0.04)'}` }}>
           <div>
             <div style={{ fontSize: 14, fontWeight: 600, color: D }}>Skip Quotes</div>
-            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>
               {skipQuote ? 'This provider will be auto-dispatched without requesting a quote or budget info.' : 'This provider will be asked for a price estimate during outreach.'}
             </div>
           </div>
@@ -693,14 +693,14 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
     } catch { /* ignore */ }
   }
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading providers...</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading providers...</div>;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Preferred Providers</h3>
-          <div style={{ fontSize: 12, color: '#9B9490', marginTop: 3 }}>
+          <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 3 }}>
             {uniqueVendorCount} of {vendorLimit === 9999 ? '\u221E' : vendorLimit} · {plan.charAt(0).toUpperCase() + plan.slice(1)}
           </div>
         </div>
@@ -720,7 +720,7 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
         <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🤝</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No preferred providers yet</div>
-          <div style={{ fontSize: 14, color: '#9B9490' }}>Add providers you trust to get priority dispatch on your jobs.</div>
+          <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Add providers you trust to get priority dispatch on your jobs.</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -758,10 +758,10 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                         <span style={{ fontWeight: 600, fontSize: 14, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.providerName}</span>
-                        {!g.active && <span style={{ fontSize: 8, fontWeight: 700, color: '#9B9490', background: '#F3F4F6', padding: '1px 6px', borderRadius: 3, flexShrink: 0 }}>INACTIVE</span>}
+                        {!g.active && <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--bp-subtle)', background: '#F3F4F6', padding: '1px 6px', borderRadius: 3, flexShrink: 0 }}>INACTIVE</span>}
                         {g.skipQuote && <span style={{ fontSize: 8, fontWeight: 700, color: '#2563EB', background: '#EFF6FF', padding: '1px 6px', borderRadius: 3, flexShrink: 0 }}>NO QUOTE</span>}
                       </div>
-                      <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         {g.providerRating && <span>★ {g.providerRating}</span>}
                         <span>{propSummary}</span>
                         <span style={{
@@ -801,29 +801,29 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
                         <a href={`mailto:${g.providerEmail}`} style={{ fontSize: 12, color: '#2563EB', textDecoration: 'none', fontWeight: 500 }}>✉ {g.providerEmail}</a>
                       )}
                       {g.providerRating && (
-                        <span style={{ fontSize: 12, color: '#9B9490' }}>★ {g.providerRating} ({g.providerReviewCount} reviews)</span>
+                        <span style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>★ {g.providerRating} ({g.providerReviewCount} reviews)</span>
                       )}
                     </div>
 
                     {/* Details grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6, marginBottom: 10 }}>
                       <div style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
-                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Priority</div>
+                        <div style={{ fontSize: 9, color: 'var(--bp-subtle)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Priority</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: g.priority === 1 ? '#B45309' : g.priority === 2 ? '#2563EB' : D }}>Level {g.priority}</div>
                       </div>
                       <div style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
-                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Properties</div>
+                        <div style={{ fontSize: 9, color: 'var(--bp-subtle)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Properties</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: isWorkspaceWide ? '#9B9490' : '#2563EB' }}>{propSummary}</div>
                       </div>
                       <div style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
-                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Hours</div>
+                        <div style={{ fontSize: 9, color: 'var(--bp-subtle)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Hours</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatScheduleSummary(g.availabilitySchedule)}</div>
                       </div>
                     </div>
 
                     {/* Assigned properties list */}
                     {!isWorkspaceWide && assignedProps.length > 0 && (
-                      <div style={{ fontSize: 11, color: '#6B6560', marginBottom: 10, lineHeight: 1.6 }}>
+                      <div style={{ fontSize: 11, color: 'var(--bp-muted)', marginBottom: 10, lineHeight: 1.6 }}>
                         📍 {assignedProps.map(p => p.name).join(', ')}
                       </div>
                     )}
@@ -838,14 +838,14 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
                     )}
 
                     {/* Notes */}
-                    {g.notes && <div style={{ fontSize: 12, color: '#6B6560', fontStyle: 'italic', marginBottom: 10 }}>{g.notes}</div>}
+                    {g.notes && <div style={{ fontSize: 12, color: 'var(--bp-muted)', fontStyle: 'italic', marginBottom: 10 }}>{g.notes}</div>}
 
                     {/* Skip Quote toggle */}
                     {canEdit && (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: '8px 10px', background: g.skipQuote ? '#EFF6FF' : W, borderRadius: 8, border: `1px solid ${g.skipQuote ? 'rgba(37,99,235,0.15)' : 'rgba(0,0,0,0.04)'}` }}>
                         <div>
                           <div style={{ fontSize: 12, fontWeight: 600, color: D }}>Skip Quotes</div>
-                          <div style={{ fontSize: 10, color: '#9B9490', marginTop: 1 }}>
+                          <div style={{ fontSize: 10, color: 'var(--bp-subtle)', marginTop: 1 }}>
                             {g.skipQuote ? 'Auto-dispatch without requesting a quote' : 'Provider will be asked for a quote'}
                           </div>
                         </div>
@@ -865,7 +865,7 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
                     {canEdit && (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.04)' }}>
                         <button onClick={() => setEditingVendor(g)}
-                          style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 600 }}>
+                          style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, cursor: 'pointer', color: 'var(--bp-muted)', fontWeight: 600 }}>
                           Edit
                         </button>
                         <button onClick={() => {

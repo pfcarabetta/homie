@@ -3,7 +3,7 @@ import type { PricingConfig } from '@/hooks/usePricing';
 import type { Reservation } from '@/services/api';
 
 // ── Color Constants ──────────────────────────────────────────────────────────
-export const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
+export const O = '#E8632B', G = '#1B9E77', D = 'var(--bp-text)', W = 'var(--bp-bg)';
 
 // ── Reservation time constants ───────────────────────────────────────────────
 // Homie uses standard check-in/check-out times across all reservations.
@@ -177,11 +177,11 @@ export function renderBold(text: string) {
 }
 
 export function trendArrow(current: number, previous: number): { text: string; color: string } {
-  if (previous === 0) return current > 0 ? { text: `+${current}`, color: G } : { text: '—', color: '#9B9490' };
+  if (previous === 0) return current > 0 ? { text: `+${current}`, color: G } : { text: '—', color: 'var(--bp-subtle)' };
   const pct = Math.round(((current - previous) / previous) * 100);
   if (pct > 0) return { text: `↑ ${pct}%`, color: G };
   if (pct < 0) return { text: `↓ ${Math.abs(pct)}%`, color: '#DC2626' };
-  return { text: '→ 0%', color: '#9B9490' };
+  return { text: '→ 0%', color: 'var(--bp-subtle)' };
 }
 
 export function timeAgo(dateStr: string): string {
@@ -343,7 +343,7 @@ export function SchedulePicker({ schedule, onChange }: { schedule: VendorSched; 
             style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid #E0DAD4', fontSize: 12, cursor: 'pointer' }}>
             {TIME_OPTIONS.map(t => <option key={t} value={t}>{fmtTimeLabel(t)}</option>)}
           </select>
-          <span style={{ color: '#9B9490', fontSize: 11 }}>to</span>
+          <span style={{ color: 'var(--bp-subtle)', fontSize: 11 }}>to</span>
           <select value={schedule[d.key]!.end} onChange={e => updateTime(d.key, 'end', e.target.value)}
             style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid #E0DAD4', fontSize: 12, cursor: 'pointer' }}>
             {TIME_OPTIONS.map(t => <option key={t} value={t}>{fmtTimeLabel(t)}</option>)}
@@ -351,7 +351,7 @@ export function SchedulePicker({ schedule, onChange }: { schedule: VendorSched; 
         </div>
       ))}
       {DAYS.every(d => !schedule[d.key]) && (
-        <div style={{ fontSize: 12, color: '#9B9490', fontStyle: 'italic' }}>No days selected — provider available anytime</div>
+        <div style={{ fontSize: 12, color: 'var(--bp-subtle)', fontStyle: 'italic' }}>No days selected — provider available anytime</div>
       )}
     </div>
   );
@@ -414,7 +414,7 @@ export function MiniCalendar({ reservations }: { reservations: Reservation[] }) 
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
                 {DAY_LABELS.map(dl => (
-                  <div key={dl} style={{ fontSize: 9, color: '#9B9490', textAlign: 'center', padding: '2px 0', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>{dl}</div>
+                  <div key={dl} style={{ fontSize: 9, color: 'var(--bp-subtle)', textAlign: 'center', padding: '2px 0', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>{dl}</div>
                 ))}
                 {cells.map((cell, i) => {
                   if (cell.day === null) return <div key={`e-${i}`} />;
@@ -464,7 +464,7 @@ export function MiniCalendar({ reservations }: { reservations: Reservation[] }) 
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 10, color: '#9B9490', fontFamily: 'DM Sans, sans-serif', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 10, color: 'var(--bp-subtle)', fontFamily: 'DM Sans, sans-serif', alignItems: 'center' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: G, display: 'inline-block' }} /> Check-in
         </span>
@@ -483,19 +483,19 @@ export function MiniCalendar({ reservations }: { reservations: Reservation[] }) 
           border: `1px solid ${BAR_COLORS[hoveredRes % BAR_COLORS.length]}20`,
         }}>
           <span style={{ fontWeight: 600 }}>{reservations[hoveredRes].guestName || 'Guest'}</span>
-          <span style={{ color: '#9B9490', marginLeft: 8 }}>
+          <span style={{ color: 'var(--bp-subtle)', marginLeft: 8 }}>
             {new Date(reservations[hoveredRes].checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             {' - '}
             {new Date(reservations[hoveredRes].checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
           {reservations[hoveredRes].guests && (
-            <span style={{ color: '#9B9490', marginLeft: 8 }}>{reservations[hoveredRes].guests} guest{reservations[hoveredRes].guests! > 1 ? 's' : ''}</span>
+            <span style={{ color: 'var(--bp-subtle)', marginLeft: 8 }}>{reservations[hoveredRes].guests} guest{reservations[hoveredRes].guests! > 1 ? 's' : ''}</span>
           )}
           {reservations[hoveredRes].source && (
-            <span style={{ color: '#9B9490', marginLeft: 8 }}>via {reservations[hoveredRes].source}</span>
+            <span style={{ color: 'var(--bp-subtle)', marginLeft: 8 }}>via {reservations[hoveredRes].source}</span>
           )}
           {(reservations[hoveredRes].guestEmail || reservations[hoveredRes].guestPhone) && (
-            <div style={{ marginTop: 4, fontSize: 11, color: '#9B9490' }}>
+            <div style={{ marginTop: 4, fontSize: 11, color: 'var(--bp-subtle)' }}>
               {reservations[hoveredRes].guestEmail && <span>{reservations[hoveredRes].guestEmail}</span>}
               {reservations[hoveredRes].guestEmail && reservations[hoveredRes].guestPhone && <span style={{ margin: '0 4px' }}>|</span>}
               {reservations[hoveredRes].guestPhone && <span>{reservations[hoveredRes].guestPhone}</span>}
@@ -521,12 +521,12 @@ export function MiniCalendar({ reservations }: { reservations: Reservation[] }) 
                   {r.guestName || 'Guest'}
                 </span>
                 {(r.guestEmail || r.guestPhone) && (
-                  <span style={{ display: 'block', fontSize: 10, color: '#9B9490', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ display: 'block', fontSize: 10, color: 'var(--bp-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {[r.guestEmail, r.guestPhone].filter(Boolean).join(' | ')}
                   </span>
                 )}
               </span>
-              <span style={{ color: '#9B9490', flexShrink: 0, fontSize: 11 }}>
+              <span style={{ color: 'var(--bp-subtle)', flexShrink: 0, fontSize: 11 }}>
                 {new Date(r.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 {' - '}
                 {new Date(r.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -541,7 +541,7 @@ export function MiniCalendar({ reservations }: { reservations: Reservation[] }) 
             </div>
           ))}
           {reservations.length > 5 && (
-            <div style={{ fontSize: 11, color: '#9B9490', textAlign: 'center', paddingTop: 6 }}>
+            <div style={{ fontSize: 11, color: 'var(--bp-subtle)', textAlign: 'center', paddingTop: 6 }}>
               +{reservations.length - 5} more
             </div>
           )}

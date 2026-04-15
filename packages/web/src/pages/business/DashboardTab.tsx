@@ -47,7 +47,7 @@ function ReservationsWidget({ workspaceId }: { workspaceId: string }) {
     <div style={{ marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
         <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: 0 }}>Reservations this week</h4>
-        <span style={{ fontSize: 11, color: '#9B9490' }}>{totalCount} active</span>
+        <span style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>{totalCount} active</span>
       </div>
       <div className="bp-res-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, alignItems: 'start' }}>
         <style>{`@media (max-width: 1100px) { .bp-res-grid { grid-template-columns: 1fr !important; } }`}</style>
@@ -152,7 +152,7 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
         } : undefined}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>{label}</span>
+          <span style={{ fontSize: 13, color: 'var(--bp-subtle)', fontWeight: 500 }}>{label}</span>
           <div style={{
             width: 36, height: 36, borderRadius: 10,
             background: `${color}15`, color,
@@ -164,7 +164,7 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ fontSize: 28, fontWeight: 700, color: D }}>{items.length}</div>
           {canExpand && (
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', display: 'flex', alignItems: 'center', gap: 4 }}>
               {isOpen ? 'Hide' : 'View'}
               <svg width={12} height={12} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                 <polyline points="6 8 10 12 14 8" />
@@ -189,7 +189,7 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
                 <div style={{ fontSize: 12, fontWeight: 700, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {item.propertyName}
                 </div>
-                <div style={{ fontSize: 11, color: '#6B6560', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 11, color: 'var(--bp-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span>{fmtGuestName(item.guestName)}</span>
                   {item.guestCount && (
                     <>
@@ -217,7 +217,7 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
                       >
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: runColor(run.status), flexShrink: 0 }} />
                         <span style={{ fontWeight: 600 }}>{run.scheduleTitle}</span>
-                        <span style={{ color: '#9B9490' }}>· {run.jobId ? 'View dispatch' : 'View schedule'}</span>
+                        <span style={{ color: 'var(--bp-subtle)' }}>· {run.jobId ? 'View dispatch' : 'View schedule'}</span>
                       </a>
                     ))}
                   </div>
@@ -286,8 +286,8 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
 
   useEffect(() => { loadSuggestions(); }, [workspace.id]);
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading dashboard...</div>;
-  if (!data) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Failed to load dashboard</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading dashboard...</div>;
+  if (!data) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Failed to load dashboard</div>;
 
   const dispatchTrend = trendArrow(data.dispatches_this_month, data.dispatches_last_month);
   const bookingTrend = trendArrow(data.bookings_this_month, data.bookings_last_month);
@@ -358,7 +358,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
               } : undefined}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>{kpi.label}</span>
+                <span style={{ fontSize: 13, color: 'var(--bp-subtle)', fontWeight: 500 }}>{kpi.label}</span>
                 <div style={{
                   width: 36, height: 36, borderRadius: 10,
                   background: `${kpi.color}15`, color: kpi.color,
@@ -387,13 +387,13 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
         <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 20 }}>
           <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Dispatches by Category</h4>
           {data.dispatches_by_category.length === 0 ? (
-            <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No dispatches yet</div>
+            <div style={{ fontSize: 13, color: 'var(--bp-subtle)', padding: '20px 0', textAlign: 'center' }}>No dispatches yet</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {data.dispatches_by_category.slice(0, 8).map(cat => (
                 <div key={cat.category}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: '#6B6560', textTransform: 'capitalize' }}>{cat.category.replace(/_/g, ' ')}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--bp-muted)', textTransform: 'capitalize' }}>{cat.category.replace(/_/g, ' ')}</span>
                     <span style={{ fontSize: 12, fontWeight: 600, color: D }}>{cat.count}</span>
                   </div>
                   <div style={{ height: 6, borderRadius: 3, background: '#F0EDE9' }}>
@@ -409,7 +409,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
         <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 20 }}>
           <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Top Providers</h4>
           {data.top_vendors.length === 0 ? (
-            <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No bookings yet</div>
+            <div style={{ fontSize: 13, color: 'var(--bp-subtle)', padding: '20px 0', textAlign: 'center' }}>No bookings yet</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {data.top_vendors.map((v, i) => (
@@ -422,7 +422,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</div>
-                    <div style={{ fontSize: 11, color: '#9B9490' }}>
+                    <div style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>
                       {v.booking_count} booking{v.booking_count !== 1 ? 's' : ''}{v.avg_rating ? ` · ★ ${v.avg_rating}` : ''}
                     </div>
                   </div>
@@ -437,7 +437,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
       <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 20, marginBottom: 24 }}>
         <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Recent Activity</h4>
         {data.recent_activity.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No recent activity</div>
+          <div style={{ fontSize: 13, color: 'var(--bp-subtle)', padding: '20px 0', textAlign: 'center' }}>No recent activity</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {data.recent_activity.map((a, i) => {
@@ -453,7 +453,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                   <span style={{ fontSize: 16, flexShrink: 0, marginTop: 2 }}>{icon}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, color: D }}>{a.title}</div>
-                    <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>
                       {a.property_name && <span>{a.property_name}</span>}
                       {a.provider_name && <span> · {a.provider_name}</span>}
                       <span> · {new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
@@ -474,16 +474,16 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div>
             <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: 0 }}>Seasonal Prep Suggestions</h4>
-            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>AI-generated based on your properties, locations, and time of year</div>
+            <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>AI-generated based on your properties, locations, and time of year</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {suggestionsGeneratedAt && (
-              <span style={{ fontSize: 11, color: '#9B9490' }}>
+              <span style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>
                 Generated {new Date(suggestionsGeneratedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
               </span>
             )}
             <button onClick={() => loadSuggestions(true)} disabled={loadingSuggestions}
-              style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, fontWeight: 600, color: '#6B6560', cursor: 'pointer', opacity: loadingSuggestions ? 0.5 : 1 }}>
+              style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, fontWeight: 600, color: 'var(--bp-muted)', cursor: 'pointer', opacity: loadingSuggestions ? 0.5 : 1 }}>
               {loadingSuggestions ? 'Generating...' : '🔄 Regenerate'}
             </button>
           </div>
@@ -492,7 +492,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
         {loadingSuggestions && suggestions.length === 0 && (
           <div style={{ textAlign: 'center', padding: '30px 0' }}>
             <div style={{ width: 24, height: 24, border: `3px solid ${O}30`, borderTopColor: O, borderRadius: '50%', margin: '0 auto 10px', animation: 'spin 0.7s linear infinite' }} />
-            <div style={{ fontSize: 13, color: '#9B9490' }}>Analyzing your properties and generating suggestions...</div>
+            <div style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>Analyzing your properties and generating suggestions...</div>
           </div>
         )}
 
@@ -510,8 +510,8 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                         <div style={{ fontSize: 14, fontWeight: 600, color: D, lineHeight: 1.3 }}>{s.title}</div>
                         <span style={{ fontSize: 10, fontWeight: 600, color: priorityColor, background: `${priorityColor}15`, padding: '2px 8px', borderRadius: 100, flexShrink: 0, marginLeft: 8, textTransform: 'capitalize' }}>{s.priority}</span>
                       </div>
-                      <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>{s.description}</div>
-                      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, color: 'var(--bp-muted)', lineHeight: 1.5, marginBottom: 8 }}>{s.description}</div>
+                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginBottom: 10 }}>
                         <span style={{ textTransform: 'capitalize' }}>{s.category.replace(/_/g, ' ')}</span>
                         {s.properties.length > 0 && <span> · {s.properties.slice(0, 3).join(', ')}{s.properties.length > 3 ? ` +${s.properties.length - 3} more` : ''}</span>}
                       </div>
@@ -531,7 +531,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                 <button onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
                   style={{
                     display: 'block', width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 10,
-                    border: '1px solid var(--bp-border)', background: 'var(--bp-card)', color: '#6B6560',
+                    border: '1px solid var(--bp-border)', background: 'var(--bp-card)', color: 'var(--bp-muted)',
                     fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'center',
                   }}>
                   {suggestionsExpanded ? `Show less` : `Show ${suggestions.length - 2} more suggestions`}
@@ -542,7 +542,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
         })()}
 
         {!loadingSuggestions && suggestions.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '30px 0', color: '#9B9490', fontSize: 13 }}>
+          <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--bp-subtle)', fontSize: 13 }}>
             No seasonal suggestions available. Add properties to get AI-driven maintenance recommendations.
           </div>
         )}
@@ -555,7 +555,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
           <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 4px' }}>Select Property to Dispatch</h3>
-            <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 16 }}>
               <strong>{dispatchSuggestion.title}</strong> — {dispatchSuggestion.description}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 350, overflowY: 'auto' }}>
@@ -592,7 +592,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                     >
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{p.name}</div>
-                        {p.city && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{p.city}{p.state ? `, ${p.state}` : ''}</div>}
+                        {p.city && <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>{p.city}{p.state ? `, ${p.state}` : ''}</div>}
                       </div>
                       {isRecommended && <span style={{ fontSize: 10, fontWeight: 600, color: O, background: `${O}12`, padding: '2px 8px', borderRadius: 100, flexShrink: 0 }}>Suggested</span>}
                     </button>

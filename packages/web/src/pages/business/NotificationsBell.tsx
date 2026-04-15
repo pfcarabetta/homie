@@ -162,7 +162,7 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
             padding: '14px 16px', borderBottom: '1px solid #F0EBE6',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
-            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: '#2D2926' }}>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: 'var(--bp-text)' }}>
               Notifications
             </div>
             {unreadCount > 0 && (
@@ -177,12 +177,12 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {loading && items.length === 0 && (
-              <div style={{ padding: 24, textAlign: 'center', color: '#9B9490', fontSize: 13 }}>
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--bp-subtle)', fontSize: 13 }}>
                 Loading...
               </div>
             )}
             {!loading && items.length === 0 && (
-              <div style={{ padding: 32, textAlign: 'center', color: '#9B9490', fontSize: 13 }}>
+              <div style={{ padding: 32, textAlign: 'center', color: 'var(--bp-subtle)', fontSize: 13 }}>
                 No notifications yet
               </div>
             )}
@@ -209,15 +209,15 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#2D2926', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {n.title}
                     </div>
                     {!n.read && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#E8632B', flexShrink: 0 }} />}
                   </div>
-                  <div style={{ fontSize: 12, color: '#6B6560', marginTop: 2, lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginTop: 2, lineHeight: 1.4 }}>
                     {n.body}
                   </div>
-                  <div style={{ fontSize: 11, color: '#9B9490', marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 4 }}>
                     {timeAgo(n.createdAt)}
                   </div>
                 </div>

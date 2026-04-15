@@ -41,7 +41,7 @@ function AddPropertyModal({ workspaceId, onClose, onCreated }: { workspaceId: st
   }
 
   const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
-  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -184,7 +184,7 @@ export function EditPropertyModal({ workspaceId, property, onClose, onUpdated, o
   }
 
   const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
-  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -245,7 +245,7 @@ export function EditPropertyModal({ workspaceId, property, onClose, onUpdated, o
             <div style={{ fontSize: 14, fontWeight: 700, color: D }}>Bed Configuration</div>
             <button onClick={addBed} style={{ fontSize: 13, color: O, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>+ Add Bed</button>
           </div>
-          {beds.length === 0 && <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 12 }}>No beds configured</div>}
+          {beds.length === 0 && <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginBottom: 12 }}>No beds configured</div>}
           {beds.map((b, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
               <select value={b.type} onChange={e => updateBed(i, 'type', e.target.value)}
@@ -326,7 +326,7 @@ export function EditPropertyModal({ workspaceId, property, onClose, onUpdated, o
                   { key: 'microwave', label: 'Microwave', fields: ['brand', 'type'] },
                 ].map(app => (
                   <div key={app.key} style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', marginBottom: 4 }}>{app.label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', marginBottom: 4 }}>{app.label}</div>
                     <div style={{ display: 'grid', gridTemplateColumns: app.fields.length > 2 ? '1fr 1fr 1fr' : '1fr 1fr', gap: 8 }}>
                       {app.fields.map(f => (
                         <div key={f}>
@@ -493,7 +493,7 @@ export function EditPropertyModal({ workspaceId, property, onClose, onUpdated, o
           ) : (
             <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: '#DC2626', marginBottom: 6 }}>Are you sure?</div>
-              <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12 }}>This will permanently remove <strong>{property.name}</strong> and cannot be undone.</div>
+              <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 12 }}>This will permanently remove <strong>{property.name}</strong> and cannot be undone.</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setConfirmDelete(false)}
                   style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 13, cursor: 'pointer', color: D }}>
@@ -641,7 +641,7 @@ function PmsConnectionCard({ workspaceId, plan, onPropertiesImported, properties
             <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, fontWeight: 700, color: D, marginBottom: 4 }}>
               {hasOrphans ? `Reconnect ${orphanLabels}` : 'Connect your PMS'}
             </div>
-            <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.5 }}>
               {hasOrphans
                 ? `Your properties were imported from ${orphanLabels} but the connection credentials need to be re-entered for syncing to work. Your existing properties won't be duplicated.`
                 : 'Import properties and sync reservations automatically from Track, Guesty, and more.'}
@@ -696,9 +696,9 @@ function PmsConnectionCard({ workspaceId, plan, onPropertiesImported, properties
                 )}
               </div>
               <button onClick={() => handleDisconnect(conn)}
-                style={{ fontSize: 12, color: '#9B9490', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>Disconnect</button>
+                style={{ fontSize: 12, color: 'var(--bp-subtle)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>Disconnect</button>
             </div>
-            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#6B6560', marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--bp-muted)', marginBottom: 12, flexWrap: 'wrap' }}>
               <span><strong style={{ color: D }}>{conn.propertiesSynced}</strong> properties</span>
               <span>·</span>
               <span><strong style={{ color: D }}>{conn.reservationsSynced}</strong> reservations</span>
@@ -724,7 +724,7 @@ function PmsConnectionCard({ workspaceId, plan, onPropertiesImported, properties
                 {isSyncingRes ? 'Syncing...' : 'Sync Reservations'}
               </button>
               <button onClick={() => setShowModal(true)}
-                style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', color: '#6B6560', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', color: 'var(--bp-muted)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 + Add PMS
               </button>
             </div>
@@ -789,7 +789,7 @@ function PmsConnectModal({ workspaceId, onClose, onConnected, initialPmsType }: 
                 {importResult.updated > 0 && `${importResult.updated} updated`}
                 {importResult.imported === 0 && importResult.updated === 0 && 'No new properties found'}
               </div>
-              <div style={{ fontSize: 13, color: '#9B9490' }}>{importResult.total} total in {pmsConfig?.label}</div>
+              <div style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>{importResult.total} total in {pmsConfig?.label}</div>
             </div>
             <button onClick={onConnected} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: O, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
               Done
@@ -798,10 +798,10 @@ function PmsConnectModal({ workspaceId, onClose, onConnected, initialPmsType }: 
         ) : (
           <div>
             <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 20, color: D, margin: '0 0 4px' }}>Connect your PMS</h3>
-            <p style={{ fontSize: 14, color: '#9B9490', marginBottom: 20 }}>Import your properties and sync reservations automatically.</p>
+            <p style={{ fontSize: 14, color: 'var(--bp-subtle)', marginBottom: 20 }}>Import your properties and sync reservations automatically.</p>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>Property Management System</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 4 }}>Property Management System</label>
               <select value={selectedPms} onChange={e => { setSelectedPms(e.target.value); setCredentials({}); setError(''); }}
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 14, outline: 'none', boxSizing: 'border-box', cursor: 'pointer', color: D }}>
                 <option value="">Select your PMS...</option>
@@ -813,7 +813,7 @@ function PmsConnectModal({ workspaceId, onClose, onConnected, initialPmsType }: 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
                 {pmsConfig.fields.map(f => (
                   <div key={f.key}>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>{f.label}</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 4 }}>{f.label}</label>
                     <input
                       type={f.type || 'text'}
                       value={credentials[f.key] || ''}
@@ -850,14 +850,14 @@ function PmsConnectModal({ workspaceId, onClose, onConnected, initialPmsType }: 
             </div>
 
             {selectedPms === 'guesty' && (
-              <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bp-bg)', borderRadius: 8, fontSize: 12, color: '#9B9490', lineHeight: 1.5 }}>
-                <strong style={{ color: '#6B6560' }}>Where to find your API credentials:</strong><br />
+              <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bp-bg)', borderRadius: 8, fontSize: 12, color: 'var(--bp-subtle)', lineHeight: 1.5 }}>
+                <strong style={{ color: 'var(--bp-muted)' }}>Where to find your API credentials:</strong><br />
                 Go to your Guesty Dashboard → Marketplace → API → Create or manage API keys. Copy the Client ID and Client Secret.
               </div>
             )}
             {selectedPms === 'track' && (
-              <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bp-bg)', borderRadius: 8, fontSize: 12, color: '#9B9490', lineHeight: 1.5 }}>
-                <strong style={{ color: '#6B6560' }}>Where to find your API credentials:</strong><br />
+              <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bp-bg)', borderRadius: 8, fontSize: 12, color: 'var(--bp-subtle)', lineHeight: 1.5 }}>
+                <strong style={{ color: 'var(--bp-muted)' }}>Where to find your API credentials:</strong><br />
                 Contact your Track PMS administrator or Track support to obtain your API key and secret. Your domain is the URL you use to log into Track (e.g. yourcompany.trackhs.com).
               </div>
             )}
@@ -956,14 +956,14 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
     return beds.map(b => `${b.count} ${BED_TYPES.find(bt => bt.value === b.type)?.label || b.type}`).join(', ');
   }
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading properties...</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading properties...</div>;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Properties</h3>
-          <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 4 }}>
             {activeCount} of {propertyLimit === 9999 ? 'unlimited' : propertyLimit} properties · {plan.charAt(0).toUpperCase() + plan.slice(1)} plan
           </div>
         </div>
@@ -971,7 +971,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
           atLimit ? (
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 13, color: '#DC2626', fontWeight: 600, marginBottom: 4 }}>Property limit reached</div>
-              <div style={{ fontSize: 12, color: '#9B9490' }}>Upgrade your plan to add more properties</div>
+              <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>Upgrade your plan to add more properties</div>
             </div>
           ) : (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1065,7 +1065,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                 </div>
               )}
             </div>
-            <button onClick={() => setCsvResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B9490', padding: 0, lineHeight: 1 }}>x</button>
+            <button onClick={() => setCsvResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--bp-subtle)', padding: 0, lineHeight: 1 }}>x</button>
           </div>
         </div>
       )}
@@ -1074,7 +1074,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
         <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🏠</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No properties yet</div>
-          <div style={{ fontSize: 14, color: '#9B9490' }}>Add your first property to start managing maintenance.</div>
+          <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Add your first property to start managing maintenance.</div>
         </div>
       ) : (
         <div className="bp-prop-grid" style={{ display: 'grid', gap: 12 }}>
@@ -1100,7 +1100,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                 <div style={{ minWidth: 0 }}>
                   <div className="bp-prop-name" style={{ fontSize: 16, fontWeight: 600, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
                   {p.address && (
-                    <div className="bp-prop-addr" style={{ fontSize: 14, color: '#6B6560', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div className="bp-prop-addr" style={{ fontSize: 14, color: 'var(--bp-muted)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.address}{p.city ? `, ${p.city}` : ''}{p.state ? `, ${p.state}` : ''} {p.zipCode || ''}
                     </div>
                   )}
@@ -1114,7 +1114,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                       else setEditingProperty(p);
                     }} style={{
                       padding: '4px 12px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)',
-                      fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 500,
+                      fontSize: 12, cursor: 'pointer', color: 'var(--bp-muted)', fontWeight: 500,
                     }}>Edit</button>
                   )}
                   <span className="bp-prop-badge bp-prop-type" style={{
@@ -1127,7 +1127,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
               </div>
 
               {/* Detail chips */}
-              <div className="bp-prop-details" style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 13, color: '#9B9490', flexWrap: 'wrap' }}>
+              <div className="bp-prop-details" style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 13, color: 'var(--bp-subtle)', flexWrap: 'wrap' }}>
                 {p.bedrooms != null && p.bedrooms > 0 && <span>{p.bedrooms} bd</span>}
                 {p.bathrooms != null && +p.bathrooms > 0 && <span>{p.bathrooms} ba</span>}
                 {p.sqft != null && p.sqft > 0 && <span>{p.sqft.toLocaleString()} sqft</span>}
@@ -1136,7 +1136,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                 )}
               </div>
 
-              {p.notes && <div className="bp-prop-notes" style={{ fontSize: 13, color: '#6B6560', marginTop: 8, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.notes}</div>}
+              {p.notes && <div className="bp-prop-notes" style={{ fontSize: 13, color: 'var(--bp-muted)', marginTop: 8, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.notes}</div>}
               </div>
               </div>
 
@@ -1145,9 +1145,9 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                 <div style={{ borderTop: '1px solid var(--bp-border)', padding: '16px 20px' }} onClick={e => e.stopPropagation()}>
                   <div style={{ fontFamily: 'Fraunces, serif', fontSize: 14, fontWeight: 600, color: D, marginBottom: 12 }}>Reservations</div>
                   {propLoading ? (
-                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#9B9490', fontSize: 13 }}>Loading reservations...</div>
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--bp-subtle)', fontSize: 13 }}>Loading reservations...</div>
                   ) : propReservations.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#9B9490', fontSize: 13, background: 'var(--bp-hover)', borderRadius: 8 }}>No upcoming reservations</div>
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--bp-subtle)', fontSize: 13, background: 'var(--bp-hover)', borderRadius: 8 }}>No upcoming reservations</div>
                   ) : (
                     <MiniCalendar reservations={propReservations} />
                   )}
@@ -1181,10 +1181,10 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>⬆️</div>
               <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 8px' }}>Plan upgrade required</h3>
-              <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, margin: 0 }}>
+              <p style={{ fontSize: 14, color: 'var(--bp-muted)', lineHeight: 1.6, margin: 0 }}>
                 Adding {showTierWarning.adding === 1 ? 'this property' : `${showTierWarning.adding} properties`} will exceed your <strong>{plan.charAt(0).toUpperCase() + plan.slice(1)}</strong> plan limit of <strong>{propertyLimit} properties</strong>.
               </p>
-              <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginTop: 8 }}>
+              <p style={{ fontSize: 14, color: 'var(--bp-muted)', lineHeight: 1.6, marginTop: 8 }}>
                 You'll be moved to the <strong style={{ color: O }}>{showTierWarning.nextTier.label}</strong> plan ({showTierWarning.nextTier.price}).
               </p>
             </div>
@@ -1208,7 +1208,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
           <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 4px' }}>Import from Track PMS</h3>
-            <p style={{ fontSize: 14, color: '#9B9490', marginBottom: 20 }}>Connect your Track account to import properties automatically.</p>
+            <p style={{ fontSize: 14, color: 'var(--bp-subtle)', marginBottom: 20 }}>Connect your Track account to import properties automatically.</p>
 
             {trackResult ? (
               <div>
@@ -1221,9 +1221,9 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                     {trackResult.imported === 0 && trackResult.updated === 0 && 'No changes needed'}
                   </div>
                   {trackResult.skipped > 0 && (
-                    <div style={{ fontSize: 13, color: '#6B6560' }}>{trackResult.skipped} unchanged (skipped)</div>
+                    <div style={{ fontSize: 13, color: 'var(--bp-muted)' }}>{trackResult.skipped} unchanged (skipped)</div>
                   )}
-                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>{trackResult.total} total found in Track</div>
+                  <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 4 }}>{trackResult.total} total found in Track</div>
                 </div>
                 <button onClick={() => {
                   setShowTrackImport(false); setTrackResult(null); setTrackError('');
@@ -1237,18 +1237,18 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
               <div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>Track Domain</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 4 }}>Track Domain</label>
                     <input value={trackDomain} onChange={e => { setTrackDomain(e.target.value); localStorage.setItem('homie_track_domain', e.target.value); }} placeholder="yourcompany.trackhs.com"
                       style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-                    <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>e.g. yourcompany.trackhs.com or yourcompany.trackhs.com/api</div>
+                    <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>e.g. yourcompany.trackhs.com or yourcompany.trackhs.com/api</div>
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>API Key</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 4 }}>API Key</label>
                     <input value={trackKey} onChange={e => { setTrackKey(e.target.value); localStorage.setItem('homie_track_key', e.target.value); }} placeholder="Your Track API key"
                       style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6560', marginBottom: 4 }}>API Secret</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 4 }}>API Secret</label>
                     <input value={trackSecret} onChange={e => { setTrackSecret(e.target.value); localStorage.setItem('homie_track_secret', e.target.value); }} placeholder="Your Track API secret" type="password"
                       style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
@@ -1359,8 +1359,8 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
                   </button>
                 )}
 
-                <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bp-bg)', borderRadius: 8, fontSize: 12, color: '#9B9490', lineHeight: 1.5 }}>
-                  <strong style={{ color: '#6B6560' }}>Where to find your API credentials:</strong><br />
+                <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bp-bg)', borderRadius: 8, fontSize: 12, color: 'var(--bp-subtle)', lineHeight: 1.5 }}>
+                  <strong style={{ color: 'var(--bp-muted)' }}>Where to find your API credentials:</strong><br />
                   Contact your Track PMS administrator or Track support to obtain your API key and secret. Your domain is the URL you use to log into Track (e.g. yourcompany.trackhs.com).
                 </div>
               </div>

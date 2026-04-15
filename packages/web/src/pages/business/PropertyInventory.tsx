@@ -471,7 +471,7 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
           }}
         />
         {!cameraReady && !cameraError && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9B9490', fontSize: 13 }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--bp-subtle)', fontSize: 13 }}>
             Requesting camera access...
           </div>
         )}
@@ -782,7 +782,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
   if (loading) {
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ background: 'var(--bp-card)', padding: 32, borderRadius: 12, color: '#9B9490' }}>Loading inventory...</div>
+        <div style={{ background: 'var(--bp-card)', padding: 32, borderRadius: 12, color: 'var(--bp-subtle)' }}>Loading inventory...</div>
       </div>
     );
   }
@@ -852,12 +852,12 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
               Property inventory
               {refreshing && (
                 <span style={{
-                  fontSize: 11, fontWeight: 600, color: '#9B9490',
+                  fontSize: 11, fontWeight: 600, color: 'var(--bp-subtle)',
                   fontFamily: "'DM Sans', sans-serif",
                 }}>Updating…</span>
               )}
             </div>
-            <div className="bp-pi-header-meta" style={{ fontSize: 12, color: '#9B9490', marginTop: 2, lineHeight: 1.4 }}>
+            <div className="bp-pi-header-meta" style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2, lineHeight: 1.4 }}>
               {data.summary.totalItems} items
               {data.summary.averageAge !== null && ` · avg age ${data.summary.averageAge} yrs`}
               {data.summary.agingItems > 0 && ` · ${data.summary.agingItems} aging`}
@@ -869,7 +869,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
             aria-label="Close"
             style={{
               background: 'none', border: 'none', fontSize: 26, lineHeight: 1,
-              cursor: 'pointer', color: '#9B9490', padding: 4, flexShrink: 0,
+              cursor: 'pointer', color: 'var(--bp-subtle)', padding: 4, flexShrink: 0,
               width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >×</button>
@@ -902,7 +902,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
           {/* Maintenance flags */}
           {flags.length > 0 && (
             <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Maintenance flags ({flags.length})
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -929,7 +929,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
               <div key={room.id} style={{ marginBottom: 22 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 15, fontWeight: 700, color: D, margin: 0 }}>{room.roomLabel}</h4>
-                  {room.flooringType && <span style={{ fontSize: 11, color: '#9B9490' }}>{room.flooringType}</span>}
+                  {room.flooringType && <span style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>{room.flooringType}</span>}
                   {room.roomCount && room.roomCount > 1 && (
                     <span title={`Merged from ${room.roomCount} scan rooms`} style={{
                       fontSize: 10, fontWeight: 700, color: O, background: `${O}15`,
@@ -938,7 +938,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                       MERGED · {room.roomCount}
                     </span>
                   )}
-                  <span style={{ fontSize: 11, color: '#9B9490', marginLeft: 'auto' }}>{roomItems.length} items</span>
+                  <span style={{ fontSize: 11, color: 'var(--bp-subtle)', marginLeft: 'auto' }}>{roomItems.length} items</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {roomItems.map(item => {
@@ -959,7 +959,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                           <div className="bp-pi-item-title" style={{ fontSize: 13, fontWeight: 700, color: D, wordBreak: 'break-word' }}>
                             {item.brand ? `${item.brand} ` : ''}{prettifyItemType(item.itemType)}
                           </div>
-                          <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             {item.modelNumber && <span style={{ wordBreak: 'break-all' }}>{item.modelNumber}</span>}
                             {age !== null && (
                               <>
@@ -990,7 +990,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                               }}>Confirm</button>
                               <button onClick={() => handleUpdate(item, 'pm_dismissed')} style={{
                                 padding: '5px 10px', borderRadius: 6, border: '1px solid var(--bp-border)',
-                                background: 'var(--bp-card)', color: '#9B9490', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                background: 'var(--bp-card)', color: 'var(--bp-subtle)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                               }}>Dismiss</button>
                             </>
                           ) : item.status === 'ai_identified' ? (
@@ -1009,7 +1009,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                             style={{
                               width: 26, height: 26, borderRadius: '50%',
                               border: '1px solid var(--bp-border)', background: 'var(--bp-card)',
-                              color: '#9B9490', fontSize: 16, lineHeight: 1, cursor: 'pointer',
+                              color: 'var(--bp-subtle)', fontSize: 16, lineHeight: 1, cursor: 'pointer',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               padding: 0, flexShrink: 0,
                             }}
@@ -1034,7 +1034,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
           })}
 
           {filtered.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 60, color: '#9B9490', fontSize: 13 }}>
+            <div style={{ textAlign: 'center', padding: 60, color: 'var(--bp-subtle)', fontSize: 13 }}>
               No items{filter !== 'all' ? ` in ${filter}` : ''} yet.
             </div>
           )}

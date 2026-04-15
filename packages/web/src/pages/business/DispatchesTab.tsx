@@ -103,13 +103,13 @@ function TrackingShareModal({ jobId, propertyName, onClose }: { jobId: string; p
       <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 440, margin: '0 12px', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: 0 }}>Share maintenance status</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, color: '#9B9490', cursor: 'pointer' }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, color: 'var(--bp-subtle)', cursor: 'pointer' }}>×</button>
         </div>
-        <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 16, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 16, lineHeight: 1.5 }}>
           Share a live tracking link with property owners or guests. They'll see real-time status updates as providers are contacted and quotes come in.
         </div>
 
-        {creating && <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 12 }}>Creating tracking link...</div>}
+        {creating && <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginBottom: 12 }}>Creating tracking link...</div>}
 
         {trackingUrl && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: W, borderRadius: 8, padding: '10px 12px', border: '1px solid rgba(0,0,0,0.06)', marginBottom: 16 }}>
@@ -123,7 +123,7 @@ function TrackingShareModal({ jobId, propertyName, onClose }: { jobId: string; p
 
         {trackingUrl && !notifySaved && (
           <>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', marginBottom: 8 }}>Also send automatic updates via (optional)</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', marginBottom: 8 }}>Also send automatic updates via (optional)</div>
             <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
               <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone for SMS updates"
                 style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 14, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
@@ -265,7 +265,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
     }
   }
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading dispatches...</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading dispatches...</div>;
 
   const filteredDispatches = dispatches.filter(d => {
     if (showArchived) { if (d.status !== 'archived') return false; }
@@ -298,7 +298,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
     <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>🚀</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No dispatches yet</div>
-      <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 20 }}>Dispatch requests from the chat will appear here.</div>
+      <div style={{ fontSize: 14, color: 'var(--bp-subtle)', marginBottom: 20 }}>Dispatch requests from the chat will appear here.</div>
       <button onClick={() => navigate(`/business?tab=dispatch-chat&workspace=${workspaceId}`)}
         style={{ padding: '10px 24px', borderRadius: 100, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
         New Dispatch
@@ -370,17 +370,17 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
           title="To date" />
         {(filterStatus || filterCategory || filterProperty || filterSeverity || filterDateFrom || filterDateTo) && (
           <button onClick={() => { setFilterStatus(''); setFilterCategory(''); setFilterProperty(''); setFilterSeverity(''); setFilterDateFrom(''); setFilterDateTo(''); }}
-            style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: '#F5F5F5', color: '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: '#F5F5F5', color: 'var(--bp-subtle)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             Clear filters
           </button>
         )}
-        <span style={{ fontSize: 12, color: '#9B9490', marginLeft: 'auto' }}>{filteredDispatches.length} dispatch{filteredDispatches.length !== 1 ? 'es' : ''}</span>
+        <span style={{ fontSize: 12, color: 'var(--bp-subtle)', marginLeft: 'auto' }}>{filteredDispatches.length} dispatch{filteredDispatches.length !== 1 ? 'es' : ''}</span>
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: DISPATCH_CARD_STYLES }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {filteredDispatches.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9B9490', fontSize: 14 }}>
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--bp-subtle)', fontSize: 14 }}>
             {showArchived ? 'No archived dispatches' : 'No active dispatches'}
           </div>
         ) : null}
@@ -398,7 +398,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
 
             return (<div key={j.id}>
               {showHeader && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-subtle)', padding: '14px 0 6px', letterSpacing: '0.03em' }}>
                   {dateLabel}
                 </div>
               )}
@@ -439,7 +439,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                       <span style={{ background: sc.bg, color: sc.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0 }}>{j.status.charAt(0).toUpperCase() + j.status.slice(1)}</span>
                       {j.diagnosis?.source === 'inspection_report' && <span style={{ background: '#EFF6FF', color: '#2563EB', padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0 }}>Inspect</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 11, color: 'var(--bp-subtle)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {j.propertyName && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>🏠 {j.propertyName}</span>}
                       <span>{new Date(j.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                       <span>{j.zipCode}</span>
@@ -449,7 +449,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                     {responseCount > 0 ? (
                       <>
                         <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: G }}>{responseCount}</div>
-                        <div style={{ fontSize: 9, color: '#9B9490' }}>quote{responseCount > 1 ? 's' : ''}</div>
+                        <div style={{ fontSize: 9, color: 'var(--bp-subtle)' }}>quote{responseCount > 1 ? 's' : ''}</div>
                       </>
                     ) : isActive ? (
                       <div style={{ fontSize: 10, fontWeight: 600, color: O, animation: 'dpc-pulse 1.5s infinite' }}>Searching</div>
@@ -475,7 +475,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 30, color: O, lineHeight: 1 }}>h</div>
                       </div>
                       <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, textAlign: 'center' }}>Your Homie's on it</div>
-                      <div style={{ fontSize: 12, color: '#9B9490', textAlign: 'center', marginTop: 2 }}>Contacting pros near {j.zipCode}</div>
+                      <div style={{ fontSize: 12, color: 'var(--bp-subtle)', textAlign: 'center', marginTop: 2 }}>Contacting pros near {j.zipCode}</div>
                       <div style={{ height: 18, overflow: 'hidden', marginTop: 8, textAlign: 'center' }}>
                         <div className="dpc-msg-rotate" style={{ animation: 'dpc-rotate-msgs 10s ease-in-out infinite' }}>
                           {DISPATCH_ENCOURAGEMENT.map((msg, i) => (
@@ -492,7 +492,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                               <div className="dpc-channel-pulse" style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: bg, animation: `dpc-channel-pulse 2.4s ease-in-out ${ci * 0.8}s infinite` }} />
                               <span style={{ position: 'relative', fontSize: 12 }}>{key === 'voice' ? '📞' : key === 'sms' ? '💬' : '🌐'}</span>
                             </div>
-                            <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>{label}</div>
+                            <div style={{ fontSize: 10, color: 'var(--bp-subtle)', fontWeight: 500 }}>{label}</div>
                           </div>
                         ))}
                       </div>
@@ -501,7 +501,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
 
                   {/* Summary */}
                   {j.diagnosis?.summary && (
-                    <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, marginBottom: 14, paddingTop: isActive ? 0 : 12 }}>
+                    <div style={{ fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6, marginBottom: 14, paddingTop: isActive ? 0 : 12 }}>
                       {renderBold(j.diagnosis.summary)}
                     </div>
                   )}
@@ -523,7 +523,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                       { label: 'Timing', value: j.preferredTiming ?? 'ASAP' },
                     ].map((item, i) => (
                       <div key={i} style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
-                        <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+                        <div style={{ fontSize: 9, color: 'var(--bp-subtle)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: (item as { color?: string }).color ?? D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
                       </div>
                     ))}
@@ -531,7 +531,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
 
                   {/* Expiry */}
                   {j.expiresAt && isActive && (
-                    <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginBottom: 12 }}>
                       Expires: {new Date(j.expiresAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                     </div>
                   )}
@@ -574,12 +574,12 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                     </div>
 
                     {loadingResponses === j.id ? (
-                      <div style={{ color: '#9B9490', fontSize: 13 }}>Loading responses...</div>
+                      <div style={{ color: 'var(--bp-subtle)', fontSize: 13 }}>Loading responses...</div>
                     ) : jobResponses.length === 0 ? (
                       <div style={{ background: W, borderRadius: 10, padding: '16px 14px', textAlign: 'center', border: '1px dashed rgba(0,0,0,0.08)' }}>
                         {isActive ? (
                           <>
-                            <div style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>Waiting for providers to respond...</div>
+                            <div style={{ fontSize: 13, color: 'var(--bp-subtle)', fontWeight: 500 }}>Waiting for providers to respond...</div>
                             <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 8 }}>
                               {[0, 1, 2].map(i => (
                                 <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: O, animation: `dpc-pulse 1.2s ${i * 0.3}s infinite` }} />
@@ -587,7 +587,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                             </div>
                           </>
                         ) : (
-                          <div style={{ fontSize: 13, color: '#9B9490' }}>No providers responded</div>
+                          <div style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>No providers responded</div>
                         )}
                       </div>
                     ) : (
@@ -606,7 +606,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                                       style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: '#D4A437', padding: '2px 5px', borderRadius: 3, letterSpacing: '0.04em' }}>LATE</span>
                                   )}
                                 </div>
-                                <div style={{ color: '#9B9490', fontSize: 10, marginTop: 1 }}>
+                                <div style={{ color: 'var(--bp-subtle)', fontSize: 10, marginTop: 1 }}>
                                   ★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})
                                   {r.provider.google_place_id && (
                                     <a href={`https://www.google.com/maps/place/?q=place_id:${r.provider.google_place_id}`} target="_blank" rel="noopener" onClick={e => e.stopPropagation()} style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginLeft: 4 }}>Reviews</a>
@@ -619,15 +619,15 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                                   {estimates[j.id] ? (
                                     <EstimateBadge quotedPrice={cleanPrice(r.quoted_price)} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
                                   ) : (
-                                    <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
+                                    <div style={{ fontSize: 10, color: 'var(--bp-subtle)', fontWeight: 500 }}>quoted price</div>
                                   )}
                                 </div>
                               )}
                             </div>
                             {r.availability && <div style={{ fontSize: 12, color: D, marginBottom: 3 }}>📅 {r.availability}</div>}
-                            {r.message && <div style={{ fontSize: 12, color: '#6B6560', fontStyle: 'italic' }}>"{r.message}"</div>}
+                            {r.message && <div style={{ fontSize: 12, color: 'var(--bp-muted)', fontStyle: 'italic' }}>"{r.message}"</div>}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, gap: 8, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 11, color: '#9B9490' }}>via {r.channel} · {timeAgo(r.responded_at)}</span>
+                              <span style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>via {r.channel} · {timeAgo(r.responded_at)}</span>
                               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                                 {r.provider.phone && (
                                   <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
@@ -636,7 +636,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                             </div>
                             {j.status !== 'archived' && j.status !== 'refunded' && (
                               j.status === 'completed' ? (
-                                <div style={{ width: '100%', padding: '10px 0', borderRadius: 100, marginTop: 10, background: '#E0DAD4', color: '#9B9490', fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", textAlign: 'center' }}>Booked</div>
+                                <div style={{ width: '100%', padding: '10px 0', borderRadius: 100, marginTop: 10, background: '#E0DAD4', color: 'var(--bp-subtle)', fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", textAlign: 'center' }}>Booked</div>
                               ) : (
                                 <button onClick={async (e) => {
                                   e.stopPropagation();
@@ -718,7 +718,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                           } catch { alert('Failed to archive'); }
                         }} style={{
                           flex: 1, padding: '10px 0', borderRadius: 100,
-                          border: '1px solid #9B9490', background: 'var(--bp-card)', color: '#9B9490',
+                          border: '1px solid #9B9490', background: 'var(--bp-card)', color: 'var(--bp-subtle)',
                           fontSize: 13, fontWeight: 600, cursor: 'pointer',
                         }}>Archive</button>
                       )}
@@ -752,7 +752,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                 <span style={{ fontSize: 22 }}>⚠️</span>
               </div>
               <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: '0 0 8px' }}>Cancel this dispatch?</h3>
-              <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, margin: 0 }}>
+              <p style={{ fontSize: 14, color: 'var(--bp-muted)', lineHeight: 1.6, margin: 0 }}>
                 This will stop all outreach for this dispatch.
                 {(() => {
                   const job = dispatches.find(d => d.id === showCancelConfirm);

@@ -49,14 +49,14 @@ function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onC
       <div style={{ background: 'var(--bp-card)', borderRadius: 12, padding: 32, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 20px' }}>Create Workspace</h3>
 
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Business Name *</label>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Business Name *</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Acme Property Management"
           style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' }} />
 
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Custom Slug (optional)</label>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Custom Slug (optional)</label>
         <input value={slug} onChange={e => setSlug(e.target.value)} placeholder="acme-pm"
           style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 8, boxSizing: 'border-box' }} />
-        <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 20 }}>Used in your workspace URL. Auto-generated from name if blank.</div>
+        <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginBottom: 20 }}>Used in your workspace URL. Auto-generated from name if blank.</div>
 
         {error && <div style={{ color: '#DC2626', fontSize: 14, marginBottom: 16 }}>{error}</div>}
 
@@ -244,7 +244,7 @@ export default function BusinessPortal() {
         <div style={{ textAlign: 'center', padding: '80px 20px' }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>🏢</div>
           <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: 28, color: D, marginBottom: 12 }}>Welcome to <HomieBizLogo size="large" /></h2>
-          <p style={{ fontSize: 16, color: '#6B6560', maxWidth: 480, margin: '0 auto 32px', lineHeight: 1.6 }}>
+          <p style={{ fontSize: 16, color: 'var(--bp-muted)', maxWidth: 480, margin: '0 auto 32px', lineHeight: 1.6 }}>
             Manage maintenance across all your properties with one dashboard. Create your first workspace to get started.
           </p>
           <button onClick={() => setShowCreate(true)}
@@ -268,7 +268,7 @@ export default function BusinessPortal() {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bp-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: '#9B9490' }}>Loading workspaces...</div>
+        <div style={{ textAlign: 'center', color: 'var(--bp-subtle)' }}>Loading workspaces...</div>
       </div>
     );
   }
@@ -464,13 +464,13 @@ export default function BusinessPortal() {
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
             <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 8px' }}>Upgrade to unlock this feature</h3>
-            <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 24 }}>
+            <p style={{ fontSize: 14, color: 'var(--bp-muted)', lineHeight: 1.6, marginBottom: 24 }}>
               Full cost reporting, provider scorecards, guest requests, and auto-dispatch are available on the <strong style={{ color: O }}>Professional</strong> plan and above.
             </p>
             <div style={{ background: 'var(--bp-bg)', borderRadius: 12, padding: 16, marginBottom: 24, textAlign: 'left' }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 10 }}>Professional plan includes:</div>
               {['Full cost reporting by property & category', 'Provider scorecards with response rates', 'Guest request management & auto-dispatch', 'Booking & dispatch analytics', 'Team activity log'].map((f, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 13, color: '#6B6560' }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 13, color: 'var(--bp-muted)' }}>
                   <span style={{ color: G, fontSize: 12 }}>✓</span> {f}
                 </div>
               ))}

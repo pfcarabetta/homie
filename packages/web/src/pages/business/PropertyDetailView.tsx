@@ -136,7 +136,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
               <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{catLabel}</span>
               <span style={{ background: sc.bg, color: sc.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0 }}>{j.status.charAt(0).toUpperCase() + j.status.slice(1)}</span>
             </div>
-            <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 11, color: 'var(--bp-subtle)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <span>{new Date(j.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
               <span>{j.zipCode}</span>
             </div>
@@ -145,7 +145,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
             {responseCount > 0 ? (
               <>
                 <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: G }}>{responseCount}</div>
-                <div style={{ fontSize: 9, color: '#9B9490' }}>quote{responseCount > 1 ? 's' : ''}</div>
+                <div style={{ fontSize: 9, color: 'var(--bp-subtle)' }}>quote{responseCount > 1 ? 's' : ''}</div>
               </>
             ) : isActive ? (
               <div style={{ fontSize: 10, fontWeight: 600, color: O, animation: 'pdv-pulse 1.5s infinite' }}>Searching</div>
@@ -162,7 +162,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
         <div style={{ padding: '0 14px 16px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
           {/* Summary */}
           {j.diagnosis?.summary && (
-            <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, marginBottom: 14, paddingTop: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6, marginBottom: 14, paddingTop: 12 }}>
               {renderBold(j.diagnosis.summary)}
             </div>
           )}
@@ -175,7 +175,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
               { label: 'Timing', value: j.preferredTiming ?? 'ASAP' },
             ].map((item, i) => (
               <div key={i} style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
-                <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+                <div style={{ fontSize: 9, color: 'var(--bp-subtle)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: (item as { color?: string }).color ?? D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
               </div>
             ))}
@@ -195,12 +195,12 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
             </div>
 
             {loadingResponses ? (
-              <div style={{ color: '#9B9490', fontSize: 13 }}>Loading responses...</div>
+              <div style={{ color: 'var(--bp-subtle)', fontSize: 13 }}>Loading responses...</div>
             ) : responses.length === 0 ? (
               <div style={{ background: W, borderRadius: 10, padding: '16px 14px', textAlign: 'center', border: '1px dashed rgba(0,0,0,0.08)' }}>
                 {isActive ? (
                   <>
-                    <div style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>Waiting for providers to respond...</div>
+                    <div style={{ fontSize: 13, color: 'var(--bp-subtle)', fontWeight: 500 }}>Waiting for providers to respond...</div>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 8 }}>
                       {[0, 1, 2].map(i => (
                         <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: O, animation: `pdv-pulse 1.2s ${i * 0.3}s infinite` }} />
@@ -208,7 +208,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
                     </div>
                   </>
                 ) : (
-                  <div style={{ fontSize: 13, color: '#9B9490' }}>No providers responded</div>
+                  <div style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>No providers responded</div>
                 )}
               </div>
             ) : (
@@ -220,7 +220,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 600, fontSize: 13, color: D }}>{r.provider.name}</span>
                         </div>
-                        <div style={{ color: '#9B9490', fontSize: 10, marginTop: 1 }}>
+                        <div style={{ color: 'var(--bp-subtle)', fontSize: 10, marginTop: 1 }}>
                           {'\u2605'} {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})
                           {r.provider.google_place_id && (
                             <a href={`https://www.google.com/maps/place/?q=place_id:${r.provider.google_place_id}`} target="_blank" rel="noopener" onClick={e => e.stopPropagation()} style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginLeft: 4 }}>Reviews</a>
@@ -233,15 +233,15 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
                           {estimates[j.id] ? (
                             <EstimateBadge quotedPrice={cleanPrice(r.quoted_price)} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
                           ) : (
-                            <div style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>quoted price</div>
+                            <div style={{ fontSize: 10, color: 'var(--bp-subtle)', fontWeight: 500 }}>quoted price</div>
                           )}
                         </div>
                       )}
                     </div>
                     {r.availability && <div style={{ fontSize: 12, color: D, marginBottom: 3 }}>{'\uD83D\uDCC5'} {r.availability}</div>}
-                    {r.message && <div style={{ fontSize: 12, color: '#6B6560', fontStyle: 'italic' }}>"{r.message}"</div>}
+                    {r.message && <div style={{ fontSize: 12, color: 'var(--bp-muted)', fontStyle: 'italic' }}>"{r.message}"</div>}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                      <span style={{ fontSize: 11, color: '#9B9490' }}>via {r.channel} {'\u00B7'} {timeAgo(r.responded_at)}</span>
+                      <span style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>via {r.channel} {'\u00B7'} {timeAgo(r.responded_at)}</span>
                       <div style={{ display: 'flex', gap: 8 }}>
                         {r.provider.phone && (
                           <a href={`tel:${r.provider.phone}`} onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>{'\uD83D\uDCDE'} Call</a>
@@ -264,7 +264,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
                       </button>
                     )}
                     {j.status === 'completed' && (
-                      <div style={{ width: '100%', padding: '10px 0', borderRadius: 100, marginTop: 10, background: '#E0DAD4', color: '#9B9490', fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", textAlign: 'center' }}>Booked</div>
+                      <div style={{ width: '100%', padding: '10px 0', borderRadius: 100, marginTop: 10, background: '#E0DAD4', color: 'var(--bp-subtle)', fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", textAlign: 'center' }}>Booked</div>
                     )}
                   </div>
                 ))}
@@ -310,7 +310,7 @@ function BookingCard({ b, isExpanded, onToggle, workspaceId, addedToPreferred, o
               <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{catLabel}</span>
               <span style={{ background: sc.bg, color: sc.text, padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600, flexShrink: 0, textTransform: 'capitalize' }}>{b.status}</span>
             </div>
-            <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 11, color: 'var(--bp-subtle)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 500 }}>{b.providerName}</span>
               <span>{new Date(b.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
             </div>
@@ -319,7 +319,7 @@ function BookingCard({ b, isExpanded, onToggle, workspaceId, addedToPreferred, o
             {b.quotedPrice ? (
               <>
                 <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: O }}>{b.quotedPrice}</div>
-                <div style={{ fontSize: 9, color: '#9B9490' }}>quoted</div>
+                <div style={{ fontSize: 9, color: 'var(--bp-subtle)' }}>quoted</div>
               </>
             ) : (
               <div style={{ fontSize: 10, fontWeight: 600, color: G }}>Booked</div>
@@ -334,7 +334,7 @@ function BookingCard({ b, isExpanded, onToggle, workspaceId, addedToPreferred, o
         <div style={{ padding: '0 14px 16px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
           {/* Summary */}
           {b.diagnosis?.summary && (
-            <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, marginBottom: 14, paddingTop: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6, marginBottom: 14, paddingTop: 12 }}>
               {renderBold(b.diagnosis.summary)}
             </div>
           )}
@@ -351,7 +351,7 @@ function BookingCard({ b, isExpanded, onToggle, workspaceId, addedToPreferred, o
               { label: 'Timing', value: b.preferredTiming ?? 'ASAP' },
             ].map((item, i) => (
               <div key={i} style={{ background: W, borderRadius: 8, padding: '7px 10px' }}>
-                <div style={{ fontSize: 9, color: '#9B9490', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+                <div style={{ fontSize: 9, color: 'var(--bp-subtle)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: (item as { color?: string }).color ?? D }}>{item.value}</div>
               </div>
             ))}
@@ -553,7 +553,7 @@ function ReservationTimeline({ workspaceId, property }: { workspaceId: string; p
                       {fmtGuestName(r.guestName)}{r.guestCount ? ` · ${r.guestCount} guest${r.guestCount === 1 ? '' : 's'}` : ''}
                     </div>
                     {r.status === 'tentative' && (
-                      <span style={{ fontSize: 9, fontWeight: 700, color: '#6B6560', background: 'rgba(0,0,0,0.06)', padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--bp-muted)', background: 'rgba(0,0,0,0.06)', padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase' }}>
                         Blocked
                       </span>
                     )}
@@ -661,7 +661,7 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property,
     }
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9B9490', fontSize: 13 }}>Loading activity...</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--bp-subtle)', fontSize: 13 }}>Loading activity...</div>;
 
   type TimelineItem = { date: string; type: 'dispatch' | 'booking'; data: WorkspaceDispatch | WorkspaceBooking };
   const items: TimelineItem[] = [
@@ -696,7 +696,7 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property,
         <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCCB'}</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No activity yet</div>
-          <div style={{ fontSize: 14, color: '#9B9490' }}>Dispatches and bookings for this property will appear here.</div>
+          <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Dispatches and bookings for this property will appear here.</div>
         </div>
       </div>
     );
@@ -735,7 +735,7 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property,
           return (
             <div key={`${item.type}-${item.type === 'dispatch' ? (item.data as WorkspaceDispatch).id : (item.data as WorkspaceBooking).id}`}>
               {showHeader && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>{dateLabel}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-subtle)', padding: '14px 0 6px', letterSpacing: '0.03em' }}>{dateLabel}</div>
               )}
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: item.type === 'dispatch' ? '#C2410C' : '#16A34A', marginBottom: 4 }}>
                 {item.type === 'dispatch' ? '📋 Dispatch' : '✅ Booking'}
@@ -808,14 +808,14 @@ function JobsSubPage({ dispatches, loading, workspaceId, propertyId }: { dispatc
     }
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9B9490', fontSize: 13 }}>Loading jobs...</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--bp-subtle)', fontSize: 13 }}>Loading jobs...</div>;
 
   if (dispatches.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCCB'}</div>
         <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No jobs</div>
-        <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 16 }}>No dispatches have been created for this property yet.</div>
+        <div style={{ fontSize: 14, color: 'var(--bp-subtle)', marginBottom: 16 }}>No dispatches have been created for this property yet.</div>
         <button onClick={goToNewDispatch} style={{ display: 'inline-block', padding: '10px 24px', borderRadius: 100, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
           + New Dispatch
         </button>
@@ -840,7 +840,7 @@ function JobsSubPage({ dispatches, loading, workspaceId, propertyId }: { dispatc
           return (
             <div key={j.id}>
               {showHeader && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>{dateLabel}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-subtle)', padding: '14px 0 6px', letterSpacing: '0.03em' }}>{dateLabel}</div>
               )}
               <DispatchCard
                 j={j}
@@ -866,14 +866,14 @@ function BookingsSubPage({ bookings, loading, workspaceId }: { bookings: Workspa
   const [addedToPreferred, setAddedToPreferred] = useState<Set<string>>(new Set());
   const [addingProvider, setAddingProvider] = useState<string | null>(null);
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9B9490', fontSize: 13 }}>Loading bookings...</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--bp-subtle)', fontSize: 13 }}>Loading bookings...</div>;
 
   if (bookings.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>{'\u2705'}</div>
         <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No bookings</div>
-        <div style={{ fontSize: 14, color: '#9B9490' }}>No bookings have been confirmed for this property yet.</div>
+        <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>No bookings have been confirmed for this property yet.</div>
       </div>
     );
   }
@@ -889,7 +889,7 @@ function BookingsSubPage({ bookings, loading, workspaceId }: { bookings: Workspa
           return (
             <div key={b.id}>
               {showHeader && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>{dateLabel}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-subtle)', padding: '14px 0 6px', letterSpacing: '0.03em' }}>{dateLabel}</div>
               )}
               <BookingCard
                 b={b}
@@ -1132,7 +1132,7 @@ function CalendarSourceCard({ workspaceId, propertyId }: { workspaceId: string; 
   }
 
   function statusDot(): { color: string; label: string } {
-    if (!source) return { color: '#9B9490', label: 'Not connected' };
+    if (!source) return { color: 'var(--bp-subtle)', label: 'Not connected' };
     if (source.lastSyncStatus === 'success') {
       const ageMinutes = source.lastSyncAt ? (Date.now() - new Date(source.lastSyncAt).getTime()) / 60000 : 0;
       if (ageMinutes > 24 * 60) return { color: '#D4A437', label: 'Stale' };
@@ -1140,7 +1140,7 @@ function CalendarSourceCard({ workspaceId, propertyId }: { workspaceId: string; 
     }
     if (source.lastSyncStatus === 'paused') return { color: '#DC2626', label: 'Paused (5+ failures)' };
     if (source.lastSyncStatus === 'failed') return { color: '#DC2626', label: 'Failed' };
-    return { color: '#9B9490', label: 'Never synced' };
+    return { color: 'var(--bp-subtle)', label: 'Never synced' };
   }
 
   if (loading) return null;

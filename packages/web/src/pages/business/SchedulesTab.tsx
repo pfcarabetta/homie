@@ -135,7 +135,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>
             {step === 'templates' ? 'Choose a template' : 'Configure schedule'}
           </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9B9490', padding: 4 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--bp-subtle)', padding: 4 }}>×</button>
         </div>
 
         {step === 'templates' ? (
@@ -168,9 +168,9 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
 
             {/* Template grid */}
             {loadingTemplates ? (
-              <div style={{ textAlign: 'center', padding: 32, color: '#9B9490' }}>Loading templates...</div>
+              <div style={{ textAlign: 'center', padding: 32, color: 'var(--bp-subtle)' }}>Loading templates...</div>
             ) : templates.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 32, color: '#9B9490' }}>No templates found for this category.</div>
+              <div style={{ textAlign: 'center', padding: 32, color: 'var(--bp-subtle)' }}>No templates found for this category.</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
                 {templates.map(t => {
@@ -190,14 +190,14 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                         }}>
                           {t.category.replace(/_/g, ' ')}
                         </span>
-                        <span style={{ fontSize: 11, color: '#9B9490' }}>{t.suggestedCadenceType?.replace(/_/g, ' ')}</span>
+                        <span style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>{t.suggestedCadenceType?.replace(/_/g, ' ')}</span>
                       </div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 4 }}>{t.title}</div>
                       {t.whyItMatters && (
-                        <div style={{ fontSize: 12, color: '#9B9490', fontStyle: 'italic', marginBottom: 6, lineHeight: 1.4 }}>{t.whyItMatters}</div>
+                        <div style={{ fontSize: 12, color: 'var(--bp-subtle)', fontStyle: 'italic', marginBottom: 6, lineHeight: 1.4 }}>{t.whyItMatters}</div>
                       )}
                       {t.estimatedCostRange && (
-                        <div style={{ fontSize: 12, color: '#6B6560' }}>{t.estimatedCostRange}</div>
+                        <div style={{ fontSize: 12, color: 'var(--bp-muted)' }}>{t.estimatedCostRange}</div>
                       )}
                       <button style={{
                         marginTop: 10, padding: '6px 16px', borderRadius: 6, border: 'none',
@@ -215,7 +215,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
         ) : (
           <div style={{ padding: 24 }}>
             {step === 'form' && templates.length > 0 && (
-              <button onClick={() => setStep('templates')} style={{ background: 'none', border: 'none', color: '#9B9490', fontSize: 13, cursor: 'pointer', marginBottom: 16, padding: 0 }}>
+              <button onClick={() => setStep('templates')} style={{ background: 'none', border: 'none', color: 'var(--bp-subtle)', fontSize: 13, cursor: 'pointer', marginBottom: 16, padding: 0 }}>
                 ← Back to templates
               </button>
             )}
@@ -223,7 +223,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             {error && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: '#DC2626' }}>{error}</div>}
 
             {/* Property multi-select */}
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>
               Properties
             </label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
@@ -232,7 +232,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
               {selectedPropertyIds.length > 0 && (
                 <><span style={{ color: '#E0DAD4' }}>|</span>
                 <button onClick={() => setSelectedPropertyIds([])}
-                  style={{ background: 'none', border: 'none', color: '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Clear</button></>
+                  style={{ background: 'none', border: 'none', color: 'var(--bp-subtle)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Clear</button></>
               )}
             </div>
             <div style={{ border: '1px solid var(--bp-border)', borderRadius: 8, maxHeight: 140, overflowY: 'auto', marginBottom: 16 }}>
@@ -243,29 +243,29 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                     <input type="checkbox" checked={checked} onChange={() => setSelectedPropertyIds(prev => checked ? prev.filter(x => x !== p.id) : [...prev, p.id])}
                       style={{ width: 14, height: 14, accentColor: O }} />
                     <span style={{ fontSize: 13, color: D }}>{p.name}</span>
-                    {p.city && <span style={{ fontSize: 11, color: '#9B9490' }}>· {p.city}</span>}
+                    {p.city && <span style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>· {p.city}</span>}
                   </label>
                 );
               })}
             </div>
             {selectedPropertyIds.length > 0 && (
               <div style={{ fontSize: 12, color: O, fontWeight: 600, marginTop: -12, marginBottom: 12 }}>
-                {selectedPropertyIds.length} selected · <button onClick={() => setSelectedPropertyIds([])} style={{ background: 'none', border: 'none', color: '#9B9490', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Clear</button>
+                {selectedPropertyIds.length} selected · <button onClick={() => setSelectedPropertyIds([])} style={{ background: 'none', border: 'none', color: 'var(--bp-subtle)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Clear</button>
               </div>
             )}
 
             {/* Title */}
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Title *</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Title *</label>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Weekly pool cleaning"
               style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }} />
 
             {/* Description */}
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Description</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Description</label>
             <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional notes for the provider"
               rows={3} style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
 
             {/* Cadence type cards */}
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 10 }}>Cadence</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 10 }}>Cadence</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16 }}>
               {CADENCE_OPTIONS.map(c => (
                 <button key={c.value} onClick={() => setCadenceType(c.value)}
@@ -275,7 +275,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                     background: cadenceType === c.value ? '#FFF5F0' : 'var(--bp-card)',
                   }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: cadenceType === c.value ? O : D }}>{c.label}</div>
-                  <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>{c.desc}</div>
+                  <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>{c.desc}</div>
                 </button>
               ))}
             </div>
@@ -284,12 +284,12 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             {cadenceType === 'one_time' && (
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Date</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Date</label>
                   <input type="date" value={oneTimeDate} min={new Date().toISOString().split('T')[0]} onChange={e => setOneTimeDate(e.target.value)}
                     style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Time</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Time</label>
                   <input type="time" value={timeVal} onChange={e => setTimeVal(e.target.value)}
                     style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
                 </div>
@@ -298,14 +298,14 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             {['weekly', 'biweekly'].includes(cadenceType) && (
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Day of week</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Day of week</label>
                   <select value={dayOfWeek} onChange={e => setDayOfWeek(Number(e.target.value))}
                     style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}>
                     {dayNames.map((d, i) => <option key={i} value={i}>{d}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Time</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Time</label>
                   <input type="time" value={timeVal} onChange={e => setTimeVal(e.target.value)}
                     style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
                 </div>
@@ -314,14 +314,14 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             {['monthly', 'quarterly'].includes(cadenceType) && (
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Day of month</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Day of month</label>
                   <select value={dayOfMonth} onChange={e => setDayOfMonth(Number(e.target.value))}
                     style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}>
                     {Array.from({ length: 28 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Time</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Time</label>
                   <input type="time" value={timeVal} onChange={e => setTimeVal(e.target.value)}
                     style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
                 </div>
@@ -329,8 +329,8 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             )}
 
             {/* Provider multi-select */}
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>
-              Preferred providers <span style={{ fontWeight: 400, color: '#9B9490' }}>(optional — select one or more)</span>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>
+              Preferred providers <span style={{ fontWeight: 400, color: 'var(--bp-subtle)' }}>(optional — select one or more)</span>
             </label>
             <div style={{ border: '1px solid var(--bp-border)', borderRadius: 8, maxHeight: 120, overflowY: 'auto', marginBottom: 16 }}>
               {[...new Map(vendors.map(v => [v.providerId, v])).values()].map(v => {
@@ -340,11 +340,11 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                     <input type="checkbox" checked={checked} onChange={() => setSelectedVendorIds(prev => checked ? prev.filter(x => x !== v.providerId) : [...prev, v.providerId])}
                       style={{ width: 14, height: 14, accentColor: G }} />
                     <span style={{ fontSize: 13, color: D }}>{v.providerName}</span>
-                    {v.providerRating && <span style={{ fontSize: 11, color: '#9B9490' }}>★ {v.providerRating}</span>}
+                    {v.providerRating && <span style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>★ {v.providerRating}</span>}
                   </label>
                 );
               })}
-              {vendors.length === 0 && <div style={{ padding: '12px', fontSize: 12, color: '#9B9490', textAlign: 'center' }}>No preferred providers set up</div>}
+              {vendors.length === 0 && <div style={{ padding: '12px', fontSize: 12, color: 'var(--bp-subtle)', textAlign: 'center' }}>No preferred providers set up</div>}
             </div>
             {selectedVendorIds.length > 0 && (
               <div style={{ fontSize: 12, color: G, fontWeight: 600, marginTop: -12, marginBottom: 12 }}>
@@ -353,9 +353,9 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             )}
 
             {/* Agreed rate */}
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Agreed rate (optional)</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Agreed rate (optional)</label>
             <div style={{ position: 'relative', marginBottom: 16 }}>
-              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9B9490', fontSize: 14 }}>$</span>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--bp-subtle)', fontSize: 14 }}>$</span>
               <input type="number" min="0" step="0.01" value={agreedRate} onChange={e => setAgreedRate(e.target.value)}
                 placeholder="0.00"
                 style={{ width: '100%', padding: '10px 14px 10px 28px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
@@ -377,7 +377,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                 </button>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book preferred providers</div>
-                  <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm when a preferred provider accepts</div>
+                  <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>Automatically confirm when a preferred provider accepts</div>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, opacity: preferredOnly ? 0.5 : 1 }}>
@@ -396,7 +396,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                 </button>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Auto-book marketplace providers</div>
-                  <div style={{ fontSize: 12, color: '#9B9490' }}>Automatically confirm marketplace responses (if no preferred provider available)</div>
+                  <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>Automatically confirm marketplace responses (if no preferred provider available)</div>
                 </div>
               </div>
 
@@ -424,7 +424,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                 </button>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Preferred providers only</div>
-                  <div style={{ fontSize: 12, color: '#9B9490' }}>Skip the Homie marketplace and only reach out to your selected preferred providers. Requires at least one preferred provider above.</div>
+                  <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>Skip the Homie marketplace and only reach out to your selected preferred providers. Requires at least one preferred provider above.</div>
                 </div>
               </div>
             </div>
@@ -476,7 +476,7 @@ function EditScheduleModal({ workspaceId, schedule, onClose, onSaved }: {
   }
 
   const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
-  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+  const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
@@ -484,7 +484,7 @@ function EditScheduleModal({ workspaceId, schedule, onClose, onSaved }: {
       <div style={{ background: 'var(--bp-card)', borderRadius: 14, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
         onClick={e => e.stopPropagation()}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 4px' }}>Edit Schedule</h3>
-        <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 20 }}>
+        <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginBottom: 20 }}>
           {formatCadence(schedule.cadenceType, schedule.cadenceConfig)} · {schedule.category.replace(/_/g, ' ')}
         </div>
 
@@ -639,7 +639,7 @@ export default function SchedulesTab({ workspaceId, plan }: { workspaceId: strin
                       </div>
                     )}
                     {sched.status === 'paused' && (
-                      <div style={{ fontSize: 12, color: '#9B9490', marginTop: 4, fontStyle: 'italic' }}>Paused</div>
+                      <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 4, fontStyle: 'italic' }}>Paused</div>
                     )}
                   </div>
 

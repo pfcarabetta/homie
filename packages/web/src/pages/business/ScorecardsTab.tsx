@@ -54,11 +54,11 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
     <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>Provider scorecards available on Professional+</div>
-      <div style={{ fontSize: 14, color: '#9B9490' }}>Upgrade your plan to access provider scorecards with response rates, grades, and performance metrics.</div>
+      <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Upgrade your plan to access provider scorecards with response rates, grades, and performance metrics.</div>
     </div>
   );
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading scorecards...</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading scorecards...</div>;
 
   return (
     <div>
@@ -68,7 +68,7 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {scorecards.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 30, color: '#9B9490', fontSize: 14 }}>No provider data yet — scorecards appear after outreach.</div>
+          <div style={{ textAlign: 'center', padding: 30, color: 'var(--bp-subtle)', fontSize: 14 }}>No provider data yet — scorecards appear after outreach.</div>
         ) : scorecards.map(v => {
           const isExpanded = expandedVendor === v.id;
           const gradeColors: Record<string, { bg: string; text: string }> = {
@@ -103,12 +103,12 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
                           <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: O, padding: '2px 6px', borderRadius: 4, letterSpacing: '0.04em' }}>PREFERRED</span>
                         )}
                       </div>
-                      <div style={{ fontSize: 12, color: '#9B9490' }}>
+                      <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>
                         {v.google_rating && `★ ${v.google_rating}`} · {v.total_outreach} outreach · {v.total_bookings} bookings
                       </div>
                     </div>
                   </div>
-                  <span style={{ fontSize: 12, color: '#9B9490' }}>{isExpanded ? '▲' : '▼'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>{isExpanded ? '▲' : '▼'}</span>
                 </div>
                 {v.badges.length > 0 && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -138,29 +138,29 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 14 }}>
                     <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 22, fontWeight: 700, color: v.response_rate >= 70 ? G : v.response_rate >= 40 ? '#C2410C' : '#DC2626' }}>{v.response_rate}%</div>
-                      <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>Response Rate</div>
+                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>Response Rate</div>
                     </div>
                     <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 22, fontWeight: 700, color: D }}>{v.acceptance_rate}%</div>
-                      <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>Acceptance Rate</div>
+                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>Acceptance Rate</div>
                     </div>
                     <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 22, fontWeight: 700, color: D }}>
                         {v.avg_response_sec != null ? (v.avg_response_sec < 60 ? `${v.avg_response_sec}s` : `${Math.round(v.avg_response_sec / 60)}m`) : '—'}
                       </div>
-                      <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>Avg Response</div>
+                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>Avg Response</div>
                     </div>
                     <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 22, fontWeight: 700, color: O }}>{v.avg_quote != null ? `$${v.avg_quote}` : '—'}</div>
-                      <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>Avg Quote</div>
+                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>Avg Quote</div>
                     </div>
                     <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 22, fontWeight: 700, color: D }}>{v.booking_rate}%</div>
-                      <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>Booking Rate</div>
+                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>Booking Rate</div>
                     </div>
                     <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 22, fontWeight: 700, color: D }}>{v.total_bookings}</div>
-                      <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>Jobs Completed</div>
+                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>Jobs Completed</div>
                     </div>
                   </div>
 

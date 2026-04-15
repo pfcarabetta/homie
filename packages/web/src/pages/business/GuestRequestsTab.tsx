@@ -47,7 +47,7 @@ export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, in
       <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
         <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>Upgrade to unlock Guest Requests</div>
-        <div style={{ fontSize: 14, color: '#9B9490', maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 14, color: 'var(--bp-subtle)', maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
           Guest issue reporting, auto-dispatch rules, and QR code links are available on the <strong style={{ color: O }}>Professional</strong> plan and above.
         </div>
       </div>
@@ -262,7 +262,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
         <input type="date" value={filterDateTo} onChange={e => { setFilterDateTo(e.target.value); setPage(1); }} style={selectStyle} title="To date" />
         {(filterStatus || filterCategory || filterSeverity || filterProperty || filterDateFrom || filterDateTo) && (
           <button onClick={() => { setFilterStatus(''); setFilterCategory(''); setFilterSeverity(''); setFilterProperty(''); setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }}
-            style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: '#F5F5F5', color: '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: '#F5F5F5', color: 'var(--bp-subtle)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             Clear filters
           </button>
         )}
@@ -273,7 +273,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading issues...</div>
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading issues...</div>
       ) : (() => {
         // Client-side filtering for category and date (server handles status, severity, property)
         const clientFiltered = issues.filter(i => {
@@ -287,7 +287,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
           <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
             <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No guest requests found</div>
-            <div style={{ fontSize: 14, color: '#9B9490' }}>
+            <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>
               {issues.length > 0 ? 'Try adjusting your filters.' : 'Issues reported by guests will appear here.'}
             </div>
           </div>
@@ -296,7 +296,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
         let lastDateLabel = '';
         return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 12, color: '#9B9490', marginBottom: -4 }}>{clientFiltered.length} request{clientFiltered.length !== 1 ? 's' : ''}</div>
+          <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginBottom: -4 }}>{clientFiltered.length} request{clientFiltered.length !== 1 ? 's' : ''}</div>
           {clientFiltered.map(issue => {
             const dateObj = new Date(issue.createdAt);
             const today = new Date();
@@ -309,7 +309,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
 
             return (<div key={issue.id}>
             {showDateHeader && (
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#9B9490', padding: '14px 0 6px', letterSpacing: '0.03em' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-subtle)', padding: '14px 0 6px', letterSpacing: '0.03em' }}>
                 {dateLabel}
               </div>
             )}
@@ -346,7 +346,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                         {issue.isRecurring && <span style={{ background: '#FFF3E0', color: '#E65100', padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600 }}>Recurring</span>}
                         {issue.autoDispatched && <span style={{ background: '#E8F5E9', color: '#2E7D32', padding: '2px 7px', borderRadius: 100, fontSize: 9, fontWeight: 600 }}>Auto-dispatched</span>}
                       </div>
-                      <div style={{ fontSize: 11, color: '#9B9490', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <span>🏠 {issue.propertyName}</span>
                         {issue.guestName && <span>👤 {issue.guestName}</span>}
                         <span>{timeAgo(issue.createdAt)}</span>
@@ -360,12 +360,12 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                 {isExpanded && (
                   <div style={{ padding: '0 14px 16px', borderTop: '1px solid rgba(0,0,0,0.04)' }} onClick={e => e.stopPropagation()}>
                     {detailLoading ? (
-                      <div style={{ textAlign: 'center', padding: 20, color: '#9B9490' }}>Loading details...</div>
+                      <div style={{ textAlign: 'center', padding: 20, color: 'var(--bp-subtle)' }}>Loading details...</div>
                     ) : detail && detail.id === issue.id ? (
                       <div style={{ paddingTop: 12 }}>
                         {/* Description */}
                         <div style={{ marginBottom: 16 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 6 }}>Description</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-muted)', marginBottom: 6 }}>Description</div>
                           <div style={{ fontSize: 14, color: D, lineHeight: 1.6, background: W, padding: 12, borderRadius: 8 }}
                             dangerouslySetInnerHTML={{ __html: (detail.description ?? '')
                               .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -377,7 +377,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                         {/* Photos */}
                         {detail.photos.length > 0 && (
                           <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 6 }}>Photos ({detail.photos.length})</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-muted)', marginBottom: 6 }}>Photos ({detail.photos.length})</div>
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                               {detail.photos.map(photo => (
                                 <a key={photo.id} href={photo.storageUrl} target="_blank" rel="noopener noreferrer">
@@ -392,11 +392,11 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                         {/* Troubleshoot log */}
                         {detail.troubleshootLog && detail.troubleshootLog.length > 0 && (
                           <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 6 }}>Troubleshoot Log</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-muted)', marginBottom: 6 }}>Troubleshoot Log</div>
                             <div style={{ background: W, borderRadius: 8, padding: 12 }}>
                               {detail.troubleshootLog.map((entry, i) => (
                                 <div key={i} style={{ marginBottom: i < detail.troubleshootLog!.length - 1 ? 10 : 0 }}>
-                                  <div style={{ fontSize: 12, fontWeight: 600, color: '#6B6560' }}>Q: {entry.question}</div>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--bp-muted)' }}>Q: {entry.question}</div>
                                   <div style={{ fontSize: 13, color: D, marginTop: 2 }}>A: {entry.answer}</div>
                                 </div>
                               ))}
@@ -417,13 +417,13 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                         {/* Timeline */}
                         {detail.timeline.length > 0 && (
                           <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 6 }}>Timeline</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-muted)', marginBottom: 6 }}>Timeline</div>
                             <div style={{ borderLeft: '2px solid #E0DAD4', paddingLeft: 14 }}>
                               {detail.timeline.map((evt, i) => (
                                 <div key={i} style={{ marginBottom: 10, position: 'relative' }}>
                                   <div style={{ position: 'absolute', left: -19, top: 4, width: 8, height: 8, borderRadius: '50%', background: O }} />
                                   <div style={{ fontSize: 12, fontWeight: 600, color: D }}>{evt.title}</div>
-                                  {evt.description && <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{evt.description}</div>}
+                                  {evt.description && <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>{evt.description}</div>}
                                   <div style={{ fontSize: 11, color: '#C0BBB6', marginTop: 2 }}>{timeAgo(evt.createdAt)}</div>
                                 </div>
                               ))}
@@ -440,7 +440,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                             padding: 14,
                             marginBottom: 16,
                           }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6560', marginBottom: 8 }}>Guest Feedback</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-muted)', marginBottom: 8 }}>Guest Feedback</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <span style={{ fontSize: 20 }}>{detail.guestSatisfactionRating === 'positive' ? '\uD83D\uDC4D' : '\uD83D\uDC4E'}</span>
                               <span style={{
@@ -509,7 +509,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                                     </label>
                                   ))}
                                 </div>
-                                <div style={{ fontSize: 11, color: '#9B9490', marginTop: 4 }}>
+                                <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 4 }}>
                                   {selectedVendorIds.size > 0 ? `${selectedVendorIds.size} provider${selectedVendorIds.size > 1 ? 's' : ''} selected` : 'All preferred providers will be contacted'}
                                 </div>
                               </div>
@@ -561,7 +561,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                           )}
                           {['closed', 'self_resolved', 'resolved'].includes(issue.status) && (
                             <button onClick={() => handleArchive(issue.id)}
-                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #9B9490', background: 'var(--bp-card)', color: '#9B9490', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #9B9490', background: 'var(--bp-card)', color: 'var(--bp-subtle)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                               Archive
                             </button>
                           )}
@@ -592,7 +592,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', cursor: page === 1 ? 'default' : 'pointer', fontSize: 13, color: page === 1 ? '#C0BBB6' : D }}>
             Previous
           </button>
-          <span style={{ padding: '8px 12px', fontSize: 13, color: '#9B9490' }}>Page {page} of {Math.ceil(total / 20)}</span>
+          <span style={{ padding: '8px 12px', fontSize: 13, color: 'var(--bp-subtle)' }}>Page {page} of {Math.ceil(total / 20)}</span>
           <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 20)}
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', cursor: page >= Math.ceil(total / 20) ? 'default' : 'pointer', fontSize: 13, color: page >= Math.ceil(total / 20) ? '#C0BBB6' : D }}>
             Next
@@ -607,7 +607,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
           <div style={{ background: 'var(--bp-card)', borderRadius: 12, padding: 32, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 16px' }}>Close Issue</h3>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Reason for closing *</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Reason for closing *</label>
             <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={3} placeholder="Enter reason..."
               style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
@@ -652,13 +652,13 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
     setSaving(false);
   }
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading settings...</div>;
-  if (!settings) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Could not load settings.</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading settings...</div>;
+  if (!settings) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Could not load settings.</div>;
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box',
   };
-  const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
+  const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 };
 
   return (
     <div style={{ maxWidth: 600 }}>
@@ -667,7 +667,7 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D }}>Guest Reporter</div>
-            <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>Allow guests to report maintenance issues via a link or QR code.</div>
+            <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>Allow guests to report maintenance issues via a link or QR code.</div>
           </div>
           <button onClick={() => setDraft(d => ({ ...d, isEnabled: !d.isEnabled }))}
             style={{ width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', background: draft.isEnabled ? G : '#D0CBC6', transition: 'background 0.2s' }}>
@@ -744,7 +744,7 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D }}>Require PM Approval</div>
-            <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>Issues must be reviewed by a PM before auto-dispatching.</div>
+            <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>Issues must be reviewed by a PM before auto-dispatching.</div>
           </div>
           <button onClick={() => setDraft(d => ({ ...d, requirePmApproval: !d.requirePmApproval }))}
             style={{ width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', background: draft.requirePmApproval ? G : '#D0CBC6', transition: 'background 0.2s' }}>
@@ -855,12 +855,12 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
     padding: '10px 14px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 14, boxSizing: 'border-box' as const, width: '100%', cursor: 'pointer',
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading rules...</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading rules...</div>;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 14, color: '#9B9490' }}>{rules.length} rule{rules.length !== 1 ? 's' : ''}</div>
+        <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>{rules.length} rule{rules.length !== 1 ? 's' : ''}</div>
         <button onClick={() => { resetForm(); setShowAdd(true); }}
           style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
           + Add Rule
@@ -875,14 +875,14 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Category *</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Category *</label>
               <select value={formCat} onChange={e => setFormCat(e.target.value)} style={selectStyle}>
                 <option value="">Select category</option>
                 {VENDOR_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Min Severity</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Min Severity</label>
               <select value={formSeverity} onChange={e => setFormSeverity(e.target.value)} style={selectStyle}>
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -892,7 +892,7 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Preferred Provider (optional)</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Preferred Provider (optional)</label>
             <select value={formVendor} onChange={e => setFormVendor(e.target.value)} style={selectStyle}>
               <option value="">None - use default matching</option>
               {vendors.map(v => <option key={v.id} value={v.providerId}>{v.providerName}</option>)}
@@ -917,7 +917,7 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
         <div style={{ textAlign: 'center', padding: '40px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🤖</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No auto-dispatch rules</div>
-          <div style={{ fontSize: 14, color: '#9B9490' }}>Create rules to automatically dispatch guest issues to vendors.</div>
+          <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Create rules to automatically dispatch guest issues to vendors.</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -938,7 +938,7 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
                       {rule.minSeverity}+
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#9B9490' }}>
+                  <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>
                     {rule.preferredVendorName || (rule.preferredVendorId ? 'Preferred provider' : 'Default matching')}
                   </div>
                 </div>
@@ -991,11 +991,11 @@ function PropertyQRCard({ workspaceId, property }: { workspaceId: string; proper
   return (
     <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, marginBottom: 4, textAlign: 'center' }}>{property.name}</div>
-      {property.address && <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 10, textAlign: 'center' }}>{property.address}</div>}
+      {property.address && <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginBottom: 10, textAlign: 'center' }}>{property.address}</div>}
       <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10, background: 'var(--bp-card)', borderRadius: 8, border: '1px solid #F0EBE6' }}>
-        {qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${property.name}`} style={{ width: 160, height: 160 }} /> : <div style={{ color: '#9B9490', fontSize: 12 }}>Generating...</div>}
+        {qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${property.name}`} style={{ width: 160, height: 160 }} /> : <div style={{ color: 'var(--bp-subtle)', fontSize: 12 }}>Generating...</div>}
       </div>
-      <div style={{ fontSize: 11, color: '#9B9490', wordBreak: 'break-all', marginBottom: 10, background: W, padding: '6px 8px', borderRadius: 6, width: '100%', textAlign: 'center' }}>{url}</div>
+      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', wordBreak: 'break-all', marginBottom: 10, background: W, padding: '6px 8px', borderRadius: 6, width: '100%', textAlign: 'center' }}>{url}</div>
       <div style={{ display: 'flex', gap: 8, width: '100%' }}>
         <button onClick={copyLink}
           style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: copiedId ? `1px solid ${G}` : '1px solid #E0DAD4', background: copiedId ? `${G}10` : '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: copiedId ? G : D, transition: 'all 0.2s' }}>
@@ -1021,19 +1021,19 @@ function GuestQRCodesSubTab({ workspaceId }: { workspaceId: string }) {
     }).catch(() => setLoading(false));
   }, [workspaceId]);
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading properties...</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading properties...</div>;
 
   if (properties.length === 0) return (
     <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>🏠</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No properties</div>
-      <div style={{ fontSize: 14, color: '#9B9490' }}>Add properties first to generate guest reporting links.</div>
+      <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Add properties first to generate guest reporting links.</div>
     </div>
   );
 
   return (
     <div>
-      <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 16 }}>
+      <div style={{ fontSize: 14, color: 'var(--bp-subtle)', marginBottom: 16 }}>
         Share these QR codes with guests so they can report maintenance issues. Print or download to place in your properties.
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>

@@ -45,11 +45,11 @@ function InviteMemberModal({ workspaceId, onClose, onInvited }: { workspaceId: s
       <div style={{ background: 'var(--bp-card)', borderRadius: 12, padding: 32, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 20px' }}>Invite Team Member</h3>
 
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Email Address *</label>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 6 }}>Email Address *</label>
         <input value={email} onChange={e => setEmail(e.target.value)} placeholder="teammate@company.com" type="email"
           style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 20, boxSizing: 'border-box' }} />
 
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 10 }}>Role</label>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', marginBottom: 10 }}>Role</label>
         <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
           {ROLE_OPTIONS.map(r => (
             <label key={r.value} style={{
@@ -61,7 +61,7 @@ function InviteMemberModal({ workspaceId, onClose, onInvited }: { workspaceId: s
                 style={{ marginTop: 2, accentColor: O }} />
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{r.label}</div>
-                <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{r.desc}</div>
+                <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>{r.desc}</div>
               </div>
             </label>
           ))}
@@ -121,14 +121,14 @@ export default function TeamTab({ workspaceId, role, ownerId, plan }: { workspac
     } catch { /* ignore */ }
   }
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading team...</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading team...</div>;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Team Members</h3>
-          <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 4 }}>
             {members.length} of {memberLimit === 9999 ? 'unlimited' : memberLimit} {memberLimit === 1 ? 'user' : 'users'} · {plan.charAt(0).toUpperCase() + plan.slice(1)} plan
           </div>
         </div>
@@ -136,7 +136,7 @@ export default function TeamTab({ workspaceId, role, ownerId, plan }: { workspac
           atLimit ? (
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 13, color: '#DC2626', fontWeight: 600, marginBottom: 4 }}>Team limit reached</div>
-              <div style={{ fontSize: 12, color: '#9B9490' }}>Upgrade your plan to add more members</div>
+              <div style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>Upgrade your plan to add more members</div>
             </div>
           ) : (
             <button onClick={() => setShowInvite(true)}
@@ -169,10 +169,10 @@ export default function TeamTab({ workspaceId, role, ownerId, plan }: { workspac
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 600, color: D }}>
                     {name}
-                    {isSelf && <span style={{ fontSize: 12, color: '#9B9490', fontWeight: 400, marginLeft: 8 }}>(you)</span>}
+                    {isSelf && <span style={{ fontSize: 12, color: 'var(--bp-subtle)', fontWeight: 400, marginLeft: 8 }}>(you)</span>}
                     {isOwner && <span style={{ fontSize: 12, color: G, fontWeight: 400, marginLeft: 8 }}>Owner</span>}
                   </div>
-                  <div style={{ fontSize: 13, color: '#9B9490' }}>{m.email}</div>
+                  <div style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>{m.email}</div>
                 </div>
               </div>
 
@@ -196,7 +196,7 @@ export default function TeamTab({ workspaceId, role, ownerId, plan }: { workspac
                     {isAdmin && !isOwner && !isSelf && (
                       <>
                         <button onClick={() => { setEditingId(m.id); setEditRole(m.role); }}
-                          style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, cursor: 'pointer', color: '#6B6560' }}>
+                          style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, cursor: 'pointer', color: 'var(--bp-muted)' }}>
                           Edit
                         </button>
                         <button onClick={() => handleRemove(m.id, name)}

@@ -88,7 +88,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '14px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#DC2626' }}>Payment failed</div>
-            <div style={{ fontSize: 13, color: '#6B6560' }}>Your last payment didn't go through. Please update your payment method to keep your service active.</div>
+            <div style={{ fontSize: 13, color: 'var(--bp-muted)' }}>Your last payment didn't go through. Please update your payment method to keep your service active.</div>
           </div>
           <button onClick={handleManageBilling} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#DC2626', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             Update payment →
@@ -111,7 +111,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
             <div style={{ background: 'var(--bp-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Plan</div>
+              <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginBottom: 2 }}>Plan</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
                 {wsPricing?.planLabel ?? usage.plan.charAt(0).toUpperCase() + usage.plan.slice(1)}
                 {wsPricing?.isCustom && (
@@ -120,21 +120,21 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
               </div>
             </div>
             <div style={{ background: 'var(--bp-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Properties</div>
+              <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginBottom: 2 }}>Properties</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{propCount}</div>
             </div>
             <div style={{ background: 'var(--bp-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Monthly total</div>
+              <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginBottom: 2 }}>Monthly total</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: O }}>
                 ${estMonthly}/mo
               </div>
-              <div style={{ fontSize: 10, color: '#9B9490' }}>
+              <div style={{ fontSize: 10, color: 'var(--bp-subtle)' }}>
                 ${base} base + ${perProp} × {propCount} properties
               </div>
             </div>
             {billingStatus?.currentPeriodEnd && (
               <div style={{ background: 'var(--bp-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Next billing</div>
+                <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginBottom: 2 }}>Next billing</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
                   {new Date(billingStatus.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </div>
@@ -149,7 +149,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
               padding: 20, textAlign: 'center', marginBottom: 16,
             }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: D, marginBottom: 6 }}>Start your subscription</div>
-              <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 14, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 14, lineHeight: 1.5 }}>
                 Set up monthly billing to keep your workspace active. You'll be charged ${estMonthly}/mo based on your current plan and {propCount} properties.
                 {perProp > 0 && ' If you add or remove properties, the change takes effect on your next billing cycle.'}
               </div>
@@ -166,10 +166,10 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
           )}
 
           <div style={{ background: 'var(--bp-bg)', borderRadius: 10, padding: '14px 16px' }}>
-            <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6 }}>
+            <div style={{ fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6 }}>
               <strong style={{ color: D }}>Unlimited searches</strong> — your plan includes unlimited diagnostic chats and outreach searches across all properties. Fair use: {wsPricing?.searchesPerProperty ?? 5} searches per property per month.
             </div>
-            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 8 }}>
               Searches this cycle: <strong style={{ color: D }}>{usage.searches_used}</strong> · Resets {new Date(usage.billing_cycle_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </div>
           </div>
@@ -190,7 +190,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
                   <div style={{ fontSize: 13, fontWeight: 500, color: D }}>
                     {new Date(inv.created * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </div>
-                  <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>
                     <span style={{
                       fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 100,
                       background: inv.status === 'paid' ? '#F0FDF4' : inv.status === 'open' ? '#FFF8F0' : '#F5F5F5',
@@ -205,7 +205,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
                     <a href={inv.hostedUrl} target="_blank" rel="noopener" style={{ fontSize: 12, color: O, fontWeight: 600, textDecoration: 'none' }}>View</a>
                   )}
                   {inv.pdf && (
-                    <a href={inv.pdf} target="_blank" rel="noopener" style={{ fontSize: 12, color: '#6B6560', fontWeight: 500, textDecoration: 'none' }}>PDF</a>
+                    <a href={inv.pdf} target="_blank" rel="noopener" style={{ fontSize: 12, color: 'var(--bp-muted)', fontWeight: 500, textDecoration: 'none' }}>PDF</a>
                   )}
                 </div>
               </div>
@@ -236,28 +236,28 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
                 <div style={{ fontSize: 18, fontWeight: 700, color: D, marginBottom: 2 }}>{p.label}</div>
                 <div style={{ marginBottom: 4 }}>
                   <span style={{ fontSize: 28, fontWeight: 700, color: D }}>${p.promoPrice ?? p.price}</span>
-                  <span style={{ fontSize: 13, color: '#9B9490' }}>/mo</span>
+                  <span style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>/mo</span>
                   {p.promoPrice != null && (
-                    <span style={{ fontSize: 14, color: '#9B9490', textDecoration: 'line-through', marginLeft: 6 }}>${p.price}</span>
+                    <span style={{ fontSize: 14, color: 'var(--bp-subtle)', textDecoration: 'line-through', marginLeft: 6 }}>${p.price}</span>
                   )}
-                  <span style={{ fontSize: 12, color: '#6B6560', marginLeft: 4 }}>+ ${p.perProperty}/property</span>
+                  <span style={{ fontSize: 12, color: 'var(--bp-muted)', marginLeft: 4 }}>+ ${p.perProperty}/property</span>
                 </div>
                 {p.promoLabel && <div style={{ fontSize: 11, fontWeight: 600, color: O, marginBottom: 8 }}>{p.promoLabel}</div>}
                 <div style={{ borderTop: '1px solid var(--bp-border)', paddingTop: 12, marginBottom: 14 }}>
                   {p.features.map((f, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 13, color: '#6B6560' }}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 13, color: 'var(--bp-muted)' }}>
                       <span style={{ color: G, fontSize: 11 }}>✓</span> {f}
                     </div>
                   ))}
                 </div>
                 {isCurrent ? (
-                  <div style={{ textAlign: 'center', fontSize: 13, color: '#9B9490', fontWeight: 600, padding: '10px 0' }}>Your current plan</div>
+                  <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--bp-subtle)', fontWeight: 600, padding: '10px 0' }}>Your current plan</div>
                 ) : exceedsLimit ? (
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ padding: '10px 0', fontSize: 13, color: '#DC2626', fontWeight: 600 }}>
                       You have {propCount} properties (max {p.maxProperties})
                     </div>
-                    <div style={{ fontSize: 11, color: '#9B9490' }}>Remove properties to downgrade</div>
+                    <div style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>Remove properties to downgrade</div>
                   </div>
                 ) : (
                   <button disabled={changingPlan === p.plan} onClick={() => handlePlanChange(p.plan)}
@@ -276,11 +276,11 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
           })}
         </div>
         <div style={{ textAlign: 'center', marginTop: 12 }}>
-          <span style={{ fontSize: 13, color: '#9B9490' }}>Need 150+ properties? </span>
+          <span style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>Need 150+ properties? </span>
           <a href="mailto:yo@homiepro.ai" style={{ fontSize: 13, color: O, fontWeight: 600, textDecoration: 'none' }}>Contact us for Enterprise pricing →</a>
         </div>
         {isActive && (
-          <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: '#9B9490' }}>
+          <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: 'var(--bp-subtle)' }}>
             Plan changes take effect on your next billing cycle. Property count updates are reflected at renewal.
           </div>
         )}
@@ -292,7 +292,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
           <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 8px' }}>Cancel Subscription</h4>
           {!showCancel ? (
             <>
-              <p style={{ fontSize: 14, color: '#6B6560', marginBottom: 12, lineHeight: 1.6 }}>
+              <p style={{ fontSize: 14, color: 'var(--bp-muted)', marginBottom: 12, lineHeight: 1.6 }}>
                 If you cancel, your workspace will remain accessible until the end of your current billing cycle{billingStatus?.currentPeriodEnd ? ` (${new Date(billingStatus.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })})` : ''}. After that, data is retained for 30 days.
               </p>
               <button onClick={() => setShowCancel(true)}
@@ -303,7 +303,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
           ) : (
             <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: '#DC2626', marginBottom: 6 }}>Are you sure?</div>
-              <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.6 }}>
+              <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 12, lineHeight: 1.6 }}>
                 You can manage or cancel your subscription directly through the billing portal.
               </div>
               <div style={{ display: 'flex', gap: 8 }}>

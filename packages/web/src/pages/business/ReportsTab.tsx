@@ -34,12 +34,12 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
     <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>Cost reporting available on Professional+</div>
-      <div style={{ fontSize: 14, color: '#9B9490' }}>Upgrade your plan to access cost breakdowns by property, category, provider, and time period.</div>
+      <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Upgrade your plan to access cost breakdowns by property, category, provider, and time period.</div>
     </div>
   );
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading reports...</div>;
-  if (!report) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Failed to load reports</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Loading reports...</div>;
+  if (!report) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>Failed to load reports</div>;
 
   const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   const views: { id: ReportView; label: string }[] = [
@@ -60,15 +60,15 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
         <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 20, textAlign: 'center' }}>
           <div style={{ fontSize: 28, fontWeight: 700, color: O, fontFamily: "'Fraunces', serif" }}>{fmt(report.total_cost)}</div>
-          <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>Total Spend</div>
+          <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 4 }}>Total Spend</div>
         </div>
         <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 20, textAlign: 'center' }}>
           <div style={{ fontSize: 28, fontWeight: 700, color: D }}>{report.total_bookings}</div>
-          <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>Total Jobs</div>
+          <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 4 }}>Total Jobs</div>
         </div>
         <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 20, textAlign: 'center' }}>
           <div style={{ fontSize: 28, fontWeight: 700, color: G }}>{fmt(report.avg_cost)}</div>
-          <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>Avg Cost / Job</div>
+          <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 4 }}>Avg Cost / Job</div>
         </div>
       </div>
 
@@ -88,7 +88,7 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
       {view === 'property' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {report.by_property.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 30, color: '#9B9490', fontSize: 14 }}>No cost data yet</div>
+            <div style={{ textAlign: 'center', padding: 30, color: 'var(--bp-subtle)', fontSize: 14 }}>No cost data yet</div>
           ) : report.by_property.map(p => (
             <div key={p.id} style={{ background: 'var(--bp-card)', borderRadius: 10, border: '1px solid var(--bp-border)', padding: '14px 18px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -98,7 +98,7 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
               <div style={{ height: 6, borderRadius: 3, background: '#E0DAD4' }}>
                 <div style={{ height: '100%', borderRadius: 3, background: O, width: `${(p.cost / maxCost(report.by_property)) * 100}%`, transition: 'width 0.5s' }} />
               </div>
-              <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>{p.count} job{p.count !== 1 ? 's' : ''}</div>
+              <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 6 }}>{p.count} job{p.count !== 1 ? 's' : ''}</div>
             </div>
           ))}
         </div>
@@ -108,7 +108,7 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
       {view === 'category' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {report.by_category.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 30, color: '#9B9490', fontSize: 14 }}>No cost data yet</div>
+            <div style={{ textAlign: 'center', padding: 30, color: 'var(--bp-subtle)', fontSize: 14 }}>No cost data yet</div>
           ) : report.by_category.map(c => (
             <div key={c.category} style={{ background: 'var(--bp-card)', borderRadius: 10, border: '1px solid var(--bp-border)', padding: '14px 18px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -118,7 +118,7 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
               <div style={{ height: 6, borderRadius: 3, background: '#E0DAD4' }}>
                 <div style={{ height: '100%', borderRadius: 3, background: G, width: `${(c.cost / maxCost(report.by_category)) * 100}%`, transition: 'width 0.5s' }} />
               </div>
-              <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>{c.count} job{c.count !== 1 ? 's' : ''} · {Math.round((c.cost / report.total_cost) * 100)}% of total</div>
+              <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 6 }}>{c.count} job{c.count !== 1 ? 's' : ''} · {Math.round((c.cost / report.total_cost) * 100)}% of total</div>
             </div>
           ))}
         </div>
@@ -128,7 +128,7 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
       {view === 'vendor' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {report.by_vendor.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 30, color: '#9B9490', fontSize: 14 }}>No cost data yet</div>
+            <div style={{ textAlign: 'center', padding: 30, color: 'var(--bp-subtle)', fontSize: 14 }}>No cost data yet</div>
           ) : report.by_vendor.map(v => (
             <div key={v.id} style={{ background: 'var(--bp-card)', borderRadius: 10, border: '1px solid var(--bp-border)', padding: '14px 18px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -138,7 +138,7 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
               <div style={{ height: 6, borderRadius: 3, background: '#E0DAD4' }}>
                 <div style={{ height: '100%', borderRadius: 3, background: '#7C3AED', width: `${(v.cost / maxCost(report.by_vendor)) * 100}%`, transition: 'width 0.5s' }} />
               </div>
-              <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>{v.count} job{v.count !== 1 ? 's' : ''} · avg {fmt(v.cost / v.count)}/job</div>
+              <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 6 }}>{v.count} job{v.count !== 1 ? 's' : ''} · avg {fmt(v.cost / v.count)}/job</div>
             </div>
           ))}
         </div>
@@ -148,7 +148,7 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
       {view === 'monthly' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {report.by_month.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 30, color: '#9B9490', fontSize: 14 }}>No cost data yet</div>
+            <div style={{ textAlign: 'center', padding: 30, color: 'var(--bp-subtle)', fontSize: 14 }}>No cost data yet</div>
           ) : report.by_month.map(m => {
             const [year, month] = m.month.split('-');
             const label = new Date(+year, +month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -161,7 +161,7 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
                 <div style={{ height: 6, borderRadius: 3, background: '#E0DAD4' }}>
                   <div style={{ height: '100%', borderRadius: 3, background: '#2563EB', width: `${(m.cost / maxCost(report.by_month)) * 100}%`, transition: 'width 0.5s' }} />
                 </div>
-                <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>{m.count} job{m.count !== 1 ? 's' : ''}</div>
+                <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 6 }}>{m.count} job{m.count !== 1 ? 's' : ''}</div>
               </div>
             );
           })}
@@ -173,26 +173,26 @@ export default function ReportsTab({ workspaceId, plan }: { workspaceId: string;
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 10 }}>Recent Jobs</div>
           {report.line_items.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 30, color: '#9B9490', fontSize: 14 }}>No booked jobs yet — costs appear when providers are booked.</div>
+            <div style={{ textAlign: 'center', padding: 30, color: 'var(--bp-subtle)', fontSize: 14 }}>No booked jobs yet — costs appear when providers are booked.</div>
           ) : (
             <div style={{ background: 'var(--bp-card)', borderRadius: 10, border: '1px solid var(--bp-border)', overflow: 'hidden' }}>
               <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: W, borderBottom: '1px solid var(--bp-border)' }}>
-                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#9B9490', fontSize: 12 }}>Date</th>
-                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#9B9490', fontSize: 12 }}>Property</th>
-                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#9B9490', fontSize: 12 }}>Category</th>
-                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#9B9490', fontSize: 12 }}>Provider</th>
-                    <th style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600, color: '#9B9490', fontSize: 12 }}>Cost</th>
+                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: 'var(--bp-subtle)', fontSize: 12 }}>Date</th>
+                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: 'var(--bp-subtle)', fontSize: 12 }}>Property</th>
+                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: 'var(--bp-subtle)', fontSize: 12 }}>Category</th>
+                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: 'var(--bp-subtle)', fontSize: 12 }}>Provider</th>
+                    <th style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600, color: 'var(--bp-subtle)', fontSize: 12 }}>Cost</th>
                   </tr>
                 </thead>
                 <tbody>
                   {report.line_items.map((item, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                      <td style={{ padding: '10px 14px', color: '#6B6560' }}>{new Date(item.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                      <td style={{ padding: '10px 14px', color: 'var(--bp-muted)' }}>{new Date(item.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
                       <td style={{ padding: '10px 14px', color: D, fontWeight: 500 }}>{item.propertyName}</td>
-                      <td style={{ padding: '10px 14px', color: '#6B6560', textTransform: 'capitalize' }}>{item.category?.replace(/_/g, ' ') ?? '-'}</td>
-                      <td style={{ padding: '10px 14px', color: '#6B6560' }}>{item.providerName}</td>
+                      <td style={{ padding: '10px 14px', color: 'var(--bp-muted)', textTransform: 'capitalize' }}>{item.category?.replace(/_/g, ' ') ?? '-'}</td>
+                      <td style={{ padding: '10px 14px', color: 'var(--bp-muted)' }}>{item.providerName}</td>
                       <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: O }}>{item.quotedPrice ?? '-'}</td>
                     </tr>
                   ))}
