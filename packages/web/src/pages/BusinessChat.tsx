@@ -1284,7 +1284,7 @@ export default function BusinessChat() {
         const hour = new Date().getHours();
         return (hour < 8 || hour >= 18) ? (
           <div style={{
-            background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
+            background: 'var(--bp-card)', borderBottom: '1px solid var(--bp-border)',
             padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center', flexShrink: 0,
           }}>
@@ -1296,9 +1296,9 @@ export default function BusinessChat() {
 
       {/* Header */}
       <nav style={{
-        zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
+        zIndex: 50, background: 'var(--bp-header)', backdropFilter: 'blur(10px)',
         padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid rgba(0,0,0,0.05)', flexShrink: 0,
+        borderBottom: '1px solid var(--bp-border)', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1, position: 'relative' }}>
           {selectedProperty && (
