@@ -119,6 +119,8 @@ export const inspectionReportItems = pgTable('inspection_report_items', {
   quotes: jsonb('quotes').$type<Array<{ providerId: string; providerName: string; providerRating: string | null; amountCents: number; availability: string | null; receivedAt: string }>>(),
   sortOrder: integer('sort_order').notNull().default(0),
   inspectorAdjusted: boolean('inspector_adjusted').notNull().default(false),
+  /** 1-indexed page numbers in the source PDF where this item was found */
+  sourcePages: integer('source_pages').array(),
   /** Negotiation — is this item included in the repair request to the seller? */
   isIncludedInRequest: boolean('is_included_in_request').notNull().default(false),
   /** Homeowner's private notes for this item (shown in PDF) */

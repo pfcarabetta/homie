@@ -69,6 +69,7 @@ export interface InspectionItem {
   dispatchStatus: 'pending' | 'dispatched' | 'quotes_received' | 'quoted' | 'booked' | 'completed' | null;
   quoteDetails: QuoteDetails | null;
   valueImpact: ValueImpact | null;
+  sourcePages?: number[] | null;
 }
 
 export interface ValueImpact {
@@ -125,6 +126,7 @@ export interface InspectReportPublic {
   items: InspectionItem[];
   perItemPrice: number;
   bundlePrice: number;
+  reportFileUrl?: string | null;
 }
 
 // ── Auth helpers ────────────────────────────────────────────────────────────
@@ -600,6 +602,8 @@ export interface PortalReportItem {
   repairRequestSource?: string | null;
   /** Homeowner-entered custom amount, used when repairRequestSource === 'custom' */
   repairRequestCustomAmountCents?: number | null;
+  /** 1-indexed page numbers in the source PDF where this item was found */
+  sourcePages?: number[] | null;
 }
 
 export interface PortalReport {
@@ -613,6 +617,7 @@ export interface PortalReport {
   parsingStatus: string;
   clientAccessToken: string;
   pricingTier: string | null;
+  reportFileUrl?: string | null;
   itemCount: number;
   dispatchedCount: number;
   quotedCount: number;
