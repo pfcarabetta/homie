@@ -360,7 +360,7 @@ function ItemRow({ item, onToggleComplete, onGetQuotes, onNavigate, pending, sho
   const catLabel = CATEGORY_LABELS[item.category] ?? item.category;
   const catIcon = CATEGORY_ICONS[item.category] ?? '';
   const cost = item.quoteAmount ?? item.costEstimateMax ?? null;
-  const canDispatch = !item.dispatchStatus || item.dispatchStatus === 'pending';
+  const canDispatch = !item.dispatchStatus || item.dispatchStatus === 'pending' || item.dispatchStatus === 'not_dispatched' || item.dispatchStatus === 'pending_dispatch';
   const tierAllowsDispatch = item._pricingTier === 'professional' || item._pricingTier === 'premium';
   const isDispatched = item.dispatchStatus === 'dispatched' || item.dispatchStatus === 'quotes_received' || item.dispatchStatus === 'quoted';
   const isBooked = item.dispatchStatus === 'booked' || item.dispatchStatus === 'completed';
