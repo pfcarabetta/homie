@@ -96,6 +96,9 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
   const [items, setItems] = useState<PortalReportItem[]>(report.items);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [activeSeverity, setActiveSeverity] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [quotedOnly, setQuotedOnly] = useState(false);
 
   // Sync items from prop when report changes
   useEffect(() => {
@@ -244,8 +247,32 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
     setDownloadingPdf(false);
   }
 
-  // Skip informational items in the negotiation list (rarely worth negotiating)
-  const negotiableItems = items.filter(i => i.severity !== 'informational');
+  // Base list: skip informational items (rarely worth negotiating)
+  const baseItems = useMemo(() => items.filter(i => i.severity !== 'informational'), [items]);
+
+  // Apply filters
+  const negotiableItems = useMemo(() => {
+    let list = baseItems;
+    if (activeSeverity) list = list.filter(i => i.severity === activeSeverity);
+    if (activeCategory) list = list.filter(i => i.category === activeCategory);
+    if (quotedOnly) list = list.filter(i => (i.quotes && i.quotes.length > 0) || (i.quoteAmount && i.quoteAmount > 0));
+    return list;
+  }, [baseItems, activeSeverity, activeCategory, quotedOnly]);
+
+  // Counts for filter pills
+  const severityCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of baseItems) m.set(i.severity, (m.get(i.severity) ?? 0) + 1);
+    return m;
+  }, [baseItems]);
+
+  const categoryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of baseItems) m.set(i.category, (m.get(i.category) ?? 0) + 1);
+    return m;
+  }, [baseItems]);
+
+  const quotedCount = useMemo(() => baseItems.filter(i => (i.quotes && i.quotes.length > 0) || (i.quoteAmount && i.quoteAmount > 0)).length, [baseItems]);
 
   return (
     <div>
@@ -324,9 +351,79 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
         </div>
       </div>
 
+      {/* Quoted-only toggle + filter row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => setQuotedOnly(!quotedOnly)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '6px 14px', borderRadius: 20,
+            border: `1px solid ${quotedOnly ? '#10B981' : 'var(--bp-border)'}`,
+            background: quotedOnly ? '#10B98115' : 'var(--bp-card)',
+            color: quotedOnly ? '#10B981' : 'var(--bp-text)',
+            fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          <span style={{
+            width: 14, height: 14, borderRadius: 3,
+            border: `2px solid ${quotedOnly ? '#10B981' : 'var(--bp-border)'}`,
+            background: quotedOnly ? '#10B981' : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {quotedOnly && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>{'\u2713'}</span>}
+          </span>
+          Quoted items only ({quotedCount})
+        </button>
+      </div>
+
+      {/* Severity filters */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', padding: '5px 0', marginRight: 4 }}>Severity:</span>
+        <FilterPill active={!activeSeverity} onClick={() => setActiveSeverity(null)}>All</FilterPill>
+        {(['safety_hazard', 'urgent', 'recommended', 'monitor'] as const).map(sev => {
+          const cnt = severityCounts.get(sev);
+          if (!cnt) return null;
+          const sevColor = SEVERITY_COLORS[sev] ?? '#9B9490';
+          return (
+            <FilterPill
+              key={sev}
+              active={activeSeverity === sev}
+              activeColor={sevColor}
+              onClick={() => setActiveSeverity(activeSeverity === sev ? null : sev)}
+            >
+              {SEVERITY_LABELS[sev]} ({cnt})
+            </FilterPill>
+          );
+        })}
+      </div>
+
+      {/* Category filters */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', padding: '5px 0', marginRight: 4 }}>Category:</span>
+        <FilterPill active={!activeCategory} onClick={() => setActiveCategory(null)}>All</FilterPill>
+        {Array.from(categoryCounts).map(([cat, cnt]) => (
+          <FilterPill
+            key={cat}
+            active={activeCategory === cat}
+            onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+          >
+            {CATEGORY_ICONS[cat] || ''} {CATEGORY_LABELS[cat] || cat} ({cnt})
+          </FilterPill>
+        ))}
+      </div>
+
       {/* Items list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {negotiableItems.map(item => (
+        {negotiableItems.length === 0 ? (
+          <div style={{
+            background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
+            padding: 32, textAlign: 'center',
+          }}>
+            <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: 0 }}>
+              No items match the current filters
+            </p>
+          </div>
+        ) : negotiableItems.map(item => (
           <NegotiationItemRow
             key={item.id}
             item={item}
@@ -336,6 +433,20 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
         ))}
       </div>
     </div>
+  );
+}
+
+// ── Filter pill ─────────────────────────────────────────────────────────────
+
+function FilterPill({ active, activeColor, onClick, children }: { active: boolean; activeColor?: string; onClick: () => void; children: React.ReactNode }) {
+  const color = activeColor ?? ACCENT;
+  return (
+    <button onClick={onClick} style={{
+      fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
+      borderRadius: 20, border: `1px solid ${active ? color : 'var(--bp-border)'}`,
+      background: active ? `${color}10` : 'transparent',
+      color: active ? color : 'var(--bp-subtle)', cursor: 'pointer',
+    }}>{children}</button>
   );
 }
 
