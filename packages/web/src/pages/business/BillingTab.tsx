@@ -98,19 +98,19 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
 
       {/* Current plan & billing */}
       {usage && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24, marginBottom: 24 }}>
+        <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24, marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
             <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: 0 }}>Current Plan & Billing</h4>
             {isActive && (
               <button onClick={handleManageBilling} disabled={openingPortal}
-                style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, fontSize: 13, fontWeight: 600, cursor: openingPortal ? 'default' : 'pointer', opacity: openingPortal ? 0.6 : 1 }}>
+                style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', color: D, fontSize: 13, fontWeight: 600, cursor: openingPortal ? 'default' : 'pointer', opacity: openingPortal ? 0.6 : 1 }}>
                 {openingPortal ? 'Opening...' : 'Manage Billing'}
               </button>
             )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
-            <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+            <div style={{ background: 'var(--bp-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Plan</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
                 {wsPricing?.planLabel ?? usage.plan.charAt(0).toUpperCase() + usage.plan.slice(1)}
@@ -119,11 +119,11 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
                 )}
               </div>
             </div>
-            <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+            <div style={{ background: 'var(--bp-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Properties</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{propCount}</div>
             </div>
-            <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+            <div style={{ background: 'var(--bp-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Monthly total</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: O }}>
                 ${estMonthly}/mo
@@ -133,7 +133,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
               </div>
             </div>
             {billingStatus?.currentPeriodEnd && (
-              <div style={{ background: W, borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+              <div style={{ background: 'var(--bp-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                 <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Next billing</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
                   {new Date(billingStatus.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -165,7 +165,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
             </div>
           )}
 
-          <div style={{ background: W, borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ background: 'var(--bp-bg)', borderRadius: 10, padding: '14px 16px' }}>
             <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6 }}>
               <strong style={{ color: D }}>Unlimited searches</strong> — your plan includes unlimited diagnostic chats and outreach searches across all properties. Fair use: {wsPricing?.searchesPerProperty ?? 5} searches per property per month.
             </div>
@@ -178,7 +178,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
 
       {/* Invoice history */}
       {invoices.length > 0 && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24, marginBottom: 24 }}>
+        <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24, marginBottom: 24 }}>
           <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 16px' }}>Invoice History</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {invoices.map((inv, i) => (
@@ -226,8 +226,8 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
             const exceedsLimit = isDowngrade && propCount > p.maxProperties;
             return (
               <div key={p.plan} style={{
-                background: '#fff', borderRadius: 14, padding: 20,
-                border: isCurrent ? `2px solid ${O}` : '1px solid #E0DAD4',
+                background: 'var(--bp-card)', borderRadius: 14, padding: 20,
+                border: isCurrent ? `2px solid ${O}` : '1px solid var(--bp-border)',
                 position: 'relative',
               }}>
                 {isCurrent && (
@@ -243,7 +243,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
                   <span style={{ fontSize: 12, color: '#6B6560', marginLeft: 4 }}>+ ${p.perProperty}/property</span>
                 </div>
                 {p.promoLabel && <div style={{ fontSize: 11, fontWeight: 600, color: O, marginBottom: 8 }}>{p.promoLabel}</div>}
-                <div style={{ borderTop: '1px solid #E0DAD4', paddingTop: 12, marginBottom: 14 }}>
+                <div style={{ borderTop: '1px solid var(--bp-border)', paddingTop: 12, marginBottom: 14 }}>
                   {p.features.map((f, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 13, color: '#6B6560' }}>
                       <span style={{ color: G, fontSize: 11 }}>✓</span> {f}
@@ -263,8 +263,8 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
                   <button disabled={changingPlan === p.plan} onClick={() => handlePlanChange(p.plan)}
                     style={{
                       width: '100%', padding: '10px 0', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                      border: isDowngrade ? '1px solid #E0DAD4' : 'none',
-                      background: isDowngrade ? '#fff' : O,
+                      border: isDowngrade ? '1px solid var(--bp-border)' : 'none',
+                      background: isDowngrade ? 'var(--bp-card)' : O,
                       color: isDowngrade ? D : '#fff',
                       opacity: changingPlan === p.plan ? 0.6 : 1,
                     }}>
@@ -288,7 +288,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
 
       {/* Cancel service */}
       {isActive && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E0DAD4', padding: 24 }}>
+        <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24 }}>
           <h4 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 8px' }}>Cancel Subscription</h4>
           {!showCancel ? (
             <>
@@ -308,7 +308,7 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setShowCancel(false)}
-                  style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: D }}>
+                  style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: D }}>
                   Keep my plan
                 </button>
                 <button onClick={handleManageBilling}

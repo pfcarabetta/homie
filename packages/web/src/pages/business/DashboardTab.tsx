@@ -121,7 +121,7 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
   return (
     <div
       style={{
-        background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4',
+        background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
         fontFamily: "'DM Sans', sans-serif",
         overflow: 'hidden', transition: 'border-color 0.15s, box-shadow 0.15s',
         ...(isOpen ? { borderColor: color, boxShadow: `0 4px 16px ${color}1A` } : {}),
@@ -145,7 +145,7 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
         } : undefined}
         onMouseLeave={canExpand ? (e) => {
           if (!isOpen) {
-            (e.currentTarget.parentElement as HTMLElement).style.borderColor = '#E0DAD4';
+            (e.currentTarget.parentElement as HTMLElement).style.borderColor = 'var(--bp-border)';
             (e.currentTarget.parentElement as HTMLElement).style.transform = 'translateY(0)';
             (e.currentTarget.parentElement as HTMLElement).style.boxShadow = 'none';
           }
@@ -178,13 +178,13 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
       {isOpen && items.length > 0 && (
         <div style={{
           borderTop: '1px solid #F0EDE9', padding: '14px 20px 18px',
-          background: '#FAFAF8',
+          background: 'var(--bp-hover)',
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {items.map(item => (
               <div key={item.reservationId} style={{
                 padding: '10px 12px', borderRadius: 10,
-                background: '#fff', border: '1px solid rgba(0,0,0,0.06)',
+                background: 'var(--bp-card)', border: '1px solid rgba(0,0,0,0.06)',
               }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {item.propertyName}
@@ -208,7 +208,7 @@ function ReservationKpiCard({ label, icon, color, items, variant, isOpen, onTogg
                         href={runHref(run)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 6,
-                          background: '#FAFAF8', borderRadius: 100,
+                          background: 'var(--bp-hover)', borderRadius: 100,
                           padding: '3px 9px', fontSize: 10, color: D,
                           textDecoration: 'none',
                           border: '1px solid rgba(0,0,0,0.06)',
@@ -340,7 +340,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
               key={kpi.label}
               onClick={kpi.onClick}
               style={{
-                background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: '18px 20px',
+                background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: '18px 20px',
                 fontFamily: "'DM Sans', sans-serif", textAlign: 'left',
                 cursor: kpi.onClick ? 'pointer' : 'default',
                 transition: 'border-color 0.15s, transform 0.15s, box-shadow 0.15s',
@@ -352,7 +352,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                 (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 16px ${kpi.color}1A`;
               } : undefined}
               onMouseLeave={kpi.onClick ? (e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = '#E0DAD4';
+                (e.currentTarget as HTMLElement).style.borderColor = 'var(--bp-border)';
                 (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
                 (e.currentTarget as HTMLElement).style.boxShadow = 'none';
               } : undefined}
@@ -384,7 +384,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
       {/* ── Middle row: Category breakdown + Top vendors ── */}
       <div className="bp-dashboard-mid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
         {/* Category breakdown */}
-        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20 }}>
+        <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 20 }}>
           <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Dispatches by Category</h4>
           {data.dispatches_by_category.length === 0 ? (
             <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No dispatches yet</div>
@@ -406,7 +406,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
         </div>
 
         {/* Top vendors */}
-        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20 }}>
+        <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 20 }}>
           <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Top Providers</h4>
           {data.top_vendors.length === 0 ? (
             <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No bookings yet</div>
@@ -434,7 +434,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
       </div>
 
       {/* ── Recent Activity ── */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20, marginBottom: 24 }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 20, marginBottom: 24 }}>
         <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: '0 0 14px' }}>Recent Activity</h4>
         {data.recent_activity.length === 0 ? (
           <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No recent activity</div>
@@ -448,7 +448,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                   if (a.type === 'booking') onNavigate('bookings', a.job_id);
                   else onNavigate('dispatches', a.job_id);
                 }} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < data.recent_activity.length - 1 ? '1px solid #F0EDE9' : 'none', cursor: 'pointer', borderRadius: 6, transition: 'background 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#FAFAF8'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bp-hover)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <span style={{ fontSize: 16, flexShrink: 0, marginTop: 2 }}>{icon}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -470,7 +470,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
       </div>
 
       {/* ── Seasonal Prep Suggestions ── */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20 }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div>
             <h4 style={{ fontSize: 14, fontWeight: 700, color: D, margin: 0 }}>Seasonal Prep Suggestions</h4>
@@ -483,7 +483,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
               </span>
             )}
             <button onClick={() => loadSuggestions(true)} disabled={loadingSuggestions}
-              style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, fontWeight: 600, color: '#6B6560', cursor: 'pointer', opacity: loadingSuggestions ? 0.5 : 1 }}>
+              style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, fontWeight: 600, color: '#6B6560', cursor: 'pointer', opacity: loadingSuggestions ? 0.5 : 1 }}>
               {loadingSuggestions ? 'Generating...' : '🔄 Regenerate'}
             </button>
           </div>
@@ -505,7 +505,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                 {visibleSuggestions.map((s, i) => {
                   const priorityColor = s.priority === 'high' ? '#DC2626' : s.priority === 'medium' ? '#D4A017' : G;
                   return (
-                    <div key={i} style={{ background: W, borderRadius: 12, padding: 16, border: '1px solid #E0DAD4' }}>
+                    <div key={i} style={{ background: 'var(--bp-bg)', borderRadius: 12, padding: 16, border: '1px solid var(--bp-border)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: D, lineHeight: 1.3 }}>{s.title}</div>
                         <span style={{ fontSize: 10, fontWeight: 600, color: priorityColor, background: `${priorityColor}15`, padding: '2px 8px', borderRadius: 100, flexShrink: 0, marginLeft: 8, textTransform: 'capitalize' }}>{s.priority}</span>
@@ -531,7 +531,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                 <button onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
                   style={{
                     display: 'block', width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 10,
-                    border: '1px solid #E0DAD4', background: '#fff', color: '#6B6560',
+                    border: '1px solid var(--bp-border)', background: 'var(--bp-card)', color: '#6B6560',
                     fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'center',
                   }}>
                   {suggestionsExpanded ? `Show less` : `Show ${suggestions.length - 2} more suggestions`}
@@ -552,7 +552,7 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
       {dispatchSuggestion && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
           onClick={() => setDispatchSuggestion(null)}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
+          <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 4px' }}>Select Property to Dispatch</h3>
             <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 16 }}>
@@ -583,12 +583,12 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                       navigate(`/business?${params.toString()}`);
                     }} style={{
                       display: 'flex', alignItems: 'center', padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
-                      border: isRecommended ? `2px solid ${O}` : '1px solid #E0DAD4',
-                      background: isRecommended ? `${O}04` : '#fff', textAlign: 'left',
+                      border: isRecommended ? `2px solid ${O}` : '1px solid var(--bp-border)',
+                      background: isRecommended ? `${O}04` : 'var(--bp-card)', textAlign: 'left',
                       fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
                     }}
                       onMouseEnter={e => { if (!isRecommended) e.currentTarget.style.borderColor = O; }}
-                      onMouseLeave={e => { if (!isRecommended) e.currentTarget.style.borderColor = '#E0DAD4'; }}
+                      onMouseLeave={e => { if (!isRecommended) e.currentTarget.style.borderColor = 'var(--bp-border)'; }}
                     >
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{p.name}</div>

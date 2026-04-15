@@ -100,7 +100,7 @@ function TrackingShareModal({ jobId, propertyName, onClose }: { jobId: string; p
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={onClose}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 440, margin: '0 12px', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 440, margin: '0 12px', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: 0 }}>Share maintenance status</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, color: '#9B9490', cursor: 'pointer' }}>×</button>
@@ -295,7 +295,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
   const uniqueProperties = [...new Map(dispatches.filter(d => d.propertyId && d.propertyName).map(d => [d.propertyId, d.propertyName])).entries()].map(([id, name]) => ({ id: id as string, name: name as string }));
 
   if (dispatches.length === 0) return (
-    <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+    <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>🚀</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No dispatches yet</div>
       <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 20 }}>Dispatch requests from the chat will appear here.</div>
@@ -312,12 +312,12 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Dispatches</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => setShowArchived(!showArchived)}
-            style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${showArchived ? O : '#E0DAD4'}`, background: showArchived ? `${O}08` : '#fff', color: showArchived ? O : '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${showArchived ? O : 'var(--bp-border)'}`, background: showArchived ? `${O}08` : 'var(--bp-card)', color: showArchived ? O : '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             {showArchived ? 'Active Dispatches' : 'Archived'}
           </button>
           <button onClick={() => { if (isPro) onTabChange?.('schedules'); }}
             title={isPro ? 'Set up recurring dispatches' : 'Upgrade to Professional to use Auto-Dispatch'}
-            style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, fontWeight: 600,
+            style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, fontWeight: 600,
               color: isPro ? D : '#ccc', cursor: isPro ? 'pointer' : 'default', opacity: isPro ? 1 : 0.6 }}>
             🔄 Auto-Dispatch{!isPro && ' (Pro+)'}
           </button>
@@ -331,7 +331,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
       {/* Filters */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' }}>
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 12, color: D, cursor: 'pointer', background: 'var(--bp-card)' }}>
           <option value="">All Statuses</option>
           <option value="open">Open</option>
           <option value="dispatching">Dispatching</option>
@@ -341,21 +341,21 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
           <option value="archived">Archived</option>
         </select>
         <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' }}>
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 12, color: D, cursor: 'pointer', background: 'var(--bp-card)' }}>
           <option value="">All Categories</option>
           {uniqueCategories.map(c => (
             <option key={c} value={c}>{c.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase())}</option>
           ))}
         </select>
         <select value={filterProperty} onChange={e => setFilterProperty(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' }}>
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 12, color: D, cursor: 'pointer', background: 'var(--bp-card)' }}>
           <option value="">All Properties</option>
           {uniqueProperties.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
         <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' }}>
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 12, color: D, cursor: 'pointer', background: 'var(--bp-card)' }}>
           <option value="">All Severities</option>
           <option value="low">Low</option>
           <option value="medium">Medium</option>
@@ -363,10 +363,10 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
           <option value="urgent">Urgent</option>
         </select>
         <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, background: '#fff' }}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 12, color: D, background: 'var(--bp-card)' }}
           title="From date" />
         <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, background: '#fff' }}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 12, color: D, background: 'var(--bp-card)' }}
           title="To date" />
         {(filterStatus || filterCategory || filterProperty || filterSeverity || filterDateFrom || filterDateTo) && (
           <button onClick={() => { setFilterStatus(''); setFilterCategory(''); setFilterProperty(''); setFilterSeverity(''); setFilterDateFrom(''); setFilterDateTo(''); }}
@@ -413,7 +413,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
 
           return (
             <div key={j.id} id={`dispatch-${j.id}`} onClick={() => toggleExpand(j.id)} style={{
-              background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+              background: 'var(--bp-card)', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
               border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
               transition: 'all 0.2s',
               boxShadow: isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
@@ -487,7 +487,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                       {/* Channel outreach counts */}
                       <div style={{ display: 'flex', gap: 8, marginTop: 14, width: '100%' }}>
                         {DPC_CHANNELS.map(({ key, label, bg, color: chColor }, ci) => (
-                          <div key={key} style={{ flex: 1, background: '#fff', borderRadius: 10, padding: '10px 6px', textAlign: 'center', border: '1px solid rgba(0,0,0,0.05)', position: 'relative', overflow: 'hidden' }}>
+                          <div key={key} style={{ flex: 1, background: 'var(--bp-card)', borderRadius: 10, padding: '10px 6px', textAlign: 'center', border: '1px solid rgba(0,0,0,0.05)', position: 'relative', overflow: 'hidden' }}>
                             <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', background: bg, marginBottom: 4 }}>
                               <div className="dpc-channel-pulse" style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: bg, animation: `dpc-channel-pulse 2.4s ease-in-out ${ci * 0.8}s infinite` }} />
                               <span style={{ position: 'relative', fontSize: 12 }}>{key === 'voice' ? '📞' : key === 'sms' ? '💬' : '🌐'}</span>
@@ -546,7 +546,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                             {downloadingPdf === j.id ? 'Generating...' : '📄 Estimate PDF'}
                           </button>
                         ) : (
-                          <button disabled style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#F5F3F0', color: '#B0AAA4', fontSize: 12, fontWeight: 600, cursor: 'default' }}>
+                          <button disabled style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--bp-border)', background: '#F5F3F0', color: '#B0AAA4', fontSize: 12, fontWeight: 600, cursor: 'default' }}>
                             📄 Estimate PDF <span style={{ fontSize: 10 }}>(Pro+)</span>
                           </button>
                         )
@@ -718,7 +718,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                           } catch { alert('Failed to archive'); }
                         }} style={{
                           flex: 1, padding: '10px 0', borderRadius: 100,
-                          border: '1px solid #9B9490', background: '#fff', color: '#9B9490',
+                          border: '1px solid #9B9490', background: 'var(--bp-card)', color: '#9B9490',
                           fontSize: 13, fontWeight: 600, cursor: 'pointer',
                         }}>Archive</button>
                       )}
@@ -746,7 +746,7 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
       {/* Cancel confirmation modal */}
       {showCancelConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowCancelConfirm(null)}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
                 <span style={{ fontSize: 22 }}>⚠️</span>
@@ -764,8 +764,8 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setShowCancelConfirm(null)} style={{
-                flex: 1, padding: '12px 0', borderRadius: 100, border: '1px solid #E0DAD4',
-                background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                flex: 1, padding: '12px 0', borderRadius: 100, border: '1px solid var(--bp-border)',
+                background: 'var(--bp-card)', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
               }}>Keep dispatch</button>
               <button onClick={async () => {
                 const jobId = showCancelConfirm;

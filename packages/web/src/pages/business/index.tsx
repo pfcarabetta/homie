@@ -46,22 +46,22 @@ function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onC
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 12, padding: 32, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 20px' }}>Create Workspace</h3>
 
         <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Business Name *</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Acme Property Management"
-          style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' }} />
+          style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' }} />
 
         <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Custom Slug (optional)</label>
         <input value={slug} onChange={e => setSlug(e.target.value)} placeholder="acme-pm"
-          style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 8, boxSizing: 'border-box' }} />
+          style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 8, boxSizing: 'border-box' }} />
         <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 20 }}>Used in your workspace URL. Auto-generated from name if blank.</div>
 
         {error && <div style={{ color: '#DC2626', fontSize: 14, marginBottom: 16 }}>{error}</div>}
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
           <button onClick={handleCreate} disabled={saving}
             style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
             {saving ? 'Creating...' : 'Create Workspace'}
@@ -267,7 +267,7 @@ export default function BusinessPortal() {
   // Loading state
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#F9F5F2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--bp-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: '#9B9490' }}>Loading workspaces...</div>
       </div>
     );
@@ -460,14 +460,14 @@ export default function BusinessPortal() {
       {showReportsUpgrade && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
           onClick={() => setShowReportsUpgrade(false)}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 32, width: '100%', maxWidth: 420, boxShadow: '0 16px 48px rgba(0,0,0,0.15)', textAlign: 'center' }}
+          <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: 32, width: '100%', maxWidth: 420, boxShadow: '0 16px 48px rgba(0,0,0,0.15)', textAlign: 'center' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
             <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 8px' }}>Upgrade to unlock this feature</h3>
             <p style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: 24 }}>
               Full cost reporting, provider scorecards, guest requests, and auto-dispatch are available on the <strong style={{ color: O }}>Professional</strong> plan and above.
             </p>
-            <div style={{ background: '#F9F5F2', borderRadius: 12, padding: 16, marginBottom: 24, textAlign: 'left' }}>
+            <div style={{ background: 'var(--bp-bg)', borderRadius: 12, padding: 16, marginBottom: 24, textAlign: 'left' }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: D, marginBottom: 10 }}>Professional plan includes:</div>
               {['Full cost reporting by property & category', 'Provider scorecards with response rates', 'Guest request management & auto-dispatch', 'Booking & dispatch analytics', 'Team activity log'].map((f, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 13, color: '#6B6560' }}>

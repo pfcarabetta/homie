@@ -352,7 +352,7 @@ export default function BusinessSidebar({
               ref={accountMenuRef}
               style={{
                 position: 'fixed', bottom: 0, left: 0, right: 0,
-                background: '#ffffff',
+                background: 'var(--bp-card)',
                 borderTopLeftRadius: 18, borderTopRightRadius: 18,
                 boxShadow: '0 -8px 32px rgba(0,0,0,0.18)',
                 zIndex: 99999,
@@ -363,7 +363,7 @@ export default function BusinessSidebar({
             >
               {/* Drag handle */}
               <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px' }}>
-                <div style={{ width: 40, height: 4, borderRadius: 2, background: '#E0DAD4' }} />
+                <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--bp-border)' }} />
               </div>
               {homeowner && (
                 <div style={{ padding: '8px 20px 16px', borderBottom: '1px solid #F5F0EB', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -402,7 +402,7 @@ export default function BusinessSidebar({
                   }}
                 >
                   <div style={{
-                    width: 36, height: 36, borderRadius: 10, background: '#fff',
+                    width: 36, height: 36, borderRadius: 10, background: 'var(--bp-card)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 20, flexShrink: 0,
                   }}>{'\uD83C\uDFE0'}</div>
@@ -429,7 +429,7 @@ export default function BusinessSidebar({
               position: 'fixed',
               bottom: `calc(100vh - ${accountMenuPos.top}px)`,
               left: accountMenuPos.left,
-              background: '#ffffff',
+              background: 'var(--bp-card)',
               borderRadius: 12,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
               border: '1px solid rgba(0,0,0,0.06)',
@@ -446,16 +446,16 @@ export default function BusinessSidebar({
               </div>
             )}
             <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={accountMenuItemStyle}
-              onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bp-bg)'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>Workspace Profile</button>
             <button onClick={() => { setAccountOpen(false); navigate('/business?tab=settings&focus=workspace'); }} style={accountMenuItemStyle}
-              onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bp-bg)'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>Workspace Settings</button>
             <button onClick={() => { setAccountOpen(false); navigate('/business?tab=billing'); }} style={accountMenuItemStyle}
-              onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bp-bg)'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>Billing</button>
             <button onClick={() => { setAccountOpen(false); navigate('/business?tab=team'); }} style={accountMenuItemStyle}
-              onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bp-bg)'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>Team</button>
 
             {/* Highlighted: Personal Homie service */}
@@ -480,7 +480,7 @@ export default function BusinessSidebar({
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
               >
                 <div style={{
-                  width: 32, height: 32, borderRadius: 8, background: '#fff',
+                  width: 32, height: 32, borderRadius: 8, background: 'var(--bp-card)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 16, flexShrink: 0,
                 }}>{'\uD83C\uDFE0'}</div>

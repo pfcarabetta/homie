@@ -126,18 +126,18 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
     }
   }
 
-  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
   const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
 
   const showDetails = mode === 'create' || selectedProvider;
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 12, padding: 32, width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 20px' }}>Add Preferred Provider</h3>
 
         {/* Mode toggle */}
-        <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 8, overflow: 'hidden', border: '1px solid #E0DAD4' }}>
+        <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--bp-border)' }}>
           <button onClick={() => { setMode('search'); setSelectedProvider(null); }}
             style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer',
               background: mode === 'search' ? O : '#fff', color: mode === 'search' ? '#fff' : '#6B6560' }}>
@@ -169,9 +169,9 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
                     setSelectedCats(matched);
                   }
                 }}
-                  style={{ padding: '12px 16px', borderRadius: 8, border: '1px solid #E0DAD4', marginBottom: 6, cursor: 'pointer', background: '#fff' }}
+                  style={{ padding: '12px 16px', borderRadius: 8, border: '1px solid var(--bp-border)', marginBottom: 6, cursor: 'pointer', background: 'var(--bp-card)' }}
                   onMouseOver={e => (e.currentTarget.style.background = '#FAFAF8')}
-                  onMouseOut={e => (e.currentTarget.style.background = '#fff')}>
+                  onMouseOut={e => (e.currentTarget.style.background = 'var(--bp-card)')}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{p.name}</div>
                   <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4, display: 'flex', gap: 12 }}>
                     {p.googleRating && <span>Rating: {p.googleRating} ({p.reviewCount})</span>}
@@ -202,7 +202,7 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
                 </div>
               </div>
               <button onClick={() => setSelectedProvider(null)}
-                style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#6B6560' }}>
+                style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, cursor: 'pointer', color: '#6B6560' }}>
                 Change
               </button>
             </div>
@@ -270,9 +270,9 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
               style={{ ...inputStyle, resize: 'vertical' as const }} />
 
             {/* Property Assignment */}
-            <div style={{ borderTop: '1px solid #E0DAD4', paddingTop: 16, marginTop: 4 }}>
+            <div style={{ borderTop: '1px solid var(--bp-border)', paddingTop: 16, marginTop: 4 }}>
               <label style={labelStyle}>Assign to Properties</label>
-              <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderRadius: 8, overflow: 'hidden', border: '1px solid #E0DAD4' }}>
+              <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--bp-border)' }}>
                 <button onClick={() => { setAssignMode('all'); setSelectedPropertyIds([]); }}
                   style={{ flex: 1, padding: '8px 0', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
                     background: assignMode === 'all' ? D : '#fff', color: assignMode === 'all' ? '#fff' : '#6B6560' }}>
@@ -333,7 +333,7 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
                   </div>
 
                   {/* Property list */}
-                  <div style={{ maxHeight: 200, overflow: 'auto', border: '1px solid #E0DAD4', borderRadius: 8 }}>
+                  <div style={{ maxHeight: 200, overflow: 'auto', border: '1px solid var(--bp-border)', borderRadius: 8 }}>
                     {filteredProperties.map(p => {
                       const checked = selectedPropertyIds.includes(p.id);
                       return (
@@ -363,7 +363,7 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
         {error && <div style={{ color: '#DC2626', fontSize: 14, marginBottom: 16, marginTop: 16 }}>{error}</div>}
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
           {showDetails && (
             <button onClick={handleAdd} disabled={saving}
               style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
@@ -493,12 +493,12 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
     }
   }
 
-  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
   const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 12, padding: 32, width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, color: D, margin: '0 0 4px' }}>Edit Preferred Provider</h3>
         <p style={{ fontSize: 15, fontWeight: 600, color: O, marginBottom: 20 }}>{vendor.providerName}</p>
 
@@ -542,9 +542,9 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
           style={{ ...inputStyle, resize: 'vertical' as const }} />
 
         {/* Property Assignment */}
-        <div style={{ borderTop: '1px solid #E0DAD4', paddingTop: 16, marginTop: 4 }}>
+        <div style={{ borderTop: '1px solid var(--bp-border)', paddingTop: 16, marginTop: 4 }}>
           <label style={labelStyle}>Assign to Properties</label>
-          <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderRadius: 8, overflow: 'hidden', border: '1px solid #E0DAD4' }}>
+          <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--bp-border)' }}>
             <button onClick={() => { setAssignMode('all'); setSelectedPropertyIds([]); }}
               style={{ flex: 1, padding: '8px 0', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
                 background: assignMode === 'all' ? D : '#fff', color: assignMode === 'all' ? '#fff' : '#6B6560' }}>
@@ -602,7 +602,7 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
                 )}
               </div>
 
-              <div style={{ maxHeight: 200, overflow: 'auto', border: '1px solid #E0DAD4', borderRadius: 8 }}>
+              <div style={{ maxHeight: 200, overflow: 'auto', border: '1px solid var(--bp-border)', borderRadius: 8 }}>
                 {filteredProperties.map(p => {
                   const checked = selectedPropertyIds.includes(p.id);
                   return (
@@ -637,14 +637,14 @@ export function EditVendorModal({ workspaceId, vendor, allProperties, onClose, o
           </div>
           <button onClick={() => setSkipQuote(!skipQuote)}
             style={{ width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer', background: skipQuote ? '#2563EB' : '#D1D5DB', position: 'relative', transition: 'background 0.2s', padding: 0, flexShrink: 0, marginLeft: 12 }}>
-            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: skipQuote ? 20 : 2, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+            <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--bp-card)', position: 'absolute', top: 2, left: skipQuote ? 20 : 2, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
           </button>
         </div>
 
         {error && <div style={{ color: '#DC2626', fontSize: 14, marginTop: 16 }}>{error}</div>}
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
-          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
           <button onClick={handleSave} disabled={saving}
             style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
             {saving ? 'Saving...' : 'Save Changes'}
@@ -717,7 +717,7 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
       </div>
 
       {vendors.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🤝</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No preferred providers yet</div>
           <div style={{ fontSize: 14, color: '#9B9490' }}>Add providers you trust to get priority dispatch on your jobs.</div>
@@ -734,7 +734,7 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
               <div key={g.providerId}
                 onClick={() => setExpandedVendorId(isExpVendor ? null : g.providerId)}
                 style={{
-                  background: '#fff', borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+                  background: 'var(--bp-card)', borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
                   border: isExpVendor ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
                   opacity: g.active ? 1 : 0.55, transition: 'all 0.2s',
                   boxShadow: isExpVendor ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
@@ -781,7 +781,7 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
                         }}
                           title={g.active ? 'Deactivate' : 'Activate'}
                           style={{ width: 34, height: 18, borderRadius: 9, border: 'none', cursor: 'pointer', background: g.active ? G : '#D1D5DB', position: 'relative', transition: 'background 0.2s', padding: 0 }}>
-                          <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: g.active ? 18 : 2, transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
+                          <div style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--bp-card)', position: 'absolute', top: 2, left: g.active ? 18 : 2, transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
                         </button>
                       )}
                       <span style={{ fontSize: 11, color: '#C0BBB6' }}>{isExpVendor ? '\u25B2' : '\u25BC'}</span>
@@ -856,7 +856,7 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
                           )).then(() => loadVendors());
                         }}
                           style={{ width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', background: g.skipQuote ? '#2563EB' : '#D1D5DB', position: 'relative', transition: 'background 0.2s', padding: 0 }}>
-                          <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: g.skipQuote ? 18 : 2, transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
+                          <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--bp-card)', position: 'absolute', top: 2, left: g.skipQuote ? 18 : 2, transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
                         </button>
                       </div>
                     )}
@@ -865,7 +865,7 @@ export default function VendorsTab({ workspaceId, role, plan }: { workspaceId: s
                     {canEdit && (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.04)' }}>
                         <button onClick={() => setEditingVendor(g)}
-                          style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 600 }}>
+                          style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, cursor: 'pointer', color: '#6B6560', fontWeight: 600 }}>
                           Edit
                         </button>
                         <button onClick={() => {

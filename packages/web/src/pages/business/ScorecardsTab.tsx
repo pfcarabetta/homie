@@ -51,7 +51,7 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
   }
 
   if (!isPremium) return (
-    <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+    <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>Provider scorecards available on Professional+</div>
       <div style={{ fontSize: 14, color: '#9B9490' }}>Upgrade your plan to access provider scorecards with response rates, grades, and performance metrics.</div>
@@ -84,7 +84,7 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
 
           return (
             <div key={v.id} onClick={() => setExpandedVendor(isExpanded ? null : v.id)} style={{
-              background: '#fff', borderRadius: 12, border: isExpanded ? `2px solid ${O}` : '1px solid #E0DAD4',
+              background: 'var(--bp-card)', borderRadius: 12, border: isExpanded ? `2px solid ${O}` : '1px solid var(--bp-border)',
               cursor: 'pointer', transition: 'all 0.15s', overflow: 'hidden',
             }}>
               {/* Collapsed */}
@@ -202,7 +202,7 @@ export default function ScorecardsTab({ workspaceId, plan }: { workspaceId: stri
                         disabled={addingId === v.id}
                         style={{
                           flex: 1, padding: '10px 0', borderRadius: 100,
-                          border: `1px solid ${G}`, background: '#fff', color: G,
+                          border: `1px solid ${G}`, background: 'var(--bp-card)', color: G,
                           fontSize: 13, fontWeight: 600, cursor: addingId === v.id ? 'default' : 'pointer',
                           opacity: addingId === v.id ? 0.6 : 1, minWidth: 120,
                         }}

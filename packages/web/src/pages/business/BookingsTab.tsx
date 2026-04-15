@@ -47,7 +47,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading bookings...</div>;
 
   if (bookingsList.length === 0) return (
-    <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+    <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No bookings yet</div>
       <div style={{ fontSize: 14, color: '#9B9490' }}>When you book a provider from a dispatch, it will appear here.</div>
@@ -67,7 +67,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
   const uniqueCategories = [...new Set(bookingsList.map(b => b.diagnosis?.category).filter(Boolean))] as string[];
   const uniqueProperties = [...new Map(bookingsList.filter(b => b.propertyId && b.propertyName).map(b => [b.propertyId, b.propertyName])).entries()].map(([id, name]) => ({ id: id as string, name: name as string }));
 
-  const selectStyle: React.CSSProperties = { padding: '6px 10px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 12, color: D, cursor: 'pointer', background: '#fff' };
+  const selectStyle: React.CSSProperties = { padding: '6px 10px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 12, color: D, cursor: 'pointer', background: 'var(--bp-card)' };
   const hasFilters = !!(filterStatus || filterCategory || filterProperty || filterSeverity || filterDateFrom || filterDateTo);
 
   return (
@@ -137,7 +137,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
 
           return (
             <div key={b.id} id={`booking-${b.id}`} onClick={() => setExpandedId(isExpanded ? null : b.id)} style={{
-              background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+              background: 'var(--bp-card)', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
               border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
               transition: 'all 0.2s',
               boxShadow: isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
@@ -217,7 +217,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
                     {b.providerEmail && (
                       <a href={`mailto:${b.providerEmail}`} style={{
                         flex: 1, minWidth: 0, padding: '10px 0', borderRadius: 100,
-                        border: `2px solid ${O}`, background: 'white', color: O,
+                        border: `2px solid ${O}`, background: 'var(--bp-card)', color: O,
                         fontSize: 14, fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'block',
                       }}>✉️ Email</a>
                     )}
@@ -272,7 +272,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
                       setAddingProvider(null);
                     }} disabled={addingProvider === b.providerId} style={{
                       width: '100%', padding: '10px 0', borderRadius: 100,
-                      border: `1px solid ${G}`, background: 'white', color: G,
+                      border: `1px solid ${G}`, background: 'var(--bp-card)', color: G,
                       fontSize: 13, fontWeight: 600, cursor: addingProvider === b.providerId ? 'default' : 'pointer',
                       opacity: addingProvider === b.providerId ? 0.6 : 1,
                       transition: 'all 0.2s',
@@ -308,7 +308,7 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
         const booking = bookingsList.find(b => b.id === showCancelBooking);
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowCancelBooking(null)}>
-            <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
               <div style={{ textAlign: 'center', marginBottom: 20 }}>
                 <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
                   <span style={{ fontSize: 22 }}>⚠️</span>
@@ -320,8 +320,8 @@ export default function BookingsTab({ workspaceId, focusJobId, onFocusHandled }:
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setShowCancelBooking(null)} style={{
-                  flex: 1, padding: '12px 0', borderRadius: 100, border: '1px solid #E0DAD4',
-                  background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  flex: 1, padding: '12px 0', borderRadius: 100, border: '1px solid var(--bp-border)',
+                  background: 'var(--bp-card)', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
                 }}>Keep booking</button>
                 <button onClick={async () => {
                   const bookingId = showCancelBooking;

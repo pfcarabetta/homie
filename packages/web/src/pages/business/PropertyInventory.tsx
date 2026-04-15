@@ -678,7 +678,7 @@ export function ScanCaptureModal({ workspaceId, scanId, propertyName, onClose, o
             disabled={uploading || (!cameraReady && !!cameraError === false)}
             style={{
               width: 72, height: 72, borderRadius: '50%',
-              background: '#fff', border: '4px solid rgba(255,255,255,0.4)',
+              background: 'var(--bp-card)', border: '4px solid rgba(255,255,255,0.4)',
               cursor: uploading ? 'default' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 4px 16px rgba(255,255,255,0.2)',
@@ -782,7 +782,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
   if (loading) {
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ background: '#fff', padding: 32, borderRadius: 12, color: '#9B9490' }}>Loading inventory...</div>
+        <div style={{ background: 'var(--bp-card)', padding: 32, borderRadius: 12, color: '#9B9490' }}>Loading inventory...</div>
       </div>
     );
   }
@@ -834,7 +834,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
       <div
         className="bp-pi-modal"
         style={{
-          background: '#fff', borderRadius: 16, width: '100%', maxWidth: 820,
+          background: 'var(--bp-card)', borderRadius: 16, width: '100%', maxWidth: 820,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
           fontFamily: "'DM Sans', sans-serif", minHeight: 0,
         }}
@@ -886,7 +886,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
           {(['all', 'appliance', 'fixture', 'system', 'safety', 'amenity'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)} className="bp-pi-tab" style={{
               padding: '6px 14px', borderRadius: 100,
-              border: filter === f ? `1px solid ${O}` : '1px solid #E0DAD4',
+              border: filter === f ? `1px solid ${O}` : '1px solid var(--bp-border)',
               background: filter === f ? `${O}10` : '#fff',
               color: filter === f ? O : '#6B6560',
               fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -950,8 +950,8 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                       : '#9B9490';
                     return (
                       <div key={item.id} className="bp-pi-item" style={{
-                        background: '#fff', borderRadius: 10, padding: '12px 14px',
-                        border: '1px solid #E0DAD4', borderLeft: `4px solid ${borderColor}`,
+                        background: 'var(--bp-card)', borderRadius: 10, padding: '12px 14px',
+                        border: '1px solid var(--bp-border)', borderLeft: `4px solid ${borderColor}`,
                         display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
                       }}>
                         <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{categoryIcon(item.category)}</span>
@@ -989,8 +989,8 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                                 background: G, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                               }}>Confirm</button>
                               <button onClick={() => handleUpdate(item, 'pm_dismissed')} style={{
-                                padding: '5px 10px', borderRadius: 6, border: '1px solid #E0DAD4',
-                                background: '#fff', color: '#9B9490', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                padding: '5px 10px', borderRadius: 6, border: '1px solid var(--bp-border)',
+                                background: 'var(--bp-card)', color: '#9B9490', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                               }}>Dismiss</button>
                             </>
                           ) : item.status === 'ai_identified' ? (
@@ -1008,7 +1008,7 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                             aria-label="Delete item"
                             style={{
                               width: 26, height: 26, borderRadius: '50%',
-                              border: '1px solid #E0DAD4', background: '#fff',
+                              border: '1px solid var(--bp-border)', background: 'var(--bp-card)',
                               color: '#9B9490', fontSize: 16, lineHeight: 1, cursor: 'pointer',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               padding: 0, flexShrink: 0,
@@ -1019,8 +1019,8 @@ export function PropertyInventoryView({ workspaceId, propertyId, onClose }: {
                               (e.currentTarget as HTMLElement).style.color = '#DC2626';
                             }}
                             onMouseLeave={e => {
-                              (e.currentTarget as HTMLElement).style.background = '#fff';
-                              (e.currentTarget as HTMLElement).style.borderColor = '#E0DAD4';
+                              (e.currentTarget as HTMLElement).style.background = 'var(--bp-card)';
+                              (e.currentTarget as HTMLElement).style.borderColor = 'var(--bp-border)';
                               (e.currentTarget as HTMLElement).style.color = '#9B9490';
                             }}
                           >×</button>

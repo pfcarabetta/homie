@@ -111,7 +111,7 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
 
   return (
     <div id={`pdv-dispatch-${j.id}`} onClick={onToggle} style={{
-      background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+      background: 'var(--bp-card)', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
       border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
       transition: 'all 0.2s',
       boxShadow: isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
@@ -294,7 +294,7 @@ function BookingCard({ b, isExpanded, onToggle, workspaceId, addedToPreferred, o
 
   return (
     <div id={`pdv-booking-${b.id}`} onClick={onToggle} style={{
-      background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+      background: 'var(--bp-card)', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
       border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
       transition: 'all 0.2s',
       boxShadow: isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
@@ -370,7 +370,7 @@ function BookingCard({ b, isExpanded, onToggle, workspaceId, addedToPreferred, o
             {b.providerEmail && (
               <a href={`mailto:${b.providerEmail}`} style={{
                 flex: 1, padding: '10px 0', borderRadius: 100,
-                border: `2px solid ${O}`, background: 'white', color: O,
+                border: `2px solid ${O}`, background: 'var(--bp-card)', color: O,
                 fontSize: 14, fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'block',
               }}>{'\u2709\uFE0F'} Email</a>
             )}
@@ -401,7 +401,7 @@ function BookingCard({ b, isExpanded, onToggle, workspaceId, addedToPreferred, o
               onSetAddingProvider(null);
             }} disabled={addingProvider === b.providerId} style={{
               width: '100%', padding: '10px 0', borderRadius: 100,
-              border: `1px solid ${G}`, background: 'white', color: G,
+              border: `1px solid ${G}`, background: 'var(--bp-card)', color: G,
               fontSize: 13, fontWeight: 600, cursor: addingProvider === b.providerId ? 'default' : 'pointer',
               opacity: addingProvider === b.providerId ? 0.6 : 1,
               transition: 'all 0.2s',
@@ -693,7 +693,7 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property,
         <PropertyInventoryView workspaceId={workspaceId} propertyId={property.id} onClose={() => setShowInventory(false)} />
       )}
       <ReservationTimeline workspaceId={workspaceId} property={property} />
-        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCCB'}</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No activity yet</div>
           <div style={{ fontSize: 14, color: '#9B9490' }}>Dispatches and bookings for this property will appear here.</div>
@@ -812,7 +812,7 @@ function JobsSubPage({ dispatches, loading, workspaceId, propertyId }: { dispatc
 
   if (dispatches.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+      <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>{'\uD83D\uDCCB'}</div>
         <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No jobs</div>
         <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 16 }}>No dispatches have been created for this property yet.</div>
@@ -870,7 +870,7 @@ function BookingsSubPage({ bookings, loading, workspaceId }: { bookings: Workspa
 
   if (bookings.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+      <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>{'\u2705'}</div>
         <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No bookings</div>
         <div style={{ fontSize: 14, color: '#9B9490' }}>No bookings have been confirmed for this property yet.</div>

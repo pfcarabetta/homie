@@ -147,8 +147,8 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
             right: pos.right,
             width: 380,
             maxHeight: 480,
-            background: '#ffffff',
-            border: '1px solid #E0DAD4',
+            background: 'var(--bp-card)',
+            border: '1px solid var(--bp-border)',
             borderRadius: 12,
             boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
             zIndex: 99999,
@@ -195,14 +195,14 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
                   padding: '12px 16px',
                   borderBottom: '1px solid #F5F0EB',
                   cursor: n.link ? 'pointer' : 'default',
-                  background: n.read ? '#fff' : '#FFF8F3',
+                  background: n.read ? 'var(--bp-card)' : '#FFF8F3',
                   display: 'flex', gap: 12,
                   transition: 'background 0.1s',
                   textDecoration: 'none',
                   color: 'inherit',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#FAFAF8'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = n.read ? '#fff' : '#FFF8F3'; }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bp-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = n.read ? 'var(--bp-card)' : '#FFF8F3'; }}
               >
                 <div style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>
                   {TYPE_ICONS[n.type] || '\uD83D\uDD14'}

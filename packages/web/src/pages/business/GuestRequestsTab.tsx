@@ -44,7 +44,7 @@ export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, in
 
   if (!isPro) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+      <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
         <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>Upgrade to unlock Guest Requests</div>
         <div style={{ fontSize: 14, color: '#9B9490', maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
@@ -224,7 +224,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
   }
 
   const selectStyle: React.CSSProperties = {
-    padding: '8px 12px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 13, color: D, background: '#fff', cursor: 'pointer',
+    padding: '8px 12px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 13, color: D, background: 'var(--bp-card)', cursor: 'pointer',
   };
 
   return (
@@ -267,7 +267,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
           </button>
         )}
         <button onClick={() => { setShowArchived(!showArchived); setPage(1); setFilterStatus(''); }}
-          style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: 8, border: `1px solid ${showArchived ? O : '#E0DAD4'}`, background: showArchived ? `${O}08` : '#fff', color: showArchived ? O : '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: 8, border: `1px solid ${showArchived ? O : 'var(--bp-border)'}`, background: showArchived ? `${O}08` : 'var(--bp-card)', color: showArchived ? O : '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
           {showArchived ? 'Active Issues' : 'Archived'}
         </button>
       </div>
@@ -284,7 +284,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
         });
 
         if (clientFiltered.length === 0) return (
-          <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+          <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
             <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No guest requests found</div>
             <div style={{ fontSize: 14, color: '#9B9490' }}>
@@ -322,7 +322,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
 
             return (
               <div key={issue.id} id={`guest-issue-${issue.id}`} onClick={() => toggleExpand(issue.id)} style={{
-                background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+                background: 'var(--bp-card)', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
                 border: isReviewing ? `2px solid ${O}` : isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
                 transition: 'all 0.2s',
                 boxShadow: isReviewing ? `0 2px 12px ${O}15` : isExpanded ? `0 4px 20px ${O}10` : '0 1px 4px rgba(0,0,0,0.03)',
@@ -382,7 +382,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                               {detail.photos.map(photo => (
                                 <a key={photo.id} href={photo.storageUrl} target="_blank" rel="noopener noreferrer">
                                   <img src={photo.thumbnailUrl || photo.storageUrl} alt="Issue photo"
-                                    style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid #E0DAD4' }} />
+                                    style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--bp-border)' }} />
                                 </a>
                               ))}
                             </div>
@@ -477,7 +477,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                                   position: 'relative', transition: 'background 0.2s', flexShrink: 0, cursor: 'pointer',
                                 }}>
                                   <div style={{
-                                    width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute',
+                                    width: 16, height: 16, borderRadius: '50%', background: 'var(--bp-card)', position: 'absolute',
                                     top: 2, left: preferredOnly ? 20 : 2, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                                   }} />
                                 </div>
@@ -486,7 +486,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                             </div>
                             {preferredOnly && (
                               <div style={{ animation: 'fadeSlide 0.2s ease' }}>
-                                <div style={{ border: '1px solid #E0DAD4', borderRadius: 8, padding: '6px 0', maxHeight: 160, overflowY: 'auto' }}>
+                                <div style={{ border: '1px solid var(--bp-border)', borderRadius: 8, padding: '6px 0', maxHeight: 160, overflowY: 'auto' }}>
                                   {[...new Map(vendors.map(v => [v.providerId, v])).values()].map(v => (
                                     <label key={v.providerId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 13, color: D }}
                                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = W; }}
@@ -526,11 +526,11 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                                 Approve &amp; Dispatch
                               </button>
                               <button onClick={() => handleSelfResolve(issue.id)} disabled={actionLoading}
-                                style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${G}`, background: '#fff', color: G, fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${G}`, background: 'var(--bp-card)', color: G, fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
                                 Self-Resolved
                               </button>
                               <button onClick={() => { setRejectModalId(issue.id); setRejectReason(''); }}
-                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: 'var(--bp-card)', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                                 Close Issue
                               </button>
                             </>
@@ -538,11 +538,11 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                           {['dispatching', 'approved', 'provider_responding'].includes(issue.status) && (
                             <>
                               <button onClick={() => handleSelfResolve(issue.id)} disabled={actionLoading}
-                                style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${G}`, background: '#fff', color: G, fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${G}`, background: 'var(--bp-card)', color: G, fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
                                 Self-Resolved
                               </button>
                               <button onClick={() => handleCancel(issue.id)} disabled={actionLoading}
-                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: 'var(--bp-card)', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
                                 Cancel
                               </button>
                             </>
@@ -554,20 +554,20 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                                 Mark Resolved
                               </button>
                               <button onClick={() => handleCancel(issue.id)} disabled={actionLoading}
-                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DC2626', background: 'var(--bp-card)', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: actionLoading ? 'default' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
                                 Cancel
                               </button>
                             </>
                           )}
                           {['closed', 'self_resolved', 'resolved'].includes(issue.status) && (
                             <button onClick={() => handleArchive(issue.id)}
-                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #9B9490', background: '#fff', color: '#9B9490', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #9B9490', background: 'var(--bp-card)', color: '#9B9490', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                               Archive
                             </button>
                           )}
                           {detail.dispatchedJobId && (
                             <button onClick={() => onViewDispatch?.(detail.dispatchedJobId!)}
-                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', color: D, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', color: D, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
                               View Dispatch
                             </button>
                           )}
@@ -589,12 +589,12 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
       {total > 20 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 20 }}>
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: page === 1 ? 'default' : 'pointer', fontSize: 13, color: page === 1 ? '#C0BBB6' : D }}>
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', cursor: page === 1 ? 'default' : 'pointer', fontSize: 13, color: page === 1 ? '#C0BBB6' : D }}>
             Previous
           </button>
           <span style={{ padding: '8px 12px', fontSize: 13, color: '#9B9490' }}>Page {page} of {Math.ceil(total / 20)}</span>
           <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 20)}
-            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: page >= Math.ceil(total / 20) ? 'default' : 'pointer', fontSize: 13, color: page >= Math.ceil(total / 20) ? '#C0BBB6' : D }}>
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', cursor: page >= Math.ceil(total / 20) ? 'default' : 'pointer', fontSize: 13, color: page >= Math.ceil(total / 20) ? '#C0BBB6' : D }}>
             Next
           </button>
         </div>
@@ -604,14 +604,14 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
       {rejectModalId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
           onClick={() => setRejectModalId(null)}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+          <div style={{ background: 'var(--bp-card)', borderRadius: 12, padding: 32, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 16px' }}>Close Issue</h3>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Reason for closing *</label>
             <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={3} placeholder="Enter reason..."
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button onClick={() => setRejectModalId(null)} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+              <button onClick={() => setRejectModalId(null)} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
               <button onClick={() => handleReject(rejectModalId)} disabled={actionLoading || !rejectReason.trim()}
                 style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: '#DC2626', color: '#fff', cursor: actionLoading ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: actionLoading || !rejectReason.trim() ? 0.6 : 1 }}>
                 Close Issue
@@ -656,14 +656,14 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
   if (!settings) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Could not load settings.</div>;
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box',
+    width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box',
   };
   const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
 
   return (
     <div style={{ maxWidth: 600 }}>
       {/* Enable toggle */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D }}>Guest Reporter</div>
@@ -671,14 +671,14 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
           </div>
           <button onClick={() => setDraft(d => ({ ...d, isEnabled: !d.isEnabled }))}
             style={{ width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', background: draft.isEnabled ? G : '#D0CBC6', transition: 'background 0.2s' }}>
-            <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: draft.isEnabled ? 25 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bp-card)', position: 'absolute', top: 3, left: draft.isEnabled ? 25 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
           </button>
         </div>
       </div>
 
       {/* Whitelabel */}
       {isBizPlus && (
-        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+        <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
           <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>Whitelabel</div>
           <div style={{ marginBottom: 12 }}>
             <label style={labelStyle}>Logo URL</label>
@@ -696,7 +696,7 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
       )}
 
       {/* Language */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
         <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>Language</div>
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>Default Language</label>
@@ -726,7 +726,7 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
       </div>
 
       {/* SLA */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
         <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>SLA Response Times (minutes)</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           {([['slaUrgentMinutes', 'Urgent'] as const, ['slaHighMinutes', 'High'] as const, ['slaMediumMinutes', 'Medium'] as const, ['slaLowMinutes', 'Low'] as const]).map(([key, label]) => (
@@ -740,7 +740,7 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
       </div>
 
       {/* PM Approval */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D }}>Require PM Approval</div>
@@ -748,13 +748,13 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
           </div>
           <button onClick={() => setDraft(d => ({ ...d, requirePmApproval: !d.requirePmApproval }))}
             style={{ width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', background: draft.requirePmApproval ? G : '#D0CBC6', transition: 'background 0.2s' }}>
-            <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: draft.requirePmApproval ? 25 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bp-card)', position: 'absolute', top: 3, left: draft.requirePmApproval ? 25 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
           </button>
         </div>
       </div>
 
       {/* Guest Support Contact */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
+      <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
         <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>Guest Support Contact</div>
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>Support Email</label>
@@ -852,7 +852,7 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
   }
 
   const selectStyle: React.CSSProperties = {
-    padding: '10px 14px', borderRadius: 8, border: '1px solid #E0DAD4', fontSize: 14, boxSizing: 'border-box' as const, width: '100%', cursor: 'pointer',
+    padding: '10px 14px', borderRadius: 8, border: '1px solid var(--bp-border)', fontSize: 14, boxSizing: 'border-box' as const, width: '100%', cursor: 'pointer',
   };
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading rules...</div>;
@@ -869,7 +869,7 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
 
       {/* Add/Edit form */}
       {showAdd && (
-        <div style={{ background: '#fff', borderRadius: 14, border: `2px solid ${O}`, padding: 20, marginBottom: 16 }}>
+        <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: `2px solid ${O}`, padding: 20, marginBottom: 16 }}>
           <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>
             {editingId ? 'Edit Rule' : 'New Auto-Dispatch Rule'}
           </div>
@@ -907,14 +907,14 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
               style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', opacity: saving || !formCat ? 0.6 : 1 }}>
               {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
             </button>
-            <button onClick={resetForm} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
+            <button onClick={resetForm} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', cursor: 'pointer', fontSize: 14, color: D }}>Cancel</button>
           </div>
         </div>
       )}
 
       {/* Rules list */}
       {rules.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+        <div style={{ textAlign: 'center', padding: '40px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🤖</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No auto-dispatch rules</div>
           <div style={{ fontSize: 14, color: '#9B9490' }}>Create rules to automatically dispatch guest issues to vendors.</div>
@@ -925,7 +925,7 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
             const sev = SEVERITY_COLORS[rule.minSeverity] || SEVERITY_COLORS.low;
             return (
               <div key={rule.id} style={{
-                background: '#fff', borderRadius: 14, padding: '14px 16px', border: '1px solid rgba(0,0,0,0.06)',
+                background: 'var(--bp-card)', borderRadius: 14, padding: '14px 16px', border: '1px solid rgba(0,0,0,0.06)',
                 opacity: rule.isEnabled ? 1 : 0.6,
                 display: 'flex', alignItems: 'center', gap: 12,
               }}>
@@ -944,9 +944,9 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
                 </div>
                 <button onClick={() => handleToggle(rule)}
                   style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', background: rule.isEnabled ? G : '#D0CBC6', transition: 'background 0.2s', flexShrink: 0 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: rule.isEnabled ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--bp-card)', position: 'absolute', top: 3, left: rule.isEnabled ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                 </button>
-                <button onClick={() => startEdit(rule)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #E0DAD4', background: '#fff', fontSize: 12, color: D, cursor: 'pointer' }}>Edit</button>
+                <button onClick={() => startEdit(rule)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 12, color: D, cursor: 'pointer' }}>Edit</button>
                 <button onClick={() => handleDelete(rule.id)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #FECACA', background: '#FFF5F5', fontSize: 12, color: '#DC2626', cursor: 'pointer' }}>Delete</button>
               </div>
             );
@@ -989,10 +989,10 @@ function PropertyQRCard({ workspaceId, property }: { workspaceId: string; proper
   }
 
   return (
-    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 15, color: D, marginBottom: 4, textAlign: 'center' }}>{property.name}</div>
       {property.address && <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 10, textAlign: 'center' }}>{property.address}</div>}
-      <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10, background: '#fff', borderRadius: 8, border: '1px solid #F0EBE6' }}>
+      <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10, background: 'var(--bp-card)', borderRadius: 8, border: '1px solid #F0EBE6' }}>
         {qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${property.name}`} style={{ width: 160, height: 160 }} /> : <div style={{ color: '#9B9490', fontSize: 12 }}>Generating...</div>}
       </div>
       <div style={{ fontSize: 11, color: '#9B9490', wordBreak: 'break-all', marginBottom: 10, background: W, padding: '6px 8px', borderRadius: 6, width: '100%', textAlign: 'center' }}>{url}</div>
@@ -1024,7 +1024,7 @@ function GuestQRCodesSubTab({ workspaceId }: { workspaceId: string }) {
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>Loading properties...</div>;
 
   if (properties.length === 0) return (
-    <div style={{ textAlign: 'center', padding: '60px 20px', background: '#FAFAF8', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
+    <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>🏠</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No properties</div>
       <div style={{ fontSize: 14, color: '#9B9490' }}>Add properties first to generate guest reporting links.</div>

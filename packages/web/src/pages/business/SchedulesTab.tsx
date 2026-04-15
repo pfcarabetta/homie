@@ -127,11 +127,11 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, overflowY: 'auto', padding: 20 }}
       onClick={onClose}>
-      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 680, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+      <div style={{ background: 'var(--bp-card)', borderRadius: 16, width: '100%', maxWidth: 680, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E0DAD4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--bp-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>
             {step === 'templates' ? 'Choose a template' : 'Configure schedule'}
           </h3>
@@ -142,12 +142,12 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
           <div style={{ padding: 24 }}>
             {/* Start from scratch */}
             <button onClick={() => setStep('form')} style={{
-              width: '100%', padding: '12px 0', borderRadius: 10, border: '1px solid #E0DAD4',
-              background: '#fff', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              width: '100%', padding: '12px 0', borderRadius: 10, border: '1px solid var(--bp-border)',
+              background: 'var(--bp-card)', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
               marginBottom: 20, transition: 'all 0.15s',
             }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = O; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#E0DAD4'; e.currentTarget.style.color = D; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.color = D; }}
             >
               + Start from scratch
             </button>
@@ -157,7 +157,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
               {TEMPLATE_CATEGORIES.map(c => (
                 <button key={c.key} onClick={() => setTemplateCat(c.key)}
                   style={{
-                    padding: '6px 14px', borderRadius: 20, border: '1px solid #E0DAD4',
+                    padding: '6px 14px', borderRadius: 20, border: '1px solid var(--bp-border)',
                     background: templateCat === c.key ? O : '#fff', color: templateCat === c.key ? '#fff' : '#6B6560',
                     fontSize: 13, fontWeight: 600, cursor: 'pointer',
                   }}>
@@ -177,11 +177,11 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                   const catColor = SCHEDULE_CAT_COLORS[t.category] ?? '#6B6560';
                   return (
                     <div key={t.id} style={{
-                      border: '1px solid #E0DAD4', borderRadius: 10, padding: 16, cursor: 'pointer',
+                      border: '1px solid var(--bp-border)', borderRadius: 10, padding: 16, cursor: 'pointer',
                       transition: 'border-color 0.15s',
                     }}
                       onMouseEnter={e => (e.currentTarget.style.borderColor = O)}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = '#E0DAD4')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--bp-border)')}
                       onClick={() => selectTemplate(t)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                         <span style={{
@@ -235,7 +235,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                   style={{ background: 'none', border: 'none', color: '#9B9490', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Clear</button></>
               )}
             </div>
-            <div style={{ border: '1px solid #E0DAD4', borderRadius: 8, maxHeight: 140, overflowY: 'auto', marginBottom: 16 }}>
+            <div style={{ border: '1px solid var(--bp-border)', borderRadius: 8, maxHeight: 140, overflowY: 'auto', marginBottom: 16 }}>
               {properties.map(p => {
                 const checked = selectedPropertyIds.includes(p.id);
                 return (
@@ -257,12 +257,12 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             {/* Title */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Title *</label>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Weekly pool cleaning"
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }} />
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }} />
 
             {/* Description */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Description</label>
             <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional notes for the provider"
-              rows={3} style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
+              rows={3} style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, marginBottom: 16, boxSizing: 'border-box', resize: 'vertical' }} />
 
             {/* Cadence type cards */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 10 }}>Cadence</label>
@@ -271,8 +271,8 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                 <button key={c.value} onClick={() => setCadenceType(c.value)}
                   style={{
                     padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                    border: cadenceType === c.value ? `2px solid ${O}` : '1px solid #E0DAD4',
-                    background: cadenceType === c.value ? '#FFF5F0' : '#fff',
+                    border: cadenceType === c.value ? `2px solid ${O}` : '1px solid var(--bp-border)',
+                    background: cadenceType === c.value ? '#FFF5F0' : 'var(--bp-card)',
                   }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: cadenceType === c.value ? O : D }}>{c.label}</div>
                   <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>{c.desc}</div>
@@ -286,12 +286,12 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Date</label>
                   <input type="date" value={oneTimeDate} min={new Date().toISOString().split('T')[0]} onChange={e => setOneTimeDate(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Time</label>
                   <input type="time" value={timeVal} onChange={e => setTimeVal(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
                 </div>
               </div>
             )}
@@ -300,14 +300,14 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Day of week</label>
                   <select value={dayOfWeek} onChange={e => setDayOfWeek(Number(e.target.value))}
-                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}>
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}>
                     {dayNames.map((d, i) => <option key={i} value={i}>{d}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Time</label>
                   <input type="time" value={timeVal} onChange={e => setTimeVal(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
                 </div>
               </div>
             )}
@@ -316,14 +316,14 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Day of month</label>
                   <select value={dayOfMonth} onChange={e => setDayOfMonth(Number(e.target.value))}
-                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}>
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}>
                     {Array.from({ length: 28 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>Time</label>
                   <input type="time" value={timeVal} onChange={e => setTimeVal(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
                 </div>
               </div>
             )}
@@ -332,7 +332,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 }}>
               Preferred providers <span style={{ fontWeight: 400, color: '#9B9490' }}>(optional — select one or more)</span>
             </label>
-            <div style={{ border: '1px solid #E0DAD4', borderRadius: 8, maxHeight: 120, overflowY: 'auto', marginBottom: 16 }}>
+            <div style={{ border: '1px solid var(--bp-border)', borderRadius: 8, maxHeight: 120, overflowY: 'auto', marginBottom: 16 }}>
               {[...new Map(vendors.map(v => [v.providerId, v])).values()].map(v => {
                 const checked = selectedVendorIds.includes(v.providerId);
                 return (
@@ -358,7 +358,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
               <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9B9490', fontSize: 14 }}>$</span>
               <input type="number" min="0" step="0.01" value={agreedRate} onChange={e => setAgreedRate(e.target.value)}
                 placeholder="0.00"
-                style={{ width: '100%', padding: '10px 14px 10px 28px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+                style={{ width: '100%', padding: '10px 14px 10px 28px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
             </div>
 
             {/* Auto-book toggles */}
@@ -371,7 +371,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                   }}>
                   <span style={{
                     position: 'absolute', top: 2, left: autoBookPreferred ? 22 : 2,
-                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    width: 20, height: 20, borderRadius: '50%', background: 'var(--bp-card)',
                     transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                   }} />
                 </button>
@@ -390,7 +390,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                   }}>
                   <span style={{
                     position: 'absolute', top: 2, left: autoBookMarketplace && !preferredOnly ? 22 : 2,
-                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    width: 20, height: 20, borderRadius: '50%', background: 'var(--bp-card)',
                     transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                   }} />
                 </button>
@@ -404,8 +404,8 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 12,
                 marginTop: 4, padding: '12px 14px', borderRadius: 10,
-                background: preferredOnly ? `${O}08` : '#FAFAF8',
-                border: `1px solid ${preferredOnly ? `${O}40` : '#E0DAD4'}`,
+                background: preferredOnly ? `${O}08` : 'var(--bp-hover)',
+                border: `1px solid ${preferredOnly ? `${O}40` : 'var(--bp-border)'}`,
               }}>
                 <button onClick={() => {
                   const next = !preferredOnly;
@@ -418,7 +418,7 @@ function NewScheduleModal({ workspaceId, onClose, onCreated }: { workspaceId: st
                   }}>
                   <span style={{
                     position: 'absolute', top: 2, left: preferredOnly ? 22 : 2,
-                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    width: 20, height: 20, borderRadius: '50%', background: 'var(--bp-card)',
                     transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                   }} />
                 </button>
@@ -475,13 +475,13 @@ function EditScheduleModal({ workspaceId, schedule, onClose, onSaved }: {
     setSaving(false);
   }
 
-  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #E0DAD4', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
+  const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid var(--bp-border)', borderRadius: 8, fontSize: 15, marginBottom: 16, boxSizing: 'border-box' as const };
   const labelStyle = { display: 'block' as const, fontSize: 13, fontWeight: 600, color: '#6B6560', marginBottom: 6 };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
       onClick={onClose}>
-      <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
+      <div style={{ background: 'var(--bp-card)', borderRadius: 14, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
         onClick={e => e.stopPropagation()}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: '0 0 4px' }}>Edit Schedule</h3>
         <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 20 }}>
@@ -509,7 +509,7 @@ function EditScheduleModal({ workspaceId, schedule, onClose, onSaved }: {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onClose}
-            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #E0DAD4', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: D }}>
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid var(--bp-border)', background: 'var(--bp-card)', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: D }}>
             Cancel
           </button>
           <button onClick={handleSave} disabled={saving}
@@ -654,7 +654,7 @@ export default function SchedulesTab({ workspaceId, plan }: { workspaceId: strin
                         opacity: toggling === sched.id ? 0.5 : 1,
                       }}>
                       <div style={{
-                        width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute',
+                        width: 20, height: 20, borderRadius: '50%', background: 'var(--bp-card)', position: 'absolute',
                         top: 2, left: isActive ? 22 : 2, transition: 'left 0.2s',
                         boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
                       }} />
