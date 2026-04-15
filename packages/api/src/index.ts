@@ -86,7 +86,12 @@ async function start() {
   try {
     const { sql } = await import('drizzle-orm');
     await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS pricing_tier text`);
-    logger.info('Schema patch: pricing_tier column ensured');
+    await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS is_included_in_request boolean NOT NULL DEFAULT false`);
+    await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS homeowner_notes text`);
+    await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS seller_agreed_amount_cents integer`);
+    await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS credit_issued_cents integer`);
+    await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS concession_status text`);
+    logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');
   }

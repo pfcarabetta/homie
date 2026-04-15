@@ -119,6 +119,16 @@ export const inspectionReportItems = pgTable('inspection_report_items', {
   quotes: jsonb('quotes').$type<Array<{ providerId: string; providerName: string; providerRating: string | null; amountCents: number; availability: string | null; receivedAt: string }>>(),
   sortOrder: integer('sort_order').notNull().default(0),
   inspectorAdjusted: boolean('inspector_adjusted').notNull().default(false),
+  /** Negotiation — is this item included in the repair request to the seller? */
+  isIncludedInRequest: boolean('is_included_in_request').notNull().default(false),
+  /** Homeowner's private notes for this item (shown in PDF) */
+  homeownerNotes: text('homeowner_notes'),
+  /** Amount the seller agreed to contribute for this item, in cents */
+  sellerAgreedAmountCents: integer('seller_agreed_amount_cents'),
+  /** Actual credit received (may differ from agreed amount — e.g. escrow holdback) */
+  creditIssuedCents: integer('credit_issued_cents'),
+  /** pending | agreed | credited | escrow_holdback | dropped */
+  concessionStatus: text('concession_status'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [

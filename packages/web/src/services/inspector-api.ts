@@ -443,6 +443,37 @@ export const inspectService = {
     );
   },
 
+  /** Authenticated: update negotiation state on an inspection item */
+  updateNegotiation(reportId: string, itemId: string, fields: {
+    isIncludedInRequest?: boolean;
+    homeownerNotes?: string | null;
+    sellerAgreedAmountCents?: number | null;
+    creditIssuedCents?: number | null;
+    concessionStatus?: string | null;
+  }) {
+    return fetchAPI<{
+      id: string;
+      isIncludedInRequest: boolean;
+      homeownerNotes: string | null;
+      sellerAgreedAmountCents: number | null;
+      creditIssuedCents: number | null;
+      concessionStatus: string | null;
+    }>(
+      `/api/v1/account/reports/${reportId}/items/${itemId}/negotiation`,
+      { method: 'PATCH', body: JSON.stringify(fields) },
+    );
+  },
+
+  /** Authenticated: download repair request PDF as a blob */
+  async downloadRepairRequestPdf(reportId: string): Promise<Blob | null> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/v1/account/reports/${reportId}/repair-request.pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) return null;
+    return res.blob();
+  },
+
   /** Authenticated: accept a quote for an inspection item */
   bookQuote(reportId: string, itemId: string, providerId: string) {
     return fetchAPI<{ bookingId: string; status: string; providerName: string; providerPhone: string; quotedPrice: string | null; scheduled: string | null }>(
@@ -548,10 +579,17 @@ export interface PortalReportItem {
   title: string;
   severity: string;
   category: string;
+  location?: string | null;
   costEstimateMin: number | null;
   costEstimateMax: number | null;
   dispatchStatus: string | null;
   quoteAmount: number | null;
+  providerName?: string | null;
+  isIncludedInRequest?: boolean;
+  homeownerNotes?: string | null;
+  sellerAgreedAmountCents?: number | null;
+  creditIssuedCents?: number | null;
+  concessionStatus?: string | null;
 }
 
 export interface PortalReport {

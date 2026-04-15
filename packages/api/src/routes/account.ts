@@ -688,10 +688,17 @@ router.get('/reports', async (req: Request, res: Response) => {
           title: inspectionReportItems.title,
           severity: inspectionReportItems.severity,
           category: inspectionReportItems.category,
+          locationInProperty: inspectionReportItems.locationInProperty,
           aiCostEstimateLowCents: inspectionReportItems.aiCostEstimateLowCents,
           aiCostEstimateHighCents: inspectionReportItems.aiCostEstimateHighCents,
           dispatchStatus: inspectionReportItems.dispatchStatus,
           quoteAmountCents: inspectionReportItems.quoteAmountCents,
+          providerName: inspectionReportItems.providerName,
+          isIncludedInRequest: inspectionReportItems.isIncludedInRequest,
+          homeownerNotes: inspectionReportItems.homeownerNotes,
+          sellerAgreedAmountCents: inspectionReportItems.sellerAgreedAmountCents,
+          creditIssuedCents: inspectionReportItems.creditIssuedCents,
+          concessionStatus: inspectionReportItems.concessionStatus,
         }).from(inspectionReportItems)
           .where(inArray(inspectionReportItems.reportId, reportIds))
       : [];
@@ -743,10 +750,17 @@ router.get('/reports', async (req: Request, res: Response) => {
           title: i.title,
           severity: i.severity,
           category: i.category,
+          location: i.locationInProperty,
           costEstimateMin: i.aiCostEstimateLowCents,
           costEstimateMax: i.aiCostEstimateHighCents,
           dispatchStatus: i.dispatchStatus,
           quoteAmount: i.quoteAmountCents,
+          providerName: i.providerName,
+          isIncludedInRequest: i.isIncludedInRequest,
+          homeownerNotes: i.homeownerNotes,
+          sellerAgreedAmountCents: i.sellerAgreedAmountCents,
+          creditIssuedCents: i.creditIssuedCents,
+          concessionStatus: i.concessionStatus,
         })),
       };
     });
@@ -1469,6 +1483,254 @@ router.post('/reports/:reportId/items/:itemId/book', async (req: Request, res: R
   } catch (err) {
     logger.error({ err }, '[POST /account/reports/:reportId/items/:itemId/book]');
     res.status(500).json({ data: null, error: 'Booking failed', meta: {} });
+  }
+});
+
+// ── Negotiations ────────────────────────────────────────────────────────────
+
+// PATCH /api/v1/account/reports/:reportId/items/:itemId/negotiation — update negotiation state
+router.patch('/reports/:reportId/items/:itemId/negotiation', async (req: Request, res: Response) => {
+  const body = req.body as {
+    isIncludedInRequest?: boolean;
+    homeownerNotes?: string | null;
+    sellerAgreedAmountCents?: number | null;
+    creditIssuedCents?: number | null;
+    concessionStatus?: string | null;
+  };
+
+  try {
+    // Validate report ownership
+    const [report] = await db.select({ id: inspectionReports.id })
+      .from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    // Build updates object only with provided fields
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.isIncludedInRequest !== undefined) updates.isIncludedInRequest = body.isIncludedInRequest;
+    if (body.homeownerNotes !== undefined) updates.homeownerNotes = body.homeownerNotes;
+    if (body.sellerAgreedAmountCents !== undefined) updates.sellerAgreedAmountCents = body.sellerAgreedAmountCents;
+    if (body.creditIssuedCents !== undefined) updates.creditIssuedCents = body.creditIssuedCents;
+    if (body.concessionStatus !== undefined) updates.concessionStatus = body.concessionStatus;
+
+    const [updated] = await db.update(inspectionReportItems)
+      .set(updates)
+      .where(and(eq(inspectionReportItems.id, req.params.itemId), eq(inspectionReportItems.reportId, report.id)))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ data: null, error: 'Item not found', meta: {} });
+      return;
+    }
+
+    res.json({
+      data: {
+        id: updated.id,
+        isIncludedInRequest: updated.isIncludedInRequest,
+        homeownerNotes: updated.homeownerNotes,
+        sellerAgreedAmountCents: updated.sellerAgreedAmountCents,
+        creditIssuedCents: updated.creditIssuedCents,
+        concessionStatus: updated.concessionStatus,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /account/reports/:reportId/items/:itemId/negotiation]');
+    res.status(500).json({ data: null, error: 'Failed to update negotiation', meta: {} });
+  }
+});
+
+// GET /api/v1/account/reports/:reportId/repair-request.pdf — generate repair request PDF
+router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    const items = await db.select().from(inspectionReportItems)
+      .where(and(
+        eq(inspectionReportItems.reportId, report.id),
+        eq(inspectionReportItems.isIncludedInRequest, true),
+      ))
+      .orderBy(inspectionReportItems.sortOrder);
+
+    if (items.length === 0) {
+      res.status(400).json({ data: null, error: 'No items selected for repair request. Select items in the Negotiations tab first.', meta: {} });
+      return;
+    }
+
+    const [homeowner] = await db.select({
+      firstName: homeowners.firstName,
+      lastName: homeowners.lastName,
+      email: homeowners.email,
+    }).from(homeowners).where(eq(homeowners.id, req.homeownerId)).limit(1);
+
+    const PDFDocument = (await import('pdfkit')).default;
+    const doc = new PDFDocument({ size: 'LETTER', margins: { top: 50, bottom: 50, left: 50, right: 50 } });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    const pdfDone = new Promise<Buffer>((resolve) => {
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+
+    const fmt = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+    // ── Header ──
+    doc.fontSize(24).fillColor('#E8632B').font('Helvetica-Bold').text('homie', 50, 50, { continued: true });
+    doc.fontSize(14).fillColor('#9B9490').font('Helvetica').text(' inspect', { baseline: 'alphabetic' });
+    doc.moveDown(0.3);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#E8E4E0').stroke();
+    doc.moveDown(0.6);
+
+    // ── Title ──
+    doc.fontSize(22).fillColor('#2D2926').font('Helvetica-Bold').text('REPAIR REQUEST');
+    doc.moveDown(0.3);
+
+    // ── Property + buyer info ──
+    doc.fontSize(14).fillColor('#2D2926').font('Helvetica-Bold').text(report.propertyAddress);
+    doc.fontSize(11).fillColor('#6B6560').font('Helvetica').text(`${report.propertyCity}, ${report.propertyState} ${report.propertyZip}`);
+    doc.moveDown(0.4);
+
+    const metaParts: string[] = [];
+    if (homeowner) {
+      const buyerName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(' ');
+      if (buyerName) metaParts.push(`Buyer: ${buyerName}`);
+    }
+    if (report.inspectionDate) {
+      metaParts.push(`Inspection Date: ${new Date(report.inspectionDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`);
+    }
+    metaParts.push(`Request Date: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`);
+    doc.fontSize(10).fillColor('#9B9490').text(metaParts.join('  |  '));
+    doc.moveDown(1);
+
+    // ── Intro paragraph ──
+    doc.fontSize(11).fillColor('#2D2926').font('Helvetica')
+      .text('Following the inspection of the above property, the following items have been identified and require attention. We are requesting that the seller address each of these items prior to closing, either through completed repairs by licensed professionals or through a credit at closing equal to the amounts indicated below.', { align: 'left', lineGap: 2 });
+    doc.moveDown(1);
+
+    // ── Total ask summary box ──
+    const totalAsk = items.reduce((sum, i) => {
+      // Use quote amount if present, else use high estimate
+      return sum + (i.quoteAmountCents ?? i.aiCostEstimateHighCents ?? 0);
+    }, 0);
+
+    const summaryY = doc.y;
+    doc.roundedRect(50, summaryY, 512, 56, 6).fillAndStroke('#FEF3F2', '#F4C7C5');
+    doc.fontSize(11).fillColor('#9B6260').font('Helvetica-Bold').text('TOTAL REPAIR REQUEST', 70, summaryY + 14);
+    doc.fontSize(24).fillColor('#DC2626').font('Helvetica-Bold').text(fmt(totalAsk), 70, summaryY + 28);
+    doc.fontSize(10).fillColor('#9B6260').font('Helvetica').text(`${items.length} item${items.length !== 1 ? 's' : ''}`, 470, summaryY + 28, { width: 75, align: 'right' });
+    doc.y = summaryY + 70;
+
+    // ── Severity helpers ──
+    const sevColors: Record<string, string> = { safety_hazard: '#E24B4A', urgent: '#E24B4A', recommended: '#EF9F27', monitor: '#9B9490', informational: '#D3CEC9' };
+    const sevLabels: Record<string, string> = { safety_hazard: 'Safety Hazard', urgent: 'Urgent', recommended: 'Recommended', monitor: 'Monitor', informational: 'Info' };
+
+    // ── Item list ──
+    let itemNum = 1;
+    for (const item of items) {
+      const askCents = item.quoteAmountCents ?? item.aiCostEstimateHighCents ?? 0;
+      const sevColor = sevColors[item.severity] ?? '#9B9490';
+
+      // Estimate row height
+      const noteHeight = item.homeownerNotes ? Math.ceil(item.homeownerNotes.length / 80) * 12 + 6 : 0;
+      const descHeight = item.description ? Math.ceil(item.description.length / 80) * 12 : 0;
+      const estRowHeight = 50 + noteHeight + descHeight;
+
+      if (doc.y + estRowHeight > 720) doc.addPage();
+
+      const rowY = doc.y;
+
+      // Severity badge
+      doc.roundedRect(50, rowY + 2, 4, estRowHeight - 8, 2).fill(sevColor);
+
+      // Item number
+      doc.fontSize(11).fillColor('#9B9490').font('Helvetica-Bold').text(`${itemNum}.`, 62, rowY, { width: 20 });
+
+      // Title
+      doc.fontSize(12).fillColor('#2D2926').font('Helvetica-Bold')
+        .text(item.title, 84, rowY, { width: 320 });
+      const titleEnd = doc.y;
+
+      // Severity + category + location
+      doc.fontSize(9).fillColor('#9B9490').font('Helvetica')
+        .text(`${sevLabels[item.severity] ?? item.severity}  •  ${item.category.replace(/_/g, ' ')}${item.locationInProperty ? `  •  ${item.locationInProperty}` : ''}`, 84, titleEnd + 2, { width: 320 });
+
+      // Ask amount (right side)
+      doc.fontSize(13).fillColor('#DC2626').font('Helvetica-Bold')
+        .text(fmt(askCents), 420, rowY, { width: 130, align: 'right' });
+      if (item.quoteAmountCents) {
+        doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
+          .text(item.providerName ? `Quote from ${item.providerName}` : 'Provider quote', 420, rowY + 18, { width: 130, align: 'right' });
+      } else {
+        doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
+          .text('Estimated cost', 420, rowY + 18, { width: 130, align: 'right' });
+      }
+
+      doc.y = Math.max(doc.y, titleEnd + 16);
+
+      // Description
+      if (item.description) {
+        doc.fontSize(10).fillColor('#4A4540').font('Helvetica').text(item.description, 84, doc.y, { width: 460, lineGap: 1 });
+      }
+
+      // Homeowner notes
+      if (item.homeownerNotes) {
+        doc.moveDown(0.3);
+        doc.fontSize(10).fillColor('#2563EB').font('Helvetica-Oblique')
+          .text(`Note: ${item.homeownerNotes}`, 84, doc.y, { width: 460, lineGap: 1 });
+      }
+
+      doc.moveDown(0.6);
+      doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#F0ECE8').stroke();
+      doc.moveDown(0.4);
+
+      itemNum++;
+    }
+
+    // ── Total at bottom ──
+    if (doc.y + 80 > 720) doc.addPage();
+    doc.moveDown(1);
+    doc.fontSize(13).fillColor('#2D2926').font('Helvetica-Bold').text('TOTAL REQUESTED:', 50, doc.y, { continued: true });
+    doc.fillColor('#DC2626').text(`  ${fmt(totalAsk)}`, { align: 'left' });
+    doc.moveDown(0.6);
+
+    // ── Signature line ──
+    if (doc.y + 80 > 720) doc.addPage();
+    doc.moveDown(1.5);
+    doc.fontSize(10).fillColor('#9B9490').font('Helvetica').text('Buyer Signature', 50, doc.y);
+    doc.moveTo(50, doc.y + 24).lineTo(280, doc.y + 24).strokeColor('#9B9490').stroke();
+    doc.fontSize(10).fillColor('#9B9490').text('Date', 320, doc.y);
+    doc.moveTo(320, doc.y + 24).lineTo(550, doc.y + 24).strokeColor('#9B9490').stroke();
+
+    // ── Footer ──
+    doc.y += 50;
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#E8E4E0').stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
+      .text(`Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} by Homie Inspect  •  homiepro.ai/inspect-portal`, 50, doc.y, { align: 'center', width: 512 });
+
+    doc.end();
+    const pdfBuffer = await pdfDone;
+
+    const addrSlug = report.propertyAddress.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+    const filename = `repair-request-${addrSlug}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err) {
+    logger.error({ err }, '[GET /account/reports/:reportId/repair-request.pdf]');
+    res.status(500).json({ data: null, error: 'Failed to generate PDF', meta: {} });
   }
 });
 
