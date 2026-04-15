@@ -722,10 +722,10 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
           </div>
         </div>
 
-        {/* Ask amount + source selector */}
+        {/* Ask / Estimated cost + source selector */}
         <div style={{ flex: '0 0 180px', textAlign: 'right', position: 'relative' }}>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Ask amount
+            {isSellerMode ? 'Estimated cost' : 'Ask amount'}
           </div>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: RED, lineHeight: 1.1 }}>
             {formatCurrency(askCents / 100)}
@@ -841,42 +841,45 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
           )}
         </div>
 
-        {/* Seller agreed input */}
-        <div style={{ flex: '0 0 110px' }}>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
-            Agreed
-          </div>
-          <DollarInput
-            valueCents={item.sellerAgreedAmountCents ?? null}
-            onChange={(cents) => onChange({ sellerAgreedAmountCents: cents })}
-          />
-        </div>
+        {/* Buyer-only: Seller agreed input + Status dropdown */}
+        {!isSellerMode && (
+          <>
+            <div style={{ flex: '0 0 110px' }}>
+              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
+                Agreed
+              </div>
+              <DollarInput
+                valueCents={item.sellerAgreedAmountCents ?? null}
+                onChange={(cents) => onChange({ sellerAgreedAmountCents: cents })}
+              />
+            </div>
 
-        {/* Status dropdown */}
-        <div style={{ flex: '0 0 130px' }}>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
-            Status
-          </div>
-          <select
-            value={status}
-            onChange={(e) => onChange({ concessionStatus: e.target.value })}
-            style={{
-              width: '100%', padding: '6px 8px', borderRadius: 6,
-              border: '1px solid var(--bp-border)',
-              background: `${STATUS_COLORS[status]}10`,
-              color: STATUS_COLORS[status],
-              fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            {(Object.keys(STATUS_LABELS) as ConcessionStatus[]).map(s => (
-              <option key={s} value={s} style={{ background: 'var(--bp-card)', color: 'var(--bp-text)' }}>{STATUS_LABELS[s]}</option>
-            ))}
-          </select>
-        </div>
+            <div style={{ flex: '0 0 130px' }}>
+              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
+                Status
+              </div>
+              <select
+                value={status}
+                onChange={(e) => onChange({ concessionStatus: e.target.value })}
+                style={{
+                  width: '100%', padding: '6px 8px', borderRadius: 6,
+                  border: '1px solid var(--bp-border)',
+                  background: `${STATUS_COLORS[status]}10`,
+                  color: STATUS_COLORS[status],
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                {(Object.keys(STATUS_LABELS) as ConcessionStatus[]).map(s => (
+                  <option key={s} value={s} style={{ background: 'var(--bp-card)', color: 'var(--bp-text)' }}>{STATUS_LABELS[s]}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Credit issued (only show if status is credited or escrow_holdback) */}
-      {(status === 'credited' || status === 'escrow_holdback') && (
+      {/* Buyer-only: Credit issued (only show if status is credited or escrow_holdback) */}
+      {!isSellerMode && (status === 'credited' || status === 'escrow_holdback') && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--bp-border)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)' }}>
             Credit Received:
@@ -899,13 +902,15 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
               display: 'inline-flex', alignItems: 'center', gap: 4,
             }}
           >
-            {'\uFF0B'} Add note for seller
+            {'\uFF0B'} {isSellerMode ? 'Add note' : 'Add note for seller'}
           </button>
         ) : (
           <textarea
             value={item.homeownerNotes ?? ''}
             onChange={(e) => onChange({ homeownerNotes: e.target.value })}
-            placeholder="Add a note about this item (will appear in the repair request PDF)..."
+            placeholder={isSellerMode
+              ? 'Add a note about this item (will appear in the pre-listing plan PDF)...'
+              : 'Add a note about this item (will appear in the repair request PDF)...'}
             rows={2}
             style={{
               width: '100%', padding: '8px 12px', borderRadius: 6,
