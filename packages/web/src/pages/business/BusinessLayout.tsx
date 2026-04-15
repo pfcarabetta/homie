@@ -169,16 +169,16 @@ export default function BusinessLayout({ children, sidebar, sidebarMobile, mobil
     <div className="bp-portal" data-theme={resolvedTheme} style={{ height: '100vh', background: 'var(--bp-bg)', display: 'flex', overflow: 'hidden' }}>
       <style>{`
         .bp-portal {
-          --bp-bg: ${W};
+          --bp-bg: #F9F5F2;
           --bp-card: #ffffff;
           --bp-input: #ffffff;
-          --bp-text: ${D};
+          --bp-text: #2D2926;
           --bp-muted: #6B6560;
           --bp-subtle: #9B9490;
           --bp-border: #E0DAD4;
           --bp-hover: #FAFAF8;
           --bp-header: #ffffff;
-          --bp-warm: ${W};
+          --bp-warm: #F9F5F2;
           color: var(--bp-text);
           transition: background 0.3s, color 0.3s;
         }
