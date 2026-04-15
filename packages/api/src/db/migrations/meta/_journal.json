@@ -274,6 +274,13 @@
       "when": 1776221204677,
       "tag": "0038_misty_electro",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1776222072633,
+      "tag": "0039_true_jasper_sitwell",
+      "breakpoints": true
     }
   ]
 }

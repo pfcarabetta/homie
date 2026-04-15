@@ -120,6 +120,7 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
       if (fields.creditIssuedCents !== undefined) apiFields.creditIssuedCents = fields.creditIssuedCents;
       if (fields.concessionStatus !== undefined) apiFields.concessionStatus = fields.concessionStatus;
       if (fields.repairRequestSource !== undefined) apiFields.repairRequestSource = fields.repairRequestSource;
+      if (fields.repairRequestCustomAmountCents !== undefined) apiFields.repairRequestCustomAmountCents = fields.repairRequestCustomAmountCents;
       void inspectService.updateNegotiation(report.id, itemId, apiFields);
       updateTimers.current.delete(itemId);
     }, 500);
@@ -139,6 +140,10 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
     const quotes = item.quotes ?? [];
     const high = item.costEstimateMax ?? 0;
 
+    // User entered a custom amount
+    if (item.repairRequestSource === 'custom' && item.repairRequestCustomAmountCents != null) {
+      return { cents: item.repairRequestCustomAmountCents, sourceId: 'custom', label: 'Custom amount' };
+    }
     // User explicitly chose AI estimate
     if (item.repairRequestSource === 'estimate') {
       return { cents: high, sourceId: 'estimate', label: 'AI estimate' };
@@ -379,14 +384,17 @@ function NegotiationItemRow({ item, askCents, onChange }: {
   const quotes = item.quotes ?? [];
   const hasQuotes = quotes.length > 0;
   const userExplicitlyChoseEstimate = item.repairRequestSource === 'estimate';
-  const userSelectedProviderId = item.repairRequestSource && item.repairRequestSource !== 'estimate' ? item.repairRequestSource : null;
+  const userExplicitlyChoseCustom = item.repairRequestSource === 'custom';
+  const userSelectedProviderId = item.repairRequestSource && item.repairRequestSource !== 'estimate' && item.repairRequestSource !== 'custom' ? item.repairRequestSource : null;
   const selectedQuote = userSelectedProviderId ? quotes.find(q => q.providerId === userSelectedProviderId) : null;
   const bestQuote = hasQuotes ? quotes.reduce((lo, q) => q.amountCents < lo.amountCents ? q : lo, quotes[0]) : null;
-  const usingEstimate = userExplicitlyChoseEstimate || (!hasQuotes && !item.quoteAmount);
+  const usingEstimate = userExplicitlyChoseEstimate || (!hasQuotes && !item.quoteAmount && !userExplicitlyChoseCustom);
 
   // Build source label for current selection
   let currentSourceLabel: string;
-  if (usingEstimate) {
+  if (userExplicitlyChoseCustom) {
+    currentSourceLabel = 'Custom amount';
+  } else if (usingEstimate) {
     const lo = (item.costEstimateMin ?? 0) / 100;
     const hi = (item.costEstimateMax ?? 0) / 100;
     currentSourceLabel = lo > 0 && lo !== hi ? `AI estimate (${formatCurrency(lo)}-${formatCurrency(hi)})` : 'AI estimate';
@@ -554,12 +562,16 @@ function NegotiationItemRow({ item, askCents, onChange }: {
                 </>
               )}
 
-              {/* No options state */}
-              {sortedQuotes.length === 0 && !hasEstimate && (
-                <div style={{ padding: '12px 10px', fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)' }}>
-                  No quotes or estimate available
-                </div>
-              )}
+              {/* Custom amount option */}
+              {(sortedQuotes.length > 0 || hasEstimate) && <div style={{ height: 1, background: 'var(--bp-border)', margin: '4px 6px' }} />}
+              <CustomAmountOption
+                isSelected={userExplicitlyChoseCustom}
+                currentAmountCents={item.repairRequestCustomAmountCents ?? null}
+                onSave={(cents) => {
+                  onChange({ repairRequestSource: 'custom', repairRequestCustomAmountCents: cents });
+                  setShowSourceMenu(false);
+                }}
+              />
             </div>
           )}
         </div>
@@ -639,6 +651,90 @@ function NegotiationItemRow({ item, askCents, onChange }: {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Custom amount option in source dropdown ────────────────────────────────
+
+function CustomAmountOption({ isSelected, currentAmountCents, onSave }: {
+  isSelected: boolean;
+  currentAmountCents: number | null;
+  onSave: (cents: number) => void;
+}) {
+  const [text, setText] = useState(currentAmountCents != null ? (currentAmountCents / 100).toString() : '');
+  const [editing, setEditing] = useState(isSelected);
+
+  function handleSave() {
+    const num = parseFloat(text);
+    if (!isNaN(num) && num > 0) {
+      onSave(Math.round(num * 100));
+    }
+  }
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          width: '100%', padding: '8px 10px', borderRadius: 6,
+          border: 'none',
+          background: isSelected ? `${ACCENT}10` : 'transparent',
+          cursor: 'pointer', textAlign: 'left',
+        }}
+        onMouseOver={e => { if (!isSelected) (e.currentTarget.style.background = 'var(--bp-bg)'); }}
+        onMouseOut={e => { if (!isSelected) (e.currentTarget.style.background = 'transparent'); }}
+      >
+        <div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: isSelected ? ACCENT : 'var(--bp-text)', display: 'flex', alignItems: 'center', gap: 5 }}>
+            {'\u270F\uFE0F'} Custom amount
+          </div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', marginTop: 1 }}>
+            {isSelected && currentAmountCents ? `Currently $${(currentAmountCents / 100).toLocaleString()}` : 'Enter your own ask amount'}
+          </div>
+        </div>
+        {isSelected && currentAmountCents != null && (
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: ACCENT, marginLeft: 8 }}>
+            ${(currentAmountCents / 100).toLocaleString()}
+          </div>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-text)' }}>$</span>
+      <input
+        type="text"
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value.replace(/[^0-9.]/g, ''))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); handleSave(); }
+          if (e.key === 'Escape') setEditing(false);
+        }}
+        placeholder="0.00"
+        style={{
+          flex: 1, padding: '6px 8px', borderRadius: 6,
+          border: `1px solid ${ACCENT}`, background: 'var(--bp-card)',
+          color: 'var(--bp-text)', fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600,
+          outline: 'none',
+        }}
+      />
+      <button
+        onClick={handleSave}
+        disabled={!text || parseFloat(text) <= 0}
+        style={{
+          padding: '6px 12px', borderRadius: 6, border: 'none',
+          background: text && parseFloat(text) > 0 ? ACCENT : '#94A3B8',
+          color: '#fff', cursor: text && parseFloat(text) > 0 ? 'pointer' : 'not-allowed',
+          fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+        }}
+      >
+        Use
+      </button>
     </div>
   );
 }
