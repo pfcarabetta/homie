@@ -23,13 +23,11 @@ export default function PageCitation({ sourcePages, reportFileUrl }: PageCitatio
     ? `Pages ${firstPage}-${lastPage}`
     : `Pages ${firstPage}-${lastPage}`;
 
-  const hasUrl = !!reportFileUrl && !reportFileUrl.startsWith('data:');
-
-  if (!hasUrl) {
-    // No URL (or data URL) — show as plain non-clickable text
+  if (!reportFileUrl) {
+    // No URL at all — non-clickable
     return (
       <span
-        title="Original PDF not available for page navigation"
+        title="Original PDF not available"
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 3,
           fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 500,
@@ -43,8 +41,13 @@ export default function PageCitation({ sourcePages, reportFileUrl }: PageCitatio
     );
   }
 
-  // Fragment #page=N is the standard PDF URL fragment spec (RFC 8118) — most browser PDF viewers honor it
-  const href = `${reportFileUrl}#page=${firstPage}`;
+  // Fragment #page=N is the standard PDF URL fragment spec (RFC 8118) — most browser PDF viewers honor it.
+  // Note: data: URLs work in browsers but page anchors may not be respected by every PDF viewer.
+  const isDataUrl = reportFileUrl.startsWith('data:');
+  const href = isDataUrl ? reportFileUrl : `${reportFileUrl}#page=${firstPage}`;
+  const titleText = isDataUrl
+    ? `Open inspection PDF (page anchor not supported for inline PDFs — scroll to ${label.toLowerCase()})`
+    : `Open inspection PDF at ${label.toLowerCase()}`;
 
   return (
     <a
@@ -52,7 +55,7 @@ export default function PageCitation({ sourcePages, reportFileUrl }: PageCitatio
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
-      title={`Open inspection PDF at ${label.toLowerCase()}`}
+      title={titleText}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 3,
         fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600,
