@@ -114,7 +114,7 @@ export default function InspectPortal() {
       case 'maintenance':
         return <MaintenanceTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'documents':
-        return <DocumentsTab />;
+        return <DocumentsTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'settings':
         return <SettingsTab resolvedTheme={resolvedTheme} themeMode={themeMode} onThemeChange={setTheme} />;
       default:

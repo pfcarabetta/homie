@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { inspectService, type PortalReport, type InspectReportPublic, type InspectionItem, type InspectStatusItem } from '@/services/inspector-api';
+import { inspectService, type PortalReport, type InspectReportPublic, type InspectionItem, type InspectStatusItem, type SupportingDocument, type CrossReferenceInsight } from '@/services/inspector-api';
 import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate } from './constants';
 import type { Tab } from './constants';
 import ItemDeepDive from './ItemDeepDive';
 import PageCitation from './PageCitation';
 import ModeToggle, { type ReportMode } from './ModeToggle';
+import SupportingDocUploadModal from './SupportingDocUploadModal';
 
 interface ReportsTabProps {
   onNavigate: (tab: Tab) => void;
@@ -489,7 +490,45 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [reportMode, setReportMode] = useState<ReportMode>((portalReport?.reportMode as ReportMode | undefined) ?? 'buyer');
+  const [supportingDocs, setSupportingDocs] = useState<SupportingDocument[]>([]);
+  const [insights, setInsights] = useState<CrossReferenceInsight[]>([]);
+  const [showDocUploadModal, setShowDocUploadModal] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const docsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load supporting docs + insights
+  const loadDocsAndInsights = useCallback(async () => {
+    try {
+      const [docsRes, insightsRes] = await Promise.all([
+        inspectService.listSupportingDocuments(reportId),
+        inspectService.getCrossReferenceInsights(reportId),
+      ]);
+      if (docsRes.data) setSupportingDocs(docsRes.data.documents);
+      if (insightsRes.data) setInsights(insightsRes.data.insights);
+    } catch { /* ignore */ }
+  }, [reportId]);
+
+  useEffect(() => { void loadDocsAndInsights(); }, [loadDocsAndInsights]);
+
+  // Poll docs while any are still processing (so the UI updates when parsing completes)
+  useEffect(() => {
+    const stillProcessing = supportingDocs.some(d => d.parsingStatus === 'processing' || d.parsingStatus === 'uploading');
+    if (!stillProcessing) {
+      if (docsPollRef.current) { clearInterval(docsPollRef.current); docsPollRef.current = null; }
+      return;
+    }
+    if (docsPollRef.current) return;
+    docsPollRef.current = setInterval(() => { void loadDocsAndInsights(); }, 4000);
+    return () => { if (docsPollRef.current) { clearInterval(docsPollRef.current); docsPollRef.current = null; } };
+  }, [supportingDocs, loadDocsAndInsights]);
+
+  async function handleDeleteDoc(docId: string) {
+    if (!window.confirm('Delete this document?')) return;
+    try {
+      await inspectService.deleteSupportingDocument(reportId, docId);
+      await loadDocsAndInsights();
+    } catch { /* ignore */ }
+  }
 
   // Sync mode when report changes
   useEffect(() => {
@@ -642,13 +681,35 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
             {fullReport.inspectionDate && <> &middot; Inspected {formatDate(fullReport.inspectionDate)}</>}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Mode:
-          </span>
-          <ModeToggle mode={reportMode} onChange={handleModeChange} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowDocUploadModal(true)}
+            style={{
+              padding: '7px 14px', borderRadius: 8, border: '1px solid var(--bp-border)',
+              background: 'var(--bp-card)', color: 'var(--bp-text)',
+              fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}
+          >
+            <span style={{ fontSize: 13 }}>{'\uD83D\uDCC4'}</span> Add Document
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Mode:
+            </span>
+            <ModeToggle mode={reportMode} onChange={handleModeChange} />
+          </div>
         </div>
       </div>
+
+      {/* Supporting Document Upload Modal */}
+      {showDocUploadModal && (
+        <SupportingDocUploadModal
+          reportId={reportId}
+          onClose={() => setShowDocUploadModal(false)}
+          onUploaded={() => { void loadDocsAndInsights(); }}
+        />
+      )}
 
       {/* Content area - blurred if locked */}
       <div style={{ position: 'relative', overflow: isLocked ? 'hidden' : 'visible', maxHeight: isLocked ? 600 : 'none' }}>
@@ -658,6 +719,18 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
           userSelect: isLocked ? 'none' : 'auto',
           transition: 'filter 0.3s',
         }}>
+          {/* Cross-Reference Insights panel */}
+          <CrossReferenceInsightsPanel
+            insights={insights}
+            supportingDocs={supportingDocs}
+            onAddDocument={() => setShowDocUploadModal(true)}
+          />
+
+          {/* Supporting Documents list */}
+          {supportingDocs.length > 0 && (
+            <SupportingDocsList docs={supportingDocs} onDelete={handleDeleteDoc} />
+          )}
+
           {/* Severity summary */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
             {(['safety_hazard', 'urgent', 'recommended', 'monitor', 'informational'] as const).map(sev => {
@@ -1066,6 +1139,179 @@ function Spinner() {
       margin: '0 auto',
     }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+// ── Cross-Reference Insights panel ──────────────────────────────────────────
+
+const SEVERITY_META: Record<'info' | 'warning' | 'concern', { color: string; bg: string; icon: string; label: string }> = {
+  info: { color: '#2563EB', bg: '#DBEAFE', icon: '\u2139\uFE0F', label: 'Info' },
+  warning: { color: '#D97706', bg: '#FEF3C7', icon: '\u26A0\uFE0F', label: 'Worth noting' },
+  concern: { color: '#DC2626', bg: '#FEE2E2', icon: '\uD83D\uDEA8', label: 'Concern' },
+};
+
+function CrossReferenceInsightsPanel({ insights, supportingDocs, onAddDocument }: {
+  insights: CrossReferenceInsight[];
+  supportingDocs: SupportingDocument[];
+  onAddDocument: () => void;
+}) {
+  const parsedDocCount = supportingDocs.filter(d => d.parsingStatus === 'parsed').length;
+  const stillProcessing = supportingDocs.some(d => d.parsingStatus === 'processing' || d.parsingStatus === 'uploading');
+
+  return (
+    <div style={{
+      background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
+      padding: '18px 20px', marginBottom: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 18 }}>{'\uD83D\uDD0D'}</span>
+        <h3 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, color: 'var(--bp-text)', margin: 0 }}>
+          Cross-Reference Insights
+        </h3>
+        <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)' }}>
+          {parsedDocCount > 0 ? `${parsedDocCount} supporting document${parsedDocCount !== 1 ? 's' : ''}` : 'No supporting documents yet'}
+        </span>
+      </div>
+
+      {/* Empty state */}
+      {parsedDocCount === 0 && !stillProcessing && (
+        <div style={{
+          padding: '20px 16px', background: 'var(--bp-bg)', borderRadius: 10,
+          textAlign: 'center',
+        }}>
+          <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', margin: '0 0 12px', maxWidth: 480, marginInline: 'auto' }}>
+            Upload a pest report or seller's disclosure to unlock AI cross-referenced insights \u2014 we'll find correlations, contradictions, and gaps across all your documents.
+          </p>
+          <button onClick={onAddDocument} style={{
+            padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2563EB', color: '#fff',
+            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          }}>Add Supporting Document</button>
+        </div>
+      )}
+
+      {/* Processing state */}
+      {stillProcessing && insights.length === 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0' }}>
+          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#2563EB', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)' }}>
+            Analyzing your documents... insights will appear shortly.
+          </span>
+        </div>
+      )}
+
+      {/* Insights */}
+      {insights.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {insights.map(insight => {
+            const meta = SEVERITY_META[insight.severity] ?? SEVERITY_META.info;
+            return (
+              <div key={insight.id} style={{
+                padding: '12px 14px', borderRadius: 10,
+                background: meta.bg, borderLeft: `4px solid ${meta.color}`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 13 }}>{meta.icon}</span>
+                  <span style={{
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
+                    padding: '2px 7px', borderRadius: 10,
+                    background: `${meta.color}25`, color: meta.color,
+                    textTransform: 'uppercase', letterSpacing: '0.05em',
+                  }}>
+                    {meta.label}
+                  </span>
+                </div>
+                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: meta.color, marginBottom: 4 }}>
+                  {insight.title}
+                </div>
+                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: '#1F2937', lineHeight: 1.5 }}>
+                  {insight.description}
+                </div>
+                {(insight.relatedDocIds.length > 0 || insight.relatedItemIds.length > 0) && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                    {insight.relatedDocIds.length > 0 && (
+                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: meta.color, opacity: 0.85 }}>
+                        \u00B7 {insight.relatedDocIds.length} related doc{insight.relatedDocIds.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {insight.relatedItemIds.length > 0 && (
+                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: meta.color, opacity: 0.85 }}>
+                        \u00B7 {insight.relatedItemIds.length} related inspection item{insight.relatedItemIds.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Failed docs */}
+      {supportingDocs.some(d => d.parsingStatus === 'failed') && (
+        <div style={{
+          marginTop: 10, padding: '8px 12px', borderRadius: 8,
+          background: '#FEE2E2', fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: '#DC2626',
+        }}>
+          {supportingDocs.filter(d => d.parsingStatus === 'failed').length} document{supportingDocs.filter(d => d.parsingStatus === 'failed').length !== 1 ? 's' : ''} failed to parse \u2014 see the documents list below.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Supporting Documents list ──────────────────────────────────────────────
+
+const DOC_TYPE_LABEL: Record<string, { label: string; icon: string }> = {
+  pest_report: { label: 'Pest Report', icon: '\uD83D\uDC1B' },
+  seller_disclosure: { label: 'Seller Disclosure', icon: '\uD83D\uDCCB' },
+};
+
+function SupportingDocsList({ docs, onDelete }: {
+  docs: SupportingDocument[];
+  onDelete: (docId: string) => void;
+}) {
+  return (
+    <div style={{
+      background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
+      padding: '14px 18px', marginBottom: 16,
+    }}>
+      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+        Supporting Documents
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {docs.map(doc => {
+          const meta = DOC_TYPE_LABEL[doc.documentType] ?? { label: doc.documentType, icon: '\uD83D\uDCC4' };
+          return (
+            <div key={doc.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 12px', borderRadius: 8, background: 'var(--bp-bg)',
+            }}>
+              <span style={{ fontSize: 16 }}>{meta.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {meta.label} \u00B7 {doc.fileName}
+                </div>
+                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)' }}>
+                  {doc.parsingStatus === 'parsed' ? '\u2713 Parsed' :
+                   doc.parsingStatus === 'processing' || doc.parsingStatus === 'uploading' ? 'Processing\u2026' :
+                   doc.parsingStatus === 'failed' ? `Failed: ${doc.parsingError ?? 'unknown error'}` : doc.parsingStatus}
+                </div>
+              </div>
+              {doc.documentFileUrl && (
+                <a href={doc.documentFileUrl} target="_blank" rel="noopener noreferrer" style={{
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: '#2563EB', textDecoration: 'none',
+                  padding: '4px 10px', borderRadius: 6, background: '#2563EB10',
+                }}>View</a>
+              )}
+              <button onClick={() => onDelete(doc.id)} title="Delete document" style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: '#9B9490',
+                padding: 4, fontSize: 14,
+              }}>{'\u2715'}</button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
