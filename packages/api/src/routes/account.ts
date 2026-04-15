@@ -746,7 +746,10 @@ router.get('/reports', async (req: Request, res: Response) => {
         clientAccessToken: r.clientAccessToken,
         pricingTier: r.pricingTier,
         reportMode: r.reportMode ?? 'buyer',
-        reportFileUrl: r.reportFileUrl,
+        // Use proxy endpoint so browsers don't block data: URLs in new tabs
+        reportFileUrl: r.reportFileUrl
+          ? `${(process.env.API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '')}/api/v1/inspect/${r.clientAccessToken}/source-pdf`
+          : null,
         itemCount: reportItems.length,
         dispatchedCount,
         quotedCount,

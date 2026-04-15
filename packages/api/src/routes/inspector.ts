@@ -700,7 +700,10 @@ router.get('/:token', async (req: Request, res: Response) => {
         inspectionType: report.inspectionType,
         perItemPrice: perItemPriceCents / 100,
         bundlePrice: bundlePriceCents / 100,
-        reportFileUrl: report.reportFileUrl ?? null,
+        // Use proxy endpoint so browsers don't block data: URLs in new tabs
+        reportFileUrl: report.reportFileUrl
+          ? `${(process.env.API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '')}/api/v1/inspect/${req.params.token}/source-pdf`
+          : null,
         reportMode: report.reportMode ?? 'buyer',
         items: items.map(i => ({
           id: i.id,
@@ -1410,6 +1413,46 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[POST /inspect/:token/dispatch]');
     res.status(500).json({ data: null, error: 'Dispatch failed', meta: {} });
+  }
+});
+
+// GET /api/v1/inspect/:token/source-pdf — serves the original source PDF for page citations.
+// Uses the report's clientAccessToken as auth (no Authorization header needed, so it works
+// when opened directly in a new tab). Handles both Cloudinary URLs and base64 data URLs.
+router.get('/:token/source-pdf', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select({ reportFileUrl: inspectionReports.reportFileUrl })
+      .from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token))
+      .limit(1);
+
+    if (!report || !report.reportFileUrl) {
+      res.status(404).send('Source PDF not available');
+      return;
+    }
+
+    // Data URL — decode and stream inline
+    if (report.reportFileUrl.startsWith('data:')) {
+      const match = report.reportFileUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) {
+        res.status(500).send('Stored PDF is malformed');
+        return;
+      }
+      const mimeType = match[1] || 'application/pdf';
+      const buffer = Buffer.from(match[2], 'base64');
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Content-Length', buffer.length);
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.send(buffer);
+      return;
+    }
+
+    // External URL (e.g. Cloudinary) — redirect. Browsers preserve the #page=N fragment.
+    res.redirect(report.reportFileUrl);
+  } catch (err) {
+    logger.error({ err }, '[GET /inspect/:token/source-pdf]');
+    res.status(500).send('Failed to load PDF');
   }
 });
 
