@@ -4243,11 +4243,11 @@ router.post('/:workspaceId/dashboard/seasonal-suggestions', requireWorkspace, as
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
-      system: 'You are a property maintenance expert. Generate seasonal maintenance suggestions for vacation rental and residential properties. Each suggestion should be a specific, actionable task that a property manager can dispatch to a vendor. Keep property name arrays short — use 2-3 example names max.',
+      system: 'You are a property maintenance expert. Generate seasonal maintenance suggestions for vacation rental and residential property portfolios. Each suggestion should be a general recommendation applicable to multiple properties — do NOT name or reference specific properties. Use the portfolio locations and property types as context for region-appropriate suggestions (e.g. desert climate prep, coastal salt air maintenance, etc.).',
       messages: [
         {
           role: 'user',
-          content: `Current month: ${currentMonth} (${currentSeason})\nTotal properties: ${props.length}\n\nProperty locations:\n${locationSummary}\n\nGenerate exactly ${limit} seasonal maintenance suggestions as a JSON array. Each item: { "title": string, "description": string (1 sentence), "category": string (e.g. hvac, plumbing, landscaping, pest_control, pool, roofing, general, cleaning), "priority": "low"|"medium"|"high", "properties": [2-3 example property names], "reason": string (1 sentence) }.\n\nRespond with ONLY a valid JSON array. No markdown, no code blocks, no explanation.`,
+          content: `Current month: ${currentMonth} (${currentSeason})\nTotal properties: ${props.length}\n\nPortfolio locations:\n${locationSummary}\n\nGenerate exactly ${limit} seasonal maintenance suggestions as a JSON array. Each suggestion should be a general recommendation the property manager can apply to any relevant property in their portfolio.\n\nEach item: { "title": string (short, actionable), "description": string (1-2 sentences explaining what to do and why), "category": string (e.g. hvac, plumbing, landscaping, pest_control, pool, roofing, general, cleaning), "priority": "low"|"medium"|"high", "reason": string (brief — why now, based on season/climate) }.\n\nDo NOT include a "properties" field. Respond with ONLY a valid JSON array. No markdown, no code blocks, no explanation.`,
         },
       ],
     });

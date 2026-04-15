@@ -1165,7 +1165,7 @@ export interface SeasonalSuggestion {
   description: string;
   category: string;
   priority: string;
-  properties: string[];
+  properties?: string[];
   reason: string;
 }
 

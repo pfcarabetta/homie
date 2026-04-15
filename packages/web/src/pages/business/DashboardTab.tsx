@@ -239,6 +239,8 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
   const [loading, setLoading] = useState(true);
   const [suggestionsGeneratedAt, setSuggestionsGeneratedAt] = useState<string | null>(null);
   const [dispatchSuggestion, setDispatchSuggestion] = useState<SeasonalSuggestion | null>(null);
+  const [selectedDispatchProperties, setSelectedDispatchProperties] = useState<Set<string>>(new Set());
+  const [dispatchingProperties, setDispatchingProperties] = useState(false);
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
   const [allProperties, setAllProperties] = useState<Property[]>([]);
 
@@ -505,24 +507,27 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
                 {visibleSuggestions.map((s, i) => {
                   const priorityColor = s.priority === 'high' ? '#DC2626' : s.priority === 'medium' ? '#D4A017' : G;
                   return (
-                    <div key={i} style={{ background: 'var(--bp-bg)', borderRadius: 12, padding: 16, border: '1px solid var(--bp-border)' }}>
+                    <div key={i} style={{
+                      background: 'var(--bp-bg)', borderRadius: 12, padding: 16, border: '1px solid var(--bp-border)',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                      onClick={() => { setDispatchSuggestion(s); setSelectedDispatchProperties(new Set()); }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; }}
+                    >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: D, lineHeight: 1.3 }}>{s.title}</div>
                         <span style={{ fontSize: 10, fontWeight: 600, color: priorityColor, background: `${priorityColor}15`, padding: '2px 8px', borderRadius: 100, flexShrink: 0, marginLeft: 8, textTransform: 'capitalize' }}>{s.priority}</span>
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--bp-muted)', lineHeight: 1.5, marginBottom: 8 }}>{s.description}</div>
-                      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginBottom: 10 }}>
-                        <span style={{ textTransform: 'capitalize' }}>{s.category.replace(/_/g, ' ')}</span>
-                        {s.properties.length > 0 && <span> · {s.properties.slice(0, 3).join(', ')}{s.properties.length > 3 ? ` +${s.properties.length - 3} more` : ''}</span>}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>
+                          <span style={{ textTransform: 'capitalize' }}>{s.category.replace(/_/g, ' ')}</span>
+                          <span style={{ margin: '0 6px' }}>·</span>
+                          <span style={{ fontStyle: 'italic', color: O }}>{s.reason}</span>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: O, flexShrink: 0 }}>Select properties →</span>
                       </div>
-                      <div style={{ fontSize: 11, color: O, fontStyle: 'italic', marginBottom: 10 }}>{s.reason}</div>
-                      <button onClick={() => setDispatchSuggestion(s)}
-                        style={{
-                          width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
-                          background: O, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                        }}>
-                        Dispatch
-                      </button>
                     </div>
                   );
                 })}
@@ -548,57 +553,102 @@ export default function DashboardTab({ workspace, onNavigate }: { workspace: Wor
         )}
       </div>
 
-      {/* Property picker for suggestion dispatch */}
+      {/* Property picker for suggestion dispatch — multi-select */}
       {dispatchSuggestion && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
           onClick={() => setDispatchSuggestion(null)}>
-          <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
+          <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 4px' }}>Select Property to Dispatch</h3>
-            <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 16 }}>
-              <strong>{dispatchSuggestion.title}</strong> — {dispatchSuggestion.description}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: D, margin: '0 0 4px' }}>{dispatchSuggestion.title}</h3>
+                <div style={{ fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.5 }}>{dispatchSuggestion.description}</div>
+              </div>
+              <button onClick={() => setDispatchSuggestion(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: 'var(--bp-subtle)', cursor: 'pointer', flexShrink: 0, marginLeft: 12 }}>×</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 350, overflowY: 'auto' }}>
-              {allProperties
-                .sort((a, b) => {
-                  const aMatch = dispatchSuggestion!.properties.some(n => a.name.includes(n) || n.includes(a.name));
-                  const bMatch = dispatchSuggestion!.properties.some(n => b.name.includes(n) || n.includes(b.name));
-                  if (aMatch && !bMatch) return -1;
-                  if (!aMatch && bMatch) return 1;
-                  return a.name.localeCompare(b.name);
-                })
-                .map(p => {
-                  const isRecommended = dispatchSuggestion!.properties.some(n => p.name.includes(n) || n.includes(p.name));
-                  return (
-                    <button key={p.id} onClick={() => {
-                      const params = new URLSearchParams({
-                        tab: 'dispatch-chat',
-                        workspace: workspace.id,
-                        property: p.id,
-                        category: dispatchSuggestion!.category,
-                        prefill: dispatchSuggestion!.title,
-                        description: dispatchSuggestion!.description,
-                      });
-                      setDispatchSuggestion(null);
-                      navigate(`/business?${params.toString()}`);
-                    }} style={{
-                      display: 'flex', alignItems: 'center', padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
-                      border: isRecommended ? `2px solid ${O}` : '1px solid var(--bp-border)',
-                      background: isRecommended ? `${O}04` : 'var(--bp-card)', textAlign: 'left',
-                      fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
-                    }}
-                      onMouseEnter={e => { if (!isRecommended) e.currentTarget.style.borderColor = O; }}
-                      onMouseLeave={e => { if (!isRecommended) e.currentTarget.style.borderColor = 'var(--bp-border)'; }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{p.name}</div>
-                        {p.city && <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>{p.city}{p.state ? `, ${p.state}` : ''}</div>}
-                      </div>
-                      {isRecommended && <span style={{ fontSize: 10, fontWeight: 600, color: O, background: `${O}12`, padding: '2px 8px', borderRadius: 100, flexShrink: 0 }}>Suggested</span>}
-                    </button>
-                  );
-                })}
+            <div style={{ fontSize: 12, color: O, fontStyle: 'italic', marginBottom: 14 }}>{dispatchSuggestion.reason}</div>
+
+            {/* Select all / deselect */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: D }}>Select properties to dispatch</span>
+              <button onClick={() => {
+                if (selectedDispatchProperties.size === allProperties.length) setSelectedDispatchProperties(new Set());
+                else setSelectedDispatchProperties(new Set(allProperties.map(p => p.id)));
+              }} style={{ fontSize: 12, fontWeight: 600, color: O, background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+                {selectedDispatchProperties.size === allProperties.length ? 'Deselect all' : 'Select all'}
+              </button>
             </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+              {allProperties.map(p => {
+                const isSelected = selectedDispatchProperties.has(p.id);
+                return (
+                  <button key={p.id} onClick={() => {
+                    setSelectedDispatchProperties(prev => {
+                      const next = new Set(prev);
+                      if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
+                      return next;
+                    });
+                  }} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                    border: isSelected ? `2px solid ${O}` : '1px solid var(--bp-border)',
+                    background: isSelected ? `${O}06` : 'var(--bp-card)', textAlign: 'left',
+                    fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
+                  }}>
+                    {/* Checkbox */}
+                    <div style={{
+                      width: 20, height: 20, minWidth: 20, borderRadius: 5,
+                      border: `2px solid ${isSelected ? O : 'var(--bp-border)'}`,
+                      background: isSelected ? O : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+                    }}>
+                      {isSelected && <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8.5l3.5 3.5 6.5-8" /></svg>}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                      {(p.city || p.address) && <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginTop: 1 }}>{p.address ? `${p.address}, ` : ''}{p.city}{p.state ? `, ${p.state}` : ''}</div>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Dispatch button */}
+            <button
+              onClick={async () => {
+                if (selectedDispatchProperties.size === 0 || !dispatchSuggestion) return;
+                setDispatchingProperties(true);
+                // Dispatch to each selected property sequentially
+                for (const propertyId of selectedDispatchProperties) {
+                  const params = new URLSearchParams({
+                    tab: 'dispatch-chat',
+                    workspace: workspace.id,
+                    property: propertyId,
+                    category: dispatchSuggestion.category,
+                    prefill: dispatchSuggestion.title,
+                    description: dispatchSuggestion.description,
+                    auto: 'true',
+                  });
+                  // Navigate to the first property's dispatch chat
+                  setDispatchSuggestion(null);
+                  setDispatchingProperties(false);
+                  navigate(`/business?${params.toString()}`);
+                  return; // For now, open dispatch chat for first property
+                }
+              }}
+              disabled={selectedDispatchProperties.size === 0 || dispatchingProperties}
+              style={{
+                width: '100%', padding: '14px 0', borderRadius: 10, border: 'none', marginTop: 14,
+                background: selectedDispatchProperties.size > 0 ? O : 'var(--bp-border)',
+                color: selectedDispatchProperties.size > 0 ? '#fff' : 'var(--bp-subtle)',
+                fontSize: 14, fontWeight: 600, cursor: selectedDispatchProperties.size > 0 ? 'pointer' : 'not-allowed',
+                fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
+              }}
+            >
+              {dispatchingProperties ? 'Dispatching...' : selectedDispatchProperties.size > 0
+                ? `Dispatch to ${selectedDispatchProperties.size} propert${selectedDispatchProperties.size === 1 ? 'y' : 'ies'}`
+                : 'Select properties to dispatch'}
+            </button>
           </div>
         </div>
       )}
