@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { inspectService, type PortalReport, type PortalReportItem } from '@/services/inspector-api';
 import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency } from './constants';
 import type { Tab } from './constants';
+import PageCitation from './PageCitation';
 
 const ACCENT = '#2563EB';
 const RED = '#DC2626';
@@ -447,6 +448,7 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
             key={item.id}
             item={item}
             askCents={askCents(item)}
+            reportFileUrl={report.reportFileUrl ?? null}
             onChange={(fields) => patchItem(item.id, fields)}
           />
         ))}
@@ -542,10 +544,11 @@ function PresetButton({ children, onClick }: { children: React.ReactNode; onClic
 
 // ── Single negotiation item row ─────────────────────────────────────────────
 
-function NegotiationItemRow({ item, askCents, onChange }: {
+function NegotiationItemRow({ item, askCents, onChange, reportFileUrl }: {
   item: PortalReportItem;
   askCents: number;
   onChange: (fields: Partial<PortalReportItem>) => void;
+  reportFileUrl?: string | null;
 }) {
   const [showNotes, setShowNotes] = useState(!!item.homeownerNotes);
   const [showSourceMenu, setShowSourceMenu] = useState(false);
@@ -621,11 +624,14 @@ function NegotiationItemRow({ item, askCents, onChange }: {
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, color: 'var(--bp-text)' }}>
             {item.title}
           </div>
-          {item.location && (
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>
-              {item.location}
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+            {item.location && (
+              <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)' }}>
+                {item.location}
+              </span>
+            )}
+            <PageCitation sourcePages={item.sourcePages} reportFileUrl={reportFileUrl} />
+          </div>
         </div>
 
         {/* Ask amount + source selector */}

@@ -3,6 +3,7 @@ import { inspectService, type PortalReport, type InspectionItem } from '@/servic
 import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency } from './constants';
 import type { Tab } from './constants';
 import ItemDeepDive from './ItemDeepDive';
+import PageCitation from './PageCitation';
 
 const ACCENT = '#2563EB';
 
@@ -18,6 +19,7 @@ interface ItemWithContext extends InspectionItem {
   _reportAddress: string;
   _pricingTier: string | null;
   _clientAccessToken: string;
+  _reportFileUrl: string | null;
 }
 
 const SEVERITY_ORDER = ['safety_hazard', 'urgent', 'recommended', 'monitor', 'informational'];
@@ -61,6 +63,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                 _reportAddress: report.propertyAddress,
                 _pricingTier: report.pricingTier,
                 _clientAccessToken: report.clientAccessToken,
+                _reportFileUrl: res.data.reportFileUrl ?? report.reportFileUrl ?? null,
               });
             }
           }
@@ -181,7 +184,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
         const res = await inspectService.getReport(report.clientAccessToken);
         if (res.data) {
           for (const item of res.data.items) {
-            items.push({ ...item, _reportId: report.id, _reportAddress: report.propertyAddress, _pricingTier: report.pricingTier, _clientAccessToken: report.clientAccessToken });
+            items.push({ ...item, _reportId: report.id, _reportAddress: report.propertyAddress, _pricingTier: report.pricingTier, _clientAccessToken: report.clientAccessToken, _reportFileUrl: res.data.reportFileUrl ?? report.reportFileUrl ?? null });
           }
         }
       } catch { /* skip */ }
@@ -475,9 +478,12 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                     </div>
                   )}
 
-                  {/* Report address */}
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)', opacity: 0.7 }}>
-                    {item._reportAddress}
+                  {/* Report address + Page citation */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)', opacity: 0.7 }}>
+                      {item._reportAddress}
+                    </span>
+                    <PageCitation sourcePages={item.sourcePages} reportFileUrl={item._reportFileUrl} />
                   </div>
 
                   {/* Quote display */}

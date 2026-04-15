@@ -4,6 +4,7 @@ import { inspectService, type PortalReport, type InspectReportPublic, type Inspe
 import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate } from './constants';
 import type { Tab } from './constants';
 import ItemDeepDive from './ItemDeepDive';
+import PageCitation from './PageCitation';
 
 interface ReportsTabProps {
   onNavigate: (tab: Tab) => void;
@@ -702,6 +703,7 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
                 onToggleExpand={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
                 reportId={reportId}
                 showDeepDive={!isLocked}
+                reportFileUrl={fullReport?.reportFileUrl ?? null}
               />
             ))}
           </div>
@@ -831,12 +833,13 @@ function PricingModal({ reportId, itemCount }: { reportId: string; itemCount: nu
 
 // ── Item Card ───────────────────────────────────────────────────────────────
 
-function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive }: {
+function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive, reportFileUrl }: {
   item: InspectionItem;
   expanded?: boolean;
   onToggleExpand?: () => void;
   reportId?: string;
   showDeepDive?: boolean;
+  reportFileUrl?: string | null;
 }) {
   const sevColor = SEVERITY_COLORS[item.severity] ?? '#9B9490';
   const catLabel = CATEGORY_LABELS[item.category] ?? item.category;
@@ -906,10 +909,15 @@ function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive }: {
         </div>
       )}
 
-      {/* Location */}
-      {item.location && (
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)', marginTop: 6 }}>
-          Location: {item.location}
+      {/* Location + Page citation */}
+      {(item.location || (item.sourcePages && item.sourcePages.length > 0)) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+          {item.location && (
+            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)' }}>
+              Location: {item.location}
+            </span>
+          )}
+          <PageCitation sourcePages={item.sourcePages} reportFileUrl={reportFileUrl} />
         </div>
       )}
 

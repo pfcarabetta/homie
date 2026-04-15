@@ -644,6 +644,7 @@ router.get('/:token', async (req: Request, res: Response) => {
         inspectionType: report.inspectionType,
         perItemPrice: perItemPriceCents / 100,
         bundlePrice: bundlePriceCents / 100,
+        reportFileUrl: report.reportFileUrl ?? null,
         items: items.map(i => ({
           id: i.id,
           reportId: i.reportId,
@@ -664,6 +665,7 @@ router.get('/:token', async (req: Request, res: Response) => {
             availability: i.providerAvailability ?? '',
           } : null,
           valueImpact: computeValueImpact(i.category, i.severity, i.aiCostEstimateLowCents, i.aiCostEstimateHighCents),
+          sourcePages: i.sourcePages ?? null,
         })),
       },
       error: null, meta: {},
@@ -1506,6 +1508,7 @@ async function parseInspectionReportAsync(reportId: string): Promise<void> {
 - cost_estimate_low: low end cost estimate in dollars based on typical repair costs in ${report.propertyCity || 'the area'}, ${report.propertyState || 'US'}
 - cost_estimate_high: high end cost estimate in dollars
 - confidence: your confidence (0.0-1.0) that you've correctly identified and categorized this item
+- source_pages: array of 1-indexed page numbers in this PDF where this item appears (e.g. [5] or [5, 6] if the item spans pages). Use the PDF's own page numbering — the first page is 1. Return an empty array [] if you cannot determine the page.
 
 Rules:
 - Only extract items that require action (repair, replacement, further evaluation, or monitoring)
@@ -1563,6 +1566,7 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
     type ParsedItem = {
       title: string; description?: string; photo_descriptions?: string[]; category: string; severity: string;
       location_in_property?: string; cost_estimate_low?: number; cost_estimate_high?: number; confidence?: number;
+      source_pages?: number[];
     };
     let parsedItems: ParsedItem[];
     let extractedProperty: { address?: string; city?: string; state?: string; zip?: string; inspection_date?: string } | null = null;
@@ -1645,6 +1649,7 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
         aiCostEstimateLowCents: Math.round((item.cost_estimate_low ?? 0) * 100),
         aiCostEstimateHighCents: Math.round((item.cost_estimate_high ?? 0) * 100),
         aiConfidence: confidence.toFixed(2),
+        sourcePages: item.source_pages?.length ? item.source_pages.filter(p => Number.isInteger(p) && p > 0) : null,
         sortOrder: i,
       });
     }

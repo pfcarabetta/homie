@@ -674,6 +674,7 @@ router.get('/reports', async (req: Request, res: Response) => {
       itemsDispatched: inspectionReports.itemsDispatched,
       itemsQuoted: inspectionReports.itemsQuoted,
       totalQuoteValueCents: inspectionReports.totalQuoteValueCents,
+      reportFileUrl: inspectionReports.reportFileUrl,
       createdAt: inspectionReports.createdAt,
     }).from(inspectionReports)
       .where(eq(inspectionReports.homeownerId, req.homeownerId))
@@ -702,6 +703,7 @@ router.get('/reports', async (req: Request, res: Response) => {
           concessionStatus: inspectionReportItems.concessionStatus,
           repairRequestSource: inspectionReportItems.repairRequestSource,
           repairRequestCustomAmountCents: inspectionReportItems.repairRequestCustomAmountCents,
+          sourcePages: inspectionReportItems.sourcePages,
         }).from(inspectionReportItems)
           .where(inArray(inspectionReportItems.reportId, reportIds))
       : [];
@@ -741,6 +743,7 @@ router.get('/reports', async (req: Request, res: Response) => {
         parsingStatus: r.parsingStatus,
         clientAccessToken: r.clientAccessToken,
         pricingTier: r.pricingTier,
+        reportFileUrl: r.reportFileUrl,
         itemCount: reportItems.length,
         dispatchedCount,
         quotedCount,
@@ -767,6 +770,7 @@ router.get('/reports', async (req: Request, res: Response) => {
           concessionStatus: i.concessionStatus,
           repairRequestSource: i.repairRequestSource,
           repairRequestCustomAmountCents: i.repairRequestCustomAmountCents,
+          sourcePages: i.sourcePages,
         })),
       };
     });
