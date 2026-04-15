@@ -193,30 +193,29 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
   }, [items]);
 
   // Bulk select presets
-  function selectAll() {
-    setItems(prev => prev.map(i => ({ ...i, isIncludedInRequest: i.severity !== 'informational' })));
-    items.filter(i => i.severity !== 'informational').forEach(i => {
-      if (!i.isIncludedInRequest) {
-        void inspectService.updateNegotiation(report.id, i.id, { isIncludedInRequest: true });
-      }
-    });
-  }
-
-  function selectBySeverity(severities: string[]) {
-    setItems(prev => prev.map(i => ({ ...i, isIncludedInRequest: severities.includes(i.severity) })));
-    items.forEach(i => {
-      const shouldInclude = severities.includes(i.severity);
-      if (i.isIncludedInRequest !== shouldInclude) {
-        void inspectService.updateNegotiation(report.id, i.id, { isIncludedInRequest: shouldInclude });
-      }
-    });
-  }
-
   function clearAll() {
     setItems(prev => prev.map(i => ({ ...i, isIncludedInRequest: false })));
     items.forEach(i => {
       if (i.isIncludedInRequest) {
         void inspectService.updateNegotiation(report.id, i.id, { isIncludedInRequest: false });
+      }
+    });
+  }
+
+  // Toggle all items in a category on/off. category=null means "all" (everything except informational)
+  function toggleCategory(category: string | null) {
+    const targetItems = items.filter(i => i.severity !== 'informational' && (category === null || i.category === category));
+    if (targetItems.length === 0) return;
+    const allSelected = targetItems.every(i => i.isIncludedInRequest);
+    const newValue = !allSelected;
+    setItems(prev => prev.map(i => {
+      if (i.severity === 'informational') return i;
+      if (category !== null && i.category !== category) return i;
+      return { ...i, isIncludedInRequest: newValue };
+    }));
+    targetItems.forEach(i => {
+      if (i.isIncludedInRequest !== newValue) {
+        void inspectService.updateNegotiation(report.id, i.id, { isIncludedInRequest: newValue });
       }
     });
   }
@@ -319,16 +318,19 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
         <SummaryCard label="Credits Received" subLabel="Closed concessions" value={formatCurrency(totals.creditsReceived / 100)} color={GREEN} icon="\u2705" />
       </div>
 
-      {/* Action bar */}
+      {/* Action bar — PDF download + clear */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap',
         padding: '12px 16px', background: 'var(--bp-card)', borderRadius: 10, border: '1px solid var(--bp-border)',
       }}>
-        <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', marginRight: 4 }}>Quick select:</span>
-        <PresetButton onClick={selectAll}>All Actionable</PresetButton>
-        <PresetButton onClick={() => selectBySeverity(['safety_hazard'])}>Safety Only</PresetButton>
-        <PresetButton onClick={() => selectBySeverity(['safety_hazard', 'urgent'])}>Urgent+</PresetButton>
-        <PresetButton onClick={clearAll}>Clear</PresetButton>
+        <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)' }}>
+          {totals.selectedCount > 0
+            ? `${totals.selectedCount} item${totals.selectedCount !== 1 ? 's' : ''} included in repair request`
+            : 'No items selected — pick from the categories below'}
+        </span>
+        {totals.selectedCount > 0 && (
+          <PresetButton onClick={clearAll}>Clear All</PresetButton>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           {pdfError && (
             <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: '#DC2626' }}>{pdfError}</span>
@@ -397,19 +399,36 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
         })}
       </div>
 
-      {/* Category filters */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+      {/* Category filters with select-all suffix */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
         <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', padding: '5px 0', marginRight: 4 }}>Category:</span>
-        <FilterPill active={!activeCategory} onClick={() => setActiveCategory(null)}>All</FilterPill>
-        {Array.from(categoryCounts).map(([cat, cnt]) => (
-          <FilterPill
-            key={cat}
-            active={activeCategory === cat}
-            onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
-          >
-            {CATEGORY_ICONS[cat] || ''} {CATEGORY_LABELS[cat] || cat} ({cnt})
-          </FilterPill>
-        ))}
+
+        {/* "All" pill with global select-all toggle */}
+        <CategoryFilterPill
+          label="All"
+          active={!activeCategory}
+          onFilterClick={() => setActiveCategory(null)}
+          allSelected={baseItems.length > 0 && baseItems.every(i => i.isIncludedInRequest)}
+          someSelected={baseItems.some(i => i.isIncludedInRequest) && !baseItems.every(i => i.isIncludedInRequest)}
+          onToggleSelect={() => toggleCategory(null)}
+        />
+
+        {Array.from(categoryCounts).map(([cat, cnt]) => {
+          const catItems = baseItems.filter(i => i.category === cat);
+          const allSelected = catItems.length > 0 && catItems.every(i => i.isIncludedInRequest);
+          const someSelected = catItems.some(i => i.isIncludedInRequest) && !allSelected;
+          return (
+            <CategoryFilterPill
+              key={cat}
+              label={`${CATEGORY_ICONS[cat] || ''} ${CATEGORY_LABELS[cat] || cat} (${cnt})`}
+              active={activeCategory === cat}
+              onFilterClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+              allSelected={allSelected}
+              someSelected={someSelected}
+              onToggleSelect={() => toggleCategory(cat)}
+            />
+          );
+        })}
       </div>
 
       {/* Items list */}
@@ -447,6 +466,47 @@ function FilterPill({ active, activeColor, onClick, children }: { active: boolea
       background: active ? `${color}10` : 'transparent',
       color: active ? color : 'var(--bp-subtle)', cursor: 'pointer',
     }}>{children}</button>
+  );
+}
+
+// ── Category filter pill with built-in select-all toggle ────────────────────
+
+function CategoryFilterPill({ label, active, onFilterClick, allSelected, someSelected, onToggleSelect }: {
+  label: string;
+  active: boolean;
+  onFilterClick: () => void;
+  allSelected: boolean;
+  someSelected: boolean;
+  onToggleSelect: () => void;
+}) {
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'stretch', gap: 0 }}>
+      {/* Filter button (left half) */}
+      <button onClick={onFilterClick} style={{
+        fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
+        borderRadius: '20px 0 0 20px',
+        border: `1px solid ${active ? ACCENT : 'var(--bp-border)'}`,
+        borderRight: 'none',
+        background: active ? `${ACCENT}10` : 'transparent',
+        color: active ? ACCENT : 'var(--bp-subtle)', cursor: 'pointer',
+      }}>{label}</button>
+      {/* Select-all toggle (right half) */}
+      <button
+        onClick={onToggleSelect}
+        title={allSelected ? 'Deselect all in this category' : 'Select all in this category'}
+        style={{
+          fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, padding: '5px 8px',
+          borderRadius: '0 20px 20px 0',
+          border: `1px solid ${active ? ACCENT : 'var(--bp-border)'}`,
+          background: allSelected ? `${ACCENT}18` : someSelected ? `${ACCENT}08` : 'transparent',
+          color: allSelected ? ACCENT : 'var(--bp-subtle)', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          minWidth: 28,
+        }}
+      >
+        {allSelected ? '\u2713' : someSelected ? '\u2012' : '\u25CB'}
+      </button>
+    </div>
   );
 }
 
