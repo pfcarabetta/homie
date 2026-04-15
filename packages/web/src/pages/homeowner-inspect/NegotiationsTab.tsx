@@ -313,9 +313,9 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <SummaryCard label="Your Ask" subLabel={`${totals.selectedCount} item${totals.selectedCount !== 1 ? 's' : ''}`} value={formatCurrency(totals.yourAsk / 100)} color={RED} icon="\uD83D\uDCCB" />
-        <SummaryCard label="Seller Agreed" subLabel="Across all items" value={formatCurrency(totals.sellerAgreed / 100)} color={ACCENT} icon="\uD83E\uDD1D" />
-        <SummaryCard label="Credits Received" subLabel="Closed concessions" value={formatCurrency(totals.creditsReceived / 100)} color={GREEN} icon="\u2705" />
+        <SummaryCard label="Your Ask" subLabel={`${totals.selectedCount} item${totals.selectedCount !== 1 ? 's' : ''}`} value={formatCurrency(totals.yourAsk / 100)} color={RED} icon={'\uD83D\uDCCB'} />
+        <SummaryCard label="Seller Agreed" subLabel="Across all items" value={formatCurrency(totals.sellerAgreed / 100)} color={ACCENT} icon={'\uD83E\uDD1D'} />
+        <SummaryCard label="Credits Received" subLabel="Closed concessions" value={formatCurrency(totals.creditsReceived / 100)} color={GREEN} icon={'\u2705'} />
       </div>
 
       {/* Action bar — PDF download + clear */}
