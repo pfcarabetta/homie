@@ -435,6 +435,14 @@ export const inspectService = {
     );
   },
 
+  /** Authenticated: seed fake quotes for testing (dev only) */
+  seedMockQuotes(reportId: string) {
+    return fetchAPI<{ quotesGenerated: number; itemsQuoted: number }>(
+      `/api/v1/account/reports/${reportId}/seed-mock-quotes`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+  },
+
   /** Authenticated: accept a quote for an inspection item */
   bookQuote(reportId: string, itemId: string, providerId: string) {
     return fetchAPI<{ bookingId: string; status: string; providerName: string; providerPhone: string; quotedPrice: string | null; scheduled: string | null }>(

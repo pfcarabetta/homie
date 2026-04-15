@@ -1218,6 +1218,156 @@ router.post('/reports/:reportId/items/:itemId/chat', async (req: Request, res: R
   }
 });
 
+// ── Mock Quotes (testing only) ──────────────────────────────────────────────
+
+const MOCK_PROVIDERS = [
+  { name: 'Acme Pro Services', rating: '4.8', phone: '+15551234567', availability: 'Tomorrow afternoon' },
+  { name: 'Reliable Home Experts', rating: '4.6', phone: '+15552345678', availability: 'This week' },
+  { name: 'QuickFix Contractors', rating: '4.3', phone: '+15553456789', availability: 'Within 3 days' },
+  { name: 'Premier Handymen', rating: '4.9', phone: '+15554567890', availability: 'Next week' },
+  { name: 'BlueStar Services', rating: '4.1', phone: '+15555678901', availability: 'Monday morning' },
+];
+
+// POST /api/v1/account/reports/:reportId/seed-mock-quotes — generate fake quotes for testing
+router.post('/reports/:reportId/seed-mock-quotes', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select({ id: inspectionReports.id })
+      .from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    // Get all dispatched items for this report that don't have booked status
+    const dispatchedItems = await db.select().from(inspectionReportItems)
+      .where(and(
+        eq(inspectionReportItems.reportId, report.id),
+        sql`${inspectionReportItems.dispatchStatus} IN ('dispatched', 'quotes_received', 'quoted', 'pending_dispatch')`,
+      ));
+
+    if (dispatchedItems.length === 0) {
+      res.status(400).json({ data: null, error: 'No dispatched items to seed quotes for. Dispatch items first.', meta: {} });
+      return;
+    }
+
+    // Ensure mock provider records exist
+    const mockProviderIds: string[] = [];
+    for (const mock of MOCK_PROVIDERS) {
+      const [existing] = await db.select({ id: providers.id }).from(providers)
+        .where(eq(providers.name, mock.name)).limit(1);
+      if (existing) {
+        mockProviderIds.push(existing.id);
+      } else {
+        const [created] = await db.insert(providers).values({
+          name: mock.name,
+          phone: mock.phone,
+          googleRating: mock.rating,
+          reviewCount: Math.floor(Math.random() * 200) + 50,
+          categories: ['general'],
+        }).returning({ id: providers.id });
+        mockProviderIds.push(created.id);
+      }
+    }
+
+    let totalQuotesGenerated = 0;
+
+    // For each dispatched item, generate 2-3 mock quotes
+    for (const item of dispatchedItems) {
+      if (!item.dispatchId) continue;
+
+      // Skip if this item already has real quotes
+      const existingQuotes = (item.quotes as Array<{ providerId: string }> | null) ?? [];
+      if (existingQuotes.length >= 2) continue;
+
+      const quoteCount = Math.floor(Math.random() * 2) + 2; // 2-3 quotes
+      const shuffled = [...MOCK_PROVIDERS].map((p, i) => ({ ...p, providerId: mockProviderIds[i] })).sort(() => Math.random() - 0.5).slice(0, quoteCount);
+
+      const avgCost = ((item.aiCostEstimateLowCents ?? 0) + (item.aiCostEstimateHighCents ?? 0)) / 2;
+      const baseCost = avgCost > 0 ? avgCost : 50000; // $500 default
+
+      const newQuotes: Array<{ providerId: string; providerName: string; providerRating: string; amountCents: number; availability: string; receivedAt: string }> = [];
+
+      for (const mock of shuffled) {
+        // Price varies -20% to +30% from base
+        const variance = 0.8 + Math.random() * 0.5;
+        const amountCents = Math.round(baseCost * variance);
+
+        // Insert provider response
+        await db.insert(providerResponses).values({
+          jobId: item.dispatchId,
+          providerId: mock.providerId,
+          channel: Math.random() > 0.5 ? 'sms' : 'voice',
+          quotedPrice: `$${Math.round(amountCents / 100)}`,
+          availability: mock.availability,
+          message: `We can help with ${item.title.toLowerCase()}. ${mock.availability}.`,
+          ratingAtTime: mock.rating,
+        });
+
+        newQuotes.push({
+          providerId: mock.providerId,
+          providerName: mock.name,
+          providerRating: mock.rating,
+          amountCents,
+          availability: mock.availability,
+          receivedAt: new Date().toISOString(),
+        });
+
+        totalQuotesGenerated++;
+      }
+
+      // Find lowest (best) quote
+      const best = newQuotes.reduce((lo, q) => q.amountCents < lo.amountCents ? q : lo, newQuotes[0]);
+
+      // Update item with all quotes and best quote details
+      const allQuotes = [...existingQuotes, ...newQuotes] as unknown as typeof inspectionReportItems.$inferInsert.quotes;
+      await db.update(inspectionReportItems).set({
+        quotes: allQuotes,
+        quoteAmountCents: best.amountCents,
+        providerName: best.providerName,
+        providerRating: best.providerRating,
+        providerAvailability: best.availability,
+        dispatchStatus: 'quotes_received',
+        updatedAt: new Date(),
+      }).where(eq(inspectionReportItems.id, item.id));
+    }
+
+    // Update report totals
+    const itemsQuoted = await db.select({ c: count() }).from(inspectionReportItems)
+      .where(and(
+        eq(inspectionReportItems.reportId, report.id),
+        sql`${inspectionReportItems.quoteAmountCents} IS NOT NULL`,
+      ));
+
+    const totalValueResult = await db.select({
+      total: sql<number>`COALESCE(SUM(${inspectionReportItems.quoteAmountCents}), 0)::int`,
+    }).from(inspectionReportItems)
+      .where(and(
+        eq(inspectionReportItems.reportId, report.id),
+        sql`${inspectionReportItems.quoteAmountCents} IS NOT NULL`,
+      ));
+
+    await db.update(inspectionReports).set({
+      itemsQuoted: itemsQuoted[0].c,
+      totalQuoteValueCents: totalValueResult[0]?.total ?? 0,
+      updatedAt: new Date(),
+    }).where(eq(inspectionReports.id, report.id));
+
+    res.json({
+      data: {
+        quotesGenerated: totalQuotesGenerated,
+        itemsQuoted: itemsQuoted[0].c,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/seed-mock-quotes]');
+    res.status(500).json({ data: null, error: 'Failed to seed mock quotes', meta: {} });
+  }
+});
+
 // ── Quote Booking ──────────────────────────────────────────────────────────
 
 // POST /api/v1/account/reports/:reportId/items/:itemId/book — accept a quote for an item

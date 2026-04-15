@@ -190,14 +190,17 @@ export default function QuotesTab({ reports, onNavigate, onReportsChange }: Quot
   return (
     <div>
       {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 24, fontWeight: 700, color: 'var(--bp-text)', margin: 0 }}>Quotes</h1>
-        <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: '4px 0 0' }}>
-          {stats.waiting > 0 && <>{stats.waiting} waiting &middot; </>}
-          {stats.quoted} quote{stats.quoted !== 1 ? 's' : ''} received
-          {stats.booked > 0 && <> &middot; {stats.booked} booked</>}
-          {stats.totalQuoteValue > 0 && <> &middot; {formatCurrency(stats.totalQuoteValue)} total</>}
-        </p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 24, fontWeight: 700, color: 'var(--bp-text)', margin: 0 }}>Quotes</h1>
+          <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: '4px 0 0' }}>
+            {stats.waiting > 0 && <>{stats.waiting} waiting &middot; </>}
+            {stats.quoted} quote{stats.quoted !== 1 ? 's' : ''} received
+            {stats.booked > 0 && <> &middot; {stats.booked} booked</>}
+            {stats.totalQuoteValue > 0 && <> &middot; {formatCurrency(stats.totalQuoteValue)} total</>}
+          </p>
+        </div>
+        <MockQuotesButton reports={reports} onSeeded={loadItems} />
       </div>
 
       {/* Booking result banner */}
@@ -543,6 +546,82 @@ function Spinner() {
       margin: '0 auto',
     }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+// ── Mock Quotes Button (dev/testing) ────────────────────────────────────────
+
+function MockQuotesButton({ reports, onSeeded }: { reports: PortalReport[]; onSeeded: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
+  const reportsWithDispatched = reports.filter(r => r.dispatchedCount > 0);
+  if (reportsWithDispatched.length === 0) return null;
+
+  async function handleSeed(reportId: string) {
+    setLoading(true);
+    setShowMenu(false);
+    try {
+      await inspectService.seedMockQuotes(reportId);
+      await onSeeded();
+    } catch { /* ignore */ }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        disabled={loading}
+        style={{
+          padding: '8px 14px', borderRadius: 8, border: '1px dashed var(--bp-border)',
+          background: 'transparent', color: 'var(--bp-subtle)',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          fontSize: 12, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+          opacity: loading ? 0.5 : 0.8,
+        }}
+      >
+        {loading ? 'Seeding...' : '\u2728 Generate Test Quotes'}
+      </button>
+      {showMenu && (
+        <div
+          onMouseLeave={() => setShowMenu(false)}
+          style={{
+            position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
+            background: 'var(--bp-card)', borderRadius: 10, border: '1px solid var(--bp-border)',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.15)', minWidth: 240, padding: 6,
+          }}
+        >
+          <div style={{
+            fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)',
+            padding: '6px 10px', borderBottom: '1px solid var(--bp-border)', marginBottom: 4,
+          }}>
+            Generate mock quotes for:
+          </div>
+          {reportsWithDispatched.map(r => (
+            <button
+              key={r.id}
+              onClick={() => handleSeed(r.id)}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                padding: '8px 10px', borderRadius: 6, border: 'none', background: 'transparent',
+                color: 'var(--bp-text)', cursor: 'pointer',
+                fontFamily: "'DM Sans',sans-serif", fontSize: 13,
+              }}
+              onMouseOver={e => (e.currentTarget.style.background = 'var(--bp-bg)')}
+              onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {r.propertyAddress}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 2 }}>
+                {r.dispatchedCount} dispatched item{r.dispatchedCount !== 1 ? 's' : ''}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
