@@ -267,6 +267,13 @@
       "when": 1776220191839,
       "tag": "0037_luxuriant_senator_kelly",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1776221204677,
+      "tag": "0038_misty_electro",
+      "breakpoints": true
     }
   ]
 }
