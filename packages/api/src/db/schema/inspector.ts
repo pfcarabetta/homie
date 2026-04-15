@@ -139,12 +139,17 @@ export const inspectionReportItems = pgTable('inspection_report_items', {
   repairRequestSource: text('repair_request_source'),
   /** Custom homeowner-entered ask amount, used when repairRequestSource = 'custom' */
   repairRequestCustomAmountCents: integer('repair_request_custom_amount_cents'),
+  /** If this item was extracted from a supporting document (pest report, seller disclosure), reference it here */
+  sourceDocumentId: uuid('source_document_id'),
+  /** Cross-references: other inspection item IDs this item correlates with (bidirectional) */
+  crossReferencedItemIds: jsonb('cross_referenced_item_ids').$type<string[]>(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index('inspection_item_report_idx').on(t.reportId, t.sortOrder),
   index('inspection_item_dispatch_idx').on(t.dispatchStatus),
   index('inspection_item_category_idx').on(t.category),
+  index('inspection_item_source_doc_idx').on(t.sourceDocumentId),
 ]);
 
 export type InspectionReportItem = typeof inspectionReportItems.$inferSelect;

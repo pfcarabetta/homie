@@ -72,6 +72,10 @@ export interface InspectionItem {
   sourcePages?: number[] | null;
   sellerAction?: 'fix_before_listing' | 'disclose' | 'ignore' | null;
   sellerActionReason?: string | null;
+  /** If set, this item was extracted from a supporting document — references that doc's id */
+  sourceDocumentId?: string | null;
+  /** Other inspection item IDs that cross-reference this one (bidirectional) */
+  crossReferencedItemIds?: string[];
 }
 
 export interface ValueImpact {
@@ -668,6 +672,10 @@ export interface PortalReportItem {
   sellerActionReason?: string | null;
   /** ISO timestamp when homeowner marked this item complete (Maintenance tab) */
   maintenanceCompletedAt?: string | null;
+  /** If set, this item was extracted from a supporting document — references that doc's id */
+  sourceDocumentId?: string | null;
+  /** Other inspection item IDs that cross-reference this one (bidirectional) */
+  crossReferencedItemIds?: string[];
 }
 
 export interface PortalReport {

@@ -806,6 +806,15 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
                 reportId={reportId}
                 showDeepDive={!isLocked}
                 reportFileUrl={fullReport?.reportFileUrl ?? null}
+                supportingDocs={supportingDocs}
+                allItems={items}
+                onScrollToItem={(targetId) => {
+                  const el = document.getElementById(`item-${targetId}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setExpandedItemId(targetId);
+                  }
+                }}
               />
             ))}
           </div>
@@ -940,21 +949,34 @@ function PricingModal({ reportId, itemCount, mode }: { reportId: string; itemCou
 
 // ── Item Card ───────────────────────────────────────────────────────────────
 
-function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive, reportFileUrl }: {
+function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive, reportFileUrl, supportingDocs, allItems, onScrollToItem }: {
   item: InspectionItem;
   expanded?: boolean;
   onToggleExpand?: () => void;
   reportId?: string;
   showDeepDive?: boolean;
   reportFileUrl?: string | null;
+  supportingDocs?: SupportingDocument[];
+  allItems?: InspectionItem[];
+  onScrollToItem?: (itemId: string) => void;
 }) {
   const sevColor = SEVERITY_COLORS[item.severity] ?? '#9B9490';
   const catLabel = CATEGORY_LABELS[item.category] ?? item.category;
   const catIcon = CATEGORY_ICONS[item.category] ?? '';
   const canExpand = showDeepDive && onToggleExpand && reportId;
+  const [showXrefList, setShowXrefList] = useState(false);
+
+  const sourceDoc = item.sourceDocumentId && supportingDocs
+    ? supportingDocs.find(d => d.id === item.sourceDocumentId)
+    : null;
+  const xrefIds = item.crossReferencedItemIds ?? [];
+  const xrefItems = xrefIds.length > 0 && allItems
+    ? xrefIds.map(id => allItems.find(i => i.id === id)).filter((i): i is InspectionItem => !!i)
+    : [];
 
   return (
     <div
+      id={`item-${item.id}`}
       onClick={canExpand ? onToggleExpand : undefined}
       style={{
         background: 'var(--bp-card)', borderRadius: 14,
@@ -962,12 +984,13 @@ function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive, repo
         padding: '18px 20px',
         cursor: canExpand ? 'pointer' : 'default',
         transition: 'border-color 0.15s',
+        scrollMarginTop: 80,
       }}
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
             <span style={{
               fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, padding: '2px 8px',
               borderRadius: 12, background: `${sevColor}18`, color: sevColor,
@@ -977,6 +1000,35 @@ function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive, repo
             <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)' }}>
               {catIcon} {catLabel}
             </span>
+            {sourceDoc && (
+              <span
+                title={sourceDoc.fileName}
+                style={{
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
+                  padding: '2px 8px', borderRadius: 10,
+                  background: sourceDoc.documentType === 'pest_report' ? '#FEF3C7' : '#DBEAFE',
+                  color: sourceDoc.documentType === 'pest_report' ? '#B45309' : '#1D4ED8',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}
+              >
+                {sourceDoc.documentType === 'pest_report' ? '\uD83D\uDC1B' : '\uD83D\uDCCB'}
+                From {sourceDoc.documentType === 'pest_report' ? 'Pest Report' : 'Disclosure'}
+              </span>
+            )}
+            {xrefItems.length > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowXrefList(v => !v); }}
+                style={{
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
+                  padding: '2px 8px', borderRadius: 10,
+                  background: '#F3E8FF', color: '#7C3AED',
+                  border: 'none', cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}
+              >
+                {'\uD83D\uDD17'} Cross-referenced ({xrefItems.length})
+              </button>
+            )}
             {canExpand && (
               <span style={{
                 fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
@@ -997,6 +1049,48 @@ function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive, repo
           </div>
         )}
       </div>
+
+      {/* Cross-referenced items list (expandable) */}
+      {showXrefList && xrefItems.length > 0 && (
+        <div style={{
+          marginBottom: 10, padding: '10px 12px', borderRadius: 10,
+          background: '#F3E8FF40', border: '1px solid #DDD6FE',
+        }}>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: '#7C3AED', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Correlates with
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {xrefItems.map(rel => {
+              const relSev = SEVERITY_COLORS[rel.severity] ?? '#9B9490';
+              return (
+                <button
+                  key={rel.id}
+                  onClick={(e) => { e.stopPropagation(); onScrollToItem?.(rel.id); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 10px', borderRadius: 8,
+                    background: 'var(--bp-card)', border: '1px solid var(--bp-border)',
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 600, padding: '2px 6px',
+                    borderRadius: 8, background: `${relSev}18`, color: relSev, whiteSpace: 'nowrap',
+                  }}>
+                    {SEVERITY_LABELS[rel.severity] ?? rel.severity}
+                  </span>
+                  <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-text)', flex: 1 }}>
+                    {rel.title}
+                  </span>
+                  <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: '#7C3AED' }}>
+                    Jump {'\u2192'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Description */}
       {item.description && (
@@ -1158,102 +1252,149 @@ function CrossReferenceInsightsPanel({ insights, supportingDocs, onAddDocument }
 }) {
   const parsedDocCount = supportingDocs.filter(d => d.parsingStatus === 'parsed').length;
   const stillProcessing = supportingDocs.some(d => d.parsingStatus === 'processing' || d.parsingStatus === 'uploading');
+  const hasContent = parsedDocCount > 0 || stillProcessing || insights.length > 0;
+  // Default collapsed when there are insights to review (so scanning the page stays compact)
+  const [collapsed, setCollapsed] = useState<boolean>(insights.length > 0);
+  // Keep the collapsed flag in sync as insights arrive — once the first insight shows up, collapse
+  // Without this, a user who opens a report during processing would see the panel stay expanded as
+  // insights stream in, which is fine, but we also don't want to auto-collapse if they've manually
+  // expanded it. Compromise: only auto-collapse on the initial transition from 0 → N.
+  const prevInsightCount = useRef(insights.length);
+  useEffect(() => {
+    if (prevInsightCount.current === 0 && insights.length > 0) setCollapsed(true);
+    prevInsightCount.current = insights.length;
+  }, [insights.length]);
+
+  const concernCount = insights.filter(i => i.severity === 'concern').length;
+  const warningCount = insights.filter(i => i.severity === 'warning').length;
 
   return (
     <div style={{
       background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
-      padding: '18px 20px', marginBottom: 16,
+      padding: 0, marginBottom: 16, overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+      {/* Header — clickable when there's content */}
+      <button
+        onClick={() => hasContent && setCollapsed(c => !c)}
+        disabled={!hasContent}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          padding: '16px 20px', background: 'transparent', border: 'none',
+          cursor: hasContent ? 'pointer' : 'default',
+          textAlign: 'left',
+        }}
+      >
         <span style={{ fontSize: 18 }}>{'\uD83D\uDD0D'}</span>
         <h3 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, color: 'var(--bp-text)', margin: 0 }}>
           Cross-Reference Insights
         </h3>
+        {insights.length > 0 && (
+          <span style={{
+            fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700,
+            padding: '2px 8px', borderRadius: 100,
+            background: concernCount > 0 ? '#FEE2E2' : warningCount > 0 ? '#FEF3C7' : '#DBEAFE',
+            color: concernCount > 0 ? '#DC2626' : warningCount > 0 ? '#B45309' : '#1D4ED8',
+          }}>
+            {insights.length}
+          </span>
+        )}
         <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)' }}>
           {parsedDocCount > 0 ? `${parsedDocCount} supporting document${parsedDocCount !== 1 ? 's' : ''}` : 'No supporting documents yet'}
         </span>
-      </div>
-
-      {/* Empty state */}
-      {parsedDocCount === 0 && !stillProcessing && (
-        <div style={{
-          padding: '20px 16px', background: 'var(--bp-bg)', borderRadius: 10,
-          textAlign: 'center',
-        }}>
-          <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', margin: '0 0 12px', maxWidth: 480, marginInline: 'auto' }}>
-            Upload a pest report or seller's disclosure to unlock AI cross-referenced insights \u2014 we'll find correlations, contradictions, and gaps across all your documents.
-          </p>
-          <button onClick={onAddDocument} style={{
-            padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2563EB', color: '#fff',
-            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer',
-          }}>Add Supporting Document</button>
-        </div>
-      )}
-
-      {/* Processing state */}
-      {stillProcessing && insights.length === 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0' }}>
-          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#2563EB', animation: 'pulse 1.5s ease-in-out infinite' }} />
-          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)' }}>
-            Analyzing your documents... insights will appear shortly.
+        {hasContent && (
+          <span style={{
+            marginLeft: 'auto', fontFamily: "'DM Sans',sans-serif", fontSize: 11,
+            color: 'var(--bp-subtle)', fontWeight: 600,
+          }}>
+            {collapsed ? (insights.length > 0 ? `Show ${insights.length}` : 'Show') : 'Hide'} {collapsed ? '\u25BC' : '\u25B2'}
           </span>
-        </div>
-      )}
+        )}
+      </button>
 
-      {/* Insights */}
-      {insights.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {insights.map(insight => {
-            const meta = SEVERITY_META[insight.severity] ?? SEVERITY_META.info;
-            return (
-              <div key={insight.id} style={{
-                padding: '12px 14px', borderRadius: 10,
-                background: meta.bg, borderLeft: `4px solid ${meta.color}`,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 13 }}>{meta.icon}</span>
-                  <span style={{
-                    fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
-                    padding: '2px 7px', borderRadius: 10,
-                    background: `${meta.color}25`, color: meta.color,
-                    textTransform: 'uppercase', letterSpacing: '0.05em',
+      {(!collapsed || !hasContent) && (
+        <div style={{ padding: '0 20px 18px' }}>
+          {/* Empty state */}
+          {parsedDocCount === 0 && !stillProcessing && (
+            <div style={{
+              padding: '20px 16px', background: 'var(--bp-bg)', borderRadius: 10,
+              textAlign: 'center',
+            }}>
+              <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', margin: '0 0 12px', maxWidth: 480, marginInline: 'auto' }}>
+                Upload a pest report or seller's disclosure to unlock AI cross-referenced insights {'\u2014'} we'll find correlations, contradictions, and gaps across all your documents.
+              </p>
+              <button onClick={onAddDocument} style={{
+                padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2563EB', color: '#fff',
+                fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}>Add Supporting Document</button>
+            </div>
+          )}
+
+          {/* Processing state */}
+          {stillProcessing && insights.length === 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0' }}>
+              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#2563EB', animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)' }}>
+                Analyzing your documents... insights will appear shortly.
+              </span>
+            </div>
+          )}
+
+          {/* Insights */}
+          {insights.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {insights.map(insight => {
+                const meta = SEVERITY_META[insight.severity] ?? SEVERITY_META.info;
+                return (
+                  <div key={insight.id} style={{
+                    padding: '12px 14px', borderRadius: 10,
+                    background: meta.bg, borderLeft: `4px solid ${meta.color}`,
                   }}>
-                    {meta.label}
-                  </span>
-                </div>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: meta.color, marginBottom: 4 }}>
-                  {insight.title}
-                </div>
-                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: '#1F2937', lineHeight: 1.5 }}>
-                  {insight.description}
-                </div>
-                {(insight.relatedDocIds.length > 0 || insight.relatedItemIds.length > 0) && (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                    {insight.relatedDocIds.length > 0 && (
-                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: meta.color, opacity: 0.85 }}>
-                        \u00B7 {insight.relatedDocIds.length} related doc{insight.relatedDocIds.length !== 1 ? 's' : ''}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13 }}>{meta.icon}</span>
+                      <span style={{
+                        fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
+                        padding: '2px 7px', borderRadius: 10,
+                        background: `${meta.color}25`, color: meta.color,
+                        textTransform: 'uppercase', letterSpacing: '0.05em',
+                      }}>
+                        {meta.label}
                       </span>
-                    )}
-                    {insight.relatedItemIds.length > 0 && (
-                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: meta.color, opacity: 0.85 }}>
-                        \u00B7 {insight.relatedItemIds.length} related inspection item{insight.relatedItemIds.length !== 1 ? 's' : ''}
-                      </span>
+                    </div>
+                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: meta.color, marginBottom: 4 }}>
+                      {insight.title}
+                    </div>
+                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: '#1F2937', lineHeight: 1.5 }}>
+                      {insight.description}
+                    </div>
+                    {(insight.relatedDocIds.length > 0 || insight.relatedItemIds.length > 0) && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                        {insight.relatedDocIds.length > 0 && (
+                          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: meta.color, opacity: 0.85 }}>
+                            {'\u00B7'} {insight.relatedDocIds.length} related doc{insight.relatedDocIds.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {insight.relatedItemIds.length > 0 && (
+                          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: meta.color, opacity: 0.85 }}>
+                            {'\u00B7'} {insight.relatedItemIds.length} related inspection item{insight.relatedItemIds.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                );
+              })}
+            </div>
+          )}
 
-      {/* Failed docs */}
-      {supportingDocs.some(d => d.parsingStatus === 'failed') && (
-        <div style={{
-          marginTop: 10, padding: '8px 12px', borderRadius: 8,
-          background: '#FEE2E2', fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: '#DC2626',
-        }}>
-          {supportingDocs.filter(d => d.parsingStatus === 'failed').length} document{supportingDocs.filter(d => d.parsingStatus === 'failed').length !== 1 ? 's' : ''} failed to parse \u2014 see the documents list below.
+          {/* Failed docs */}
+          {supportingDocs.some(d => d.parsingStatus === 'failed') && (
+            <div style={{
+              marginTop: 10, padding: '8px 12px', borderRadius: 8,
+              background: '#FEE2E2', fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: '#DC2626',
+            }}>
+              {supportingDocs.filter(d => d.parsingStatus === 'failed').length} document{supportingDocs.filter(d => d.parsingStatus === 'failed').length !== 1 ? 's' : ''} failed to parse {'\u2014'} see the documents list below.
+            </div>
+          )}
         </div>
       )}
     </div>

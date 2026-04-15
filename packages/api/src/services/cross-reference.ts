@@ -2,8 +2,10 @@
  * Cross-reference insight generator.
  * Takes the inspection items + parsed supporting documents for a report,
  * and asks Claude to find correlations, contradictions, and gaps.
+ * Also identifies pairs of items that correlate, and records those
+ * links bidirectionally on each item's crossReferencedItemIds column.
  */
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { db } from '../db';
 import { inspectionReports, inspectionReportItems, inspectionSupportingDocuments, inspectionCrossReferenceInsights } from '../db/schema/inspector';
@@ -26,21 +28,28 @@ const SYSTEM_PROMPT = `You are a real estate analyst comparing a home inspection
 - Contradictions: where the seller's disclosure or pest report contradicts the inspection
 - Gaps: things the seller didn't disclose that the inspection or pest report uncovered
 
-Output a JSON array of insights. Each insight has exactly these keys:
-- title: short headline (under 80 characters)
-- description: 1-3 sentence explanation linking the findings together. Be specific about what was found in each document.
-- severity: "info" (informational connection), "warning" (worth noting but not urgent), or "concern" (potential red flag for the buyer)
-- relatedDocIds: array of supporting document IDs that contributed to this insight
-- relatedItemIds: array of inspection item IDs that contributed to this insight
+Some inspection items may have been extracted from a supporting document (they show sourceDoc=<docId>). Identify when those items correlate with items from OTHER sources (inspector items or other docs).
+
+Output a JSON object with exactly these keys:
+- insights: array of insight objects. Each has:
+  - title: short headline (under 80 characters)
+  - description: 1-3 sentence explanation linking the findings together. Be specific about what was found in each document.
+  - severity: "info" (informational connection), "warning" (worth noting but not urgent), or "concern" (potential red flag for the buyer)
+  - relatedDocIds: array of supporting document IDs that contributed to this insight
+  - relatedItemIds: array of inspection item IDs that contributed to this insight
+- itemLinks: array of pairs of inspection item IDs that correlate — same issue found by different sources, or one issue that reinforces another. Each pair is { "itemIdA": "<uuid>", "itemIdB": "<uuid>" }. Only link items from DIFFERENT sources (one from inspector + one from doc, or two from different docs). Do not link two items that have the same sourceDoc value.
 
 Rules:
 - Maximum 8 insights, prioritize the most actionable
 - Don't repeat findings — each insight should add new analytical value
-- It's OK to have an empty array if there's nothing meaningful to say
+- It's OK to have empty arrays if there's nothing meaningful to say
 - Don't invent connections that aren't supported by the evidence
 - Use the exact UUIDs from the input
+- itemLinks should be conservative — only link when the correlation is clear
 
-Return ONLY the JSON array. No preamble, no markdown code fences.`;
+Return ONLY the JSON object. No preamble, no markdown code fences.`;
+
+interface ItemLink { itemIdA: string; itemIdB: string }
 
 export async function generateCrossReferenceInsights(reportId: string): Promise<CrossReferenceInsight[]> {
   // 1. Load the report
@@ -58,15 +67,19 @@ export async function generateCrossReferenceInsights(reportId: string): Promise<
     .where(eq(inspectionSupportingDocuments.reportId, reportId));
   const parsedDocs = docs.filter(d => d.parsingStatus === 'parsed' && d.parsedSummary);
 
-  // No insights if no supporting docs
+  // No insights if no supporting docs. Also clear any stale cross-refs.
   if (parsedDocs.length === 0) {
     await upsertInsights(reportId, []);
+    await clearAllItemLinks(reportId);
     return [];
   }
 
-  // 4. Build the user message
+  // 4. Build the user message — include sourceDocumentId so AI knows what came from where
   const itemsBlock = items.length > 0
-    ? items.map(i => `  - id=${i.id} | severity=${i.severity} | category=${i.category} | location=${i.locationInProperty || 'unspecified'} | title=${i.title}${i.description ? ` | notes=${i.description.slice(0, 200)}` : ''}`).join('\n')
+    ? items.map(i => {
+        const source = i.sourceDocumentId ? `sourceDoc=${i.sourceDocumentId}` : 'sourceDoc=inspector';
+        return `  - id=${i.id} | ${source} | severity=${i.severity} | category=${i.category} | location=${i.locationInProperty || 'unspecified'} | title=${i.title}${i.description ? ` | notes=${i.description.slice(0, 200)}` : ''}`;
+      }).join('\n')
     : '  (none)';
 
   const docsBlock = parsedDocs.map(d => {
@@ -82,7 +95,7 @@ ${itemsBlock}
 SUPPORTING DOCUMENTS (${parsedDocs.length}):
 ${docsBlock}
 
-Produce the cross-reference insights JSON array now.`;
+Produce the JSON object now.`;
 
   // 5. Call Claude
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -108,11 +121,11 @@ Produce the cross-reference insights JSON array now.`;
     }
 
     const raw = textBlock.text.trim();
-    const arrStart = raw.indexOf('[');
-    const arrEnd = raw.lastIndexOf(']');
-    const jsonStr = arrStart !== -1 && arrEnd > arrStart ? raw.slice(arrStart, arrEnd + 1) : raw;
+    const objStart = raw.indexOf('{');
+    const objEnd = raw.lastIndexOf('}');
+    const jsonStr = objStart !== -1 && objEnd > objStart ? raw.slice(objStart, objEnd + 1) : raw;
 
-    let parsed: Array<Omit<CrossReferenceInsight, 'id'>>;
+    let parsed: { insights?: Array<Omit<CrossReferenceInsight, 'id'>>; itemLinks?: ItemLink[] };
     try {
       parsed = JSON.parse(jsonStr);
     } catch (err) {
@@ -121,7 +134,7 @@ Produce the cross-reference insights JSON array now.`;
     }
 
     // Add IDs and validate severity
-    const insights: CrossReferenceInsight[] = parsed.map(p => ({
+    const insights: CrossReferenceInsight[] = (parsed.insights || []).map(p => ({
       id: randomUUID(),
       title: p.title || 'Untitled insight',
       description: p.description || '',
@@ -131,7 +144,18 @@ Produce the cross-reference insights JSON array now.`;
     }));
 
     await upsertInsights(reportId, insights);
-    logger.info({ reportId, insightCount: insights.length }, '[cross-reference] Insights generated');
+
+    // Apply item cross-references
+    const validItemIds = new Set(items.map(i => i.id));
+    const links = Array.isArray(parsed.itemLinks) ? parsed.itemLinks : [];
+    const validLinks = links.filter(l =>
+      typeof l.itemIdA === 'string' && typeof l.itemIdB === 'string'
+      && l.itemIdA !== l.itemIdB
+      && validItemIds.has(l.itemIdA) && validItemIds.has(l.itemIdB),
+    );
+    await applyItemLinks(reportId, validLinks);
+
+    logger.info({ reportId, insightCount: insights.length, linkCount: validLinks.length }, '[cross-reference] Insights + links generated');
     return insights;
   } catch (err) {
     logger.error({ err, reportId }, '[cross-reference] Failed to generate insights');
@@ -154,4 +178,45 @@ async function upsertInsights(reportId: string, insights: CrossReferenceInsight[
       insights: insights as never,
     });
   }
+}
+
+/**
+ * Build a per-item set of cross-referenced IDs from the AI's pair list and
+ * write them bidirectionally. Wipes previous cross-refs for the report first
+ * so deletes/regenerations don't leave stale links.
+ */
+async function applyItemLinks(reportId: string, links: ItemLink[]): Promise<void> {
+  // Build adjacency map
+  const adjacency = new Map<string, Set<string>>();
+  for (const { itemIdA, itemIdB } of links) {
+    if (!adjacency.has(itemIdA)) adjacency.set(itemIdA, new Set());
+    if (!adjacency.has(itemIdB)) adjacency.set(itemIdB, new Set());
+    adjacency.get(itemIdA)!.add(itemIdB);
+    adjacency.get(itemIdB)!.add(itemIdA);
+  }
+
+  // Clear all existing cross-refs for this report, then set fresh ones
+  await db.update(inspectionReportItems)
+    .set({ crossReferencedItemIds: null, updatedAt: new Date() })
+    .where(eq(inspectionReportItems.reportId, reportId));
+
+  for (const [itemId, relatedSet] of adjacency.entries()) {
+    await db.update(inspectionReportItems)
+      .set({ crossReferencedItemIds: Array.from(relatedSet) as never, updatedAt: new Date() })
+      .where(eq(inspectionReportItems.id, itemId));
+  }
+}
+
+async function clearAllItemLinks(reportId: string): Promise<void> {
+  await db.update(inspectionReportItems)
+    .set({ crossReferencedItemIds: null, updatedAt: new Date() })
+    .where(eq(inspectionReportItems.reportId, reportId));
+}
+
+// Re-export for callers that want to wipe links on specific items
+export async function clearItemLinks(itemIds: string[]): Promise<void> {
+  if (itemIds.length === 0) return;
+  await db.update(inspectionReportItems)
+    .set({ crossReferencedItemIds: null, updatedAt: new Date() })
+    .where(inArray(inspectionReportItems.id, itemIds));
 }

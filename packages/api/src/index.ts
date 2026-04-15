@@ -118,6 +118,11 @@ async function start() {
       insights jsonb NOT NULL,
       generated_at timestamp with time zone DEFAULT now() NOT NULL
     )`);
+
+    // Item cross-references and source document linking
+    await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS source_document_id uuid`);
+    await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS cross_referenced_item_ids jsonb`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS inspection_item_source_doc_idx ON inspection_report_items (source_document_id)`);
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');
