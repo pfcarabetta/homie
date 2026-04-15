@@ -17,6 +17,19 @@ const RATE_LIMIT_DAYS = 7;
 // Per-workspace cooldown — same workspace can re-contact a provider after 2 days
 const WORKSPACE_RATE_LIMIT_DAYS = 2;
 
+/**
+ * Normalize a phone number to a comparable dedupe key (digits only, US country
+ * code stripped). Google returns "+1 415-555-1234" or "(415) 555-1234"; Yelp
+ * returns "+14155551234". Without this, set-based dedupe silently misses them.
+ */
+function phoneKey(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+  if (digits.length >= 10) return digits;
+  return null;
+}
+
 export async function discoverProviders(params: DiscoveryParams): Promise<DiscoveryResult> {
   const { category, zipCode, radiusMiles, minRating, limit, workspaceId } = params;
   const radiusMeters = Math.round(radiusMiles * MILES_TO_METERS);
@@ -103,12 +116,17 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
 
   // ── Phase 2b: Merge Yelp providers ──────────────────────────────────────
 
-  // Dedup Yelp results against already-known phone numbers to avoid duplicates
-  const knownPhones = new Set(googleProviderRows.map((p) => p.phone).filter(Boolean));
-
-  const newYelpBusinesses = yelpResults.filter(
-    (b) => !b.phone || !knownPhones.has(b.phone),
+  // Dedup Yelp results against already-known phone numbers to avoid duplicates.
+  // Normalize before compare — Google and Yelp return phones in different formats
+  // (e.g. "+1 415-555-1234" vs "+14155551234") so exact string match would miss them.
+  const knownPhoneKeys = new Set(
+    googleProviderRows.map((p) => phoneKey(p.phone)).filter((k): k is string => !!k),
   );
+
+  const newYelpBusinesses = yelpResults.filter((b) => {
+    const key = phoneKey(b.phone);
+    return !key || !knownPhoneKeys.has(key);
+  });
 
   // coordsByProviderId covers all providers (Google rows use UUID after upsert;
   // Yelp rows will be mapped after insert below)
