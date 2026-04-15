@@ -416,11 +416,11 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
           )}
           <button
             onClick={isSellerMode ? handleDownloadPreListingPdf : handleDownloadPdf}
-            disabled={downloadingPdf || (isSellerMode ? false : totals.selectedCount === 0)}
+            disabled={downloadingPdf || totals.selectedCount === 0}
             style={{
               padding: '9px 18px', borderRadius: 8, border: 'none',
-              background: (isSellerMode || totals.selectedCount > 0) && !downloadingPdf ? ACCENT : '#94A3B8',
-              color: '#fff', cursor: (isSellerMode || totals.selectedCount > 0) && !downloadingPdf ? 'pointer' : 'not-allowed',
+              background: totals.selectedCount > 0 && !downloadingPdf ? ACCENT : '#94A3B8',
+              color: '#fff', cursor: totals.selectedCount > 0 && !downloadingPdf ? 'pointer' : 'not-allowed',
               fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
               display: 'inline-flex', alignItems: 'center', gap: 6,
               opacity: downloadingPdf ? 0.7 : 1,

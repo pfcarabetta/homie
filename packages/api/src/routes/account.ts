@@ -1839,11 +1839,14 @@ router.get('/reports/:reportId/pre-listing-plan.pdf', async (req: Request, res: 
     }
 
     const items = await db.select().from(inspectionReportItems)
-      .where(eq(inspectionReportItems.reportId, report.id))
+      .where(and(
+        eq(inspectionReportItems.reportId, report.id),
+        eq(inspectionReportItems.isIncludedInRequest, true),
+      ))
       .orderBy(inspectionReportItems.sortOrder);
 
     if (items.length === 0) {
-      res.status(400).json({ data: null, error: 'No items to include in pre-listing plan', meta: {} });
+      res.status(400).json({ data: null, error: 'No items selected for the pre-listing plan. Check items to include them.', meta: {} });
       return;
     }
 
