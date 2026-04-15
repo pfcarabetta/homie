@@ -164,6 +164,9 @@ export async function generateScripts(params: GenerateScriptsParams): Promise<Sc
   }
 
   // Interpolate job-specific values into the cached template
+  // Format zip code with SSML digits tag for voice, plain for SMS/web
+  const zipSpoken = zipCode.split('').join(' ');
+
   const vars: Record<string, string> = {
     provider_name: providerName,
     category: category.replace(/_/g, ' '),
@@ -174,10 +177,15 @@ export async function generateScripts(params: GenerateScriptsParams): Promise<Sc
     timing,
   };
 
+  const voiceVars: Record<string, string> = {
+    ...vars,
+    zip_code: zipSpoken,
+  };
+
   return {
     job_id: jobId,
     provider_id: providerId,
-    voice: interpolate(template.voice, vars),
+    voice: interpolate(template.voice, voiceVars),
     sms: interpolate(template.sms, vars),
     web: interpolate(template.web, vars),
     generated_at: new Date().toISOString(),
