@@ -146,6 +146,24 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
     yelpCount = yelpProviderRows.length;
   }
 
+  // Trial-decision metric — measures whether Yelp is adding net-new providers beyond Google.
+  // Grep Railway for "[yelp-trial-metric]" before day 28 to decide on the $229/mo conversion.
+  if (yelpResults.length > 0 || places.length > 0) {
+    const yelpDupes = yelpResults.length - newYelpBusinesses.length;
+    const yelpUniquePct = yelpResults.length > 0
+      ? Math.round((newYelpBusinesses.length / yelpResults.length) * 100)
+      : 0;
+    logger.info({
+      category,
+      radiusMiles,
+      googleCount: places.length,
+      yelpReturned: yelpResults.length,
+      yelpUnique: newYelpBusinesses.length,
+      yelpDupesWithGoogle: yelpDupes,
+      yelpUniquePct,
+    }, '[yelp-trial-metric]');
+  }
+
   // Google providers not in coordsByProviderId yet (DB-only providers with no coord match)
   // fall back to radiusMiles in Phase 3.
 
