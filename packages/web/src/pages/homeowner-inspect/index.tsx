@@ -110,7 +110,7 @@ export default function InspectPortal() {
       case 'quotes':
         return <QuotesTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'negotiations':
-        return <NegotiationsTab />;
+        return <NegotiationsTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'maintenance':
         return <MaintenanceTab />;
       case 'documents':
