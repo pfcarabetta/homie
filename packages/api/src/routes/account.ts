@@ -1218,4 +1218,108 @@ router.post('/reports/:reportId/items/:itemId/chat', async (req: Request, res: R
   }
 });
 
+// ── Quote Booking ──────────────────────────────────────────────────────────
+
+// POST /api/v1/account/reports/:reportId/items/:itemId/book — accept a quote for an item
+router.post('/reports/:reportId/items/:itemId/book', async (req: Request, res: Response) => {
+  const { provider_id } = req.body as { provider_id: string };
+
+  if (!provider_id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(provider_id)) {
+    res.status(400).json({ data: null, error: 'provider_id must be a valid UUID', meta: {} });
+    return;
+  }
+
+  try {
+    // Validate report ownership
+    const [report] = await db.select({ id: inspectionReports.id })
+      .from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    // Load item
+    const [item] = await db.select().from(inspectionReportItems)
+      .where(and(eq(inspectionReportItems.id, req.params.itemId), eq(inspectionReportItems.reportId, report.id)))
+      .limit(1);
+
+    if (!item) {
+      res.status(404).json({ data: null, error: 'Item not found', meta: {} });
+      return;
+    }
+
+    if (!item.dispatchId) {
+      res.status(400).json({ data: null, error: 'Item has not been dispatched', meta: {} });
+      return;
+    }
+
+    if (item.dispatchStatus === 'booked' || item.dispatchStatus === 'completed') {
+      res.status(409).json({ data: null, error: 'Item is already booked', meta: {} });
+      return;
+    }
+
+    // Find the matching provider response
+    const rows = await db
+      .select({ response: providerResponses, provider: providers })
+      .from(providerResponses)
+      .innerJoin(providers, eq(providerResponses.providerId, providers.id))
+      .where(and(
+        eq(providerResponses.jobId, item.dispatchId),
+        eq(providerResponses.providerId, provider_id),
+      ))
+      .orderBy(desc(providerResponses.createdAt))
+      .limit(1);
+
+    if (rows.length === 0) {
+      res.status(404).json({ data: null, error: 'No quote found from this provider for this item', meta: {} });
+      return;
+    }
+
+    const { response: r, provider: p } = rows[0];
+
+    // Update job status
+    await db.update(jobs).set({ status: 'completed' }).where(eq(jobs.id, item.dispatchId));
+
+    // Create booking
+    const [booking] = await db.insert(bookings).values({
+      jobId: item.dispatchId,
+      homeownerId: req.homeownerId,
+      providerId: p.id,
+      responseId: r.id,
+    }).returning();
+
+    // Update inspection item status
+    await db.update(inspectionReportItems).set({
+      dispatchStatus: 'booked',
+      updatedAt: new Date(),
+    }).where(eq(inspectionReportItems.id, item.id));
+
+    // Fire off notifications (best-effort)
+    try {
+      const { sendBookingNotifications } = await import('../services/orchestration');
+      void sendBookingNotifications(item.dispatchId, p.id, booking.id, booking.serviceAddress);
+    } catch (notifErr) {
+      logger.warn({ err: notifErr }, '[account/book] Booking notifications failed');
+    }
+
+    res.json({
+      data: {
+        bookingId: booking.id,
+        status: 'confirmed',
+        providerName: p.name,
+        providerPhone: p.phone,
+        quotedPrice: r.quotedPrice,
+        scheduled: r.availability,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/items/:itemId/book]');
+    res.status(500).json({ data: null, error: 'Booking failed', meta: {} });
+  }
+});
+
 export default router;

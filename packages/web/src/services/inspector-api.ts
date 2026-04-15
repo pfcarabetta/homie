@@ -434,6 +434,14 @@ export const inspectService = {
       { method: 'POST', body: JSON.stringify(itemIds ? { item_ids: itemIds } : {}) },
     );
   },
+
+  /** Authenticated: accept a quote for an inspection item */
+  bookQuote(reportId: string, itemId: string, providerId: string) {
+    return fetchAPI<{ bookingId: string; status: string; providerName: string; providerPhone: string; quotedPrice: string | null; scheduled: string | null }>(
+      `/api/v1/account/reports/${reportId}/items/${itemId}/book`,
+      { method: 'POST', body: JSON.stringify({ provider_id: providerId }) },
+    );
+  },
 };
 
 // ── SSE streaming helpers for AI deep dive ────────────────────────────────
