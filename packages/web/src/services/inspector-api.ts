@@ -451,6 +451,7 @@ export const inspectService = {
     creditIssuedCents?: number | null;
     concessionStatus?: string | null;
     repairRequestSource?: string | null;
+    repairRequestCustomAmountCents?: number | null;
   }) {
     return fetchAPI<{
       id: string;
@@ -460,6 +461,7 @@ export const inspectService = {
       creditIssuedCents: number | null;
       concessionStatus: string | null;
       repairRequestSource: string | null;
+      repairRequestCustomAmountCents: number | null;
     }>(
       `/api/v1/account/reports/${reportId}/items/${itemId}/negotiation`,
       { method: 'PATCH', body: JSON.stringify(fields) },
@@ -594,8 +596,10 @@ export interface PortalReportItem {
   sellerAgreedAmountCents?: number | null;
   creditIssuedCents?: number | null;
   concessionStatus?: string | null;
-  /** Source for repair request ask: null = default (best quote else estimate), 'estimate' = use AI estimate, otherwise = provider UUID */
+  /** Source for repair request ask: null = default, 'estimate' = AI estimate, 'custom' = use repairRequestCustomAmountCents, otherwise = provider UUID */
   repairRequestSource?: string | null;
+  /** Homeowner-entered custom amount, used when repairRequestSource === 'custom' */
+  repairRequestCustomAmountCents?: number | null;
 }
 
 export interface PortalReport {

@@ -701,6 +701,7 @@ router.get('/reports', async (req: Request, res: Response) => {
           creditIssuedCents: inspectionReportItems.creditIssuedCents,
           concessionStatus: inspectionReportItems.concessionStatus,
           repairRequestSource: inspectionReportItems.repairRequestSource,
+          repairRequestCustomAmountCents: inspectionReportItems.repairRequestCustomAmountCents,
         }).from(inspectionReportItems)
           .where(inArray(inspectionReportItems.reportId, reportIds))
       : [];
@@ -765,6 +766,7 @@ router.get('/reports', async (req: Request, res: Response) => {
           creditIssuedCents: i.creditIssuedCents,
           concessionStatus: i.concessionStatus,
           repairRequestSource: i.repairRequestSource,
+          repairRequestCustomAmountCents: i.repairRequestCustomAmountCents,
         })),
       };
     });
@@ -1501,6 +1503,7 @@ router.patch('/reports/:reportId/items/:itemId/negotiation', async (req: Request
     creditIssuedCents?: number | null;
     concessionStatus?: string | null;
     repairRequestSource?: string | null;
+    repairRequestCustomAmountCents?: number | null;
   };
 
   try {
@@ -1523,6 +1526,7 @@ router.patch('/reports/:reportId/items/:itemId/negotiation', async (req: Request
     if (body.creditIssuedCents !== undefined) updates.creditIssuedCents = body.creditIssuedCents;
     if (body.concessionStatus !== undefined) updates.concessionStatus = body.concessionStatus;
     if (body.repairRequestSource !== undefined) updates.repairRequestSource = body.repairRequestSource;
+    if (body.repairRequestCustomAmountCents !== undefined) updates.repairRequestCustomAmountCents = body.repairRequestCustomAmountCents;
 
     const [updated] = await db.update(inspectionReportItems)
       .set(updates)
@@ -1543,6 +1547,7 @@ router.patch('/reports/:reportId/items/:itemId/negotiation', async (req: Request
         creditIssuedCents: updated.creditIssuedCents,
         concessionStatus: updated.concessionStatus,
         repairRequestSource: updated.repairRequestSource,
+        repairRequestCustomAmountCents: updated.repairRequestCustomAmountCents,
       },
       error: null, meta: {},
     });
@@ -1594,12 +1599,16 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
 
     // Resolve the "ask" for each item based on selected source
     type QuoteEntry = { providerId: string; providerName: string; providerRating: string | null; amountCents: number; availability: string | null; receivedAt: string };
-    function resolveAsk(item: typeof items[number]): { cents: number; sourceLabel: string; providerName?: string; providerRating?: string | null; availability?: string | null } {
+    function resolveAsk(item: typeof items[number]): { cents: number; sourceLabel: string; providerName?: string; providerRating?: string | null } {
       const quotes = (item.quotes as QuoteEntry[] | null) ?? [];
       const high = item.aiCostEstimateHighCents ?? 0;
       const low = item.aiCostEstimateLowCents ?? 0;
-      const estimateLabel = low > 0 && low !== high ? `AI estimated (${fmt(low)}–${fmt(high)})` : 'AI estimated cost';
+      const estimateLabel = low > 0 && low !== high ? `Estimated (${fmt(low)}-${fmt(high)})` : 'Estimated cost';
 
+      // User entered a custom amount
+      if (item.repairRequestSource === 'custom' && item.repairRequestCustomAmountCents != null) {
+        return { cents: item.repairRequestCustomAmountCents, sourceLabel: 'Custom amount' };
+      }
       // User explicitly chose AI estimate
       if (item.repairRequestSource === 'estimate') {
         return { cents: high, sourceLabel: estimateLabel };
@@ -1613,7 +1622,6 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
             sourceLabel: `Quote from ${selected.providerName}`,
             providerName: selected.providerName,
             providerRating: selected.providerRating,
-            availability: selected.availability,
           };
         }
       }
@@ -1624,7 +1632,6 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
           sourceLabel: item.providerName ? `Quote from ${item.providerName}` : 'Provider quote',
           providerName: item.providerName ?? undefined,
           providerRating: item.providerRating,
-          availability: item.providerAvailability,
         };
       }
       // Fall back to AI estimate (high)
@@ -1714,14 +1721,13 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
         .text(fmt(ask.cents), 420, rowY, { width: 130, align: 'right' });
       doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
         .text(ask.sourceLabel, 420, rowY + 18, { width: 130, align: 'right' });
-      // Provider rating + availability if quote-based
+      // Provider rating if quote-based (PDFKit Helvetica doesn't include star glyph reliably,
+      // so use a plain "rated" label instead)
       if (ask.providerName) {
-        const ratingPart = ask.providerRating && parseFloat(ask.providerRating) > 0 ? `${parseFloat(ask.providerRating).toFixed(1)}\u2605` : '';
-        const availPart = ask.availability ? ask.availability : '';
-        const subline = [ratingPart, availPart].filter(Boolean).join('  •  ');
-        if (subline) {
+        const rating = ask.providerRating ? parseFloat(ask.providerRating) : 0;
+        if (rating > 0) {
           doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
-            .text(subline, 420, rowY + 30, { width: 130, align: 'right' });
+            .text(`Rated ${rating.toFixed(1)}/5`, 420, rowY + 30, { width: 130, align: 'right' });
         }
       }
 
