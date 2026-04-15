@@ -129,6 +129,8 @@ export const inspectionReportItems = pgTable('inspection_report_items', {
   creditIssuedCents: integer('credit_issued_cents'),
   /** pending | agreed | credited | escrow_holdback | dropped */
   concessionStatus: text('concession_status'),
+  /** Which source to use for the repair request ask. null = default (best quote if exists, else estimate). Special value 'estimate' = use AI estimate. Otherwise = provider UUID */
+  repairRequestSource: text('repair_request_source'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [

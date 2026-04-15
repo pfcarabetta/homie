@@ -694,11 +694,13 @@ router.get('/reports', async (req: Request, res: Response) => {
           dispatchStatus: inspectionReportItems.dispatchStatus,
           quoteAmountCents: inspectionReportItems.quoteAmountCents,
           providerName: inspectionReportItems.providerName,
+          quotes: inspectionReportItems.quotes,
           isIncludedInRequest: inspectionReportItems.isIncludedInRequest,
           homeownerNotes: inspectionReportItems.homeownerNotes,
           sellerAgreedAmountCents: inspectionReportItems.sellerAgreedAmountCents,
           creditIssuedCents: inspectionReportItems.creditIssuedCents,
           concessionStatus: inspectionReportItems.concessionStatus,
+          repairRequestSource: inspectionReportItems.repairRequestSource,
         }).from(inspectionReportItems)
           .where(inArray(inspectionReportItems.reportId, reportIds))
       : [];
@@ -756,11 +758,13 @@ router.get('/reports', async (req: Request, res: Response) => {
           dispatchStatus: i.dispatchStatus,
           quoteAmount: i.quoteAmountCents,
           providerName: i.providerName,
+          quotes: i.quotes ?? [],
           isIncludedInRequest: i.isIncludedInRequest,
           homeownerNotes: i.homeownerNotes,
           sellerAgreedAmountCents: i.sellerAgreedAmountCents,
           creditIssuedCents: i.creditIssuedCents,
           concessionStatus: i.concessionStatus,
+          repairRequestSource: i.repairRequestSource,
         })),
       };
     });
@@ -1496,6 +1500,7 @@ router.patch('/reports/:reportId/items/:itemId/negotiation', async (req: Request
     sellerAgreedAmountCents?: number | null;
     creditIssuedCents?: number | null;
     concessionStatus?: string | null;
+    repairRequestSource?: string | null;
   };
 
   try {
@@ -1517,6 +1522,7 @@ router.patch('/reports/:reportId/items/:itemId/negotiation', async (req: Request
     if (body.sellerAgreedAmountCents !== undefined) updates.sellerAgreedAmountCents = body.sellerAgreedAmountCents;
     if (body.creditIssuedCents !== undefined) updates.creditIssuedCents = body.creditIssuedCents;
     if (body.concessionStatus !== undefined) updates.concessionStatus = body.concessionStatus;
+    if (body.repairRequestSource !== undefined) updates.repairRequestSource = body.repairRequestSource;
 
     const [updated] = await db.update(inspectionReportItems)
       .set(updates)
@@ -1536,6 +1542,7 @@ router.patch('/reports/:reportId/items/:itemId/negotiation', async (req: Request
         sellerAgreedAmountCents: updated.sellerAgreedAmountCents,
         creditIssuedCents: updated.creditIssuedCents,
         concessionStatus: updated.concessionStatus,
+        repairRequestSource: updated.repairRequestSource,
       },
       error: null, meta: {},
     });
@@ -1585,6 +1592,45 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
 
     const fmt = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
+    // Resolve the "ask" for each item based on selected source
+    type QuoteEntry = { providerId: string; providerName: string; providerRating: string | null; amountCents: number; availability: string | null; receivedAt: string };
+    function resolveAsk(item: typeof items[number]): { cents: number; sourceLabel: string; providerName?: string; providerRating?: string | null; availability?: string | null } {
+      const quotes = (item.quotes as QuoteEntry[] | null) ?? [];
+      const high = item.aiCostEstimateHighCents ?? 0;
+      const low = item.aiCostEstimateLowCents ?? 0;
+      const estimateLabel = low > 0 && low !== high ? `AI estimated (${fmt(low)}–${fmt(high)})` : 'AI estimated cost';
+
+      // User explicitly chose AI estimate
+      if (item.repairRequestSource === 'estimate') {
+        return { cents: high, sourceLabel: estimateLabel };
+      }
+      // User selected a specific provider — find that quote
+      if (item.repairRequestSource) {
+        const selected = quotes.find(q => q.providerId === item.repairRequestSource);
+        if (selected) {
+          return {
+            cents: selected.amountCents,
+            sourceLabel: `Quote from ${selected.providerName}`,
+            providerName: selected.providerName,
+            providerRating: selected.providerRating,
+            availability: selected.availability,
+          };
+        }
+      }
+      // Default: best quote if available
+      if (item.quoteAmountCents && item.quoteAmountCents > 0) {
+        return {
+          cents: item.quoteAmountCents,
+          sourceLabel: item.providerName ? `Quote from ${item.providerName}` : 'Provider quote',
+          providerName: item.providerName ?? undefined,
+          providerRating: item.providerRating,
+          availability: item.providerAvailability,
+        };
+      }
+      // Fall back to AI estimate (high)
+      return { cents: high, sourceLabel: estimateLabel };
+    }
+
     // ── Header ──
     doc.fontSize(24).fillColor('#E8632B').font('Helvetica-Bold').text('homie', 50, 50, { continued: true });
     doc.fontSize(14).fillColor('#9B9490').font('Helvetica').text(' inspect', { baseline: 'alphabetic' });
@@ -1619,10 +1665,7 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
     doc.moveDown(1);
 
     // ── Total ask summary box ──
-    const totalAsk = items.reduce((sum, i) => {
-      // Use quote amount if present, else use high estimate
-      return sum + (i.quoteAmountCents ?? i.aiCostEstimateHighCents ?? 0);
-    }, 0);
+    const totalAsk = items.reduce((sum, i) => sum + resolveAsk(i).cents, 0);
 
     const summaryY = doc.y;
     doc.roundedRect(50, summaryY, 512, 56, 6).fillAndStroke('#FEF3F2', '#F4C7C5');
@@ -1638,13 +1681,14 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
     // ── Item list ──
     let itemNum = 1;
     for (const item of items) {
-      const askCents = item.quoteAmountCents ?? item.aiCostEstimateHighCents ?? 0;
+      const ask = resolveAsk(item);
       const sevColor = sevColors[item.severity] ?? '#9B9490';
 
       // Estimate row height
       const noteHeight = item.homeownerNotes ? Math.ceil(item.homeownerNotes.length / 80) * 12 + 6 : 0;
       const descHeight = item.description ? Math.ceil(item.description.length / 80) * 12 : 0;
-      const estRowHeight = 50 + noteHeight + descHeight;
+      const providerLineHeight = ask.providerName ? 14 : 0;
+      const estRowHeight = 50 + noteHeight + descHeight + providerLineHeight;
 
       if (doc.y + estRowHeight > 720) doc.addPage();
 
@@ -1667,13 +1711,18 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
 
       // Ask amount (right side)
       doc.fontSize(13).fillColor('#DC2626').font('Helvetica-Bold')
-        .text(fmt(askCents), 420, rowY, { width: 130, align: 'right' });
-      if (item.quoteAmountCents) {
-        doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
-          .text(item.providerName ? `Quote from ${item.providerName}` : 'Provider quote', 420, rowY + 18, { width: 130, align: 'right' });
-      } else {
-        doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
-          .text('Estimated cost', 420, rowY + 18, { width: 130, align: 'right' });
+        .text(fmt(ask.cents), 420, rowY, { width: 130, align: 'right' });
+      doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
+        .text(ask.sourceLabel, 420, rowY + 18, { width: 130, align: 'right' });
+      // Provider rating + availability if quote-based
+      if (ask.providerName) {
+        const ratingPart = ask.providerRating && parseFloat(ask.providerRating) > 0 ? `${parseFloat(ask.providerRating).toFixed(1)}\u2605` : '';
+        const availPart = ask.availability ? ask.availability : '';
+        const subline = [ratingPart, availPart].filter(Boolean).join('  •  ');
+        if (subline) {
+          doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
+            .text(subline, 420, rowY + 30, { width: 130, align: 'right' });
+        }
       }
 
       doc.y = Math.max(doc.y, titleEnd + 16);

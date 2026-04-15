@@ -1,0 +1,1 @@
+ALTER TABLE "inspection_report_items" ADD COLUMN "repair_request_source" text;

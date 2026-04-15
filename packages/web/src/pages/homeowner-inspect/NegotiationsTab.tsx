@@ -119,6 +119,7 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
       if (fields.sellerAgreedAmountCents !== undefined) apiFields.sellerAgreedAmountCents = fields.sellerAgreedAmountCents;
       if (fields.creditIssuedCents !== undefined) apiFields.creditIssuedCents = fields.creditIssuedCents;
       if (fields.concessionStatus !== undefined) apiFields.concessionStatus = fields.concessionStatus;
+      if (fields.repairRequestSource !== undefined) apiFields.repairRequestSource = fields.repairRequestSource;
       void inspectService.updateNegotiation(report.id, itemId, apiFields);
       updateTimers.current.delete(itemId);
     }, 500);
@@ -133,9 +134,37 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
     };
   }, []);
 
-  // Helper: ask amount = quote if available, else estimate high
+  // Helper: resolve ask amount based on selected source
+  function resolveAsk(item: PortalReportItem): { cents: number; sourceId: string; label: string } {
+    const quotes = item.quotes ?? [];
+    const high = item.costEstimateMax ?? 0;
+
+    // User explicitly chose AI estimate
+    if (item.repairRequestSource === 'estimate') {
+      return { cents: high, sourceId: 'estimate', label: 'AI estimate' };
+    }
+    // User selected a specific provider
+    if (item.repairRequestSource) {
+      const selected = quotes.find(q => q.providerId === item.repairRequestSource);
+      if (selected) {
+        return { cents: selected.amountCents, sourceId: selected.providerId, label: `Quote: ${selected.providerName}` };
+      }
+    }
+    // Default to best (lowest) quote if available
+    if (quotes.length > 0) {
+      const best = quotes.reduce((lo, q) => q.amountCents < lo.amountCents ? q : lo, quotes[0]);
+      return { cents: best.amountCents, sourceId: best.providerId, label: `Quote: ${best.providerName}` };
+    }
+    // Legacy single-quote field
+    if (item.quoteAmount && item.quoteAmount > 0) {
+      return { cents: item.quoteAmount, sourceId: 'quote', label: item.providerName ? `Quote: ${item.providerName}` : 'Provider quote' };
+    }
+    // Use AI estimate
+    return { cents: high, sourceId: 'estimate', label: 'AI estimate' };
+  }
+
   function askCents(item: PortalReportItem): number {
-    return (item.quoteAmount ?? item.costEstimateMax ?? 0);
+    return resolveAsk(item).cents;
   }
 
   // Computed totals
@@ -343,8 +372,37 @@ function NegotiationItemRow({ item, askCents, onChange }: {
   onChange: (fields: Partial<PortalReportItem>) => void;
 }) {
   const [showNotes, setShowNotes] = useState(!!item.homeownerNotes);
+  const [showSourceMenu, setShowSourceMenu] = useState(false);
   const sevColor = SEVERITY_COLORS[item.severity] ?? '#9B9490';
   const status = (item.concessionStatus as ConcessionStatus | null) ?? 'pending';
+
+  const quotes = item.quotes ?? [];
+  const hasQuotes = quotes.length > 0;
+  const userExplicitlyChoseEstimate = item.repairRequestSource === 'estimate';
+  const userSelectedProviderId = item.repairRequestSource && item.repairRequestSource !== 'estimate' ? item.repairRequestSource : null;
+  const selectedQuote = userSelectedProviderId ? quotes.find(q => q.providerId === userSelectedProviderId) : null;
+  const bestQuote = hasQuotes ? quotes.reduce((lo, q) => q.amountCents < lo.amountCents ? q : lo, quotes[0]) : null;
+  const usingEstimate = userExplicitlyChoseEstimate || (!hasQuotes && !item.quoteAmount);
+
+  // Build source label for current selection
+  let currentSourceLabel: string;
+  if (usingEstimate) {
+    const lo = (item.costEstimateMin ?? 0) / 100;
+    const hi = (item.costEstimateMax ?? 0) / 100;
+    currentSourceLabel = lo > 0 && lo !== hi ? `AI estimate (${formatCurrency(lo)}-${formatCurrency(hi)})` : 'AI estimate';
+  } else if (selectedQuote) {
+    currentSourceLabel = `Quote: ${selectedQuote.providerName}`;
+  } else if (bestQuote) {
+    currentSourceLabel = `Best quote: ${bestQuote.providerName}`;
+  } else if (item.providerName) {
+    currentSourceLabel = `Quote: ${item.providerName}`;
+  } else {
+    currentSourceLabel = 'AI estimate';
+  }
+
+  // Source selector options: all quotes + estimate (if cost estimate exists)
+  const hasEstimate = (item.costEstimateMax ?? 0) > 0;
+  const sortedQuotes = [...quotes].sort((a, b) => a.amountCents - b.amountCents);
 
   return (
     <div style={{
@@ -391,14 +449,119 @@ function NegotiationItemRow({ item, askCents, onChange }: {
           )}
         </div>
 
-        {/* Ask amount */}
-        <div style={{ flex: '0 0 100px', textAlign: 'right' }}>
+        {/* Ask amount + source selector */}
+        <div style={{ flex: '0 0 180px', textAlign: 'right', position: 'relative' }}>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            {item.quoteAmount ? 'Quote' : 'Ask'}
+            Ask amount
           </div>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 16, fontWeight: 700, color: RED }}>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: RED, lineHeight: 1.1 }}>
             {formatCurrency(askCents / 100)}
           </div>
+          {/* Clickable source label */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowSourceMenu(!showSourceMenu); }}
+            style={{
+              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 500, color: 'var(--bp-subtle)',
+              background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0',
+              display: 'inline-flex', alignItems: 'center', gap: 3, textAlign: 'right',
+              maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}
+            title="Change source"
+          >
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentSourceLabel}</span>
+            <span style={{ fontSize: 9, opacity: 0.6 }}>{showSourceMenu ? '\u25B2' : '\u25BC'}</span>
+          </button>
+
+          {/* Source menu */}
+          {showSourceMenu && (
+            <div
+              onMouseLeave={() => setShowSourceMenu(false)}
+              style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
+                background: 'var(--bp-card)', borderRadius: 10, border: '1px solid var(--bp-border)',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.15)', minWidth: 280, padding: 6, textAlign: 'left',
+              }}
+            >
+              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '6px 10px 4px' }}>
+                Choose Source
+              </div>
+
+              {/* Quote options */}
+              {sortedQuotes.map((q, idx) => {
+                const isSelected = userSelectedProviderId === q.providerId || (!userExplicitlyChoseEstimate && !userSelectedProviderId && bestQuote?.providerId === q.providerId);
+                const isBest = idx === 0;
+                return (
+                  <button
+                    key={q.providerId}
+                    onClick={() => { onChange({ repairRequestSource: q.providerId }); setShowSourceMenu(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      width: '100%', padding: '8px 10px', borderRadius: 6,
+                      border: 'none',
+                      background: isSelected ? `${ACCENT}10` : 'transparent',
+                      cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseOver={e => { if (!isSelected) (e.currentTarget.style.background = 'var(--bp-bg)'); }}
+                    onMouseOut={e => { if (!isSelected) (e.currentTarget.style.background = 'transparent'); }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: isSelected ? ACCENT : 'var(--bp-text)' }}>
+                          {q.providerName}
+                        </span>
+                        {isBest && <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: '#10B98115', color: '#10B981', letterSpacing: '0.04em' }}>BEST</span>}
+                      </div>
+                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', marginTop: 1 }}>
+                        {q.providerRating && parseFloat(q.providerRating) > 0 ? `${parseFloat(q.providerRating).toFixed(1)}\u2605` : 'No rating'}
+                        {q.availability ? ` · ${q.availability}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: isSelected ? ACCENT : 'var(--bp-text)', marginLeft: 8 }}>
+                      {formatCurrency(q.amountCents / 100)}
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* Estimate option */}
+              {hasEstimate && (
+                <>
+                  {sortedQuotes.length > 0 && <div style={{ height: 1, background: 'var(--bp-border)', margin: '4px 6px' }} />}
+                  <button
+                    onClick={() => { onChange({ repairRequestSource: 'estimate' }); setShowSourceMenu(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      width: '100%', padding: '8px 10px', borderRadius: 6,
+                      border: 'none',
+                      background: usingEstimate ? `${ACCENT}10` : 'transparent',
+                      cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseOver={e => { if (!usingEstimate) (e.currentTarget.style.background = 'var(--bp-bg)'); }}
+                    onMouseOut={e => { if (!usingEstimate) (e.currentTarget.style.background = 'transparent'); }}
+                  >
+                    <div>
+                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: usingEstimate ? ACCENT : 'var(--bp-text)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {'\u2728'} AI Estimate
+                      </div>
+                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', marginTop: 1 }}>
+                        Range: {formatCurrency((item.costEstimateMin ?? 0) / 100)}-{formatCurrency((item.costEstimateMax ?? 0) / 100)}
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: usingEstimate ? ACCENT : 'var(--bp-text)', marginLeft: 8 }}>
+                      {formatCurrency((item.costEstimateMax ?? 0) / 100)}
+                    </div>
+                  </button>
+                </>
+              )}
+
+              {/* No options state */}
+              {sortedQuotes.length === 0 && !hasEstimate && (
+                <div style={{ padding: '12px 10px', fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)' }}>
+                  No quotes or estimate available
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Seller agreed input */}
