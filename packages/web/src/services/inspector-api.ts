@@ -533,6 +533,13 @@ export const inspectService = {
     );
   },
 
+  reprocessSupportingDocument(reportId: string, docId: string) {
+    return fetchAPI<{ itemsExtracted: number; insightsGenerated: number }>(
+      `/api/v1/account/reports/${reportId}/documents/${docId}/reprocess`,
+      { method: 'POST' },
+    );
+  },
+
   getCrossReferenceInsights(reportId: string) {
     return fetchAPI<{ insights: CrossReferenceInsight[]; generatedAt: string | null }>(
       `/api/v1/account/reports/${reportId}/insights`,

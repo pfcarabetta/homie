@@ -508,11 +508,27 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
     } catch { /* ignore */ }
   }, [reportId]);
 
+  // Load full report via token — reused whenever we need to refresh items
+  const loadFullReport = useCallback(() => {
+    if (!portalReport?.clientAccessToken) return;
+    inspectService.getReport(portalReport.clientAccessToken)
+      .then(res => { if (res.data) setFullReport(res.data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [portalReport?.clientAccessToken]);
+
   useEffect(() => { void loadDocsAndInsights(); }, [loadDocsAndInsights]);
 
   // Poll docs while any are still processing (so the UI updates when parsing completes)
+  const prevProcessingRef = useRef(false);
   useEffect(() => {
     const stillProcessing = supportingDocs.some(d => d.parsingStatus === 'processing' || d.parsingStatus === 'uploading');
+    // When transitioning from processing → not processing, a doc just finished parsing.
+    // Refetch the full report so any items extracted from that doc appear in the UI.
+    if (prevProcessingRef.current && !stillProcessing) {
+      loadFullReport();
+    }
+    prevProcessingRef.current = stillProcessing;
     if (!stillProcessing) {
       if (docsPollRef.current) { clearInterval(docsPollRef.current); docsPollRef.current = null; }
       return;
@@ -520,14 +536,28 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
     if (docsPollRef.current) return;
     docsPollRef.current = setInterval(() => { void loadDocsAndInsights(); }, 4000);
     return () => { if (docsPollRef.current) { clearInterval(docsPollRef.current); docsPollRef.current = null; } };
-  }, [supportingDocs, loadDocsAndInsights]);
+  }, [supportingDocs, loadDocsAndInsights, loadFullReport]);
 
   async function handleDeleteDoc(docId: string) {
     if (!window.confirm('Delete this document?')) return;
     try {
       await inspectService.deleteSupportingDocument(reportId, docId);
       await loadDocsAndInsights();
+      loadFullReport();
     } catch { /* ignore */ }
+  }
+
+  async function handleReprocessDoc(docId: string) {
+    try {
+      const res = await inspectService.reprocessSupportingDocument(reportId, docId);
+      await loadDocsAndInsights();
+      loadFullReport();
+      if (res.data) {
+        alert(`Reprocessed: ${res.data.itemsExtracted} items extracted, ${res.data.insightsGenerated} insights generated.`);
+      }
+    } catch (err) {
+      alert(`Reprocess failed: ${(err as Error).message ?? 'unknown error'}`);
+    }
   }
 
   // Sync mode when report changes
@@ -547,16 +577,12 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   // (race after upload), wait for reports to refresh and retry
   useEffect(() => {
     if (!portalReport?.clientAccessToken) {
-      // Reports list may not have refreshed yet — don't show "not found" immediately
       if (!portalReport) return;
       setLoading(false);
       return;
     }
-    inspectService.getReport(portalReport.clientAccessToken)
-      .then(res => { if (res.data) setFullReport(res.data); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [portalReport?.clientAccessToken, portalReport]);
+    loadFullReport();
+  }, [portalReport, loadFullReport]);
 
   // Handle payment return
   useEffect(() => {
@@ -728,7 +754,7 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
 
           {/* Supporting Documents list */}
           {supportingDocs.length > 0 && (
-            <SupportingDocsList docs={supportingDocs} onDelete={handleDeleteDoc} />
+            <SupportingDocsList docs={supportingDocs} onDelete={handleDeleteDoc} onReprocess={handleReprocessDoc} />
           )}
 
           {/* Severity summary */}
@@ -1339,6 +1365,18 @@ function CrossReferenceInsightsPanel({ insights, supportingDocs, onAddDocument }
             </div>
           )}
 
+          {/* No-insights state (docs are parsed but AI found nothing) */}
+          {!stillProcessing && parsedDocCount > 0 && insights.length === 0 && (
+            <div style={{
+              padding: '16px', background: 'var(--bp-bg)', borderRadius: 10,
+              fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', lineHeight: 1.5,
+            }}>
+              No clear cross-references found between your inspection and the uploaded documents.
+              Any unique findings from the documents have been added as inspection items below.
+              Use the <strong>Reprocess</strong> button if you'd like to retry the analysis.
+            </div>
+          )}
+
           {/* Insights */}
           {insights.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1408,10 +1446,19 @@ const DOC_TYPE_LABEL: Record<string, { label: string; icon: string }> = {
   seller_disclosure: { label: 'Seller Disclosure', icon: '\uD83D\uDCCB' },
 };
 
-function SupportingDocsList({ docs, onDelete }: {
+function SupportingDocsList({ docs, onDelete, onReprocess }: {
   docs: SupportingDocument[];
   onDelete: (docId: string) => void;
+  onReprocess: (docId: string) => Promise<void>;
 }) {
+  const [reprocessingId, setReprocessingId] = useState<string | null>(null);
+
+  async function handleReprocess(docId: string) {
+    setReprocessingId(docId);
+    try { await onReprocess(docId); }
+    finally { setReprocessingId(null); }
+  }
+
   return (
     <div style={{
       background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
@@ -1423,6 +1470,7 @@ function SupportingDocsList({ docs, onDelete }: {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {docs.map(doc => {
           const meta = DOC_TYPE_LABEL[doc.documentType] ?? { label: doc.documentType, icon: '\uD83D\uDCC4' };
+          const isReprocessing = reprocessingId === doc.id;
           return (
             <div key={doc.id} style={{
               display: 'flex', alignItems: 'center', gap: 10,
@@ -1431,14 +1479,32 @@ function SupportingDocsList({ docs, onDelete }: {
               <span style={{ fontSize: 16 }}>{meta.icon}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {meta.label} \u00B7 {doc.fileName}
+                  {meta.label} {'\u00B7'} {doc.fileName}
                 </div>
                 <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)' }}>
-                  {doc.parsingStatus === 'parsed' ? '\u2713 Parsed' :
+                  {isReprocessing ? 'Reprocessing\u2026' :
+                   doc.parsingStatus === 'parsed' ? '\u2713 Parsed' :
                    doc.parsingStatus === 'processing' || doc.parsingStatus === 'uploading' ? 'Processing\u2026' :
                    doc.parsingStatus === 'failed' ? `Failed: ${doc.parsingError ?? 'unknown error'}` : doc.parsingStatus}
                 </div>
               </div>
+              {doc.parsingStatus === 'parsed' && (
+                <button
+                  onClick={() => handleReprocess(doc.id)}
+                  disabled={isReprocessing}
+                  title="Re-extract items and regenerate cross-reference insights"
+                  style={{
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+                    padding: '4px 10px', borderRadius: 6,
+                    background: 'transparent', color: '#7C3AED',
+                    border: '1px solid #DDD6FE',
+                    cursor: isReprocessing ? 'wait' : 'pointer',
+                    opacity: isReprocessing ? 0.6 : 1,
+                  }}
+                >
+                  {isReprocessing ? '\u21BB' : 'Reprocess'}
+                </button>
+              )}
               {doc.documentFileUrl && (
                 <a href={doc.documentFileUrl} target="_blank" rel="noopener noreferrer" style={{
                   fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: '#2563EB', textDecoration: 'none',

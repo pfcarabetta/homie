@@ -2236,6 +2236,56 @@ router.delete('/reports/:reportId/documents/:docId', async (req: Request, res: R
   }
 });
 
+// POST /api/v1/account/reports/:reportId/documents/:docId/reprocess — re-extract items + regenerate insights for an already-parsed doc
+router.post('/reports/:reportId/documents/:docId/reprocess', async (req: Request, res: Response) => {
+  try {
+    if (!await ownsReport(req.params.reportId, req.homeownerId)) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    const [doc] = await db.select().from(inspectionSupportingDocuments)
+      .where(and(
+        eq(inspectionSupportingDocuments.id, req.params.docId),
+        eq(inspectionSupportingDocuments.reportId, req.params.reportId),
+      )).limit(1);
+    if (!doc) {
+      res.status(404).json({ data: null, error: 'Document not found', meta: {} });
+      return;
+    }
+    if (doc.parsingStatus !== 'parsed' || !doc.parsedSummary) {
+      res.status(400).json({ data: null, error: 'Document has not been parsed successfully yet', meta: {} });
+      return;
+    }
+    // Remove existing items from this doc, then re-extract
+    await db.delete(inspectionReportItems)
+      .where(and(
+        eq(inspectionReportItems.reportId, req.params.reportId),
+        eq(inspectionReportItems.sourceDocumentId, req.params.docId),
+      ));
+    let itemsExtracted = 0;
+    try {
+      itemsExtracted = await extractItemsFromDoc(req.params.docId);
+    } catch (err) {
+      logger.error({ err, docId: req.params.docId }, '[supporting-doc/reprocess] Extraction failed');
+    }
+    // Regenerate insights + cross-refs
+    const insights = await generateCrossReferenceInsights(req.params.reportId).catch(err => {
+      logger.error({ err }, '[supporting-doc/reprocess] Cross-ref regen failed');
+      return [];
+    });
+    res.json({
+      data: {
+        itemsExtracted,
+        insightsGenerated: insights.length,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/documents/:docId/reprocess]');
+    res.status(500).json({ data: null, error: 'Failed to reprocess document', meta: {} });
+  }
+});
+
 // GET /api/v1/account/reports/:reportId/documents/:docId/source-pdf — proxy the doc PDF
 router.get('/reports/:reportId/documents/:docId/source-pdf', async (req: Request, res: Response) => {
   try {
