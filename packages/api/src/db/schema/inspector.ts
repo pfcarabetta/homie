@@ -67,6 +67,8 @@ export const inspectionReports = pgTable('inspection_reports', {
   addonPriceCents: integer('addon_price_cents'),
   /** essential | professional | premium — null means unpaid */
   pricingTier: text('pricing_tier'),
+  /** 'buyer' (negotiate with seller) | 'seller' (prep for listing). Reframes the portal for this report. */
+  reportMode: text('report_mode').notNull().default('buyer'),
   /** uploading | processing | parsed | review_pending | sent_to_client | failed */
   parsingStatus: text('parsing_status').notNull().default('uploading'),
   parsingError: text('parsing_error'),

@@ -5,6 +5,7 @@ import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, form
 import type { Tab } from './constants';
 import ItemDeepDive from './ItemDeepDive';
 import PageCitation from './PageCitation';
+import ModeToggle, { type ReportMode } from './ModeToggle';
 
 interface ReportsTabProps {
   onNavigate: (tab: Tab) => void;
@@ -487,7 +488,21 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   const [pricingTier, setPricingTier] = useState<string | null>(portalReport?.pricingTier ?? null);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [reportMode, setReportMode] = useState<ReportMode>((portalReport?.reportMode as ReportMode | undefined) ?? 'buyer');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Sync mode when report changes
+  useEffect(() => {
+    setReportMode((portalReport?.reportMode as ReportMode | undefined) ?? 'buyer');
+  }, [portalReport?.reportMode, portalReport?.id]);
+
+  async function handleModeChange(newMode: ReportMode) {
+    setReportMode(newMode);
+    try {
+      await inspectService.updateReportMode(reportId, newMode);
+      onReportsChange();
+    } catch { /* revert on error */ }
+  }
 
   // Load full report via token — if portalReport isn't in the list yet
   // (race after upload), wait for reports to refresh and retry
@@ -612,14 +627,26 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
     <div style={{ position: 'relative' }}>
       <BackButton onClick={onBack} label="Back to Reports" />
 
-      {/* Property header */}
-      <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: '20px 24px', marginBottom: 16 }}>
-        <h2 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 4px' }}>
-          {fullReport.propertyAddress}
-        </h2>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)' }}>
-          {fullReport.propertyCity}, {fullReport.propertyState} {fullReport.propertyZip}
-          {fullReport.inspectionDate && <> &middot; Inspected {formatDate(fullReport.inspectionDate)}</>}
+      {/* Property header with mode toggle */}
+      <div style={{
+        background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
+        padding: '20px 24px', marginBottom: 16,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+      }}>
+        <div>
+          <h2 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 4px' }}>
+            {fullReport.propertyAddress}
+          </h2>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)' }}>
+            {fullReport.propertyCity}, {fullReport.propertyState} {fullReport.propertyZip}
+            {fullReport.inspectionDate && <> &middot; Inspected {formatDate(fullReport.inspectionDate)}</>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Mode:
+          </span>
+          <ModeToggle mode={reportMode} onChange={handleModeChange} />
         </div>
       </div>
 
@@ -657,10 +684,12 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
             }}>
               <div>
                 <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, color: 'var(--bp-text)' }}>
-                  Ready to get quotes?
+                  {reportMode === 'seller' ? 'Get pre-listing quotes' : 'Ready to get quotes?'}
                 </div>
                 <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>
-                  Select specific items and categories to dispatch to local professionals
+                  {reportMode === 'seller'
+                    ? 'Pick items to schedule pros for pre-listing repair work'
+                    : 'Select specific items and categories to dispatch to local professionals'}
                 </div>
               </div>
               <button onClick={() => onNavigate('items')} style={{
@@ -668,7 +697,7 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
                 cursor: 'pointer', fontSize: 14, fontWeight: 600,
                 fontFamily: "'DM Sans',sans-serif", whiteSpace: 'nowrap',
               }}>
-                Select Items for Quotes
+                {reportMode === 'seller' ? 'Select Items to Schedule' : 'Select Items for Quotes'}
               </button>
             </div>
           )}
@@ -710,7 +739,7 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
         </div>
 
         {/* Paywall overlay */}
-        {isLocked && <PricingModal reportId={reportId} itemCount={items.length} />}
+        {isLocked && <PricingModal reportId={reportId} itemCount={items.length} mode={reportMode} />}
       </div>
 
       <style>{`
@@ -744,7 +773,7 @@ const TIERS = [
   },
 ];
 
-function PricingModal({ reportId, itemCount }: { reportId: string; itemCount: number }) {
+function PricingModal({ reportId, itemCount, mode }: { reportId: string; itemCount: number; mode: ReportMode }) {
   const [loading, setLoading] = useState<string | null>(null);
 
   async function handleSelectTier(tier: 'essential' | 'professional' | 'premium') {
@@ -757,6 +786,11 @@ function PricingModal({ reportId, itemCount }: { reportId: string; itemCount: nu
     } catch { /* ignore */ }
     setLoading(null);
   }
+
+  const title = mode === 'seller' ? 'Unlock Your Pre-Listing Analysis' : 'Unlock Your Report';
+  const subtitle = mode === 'seller'
+    ? `${itemCount} item${itemCount !== 1 ? 's' : ''} found \u00B7 Choose a plan for your pre-listing strategy`
+    : `${itemCount} item${itemCount !== 1 ? 's' : ''} found \u00B7 Choose a plan to access your full analysis`;
 
   return (
     <div style={{
@@ -771,10 +805,10 @@ function PricingModal({ reportId, itemCount }: { reportId: string; itemCount: nu
       }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 6px' }}>
-            Unlock Your Report
+            {title}
           </h3>
           <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: 0 }}>
-            {itemCount} item{itemCount !== 1 ? 's' : ''} found &middot; Choose a plan to access your full analysis
+            {subtitle}
           </p>
         </div>
 

@@ -70,6 +70,8 @@ export interface InspectionItem {
   quoteDetails: QuoteDetails | null;
   valueImpact: ValueImpact | null;
   sourcePages?: number[] | null;
+  sellerAction?: 'fix_before_listing' | 'disclose' | 'ignore' | null;
+  sellerActionReason?: string | null;
 }
 
 export interface ValueImpact {
@@ -127,6 +129,7 @@ export interface InspectReportPublic {
   perItemPrice: number;
   bundlePrice: number;
   reportFileUrl?: string | null;
+  reportMode?: 'buyer' | 'seller';
 }
 
 // ── Auth helpers ────────────────────────────────────────────────────────────
@@ -480,6 +483,24 @@ export const inspectService = {
     return res.blob();
   },
 
+  /** Authenticated: download seller pre-listing plan PDF as a blob */
+  async downloadPreListingPlanPdf(reportId: string): Promise<Blob | null> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/v1/account/reports/${reportId}/pre-listing-plan.pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) return null;
+    return res.blob();
+  },
+
+  /** Authenticated: switch report buyer/seller mode */
+  updateReportMode(reportId: string, mode: 'buyer' | 'seller') {
+    return fetchAPI<{ id: string; reportMode: string }>(
+      `/api/v1/account/reports/${reportId}/mode`,
+      { method: 'PATCH', body: JSON.stringify({ mode }) },
+    );
+  },
+
   /** Authenticated: accept a quote for an inspection item */
   bookQuote(reportId: string, itemId: string, providerId: string) {
     return fetchAPI<{ bookingId: string; status: string; providerName: string; providerPhone: string; quotedPrice: string | null; scheduled: string | null }>(
@@ -604,6 +625,9 @@ export interface PortalReportItem {
   repairRequestCustomAmountCents?: number | null;
   /** 1-indexed page numbers in the source PDF where this item was found */
   sourcePages?: number[] | null;
+  /** Seller action recommendation: fix_before_listing | disclose | ignore */
+  sellerAction?: 'fix_before_listing' | 'disclose' | 'ignore' | null;
+  sellerActionReason?: string | null;
 }
 
 export interface PortalReport {
@@ -618,6 +642,7 @@ export interface PortalReport {
   clientAccessToken: string;
   pricingTier: string | null;
   reportFileUrl?: string | null;
+  reportMode?: 'buyer' | 'seller';
   itemCount: number;
   dispatchedCount: number;
   quotedCount: number;

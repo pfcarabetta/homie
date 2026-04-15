@@ -3,6 +3,7 @@ import { inspectService, type PortalReport, type PortalReportItem } from '@/serv
 import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency } from './constants';
 import type { Tab } from './constants';
 import PageCitation from './PageCitation';
+import { SellerActionBadge } from './ItemsTab';
 
 const ACCENT = '#2563EB';
 const RED = '#DC2626';
@@ -274,13 +275,74 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
 
   const quotedCount = useMemo(() => baseItems.filter(i => (i.quotes && i.quotes.length > 0) || (i.quoteAmount && i.quoteAmount > 0)).length, [baseItems]);
 
+  const isSellerMode = report.reportMode === 'seller';
+
+  // Seller-mode computed totals
+  const sellerTotals = useMemo(() => {
+    if (!isSellerMode) return { preListingCost: 0, valueLift: 0, dealKillers: 0, fixCount: 0, discloseCount: 0 };
+    let preListingCost = 0;
+    let valueLiftSum = 0;
+    let dealKillers = 0;
+    let fixCount = 0;
+    let discloseCount = 0;
+    for (const item of baseItems) {
+      if (item.sellerAction === 'fix_before_listing' && item.isIncludedInRequest) {
+        const cost = (item.costEstimateMax ?? 0);
+        preListingCost += cost;
+        valueLiftSum += ((item.costEstimateMin ?? 0) + (item.costEstimateMax ?? 0)) / 2;
+        fixCount++;
+        // Deal-killer check: safety/urgent or FHA/VA flagged-ish categories
+        if (item.severity === 'safety_hazard' || item.severity === 'urgent') dealKillers++;
+      }
+      if (item.sellerAction === 'disclose' && item.isIncludedInRequest) discloseCount++;
+    }
+    const valueLift = Math.round(valueLiftSum * 1.3);
+    return { preListingCost, valueLift, dealKillers, fixCount, discloseCount };
+  }, [baseItems, isSellerMode]);
+
+  async function handleDownloadPreListingPdf() {
+    setDownloadingPdf(true);
+    setPdfError(null);
+    try {
+      const blob = await inspectService.downloadPreListingPlanPdf(report.id);
+      if (!blob) { setPdfError('Failed to generate PDF.'); setDownloadingPdf(false); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const addrSlug = report.propertyAddress.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+      a.download = `pre-listing-plan-${addrSlug}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setPdfError((err as Error).message ?? 'Failed to download PDF');
+    }
+    setDownloadingPdf(false);
+  }
+
+  // Preset helpers for seller mode
+  function selectAllByAction(action: 'fix_before_listing' | 'disclose') {
+    const targets = baseItems.filter(i => i.sellerAction === action);
+    setItems(prev => prev.map(i => i.sellerAction === action ? { ...i, isIncludedInRequest: true } : i));
+    targets.forEach(i => {
+      if (!i.isIncludedInRequest) {
+        void inspectService.updateNegotiation(report.id, i.id, { isIncludedInRequest: true });
+      }
+    });
+  }
+
   return (
     <div>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 24, fontWeight: 700, color: 'var(--bp-text)', margin: 0 }}>Negotiations</h1>
-          <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: '4px 0 0' }}>Build repair requests and track seller concessions</p>
+          <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 24, fontWeight: 700, color: 'var(--bp-text)', margin: 0 }}>
+            {isSellerMode ? 'Pre-Listing Plan' : 'Negotiations'}
+          </h1>
+          <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: '4px 0 0' }}>
+            {isSellerMode ? 'Plan what to fix, disclose, or ignore before listing' : 'Build repair requests and track seller concessions'}
+          </p>
         </div>
         {reports.length > 1 && (
           <select
@@ -314,9 +376,19 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <SummaryCard label="Your Ask" subLabel={`${totals.selectedCount} item${totals.selectedCount !== 1 ? 's' : ''}`} value={formatCurrency(totals.yourAsk / 100)} color={RED} icon={'\uD83D\uDCCB'} />
-        <SummaryCard label="Seller Agreed" subLabel="Across all items" value={formatCurrency(totals.sellerAgreed / 100)} color={ACCENT} icon={'\uD83E\uDD1D'} />
-        <SummaryCard label="Credits Received" subLabel="Closed concessions" value={formatCurrency(totals.creditsReceived / 100)} color={GREEN} icon={'\u2705'} />
+        {isSellerMode ? (
+          <>
+            <SummaryCard label="Pre-Listing Investment" subLabel={`${sellerTotals.fixCount} item${sellerTotals.fixCount !== 1 ? 's' : ''} to fix`} value={formatCurrency(sellerTotals.preListingCost / 100)} color={RED} icon={'\uD83D\uDD27'} />
+            <SummaryCard label="Est. Value Lift" subLabel="If all fix items completed" value={formatCurrency(sellerTotals.valueLift / 100)} color={GREEN} icon={'\uD83D\uDCC8'} />
+            <SummaryCard label="Deal-Killers" subLabel="Safety / urgent / FHA-VA" value={String(sellerTotals.dealKillers)} color={'#EA580C'} icon={'\u26A0\uFE0F'} />
+          </>
+        ) : (
+          <>
+            <SummaryCard label="Your Ask" subLabel={`${totals.selectedCount} item${totals.selectedCount !== 1 ? 's' : ''}`} value={formatCurrency(totals.yourAsk / 100)} color={RED} icon={'\uD83D\uDCCB'} />
+            <SummaryCard label="Seller Agreed" subLabel="Across all items" value={formatCurrency(totals.sellerAgreed / 100)} color={ACCENT} icon={'\uD83E\uDD1D'} />
+            <SummaryCard label="Credits Received" subLabel="Closed concessions" value={formatCurrency(totals.creditsReceived / 100)} color={GREEN} icon={'\u2705'} />
+          </>
+        )}
       </div>
 
       {/* Action bar — PDF download + clear */}
@@ -326,9 +398,15 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
       }}>
         <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)' }}>
           {totals.selectedCount > 0
-            ? `${totals.selectedCount} item${totals.selectedCount !== 1 ? 's' : ''} included in repair request`
-            : 'No items selected — pick from the categories below'}
+            ? `${totals.selectedCount} item${totals.selectedCount !== 1 ? 's' : ''} ${isSellerMode ? 'included in pre-listing plan' : 'included in repair request'}`
+            : isSellerMode ? 'No items selected — use the quick select buttons or pick from categories' : 'No items selected — pick from the categories below'}
         </span>
+        {isSellerMode && (
+          <>
+            <PresetButton onClick={() => selectAllByAction('fix_before_listing')}>Select All Fix</PresetButton>
+            <PresetButton onClick={() => selectAllByAction('disclose')}>Select All Disclose</PresetButton>
+          </>
+        )}
         {totals.selectedCount > 0 && (
           <PresetButton onClick={clearAll}>Clear All</PresetButton>
         )}
@@ -337,19 +415,19 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
             <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: '#DC2626' }}>{pdfError}</span>
           )}
           <button
-            onClick={handleDownloadPdf}
-            disabled={downloadingPdf || totals.selectedCount === 0}
+            onClick={isSellerMode ? handleDownloadPreListingPdf : handleDownloadPdf}
+            disabled={downloadingPdf || (isSellerMode ? false : totals.selectedCount === 0)}
             style={{
               padding: '9px 18px', borderRadius: 8, border: 'none',
-              background: totals.selectedCount > 0 && !downloadingPdf ? ACCENT : '#94A3B8',
-              color: '#fff', cursor: totals.selectedCount > 0 && !downloadingPdf ? 'pointer' : 'not-allowed',
+              background: (isSellerMode || totals.selectedCount > 0) && !downloadingPdf ? ACCENT : '#94A3B8',
+              color: '#fff', cursor: (isSellerMode || totals.selectedCount > 0) && !downloadingPdf ? 'pointer' : 'not-allowed',
               fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
               display: 'inline-flex', alignItems: 'center', gap: 6,
               opacity: downloadingPdf ? 0.7 : 1,
             }}
           >
             <svg width={14} height={14} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 4v10M5 9l5 5 5-5M3 17h14" /></svg>
-            {downloadingPdf ? 'Generating...' : 'Download Repair Request PDF'}
+            {downloadingPdf ? 'Generating...' : isSellerMode ? 'Download Pre-Listing Plan PDF' : 'Download Repair Request PDF'}
           </button>
         </div>
       </div>
@@ -449,6 +527,7 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
             item={item}
             askCents={askCents(item)}
             reportFileUrl={report.reportFileUrl ?? null}
+            isSellerMode={isSellerMode}
             onChange={(fields) => patchItem(item.id, fields)}
           />
         ))}
@@ -544,11 +623,12 @@ function PresetButton({ children, onClick }: { children: React.ReactNode; onClic
 
 // ── Single negotiation item row ─────────────────────────────────────────────
 
-function NegotiationItemRow({ item, askCents, onChange, reportFileUrl }: {
+function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerMode }: {
   item: PortalReportItem;
   askCents: number;
   onChange: (fields: Partial<PortalReportItem>) => void;
   reportFileUrl?: string | null;
+  isSellerMode?: boolean;
 }) {
   const [showNotes, setShowNotes] = useState(!!item.homeownerNotes);
   const [showSourceMenu, setShowSourceMenu] = useState(false);
@@ -620,10 +700,18 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl }: {
             <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)' }}>
               {CATEGORY_ICONS[item.category] || ''} {CATEGORY_LABELS[item.category] || item.category}
             </span>
+            {isSellerMode && item.sellerAction && (
+              <SellerActionBadge action={item.sellerAction} />
+            )}
           </div>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, color: 'var(--bp-text)' }}>
             {item.title}
           </div>
+          {isSellerMode && item.sellerActionReason && (
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)', fontStyle: 'italic', marginTop: 2 }}>
+              {item.sellerActionReason}
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
             {item.location && (
               <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)' }}>
