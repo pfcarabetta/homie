@@ -29,7 +29,7 @@ function renderBold(text: string) {
 interface Job {
   id: string;
   homeownerEmail: string | null;
-  diagnosis: { category?: string; severity?: string; summary?: string } | null;
+  diagnosis: { category?: string; severity?: string; summary?: string; source?: string } | null;
   tier: string;
   status: string;
   zipCode: string;
@@ -45,7 +45,7 @@ interface JobDetail {
     homeownerEmail: string | null;
     homeownerPhone: string | null;
     homeownerName: string | null;
-    diagnosis: { category?: string; severity?: string; summary?: string; recommendedActions?: string[] } | null;
+    diagnosis: { category?: string; severity?: string; summary?: string; source?: string; recommendedActions?: string[] } | null;
     tier: string;
     status: string;
     paymentStatus: string;
@@ -175,6 +175,7 @@ export default function AdminJobs() {
                     <td className="px-4 py-3 text-dark/60">
                       {j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-'}
                       {j.workspaceId && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase tracking-wide">Business</span>}
+                      {j.diagnosis?.source === 'inspection_report' && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 uppercase tracking-wide">Inspect</span>}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={j.status} /></td>
                     <td className="px-4 py-3 capitalize text-dark/60 whitespace-nowrap">{j.tier}</td>

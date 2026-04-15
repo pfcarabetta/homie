@@ -23,6 +23,7 @@ interface Booking {
   channel: string | null;
   jobCategory: string | null;
   jobSummary: string | null;
+  jobSource?: string | null;
   jobZipCode: string | null;
   workspaceId: string | null;
 }
@@ -128,6 +129,7 @@ export default function AdminBookings() {
                       <span>{b.homeownerName ?? b.homeownerEmail ?? '-'}</span>
                       <span>{new Date(b.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                       {b.workspaceId && <span className="bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded text-[10px] font-semibold">B2B</span>}
+                      {b.jobSource === 'inspection_report' && <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">Inspect</span>}
                     </div>
                   </div>
                   {b.quotedPrice && (

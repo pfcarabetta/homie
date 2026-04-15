@@ -454,6 +454,7 @@ router.get('/bookings', async (req: Request, res: Response) => {
           channel: providerResponses.channel,
           jobCategory: sql<string>`${jobs.diagnosis}->>'category'`,
           jobSummary: sql<string>`${jobs.diagnosis}->>'summary'`,
+          jobSource: sql<string>`${jobs.diagnosis}->>'source'`,
           jobZipCode: jobs.zipCode,
           workspaceId: jobs.workspaceId,
         })
