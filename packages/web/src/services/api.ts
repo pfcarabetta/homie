@@ -101,6 +101,7 @@ export interface DiagnosisPayload {
   summary: string;
   recommendedActions: string[];
   estimatedCost?: { min: number; max: number };
+  source?: string;
 }
 
 export interface DiagnosticStreamCallbacks {
