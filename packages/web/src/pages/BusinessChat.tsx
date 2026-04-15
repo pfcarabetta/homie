@@ -13,7 +13,7 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 
-const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
+const O = '#E8632B', G = '#1B9E77', D = 'var(--bp-text)', W = 'var(--bp-bg)';
 
 /* ── Categories ─────────────────────────────────────────────────────────── */
 
