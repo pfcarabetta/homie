@@ -1719,11 +1719,10 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
       // Ask amount (right side)
       doc.fontSize(13).fillColor('#DC2626').font('Helvetica-Bold')
         .text(fmt(ask.cents), 420, rowY, { width: 130, align: 'right' });
-      doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
-        .text(ask.sourceLabel, 420, rowY + 18, { width: 130, align: 'right' });
-      // Provider rating if quote-based (PDFKit Helvetica doesn't include star glyph reliably,
-      // so use a plain "rated" label instead)
+      // Subtext only shown for verified provider quotes (not for estimates or custom amounts)
       if (ask.providerName) {
+        doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
+          .text(ask.sourceLabel, 420, rowY + 18, { width: 130, align: 'right' });
         const rating = ask.providerRating ? parseFloat(ask.providerRating) : 0;
         if (rating > 0) {
           doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
