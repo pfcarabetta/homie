@@ -112,7 +112,7 @@ export default function InspectPortal() {
       case 'negotiations':
         return <NegotiationsTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'maintenance':
-        return <MaintenanceTab />;
+        return <MaintenanceTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'documents':
         return <DocumentsTab />;
       case 'settings':

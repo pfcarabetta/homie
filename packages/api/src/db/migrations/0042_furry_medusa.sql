@@ -1,0 +1,1 @@
+ALTER TABLE "inspection_report_items" ADD COLUMN "maintenance_completed_at" timestamp with time zone;

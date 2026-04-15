@@ -501,6 +501,14 @@ export const inspectService = {
     );
   },
 
+  /** Authenticated: mark/unmark a maintenance item complete */
+  updateMaintenance(reportId: string, itemId: string, fields: { maintenanceCompletedAt: string | null }) {
+    return fetchAPI<{ id: string; maintenanceCompletedAt: string | null }>(
+      `/api/v1/account/reports/${reportId}/items/${itemId}/maintenance`,
+      { method: 'PATCH', body: JSON.stringify(fields) },
+    );
+  },
+
   /** Authenticated: accept a quote for an inspection item */
   bookQuote(reportId: string, itemId: string, providerId: string) {
     return fetchAPI<{ bookingId: string; status: string; providerName: string; providerPhone: string; quotedPrice: string | null; scheduled: string | null }>(
@@ -628,6 +636,8 @@ export interface PortalReportItem {
   /** Seller action recommendation: fix_before_listing | disclose | ignore */
   sellerAction?: 'fix_before_listing' | 'disclose' | 'ignore' | null;
   sellerActionReason?: string | null;
+  /** ISO timestamp when homeowner marked this item complete (Maintenance tab) */
+  maintenanceCompletedAt?: string | null;
 }
 
 export interface PortalReport {
