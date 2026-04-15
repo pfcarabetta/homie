@@ -453,7 +453,7 @@ function PropertySelector({ properties, workspaces, selectedWorkspace, onSelectW
                     fontFamily: "'DM Sans', sans-serif", width: '100%', marginBottom: 8,
                   }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
                   >
                     {p.photoUrls && p.photoUrls.length > 0 && (
                       <img src={p.photoUrls[0]} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', marginRight: 12, flexShrink: 0 }} />
@@ -1456,7 +1456,7 @@ export default function BusinessChat() {
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
                     >
                       <div style={{ fontSize: 22, marginBottom: 4 }}>{g.icon}</div>
                       <div>{g.label}</div>
@@ -1473,7 +1473,7 @@ export default function BusinessChat() {
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
                     >
                       <div style={{ fontSize: 22, marginBottom: 4 }}>{g.icon}</div>
                       <div>{g.label}</div>
@@ -1505,7 +1505,7 @@ export default function BusinessChat() {
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
                   >
                     <div style={{ fontSize: 22, marginBottom: 4 }}>{s.icon}</div>
                     <div>{s.label}</div>
@@ -1527,7 +1527,7 @@ export default function BusinessChat() {
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
                     >{opt}</button>
                   ))}
                   <button onClick={() => setShowQ1Input(true)} style={{
@@ -1576,7 +1576,7 @@ export default function BusinessChat() {
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
                     >{s}</button>
                   ))}
                   <button onClick={() => setShowFreeInput(true)} style={{
@@ -1714,7 +1714,7 @@ export default function BusinessChat() {
                   fontFamily: "'DM Sans', sans-serif",
                 }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
                 >{b}</button>
               ))}
               <button onClick={() => handleBudget('flexible')} style={{
@@ -1739,12 +1739,12 @@ export default function BusinessChat() {
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'white'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
                   >{t}</button>
                 ))}
                 <button onClick={() => setShowDatePicker(!showDatePicker)} style={{
                   padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: `2px ${showDatePicker ? 'solid' : 'dashed'} ${showDatePicker ? O : 'rgba(0,0,0,0.12)'}`,
-                  background: showDatePicker ? 'rgba(232,99,43,0.03)' : 'white', fontSize: 14,
+                  background: showDatePicker ? 'rgba(232,99,43,0.03)' : 'var(--bp-card)', fontSize: 14,
                   color: showDatePicker ? O : '#9B9490', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                   fontFamily: "'DM Sans', sans-serif",
                 }}
