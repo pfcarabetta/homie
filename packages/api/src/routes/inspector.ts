@@ -604,6 +604,62 @@ function computeValueImpact(category: string, severity: string, costLowCents: nu
   };
 }
 
+// ── Seller Action Classification ───────────────────────────────────────────
+// Deterministic rules that classify each item into one of three pre-listing actions.
+
+export type SellerAction = 'fix_before_listing' | 'disclose' | 'ignore';
+
+export interface SellerActionResult {
+  action: SellerAction;
+  reason: string;
+}
+
+export function computeSellerAction(category: string, severity: string, costLowCents: number, costHighCents: number): SellerActionResult {
+  // Informational items — never worth bringing up
+  if (severity === 'informational') {
+    return { action: 'ignore', reason: 'Informational only' };
+  }
+  // No cost data — no way to decide, mark ignore
+  if (costLowCents <= 0 && costHighCents <= 0 && severity !== 'safety_hazard' && severity !== 'urgent') {
+    return { action: 'ignore', reason: 'No cost estimate available' };
+  }
+
+  const avgCost = (costLowCents + costHighCents) / 2;
+  const isFhaVaCategory = FHA_VA_CATEGORIES.has(category);
+  const isFhaVaSeverity = FHA_VA_SEVERITIES.has(severity);
+  const fhaVaFlag = isFhaVaCategory && isFhaVaSeverity;
+
+  // Safety hazards and urgent items are deal-killers — always fix
+  if (severity === 'safety_hazard' || severity === 'urgent') {
+    return { action: 'fix_before_listing', reason: fhaVaFlag ? 'Safety/urgent — FHA/VA deal-killer' : 'Safety/urgent — buyers will demand credit' };
+  }
+
+  // FHA/VA lender concern — strongly recommend fixing to widen buyer pool
+  if (fhaVaFlag) {
+    return { action: 'fix_before_listing', reason: 'FHA/VA concern — widens buyer pool' };
+  }
+
+  // Low-cost easy wins — worth just fixing
+  if (avgCost > 0 && avgCost < 20000) {
+    return { action: 'fix_before_listing', reason: 'Low cost — easy win before listing' };
+  }
+
+  // Strong ROI — fixing adds more value than cost
+  const mult = ROI_MULTIPLIERS[category] ?? { low: 0.5, high: 0.9 };
+  const roiMultiplier = (mult.low + mult.high) / 2;
+  if (roiMultiplier >= 1.2) {
+    return { action: 'fix_before_listing', reason: 'Strong ROI — adds more value than the cost' };
+  }
+
+  // Monitor severity — leave alone
+  if (severity === 'monitor') {
+    return { action: 'ignore', reason: 'Minor — not worth acting on' };
+  }
+
+  // Everything else — disclose and let buyer factor into their offer
+  return { action: 'disclose', reason: 'Low ROI — disclose and let buyer price it in' };
+}
+
 // ── Client-facing (token-based, no auth) ──────────────────────────────────
 
 // GET /api/v1/inspect/:token — client views their report
@@ -645,6 +701,7 @@ router.get('/:token', async (req: Request, res: Response) => {
         perItemPrice: perItemPriceCents / 100,
         bundlePrice: bundlePriceCents / 100,
         reportFileUrl: report.reportFileUrl ?? null,
+        reportMode: report.reportMode ?? 'buyer',
         items: items.map(i => ({
           id: i.id,
           reportId: i.reportId,
@@ -666,6 +723,7 @@ router.get('/:token', async (req: Request, res: Response) => {
           } : null,
           valueImpact: computeValueImpact(i.category, i.severity, i.aiCostEstimateLowCents, i.aiCostEstimateHighCents),
           sourcePages: i.sourcePages ?? null,
+          ...(function(){ const s = computeSellerAction(i.category, i.severity, i.aiCostEstimateLowCents ?? 0, i.aiCostEstimateHighCents ?? 0); return { sellerAction: s.action, sellerActionReason: s.reason }; })(),
         })),
       },
       error: null, meta: {},

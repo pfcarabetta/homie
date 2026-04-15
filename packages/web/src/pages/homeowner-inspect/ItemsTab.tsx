@@ -20,6 +20,7 @@ interface ItemWithContext extends InspectionItem {
   _pricingTier: string | null;
   _clientAccessToken: string;
   _reportFileUrl: string | null;
+  _reportMode: 'buyer' | 'seller';
 }
 
 const SEVERITY_ORDER = ['safety_hazard', 'urgent', 'recommended', 'monitor', 'informational'];
@@ -43,6 +44,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
   const [activeSeverity, setActiveSeverity] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
+  const [activeSellerAction, setActiveSellerAction] = useState<'fix_before_listing' | 'disclose' | 'ignore' | null>(null);
   const [dispatching, setDispatching] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<string | null>(null);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                 _pricingTier: report.pricingTier,
                 _clientAccessToken: report.clientAccessToken,
                 _reportFileUrl: res.data.reportFileUrl ?? report.reportFileUrl ?? null,
+                _reportMode: (res.data.reportMode ?? report.reportMode ?? 'buyer') as 'buyer' | 'seller',
               });
             }
           }
@@ -89,8 +92,19 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
     if (activeReportId) items = items.filter(i => i._reportId === activeReportId);
     if (activeSeverity) items = items.filter(i => i.severity === activeSeverity);
     if (activeCategory) items = items.filter(i => i.category === activeCategory);
+    if (activeSellerAction) items = items.filter(i => i.sellerAction === activeSellerAction);
     return items;
-  }, [fullItems, activeReportId, activeSeverity, activeCategory]);
+  }, [fullItems, activeReportId, activeSeverity, activeCategory, activeSellerAction]);
+
+  // Has any items in seller mode — show seller action filter only if so
+  const hasSellerModeItems = useMemo(() => fullItems.some(i => i._reportMode === 'seller'), [fullItems]);
+  const sellerActionCounts = useMemo(() => {
+    const m = { fix_before_listing: 0, disclose: 0, ignore: 0 };
+    for (const i of fullItems) {
+      if (i._reportMode === 'seller' && i.sellerAction) m[i.sellerAction]++;
+    }
+    return m;
+  }, [fullItems]);
 
   // Unique reports for filter
   const reportOptions = useMemo(() => {
@@ -184,7 +198,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
         const res = await inspectService.getReport(report.clientAccessToken);
         if (res.data) {
           for (const item of res.data.items) {
-            items.push({ ...item, _reportId: report.id, _reportAddress: report.propertyAddress, _pricingTier: report.pricingTier, _clientAccessToken: report.clientAccessToken, _reportFileUrl: res.data.reportFileUrl ?? report.reportFileUrl ?? null });
+            items.push({ ...item, _reportId: report.id, _reportAddress: report.propertyAddress, _pricingTier: report.pricingTier, _clientAccessToken: report.clientAccessToken, _reportFileUrl: res.data.reportFileUrl ?? report.reportFileUrl ?? null, _reportMode: (res.data.reportMode ?? report.reportMode ?? 'buyer') as 'buyer' | 'seller' });
           }
         }
       } catch { /* skip */ }
@@ -286,6 +300,35 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
               color: selectedCount === 0 ? ACCENT : 'var(--bp-subtle)', cursor: 'pointer',
             }}>Deselect All</button>
           </div>
+        </div>
+      )}
+
+      {/* Seller action filter (only when any item is in a seller-mode report) */}
+      {hasSellerModeItems && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', padding: '5px 0', marginRight: 4 }}>Action:</span>
+          <button onClick={() => setActiveSellerAction(null)} style={{
+            fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
+            borderRadius: 20, border: `1px solid ${!activeSellerAction ? ACCENT : 'var(--bp-border)'}`,
+            background: !activeSellerAction ? `${ACCENT}10` : 'transparent',
+            color: !activeSellerAction ? ACCENT : 'var(--bp-subtle)', cursor: 'pointer',
+          }}>All</button>
+          {(['fix_before_listing', 'disclose', 'ignore'] as const).map(act => {
+            const m = SELLER_ACTION_META[act];
+            const active = activeSellerAction === act;
+            return (
+              <button key={act} onClick={() => setActiveSellerAction(active ? null : act)} style={{
+                fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
+                borderRadius: 20, border: `1px solid ${active ? m.color : 'var(--bp-border)'}`,
+                background: active ? m.bg : 'transparent',
+                color: active ? m.color : 'var(--bp-subtle)', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                <span style={{ fontSize: 11 }}>{m.icon}</span>
+                {m.label} ({sellerActionCounts[act]})
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -453,6 +496,10 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                         borderRadius: 10, background: '#10B98115', color: '#10B981',
                       }}>Quoted</span>
                     )}
+                    {/* Seller action badge (when parent report is in seller mode) */}
+                    {item._reportMode === 'seller' && item.sellerAction && (
+                      <SellerActionBadge action={item.sellerAction} />
+                    )}
                   </div>
 
                   {/* Title */}
@@ -580,6 +627,30 @@ function isDispatchable(item: ItemWithContext): boolean {
   if (item.dispatchStatus === 'dispatched' || item.dispatchStatus === 'quotes_received' || item.dispatchStatus === 'quoted' || item.dispatchStatus === 'booked' || item.dispatchStatus === 'completed') return false;
   return true;
 }
+
+// ── Seller Action Badge (shared colors/labels exported as helpers) ─────────
+
+const SELLER_ACTION_META: Record<'fix_before_listing' | 'disclose' | 'ignore', { label: string; color: string; bg: string; icon: string }> = {
+  fix_before_listing: { label: 'Fix', color: '#DC2626', bg: '#FEE2E2', icon: '\uD83D\uDD27' },
+  disclose:           { label: 'Disclose', color: '#D97706', bg: '#FEF3C7', icon: '\uD83D\uDCCB' },
+  ignore:             { label: 'Ignore', color: '#6B7280', bg: '#E5E7EB', icon: '\u23ED\uFE0F' },
+};
+
+function SellerActionBadge({ action }: { action: 'fix_before_listing' | 'disclose' | 'ignore' }) {
+  const m = SELLER_ACTION_META[action];
+  return (
+    <span style={{
+      fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, padding: '2px 7px',
+      borderRadius: 10, background: m.bg, color: m.color,
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+    }}>
+      <span style={{ fontSize: 10 }}>{m.icon}</span>
+      {m.label}
+    </span>
+  );
+}
+
+export { SELLER_ACTION_META, SellerActionBadge };
 
 function Spinner() {
   return (

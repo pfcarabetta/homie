@@ -1,0 +1,1 @@
+ALTER TABLE "inspection_reports" ADD COLUMN "report_mode" text DEFAULT 'buyer' NOT NULL;

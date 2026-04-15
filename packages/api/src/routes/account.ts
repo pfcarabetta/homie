@@ -12,6 +12,7 @@ import { providers } from '../db/schema/providers';
 import { providerResponses } from '../db/schema/provider-responses';
 import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/schema/property-scans';
 import { inspectionReports, inspectionReportItems } from '../db/schema/inspector';
+import { computeSellerAction } from './inspector';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -670,6 +671,7 @@ router.get('/reports', async (req: Request, res: Response) => {
       parsingStatus: inspectionReports.parsingStatus,
       clientAccessToken: inspectionReports.clientAccessToken,
       pricingTier: inspectionReports.pricingTier,
+      reportMode: inspectionReports.reportMode,
       itemsParsed: inspectionReports.itemsParsed,
       itemsDispatched: inspectionReports.itemsDispatched,
       itemsQuoted: inspectionReports.itemsQuoted,
@@ -743,6 +745,7 @@ router.get('/reports', async (req: Request, res: Response) => {
         parsingStatus: r.parsingStatus,
         clientAccessToken: r.clientAccessToken,
         pricingTier: r.pricingTier,
+        reportMode: r.reportMode ?? 'buyer',
         reportFileUrl: r.reportFileUrl,
         itemCount: reportItems.length,
         dispatchedCount,
@@ -751,27 +754,32 @@ router.get('/reports', async (req: Request, res: Response) => {
         totalEstimateHigh,
         totalQuoteValue,
         createdAt: r.createdAt,
-        items: reportItems.map(i => ({
-          id: i.id,
-          title: i.title,
-          severity: i.severity,
-          category: i.category,
-          location: i.locationInProperty,
-          costEstimateMin: i.aiCostEstimateLowCents,
-          costEstimateMax: i.aiCostEstimateHighCents,
-          dispatchStatus: i.dispatchStatus,
-          quoteAmount: i.quoteAmountCents,
-          providerName: i.providerName,
-          quotes: i.quotes ?? [],
-          isIncludedInRequest: i.isIncludedInRequest,
-          homeownerNotes: i.homeownerNotes,
-          sellerAgreedAmountCents: i.sellerAgreedAmountCents,
-          creditIssuedCents: i.creditIssuedCents,
-          concessionStatus: i.concessionStatus,
-          repairRequestSource: i.repairRequestSource,
-          repairRequestCustomAmountCents: i.repairRequestCustomAmountCents,
-          sourcePages: i.sourcePages,
-        })),
+        items: reportItems.map(i => {
+          const sa = computeSellerAction(i.category, i.severity, i.aiCostEstimateLowCents ?? 0, i.aiCostEstimateHighCents ?? 0);
+          return {
+            id: i.id,
+            title: i.title,
+            severity: i.severity,
+            category: i.category,
+            location: i.locationInProperty,
+            costEstimateMin: i.aiCostEstimateLowCents,
+            costEstimateMax: i.aiCostEstimateHighCents,
+            dispatchStatus: i.dispatchStatus,
+            quoteAmount: i.quoteAmountCents,
+            providerName: i.providerName,
+            quotes: i.quotes ?? [],
+            isIncludedInRequest: i.isIncludedInRequest,
+            homeownerNotes: i.homeownerNotes,
+            sellerAgreedAmountCents: i.sellerAgreedAmountCents,
+            creditIssuedCents: i.creditIssuedCents,
+            concessionStatus: i.concessionStatus,
+            repairRequestSource: i.repairRequestSource,
+            repairRequestCustomAmountCents: i.repairRequestCustomAmountCents,
+            sourcePages: i.sourcePages,
+            sellerAction: sa.action,
+            sellerActionReason: sa.reason,
+          };
+        }),
       };
     });
 
@@ -811,6 +819,29 @@ const REPORT_TIER_PRICES: Record<string, { cents: number; label: string }> = {
   professional: { cents: 19900, label: 'Professional' },
   premium: { cents: 29900, label: 'Premium' },
 };
+
+// PATCH /api/v1/account/reports/:reportId/mode — switch buyer/seller mode for this report
+router.patch('/reports/:reportId/mode', async (req: Request, res: Response) => {
+  const { mode } = req.body as { mode?: string };
+  if (mode !== 'buyer' && mode !== 'seller') {
+    res.status(400).json({ data: null, error: 'mode must be "buyer" or "seller"', meta: {} });
+    return;
+  }
+  try {
+    const [updated] = await db.update(inspectionReports)
+      .set({ reportMode: mode, updatedAt: new Date() })
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .returning({ id: inspectionReports.id, reportMode: inspectionReports.reportMode });
+    if (!updated) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    res.json({ data: { id: updated.id, reportMode: updated.reportMode }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /account/reports/:reportId/mode]');
+    res.status(500).json({ data: null, error: 'Failed to update mode', meta: {} });
+  }
+});
 
 // POST /api/v1/account/reports/:reportId/checkout — create Stripe checkout for a report tier
 router.post('/reports/:reportId/checkout', async (req: Request, res: Response) => {
@@ -1788,6 +1819,183 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
     res.send(pdfBuffer);
   } catch (err) {
     logger.error({ err }, '[GET /account/reports/:reportId/repair-request.pdf]');
+    res.status(500).json({ data: null, error: 'Failed to generate PDF', meta: {} });
+  }
+});
+
+// GET /api/v1/account/reports/:reportId/pre-listing-plan.pdf — generate seller pre-listing plan PDF
+router.get('/reports/:reportId/pre-listing-plan.pdf', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    const items = await db.select().from(inspectionReportItems)
+      .where(eq(inspectionReportItems.reportId, report.id))
+      .orderBy(inspectionReportItems.sortOrder);
+
+    if (items.length === 0) {
+      res.status(400).json({ data: null, error: 'No items to include in pre-listing plan', meta: {} });
+      return;
+    }
+
+    const [homeowner] = await db.select({
+      firstName: homeowners.firstName,
+      lastName: homeowners.lastName,
+    }).from(homeowners).where(eq(homeowners.id, req.homeownerId)).limit(1);
+
+    const PDFDocument = (await import('pdfkit')).default;
+    const doc = new PDFDocument({ size: 'LETTER', margins: { top: 50, bottom: 50, left: 50, right: 50 } });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    const pdfDone = new Promise<Buffer>((resolve) => { doc.on('end', () => resolve(Buffer.concat(chunks))); });
+
+    const fmt = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+    // Classify items
+    const fixItems: typeof items = [];
+    const discloseItems: typeof items = [];
+    const ignoreItems: typeof items = [];
+    for (const item of items) {
+      const sa = computeSellerAction(item.category, item.severity, item.aiCostEstimateLowCents ?? 0, item.aiCostEstimateHighCents ?? 0);
+      if (sa.action === 'fix_before_listing') fixItems.push(item);
+      else if (sa.action === 'disclose') discloseItems.push(item);
+      else ignoreItems.push(item);
+    }
+
+    const preListingCost = fixItems.reduce((sum, i) => sum + (i.aiCostEstimateHighCents ?? 0), 0);
+    const fhaVaCategories = new Set(['roofing', 'structural', 'foundation', 'electrical', 'plumbing', 'safety', 'pest_control']);
+    const dealKillers = fixItems.filter(i => i.severity === 'safety_hazard' || i.severity === 'urgent' || fhaVaCategories.has(i.category)).length;
+    // Rough value lift estimate: sum of fix items' avg cost * 1.3
+    const valueLift = Math.round(fixItems.reduce((sum, i) => sum + ((i.aiCostEstimateLowCents ?? 0) + (i.aiCostEstimateHighCents ?? 0)) / 2, 0) * 1.3);
+
+    // ── Header ──
+    doc.fontSize(24).fillColor('#E8632B').font('Helvetica-Bold').text('homie', 50, 50, { continued: true });
+    doc.fontSize(14).fillColor('#9B9490').font('Helvetica').text(' inspect', { baseline: 'alphabetic' });
+    doc.moveDown(0.3);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#E8E4E0').stroke();
+    doc.moveDown(0.6);
+
+    // ── Title ──
+    doc.fontSize(22).fillColor('#E8632B').font('Helvetica-Bold').text('PRE-LISTING PLAN');
+    doc.moveDown(0.3);
+
+    // ── Property + seller info ──
+    doc.fontSize(14).fillColor('#2D2926').font('Helvetica-Bold').text(report.propertyAddress);
+    doc.fontSize(11).fillColor('#6B6560').font('Helvetica').text(`${report.propertyCity}, ${report.propertyState} ${report.propertyZip}`);
+    doc.moveDown(0.4);
+
+    const metaParts: string[] = [];
+    if (homeowner) {
+      const sellerName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(' ');
+      if (sellerName) metaParts.push(`Seller: ${sellerName}`);
+    }
+    if (report.inspectionDate) metaParts.push(`Inspection: ${new Date(report.inspectionDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`);
+    metaParts.push(`Plan Date: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`);
+    doc.fontSize(10).fillColor('#9B9490').text(metaParts.join('  |  '));
+    doc.moveDown(1);
+
+    // ── Intro ──
+    doc.fontSize(11).fillColor('#2D2926').font('Helvetica')
+      .text('This pre-listing plan classifies each inspection finding into one of three actions: items to fix before listing, items to disclose and let the buyer price in, and items not worth acting on. Fix-before-listing items are prioritized by safety, lender requirements, and return on investment.', { align: 'left', lineGap: 2 });
+    doc.moveDown(1);
+
+    // ── Summary tiles ──
+    const summaryY = doc.y;
+    const tileW = 164;
+    doc.roundedRect(50, summaryY, tileW, 60, 6).fillAndStroke('#FEF3F2', '#F4C7C5');
+    doc.fontSize(10).fillColor('#9B6260').font('Helvetica-Bold').text('PRE-LISTING INVESTMENT', 60, summaryY + 10, { width: tileW - 20 });
+    doc.fontSize(18).fillColor('#DC2626').font('Helvetica-Bold').text(fmt(preListingCost), 60, summaryY + 28, { width: tileW - 20 });
+    doc.fontSize(9).fillColor('#9B6260').font('Helvetica').text(`${fixItems.length} item${fixItems.length !== 1 ? 's' : ''}`, 60, summaryY + 48);
+
+    doc.roundedRect(50 + tileW + 10, summaryY, tileW, 60, 6).fillAndStroke('#ECFDF5', '#BBF7D0');
+    doc.fontSize(10).fillColor('#047857').font('Helvetica-Bold').text('EST. VALUE LIFT', 60 + tileW + 10, summaryY + 10, { width: tileW - 20 });
+    doc.fontSize(18).fillColor('#10B981').font('Helvetica-Bold').text(fmt(valueLift), 60 + tileW + 10, summaryY + 28, { width: tileW - 20 });
+    doc.fontSize(9).fillColor('#047857').font('Helvetica').text('If all fix items completed', 60 + tileW + 10, summaryY + 48);
+
+    doc.roundedRect(50 + (tileW + 10) * 2, summaryY, tileW, 60, 6).fillAndStroke('#FFF7ED', '#FED7AA');
+    doc.fontSize(10).fillColor('#9A3412').font('Helvetica-Bold').text('DEAL-KILLERS', 60 + (tileW + 10) * 2, summaryY + 10, { width: tileW - 20 });
+    doc.fontSize(18).fillColor('#EA580C').font('Helvetica-Bold').text(String(dealKillers), 60 + (tileW + 10) * 2, summaryY + 28, { width: tileW - 20 });
+    doc.fontSize(9).fillColor('#9A3412').font('Helvetica').text('Safety / FHA-VA / urgent', 60 + (tileW + 10) * 2, summaryY + 48);
+    doc.y = summaryY + 76;
+
+    const sevColors: Record<string, string> = { safety_hazard: '#E24B4A', urgent: '#E24B4A', recommended: '#EF9F27', monitor: '#9B9490', informational: '#D3CEC9' };
+    const sevLabels: Record<string, string> = { safety_hazard: 'Safety Hazard', urgent: 'Urgent', recommended: 'Recommended', monitor: 'Monitor', informational: 'Info' };
+
+    // Helper to render a section
+    function renderSection(title: string, sectionColor: string, sectionBg: string, sectionItems: typeof items, includeCost: boolean) {
+      if (sectionItems.length === 0) return;
+      if (doc.y > 680) doc.addPage();
+
+      // Section header
+      doc.roundedRect(50, doc.y, 512, 30, 4).fillAndStroke(sectionBg, sectionColor);
+      doc.fontSize(12).fillColor(sectionColor).font('Helvetica-Bold').text(title, 60, doc.y + 8);
+      doc.y += 38;
+
+      let num = 1;
+      for (const item of sectionItems) {
+        const noteHeight = item.homeownerNotes ? Math.ceil(item.homeownerNotes.length / 80) * 12 + 6 : 0;
+        const descHeight = item.description ? Math.ceil(item.description.length / 80) * 12 : 0;
+        const estRowHeight = 42 + noteHeight + descHeight;
+        if (doc.y + estRowHeight > 720) doc.addPage();
+
+        const rowY = doc.y;
+        const sevColor = sevColors[item.severity] ?? '#9B9490';
+        doc.roundedRect(50, rowY + 2, 4, estRowHeight - 8, 2).fill(sevColor);
+        doc.fontSize(10).fillColor('#9B9490').font('Helvetica-Bold').text(`${num}.`, 62, rowY, { width: 20 });
+        doc.fontSize(11).fillColor('#2D2926').font('Helvetica-Bold').text(item.title, 84, rowY, { width: 330 });
+        const titleEnd = doc.y;
+        doc.fontSize(9).fillColor('#9B9490').font('Helvetica').text(`${sevLabels[item.severity] ?? item.severity}  •  ${item.category.replace(/_/g, ' ')}${item.locationInProperty ? '  •  ' + item.locationInProperty : ''}`, 84, titleEnd + 2, { width: 330 });
+
+        if (includeCost) {
+          const cost = item.aiCostEstimateHighCents ?? 0;
+          doc.fontSize(12).fillColor(sectionColor).font('Helvetica-Bold').text(fmt(cost), 420, rowY, { width: 130, align: 'right' });
+        }
+
+        doc.y = Math.max(doc.y, titleEnd + 16);
+        if (item.description) {
+          doc.fontSize(9).fillColor('#4A4540').font('Helvetica').text(item.description, 84, doc.y, { width: 460, lineGap: 1 });
+        }
+        if (item.homeownerNotes) {
+          doc.moveDown(0.3);
+          doc.fontSize(9).fillColor('#2563EB').font('Helvetica-Oblique').text(`Note: ${item.homeownerNotes}`, 84, doc.y, { width: 460, lineGap: 1 });
+        }
+        doc.moveDown(0.5);
+        doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#F0ECE8').stroke();
+        doc.moveDown(0.3);
+        num++;
+      }
+      doc.moveDown(0.5);
+    }
+
+    renderSection(`\uD83D\uDD27  FIX BEFORE LISTING  (${fixItems.length} items  •  ${fmt(preListingCost)})`, '#DC2626', '#FEF3F2', fixItems, true);
+    renderSection(`\uD83D\uDCCB  DISCLOSE & PRICE-ADJUST  (${discloseItems.length} items)`, '#EA580C', '#FFF7ED', discloseItems, false);
+    renderSection(`\u23ED\uFE0F  IGNORE  (${ignoreItems.length} items)`, '#6B6560', '#F5F5F5', ignoreItems, false);
+
+    // Footer
+    if (doc.y + 40 > 720) doc.addPage();
+    doc.moveDown(1);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#E8E4E0').stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(8).fillColor('#9B9490').font('Helvetica')
+      .text(`Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} by Homie Inspect  •  homiepro.ai/inspect-portal`, 50, doc.y, { align: 'center', width: 512 });
+
+    doc.end();
+    const pdfBuffer = await pdfDone;
+
+    const addrSlug = report.propertyAddress.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+    const filename = `pre-listing-plan-${addrSlug}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err) {
+    logger.error({ err }, '[GET /account/reports/:reportId/pre-listing-plan.pdf]');
     res.status(500).json({ data: null, error: 'Failed to generate PDF', meta: {} });
   }
 });
