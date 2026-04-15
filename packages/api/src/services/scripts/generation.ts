@@ -46,9 +46,11 @@ const GENERATE_SCRIPTS_TOOL: Anthropic.Tool = {
       voice: {
         type: 'string',
         description:
-          'Voice call script (30–60 seconds when read aloud). ' +
-          'Must include a greeting, brief job description, ask for the provider to accept/decline, and a callback number placeholder. ' +
-          'Use {{provider_name}}, {{category}}, {{summary}}, {{budget}}, {{zip_code}}, {{callback_number}}.',
+          'Voice call script (20–30 seconds when read aloud). ' +
+          'Greet the provider by name, briefly describe the job opportunity, and end by telling them they can respond right now on this call. ' +
+          'Do NOT mention calling back a number or visiting a website — the system will automatically ask them to respond after the script plays. ' +
+          'Keep it concise and conversational, like a real person calling. ' +
+          'Use {{provider_name}}, {{category}}, {{summary}}, {{budget}}, {{zip_code}}.',
       },
       sms: {
         type: 'string',
@@ -97,9 +99,12 @@ Recommended actions: ${recommendedActions.join('; ')}
 Create templates for all three channels using the generate_scripts tool.
 Use {{placeholder}} syntax for dynamic values — do NOT hard-code specific names, dollar amounts, or zip codes.
 
-Available placeholders: {{provider_name}}, {{category}}, {{severity}}, {{summary}}, {{budget}}, {{zip_code}}, {{timing}}, {{callback_number}}
+Available placeholders: {{provider_name}}, {{category}}, {{severity}}, {{summary}}, {{budget}}, {{zip_code}}, {{timing}}
 
-IMPORTANT: The SMS template MUST include the timing requirement using {{timing}} — e.g. "Timing: {{timing}}" or "Needed: {{timing}}". This tells the provider when the homeowner needs the work done.`;
+IMPORTANT rules:
+- The SMS template MUST include the timing requirement using {{timing}} — e.g. "Timing: {{timing}}" or "Needed: {{timing}}". This tells the provider when the homeowner needs the work done.
+- The voice script must NOT tell the provider to call a number or visit a website. After the script plays, the system will automatically ask "Are you interested?" and listen for their spoken response. End the script with something like "I'll give you a moment to respond."
+- Do NOT use {{callback_number}} — it is not available.`;
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -161,13 +166,12 @@ export async function generateScripts(params: GenerateScriptsParams): Promise<Sc
   // Interpolate job-specific values into the cached template
   const vars: Record<string, string> = {
     provider_name: providerName,
-    category,
+    category: category.replace(/_/g, ' '),
     severity,
     summary,
     budget,
     zip_code: zipCode,
     timing,
-    callback_number: process.env.CALLBACK_PHONE ?? '+18005550100',
   };
 
   return {
