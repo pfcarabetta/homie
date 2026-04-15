@@ -43,30 +43,28 @@ export default function PageCitation({ sourcePages, reportFileUrl }: PageCitatio
     );
   }
 
-  function handleClick(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (!reportFileUrl) return;
-    // Fragment #page=N is the standard PDF URL fragment spec (RFC 8118) — most browser PDF viewers honor it
-    const url = `${reportFileUrl}#page=${firstPage}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
+  // Fragment #page=N is the standard PDF URL fragment spec (RFC 8118) — most browser PDF viewers honor it
+  const href = `${reportFileUrl}#page=${firstPage}`;
 
   return (
-    <button
-      onClick={handleClick}
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
       title={`Open inspection PDF at ${label.toLowerCase()}`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 3,
         fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600,
         color: '#2563EB', padding: '2px 8px', borderRadius: 4,
         background: '#2563EB10', border: '1px solid #2563EB25',
-        cursor: 'pointer',
+        cursor: 'pointer', textDecoration: 'none',
       }}
       onMouseOver={e => { e.currentTarget.style.background = '#2563EB20'; }}
       onMouseOut={e => { e.currentTarget.style.background = '#2563EB10'; }}
     >
       <span style={{ fontSize: 10 }}>{'\uD83D\uDCC4'}</span>
       {label}
-    </button>
+    </a>
   );
 }
