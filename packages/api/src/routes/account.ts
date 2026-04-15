@@ -11,8 +11,10 @@ import { bookings } from '../db/schema/bookings';
 import { providers } from '../db/schema/providers';
 import { providerResponses } from '../db/schema/provider-responses';
 import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/schema/property-scans';
-import { inspectionReports, inspectionReportItems } from '../db/schema/inspector';
+import { inspectionReports, inspectionReportItems, inspectionSupportingDocuments, inspectionCrossReferenceInsights } from '../db/schema/inspector';
 import { computeSellerAction } from './inspector';
+import { parseSupportingDoc } from '../services/document-parsers';
+import { generateCrossReferenceInsights } from '../services/cross-reference';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -2048,6 +2050,274 @@ router.get('/reports/:reportId/pre-listing-plan.pdf', async (req: Request, res: 
   } catch (err) {
     logger.error({ err }, '[GET /account/reports/:reportId/pre-listing-plan.pdf]');
     res.status(500).json({ data: null, error: 'Failed to generate PDF', meta: {} });
+  }
+});
+
+// ── Supporting Documents (multi-doc analysis) ──────────────────────────────
+
+const VALID_DOC_TYPES = new Set(['pest_report', 'seller_disclosure']);
+
+async function ownsReport(reportId: string, homeownerId: string): Promise<boolean> {
+  const [r] = await db.select({ id: inspectionReports.id }).from(inspectionReports)
+    .where(and(eq(inspectionReports.id, reportId), eq(inspectionReports.homeownerId, homeownerId)))
+    .limit(1);
+  return !!r;
+}
+
+function buildDocSourcePdfUrl(reportId: string, docId: string): string {
+  const base = (process.env.API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+  return `${base}/api/v1/account/reports/${reportId}/documents/${docId}/source-pdf`;
+}
+
+async function parseSupportingDocAsync(docId: string): Promise<void> {
+  const [doc] = await db.select().from(inspectionSupportingDocuments)
+    .where(eq(inspectionSupportingDocuments.id, docId)).limit(1);
+  if (!doc) return;
+  if (!doc.documentFileUrl) {
+    await db.update(inspectionSupportingDocuments)
+      .set({ parsingStatus: 'failed', parsingError: 'No file URL', updatedAt: new Date() })
+      .where(eq(inspectionSupportingDocuments.id, docId));
+    return;
+  }
+  try {
+    const summary = await parseSupportingDoc(doc.documentType, doc.documentFileUrl);
+    await db.update(inspectionSupportingDocuments)
+      .set({ parsingStatus: 'parsed', parsedSummary: summary as never, updatedAt: new Date() })
+      .where(eq(inspectionSupportingDocuments.id, docId));
+    // Trigger cross-reference insight regeneration
+    void generateCrossReferenceInsights(doc.reportId).catch(err =>
+      logger.error({ err, reportId: doc.reportId }, '[supporting-doc] Cross-ref generation failed'),
+    );
+  } catch (err) {
+    logger.error({ err, docId }, '[supporting-doc] Parsing failed');
+    await db.update(inspectionSupportingDocuments)
+      .set({ parsingStatus: 'failed', parsingError: (err as Error).message, updatedAt: new Date() })
+      .where(eq(inspectionSupportingDocuments.id, docId));
+  }
+}
+
+// POST /api/v1/account/reports/:reportId/documents — upload a supporting document
+router.post('/reports/:reportId/documents', async (req: Request, res: Response) => {
+  const body = req.body as { document_type?: string; file_data_url?: string; file_name?: string };
+
+  if (!body.document_type || !VALID_DOC_TYPES.has(body.document_type)) {
+    res.status(400).json({ data: null, error: `document_type must be one of: ${Array.from(VALID_DOC_TYPES).join(', ')}`, meta: {} });
+    return;
+  }
+  if (!body.file_data_url || !body.file_name) {
+    res.status(400).json({ data: null, error: 'file_data_url and file_name are required', meta: {} });
+    return;
+  }
+
+  try {
+    if (!await ownsReport(req.params.reportId, req.homeownerId)) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    // Try Cloudinary upload, fallback to data URL
+    let documentFileUrl: string | null = null;
+    try {
+      const { uploadFile } = await import('../services/image-upload');
+      const result = await uploadFile(body.file_data_url, 'homie/inspection-supporting-docs');
+      if (result) documentFileUrl = result.url;
+    } catch (err) {
+      logger.warn({ err }, '[supporting-doc/upload] Cloudinary upload failed, using data URL directly');
+    }
+    if (!documentFileUrl) documentFileUrl = body.file_data_url;
+
+    const [doc] = await db.insert(inspectionSupportingDocuments).values({
+      reportId: req.params.reportId,
+      documentType: body.document_type,
+      fileName: body.file_name,
+      documentFileUrl,
+      parsingStatus: 'processing',
+    }).returning();
+
+    // Kick off async parsing
+    void parseSupportingDocAsync(doc.id).catch(err =>
+      logger.error({ err, docId: doc.id }, '[supporting-doc/upload] Async parse failed'),
+    );
+
+    res.status(201).json({
+      data: {
+        id: doc.id,
+        reportId: doc.reportId,
+        documentType: doc.documentType,
+        fileName: doc.fileName,
+        documentFileUrl: buildDocSourcePdfUrl(doc.reportId, doc.id),
+        parsingStatus: doc.parsingStatus,
+        parsedSummary: null,
+        createdAt: doc.createdAt.toISOString(),
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/documents]');
+    res.status(500).json({ data: null, error: 'Failed to upload document', meta: {} });
+  }
+});
+
+// GET /api/v1/account/reports/:reportId/documents — list documents for a report
+router.get('/reports/:reportId/documents', async (req: Request, res: Response) => {
+  try {
+    if (!await ownsReport(req.params.reportId, req.homeownerId)) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    const docs = await db.select().from(inspectionSupportingDocuments)
+      .where(eq(inspectionSupportingDocuments.reportId, req.params.reportId))
+      .orderBy(desc(inspectionSupportingDocuments.createdAt));
+
+    res.json({
+      data: {
+        documents: docs.map(d => ({
+          id: d.id,
+          reportId: d.reportId,
+          documentType: d.documentType,
+          fileName: d.fileName,
+          documentFileUrl: d.documentFileUrl ? buildDocSourcePdfUrl(d.reportId, d.id) : null,
+          parsingStatus: d.parsingStatus,
+          parsingError: d.parsingError,
+          parsedSummary: d.parsedSummary,
+          createdAt: d.createdAt.toISOString(),
+        })),
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/reports/:reportId/documents]');
+    res.status(500).json({ data: null, error: 'Failed to load documents', meta: {} });
+  }
+});
+
+// DELETE /api/v1/account/reports/:reportId/documents/:docId — delete a supporting doc
+router.delete('/reports/:reportId/documents/:docId', async (req: Request, res: Response) => {
+  try {
+    if (!await ownsReport(req.params.reportId, req.homeownerId)) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    const result = await db.delete(inspectionSupportingDocuments)
+      .where(and(
+        eq(inspectionSupportingDocuments.id, req.params.docId),
+        eq(inspectionSupportingDocuments.reportId, req.params.reportId),
+      )).returning({ id: inspectionSupportingDocuments.id });
+    if (result.length === 0) {
+      res.status(404).json({ data: null, error: 'Document not found', meta: {} });
+      return;
+    }
+    // Regenerate insights without this doc
+    void generateCrossReferenceInsights(req.params.reportId).catch(err =>
+      logger.error({ err }, '[supporting-doc/delete] Cross-ref regen failed'),
+    );
+    res.json({ data: { deleted: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[DELETE /account/reports/:reportId/documents/:docId]');
+    res.status(500).json({ data: null, error: 'Failed to delete document', meta: {} });
+  }
+});
+
+// GET /api/v1/account/reports/:reportId/documents/:docId/source-pdf — proxy the doc PDF
+router.get('/reports/:reportId/documents/:docId/source-pdf', async (req: Request, res: Response) => {
+  try {
+    if (!await ownsReport(req.params.reportId, req.homeownerId)) {
+      res.status(404).send('Not found');
+      return;
+    }
+    const [doc] = await db.select({ documentFileUrl: inspectionSupportingDocuments.documentFileUrl })
+      .from(inspectionSupportingDocuments)
+      .where(and(
+        eq(inspectionSupportingDocuments.id, req.params.docId),
+        eq(inspectionSupportingDocuments.reportId, req.params.reportId),
+      )).limit(1);
+    if (!doc || !doc.documentFileUrl) {
+      res.status(404).send('Document not found');
+      return;
+    }
+    if (doc.documentFileUrl.startsWith('data:')) {
+      const match = doc.documentFileUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) { res.status(500).send('Stored document is malformed'); return; }
+      const mimeType = match[1] || 'application/pdf';
+      const buffer = Buffer.from(match[2], 'base64');
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Content-Length', buffer.length);
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.send(buffer);
+      return;
+    }
+    res.redirect(doc.documentFileUrl);
+  } catch (err) {
+    logger.error({ err }, '[GET /account/reports/:reportId/documents/:docId/source-pdf]');
+    res.status(500).send('Failed to load document');
+  }
+});
+
+// GET /api/v1/account/reports/:reportId/insights — fetch cached cross-reference insights
+router.get('/reports/:reportId/insights', async (req: Request, res: Response) => {
+  try {
+    if (!await ownsReport(req.params.reportId, req.homeownerId)) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    const [row] = await db.select().from(inspectionCrossReferenceInsights)
+      .where(eq(inspectionCrossReferenceInsights.reportId, req.params.reportId))
+      .limit(1);
+    res.json({
+      data: {
+        insights: row ? row.insights : [],
+        generatedAt: row ? row.generatedAt.toISOString() : null,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/reports/:reportId/insights]');
+    res.status(500).json({ data: null, error: 'Failed to load insights', meta: {} });
+  }
+});
+
+// GET /api/v1/account/documents — aggregate list of all of the homeowner's supporting docs
+router.get('/documents', async (req: Request, res: Response) => {
+  try {
+    // Get all reports for this homeowner
+    const reports = await db.select({
+      id: inspectionReports.id,
+      propertyAddress: inspectionReports.propertyAddress,
+    }).from(inspectionReports)
+      .where(eq(inspectionReports.homeownerId, req.homeownerId));
+
+    const reportIds = reports.map(r => r.id);
+    if (reportIds.length === 0) {
+      res.json({ data: { documents: [] }, error: null, meta: {} });
+      return;
+    }
+
+    const docs = await db.select().from(inspectionSupportingDocuments)
+      .where(inArray(inspectionSupportingDocuments.reportId, reportIds))
+      .orderBy(desc(inspectionSupportingDocuments.createdAt));
+
+    const reportMap = new Map(reports.map(r => [r.id, r.propertyAddress]));
+
+    res.json({
+      data: {
+        documents: docs.map(d => ({
+          id: d.id,
+          reportId: d.reportId,
+          reportAddress: reportMap.get(d.reportId) ?? '',
+          documentType: d.documentType,
+          fileName: d.fileName,
+          documentFileUrl: d.documentFileUrl ? buildDocSourcePdfUrl(d.reportId, d.id) : null,
+          parsingStatus: d.parsingStatus,
+          parsedSummary: d.parsedSummary,
+          createdAt: d.createdAt.toISOString(),
+        })),
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/documents]');
+    res.status(500).json({ data: null, error: 'Failed to load documents', meta: {} });
   }
 });
 

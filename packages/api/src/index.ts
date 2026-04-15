@@ -96,6 +96,28 @@ async function start() {
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS source_pages integer[]`);
     await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS report_mode text NOT NULL DEFAULT 'buyer'`);
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS maintenance_completed_at timestamp with time zone`);
+
+    // Multi-document analysis tables
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS inspection_supporting_documents (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      report_id uuid NOT NULL REFERENCES inspection_reports(id) ON DELETE CASCADE,
+      document_type text NOT NULL,
+      file_name text NOT NULL,
+      document_file_url text,
+      parsing_status text NOT NULL DEFAULT 'uploading',
+      parsing_error text,
+      parsed_summary jsonb,
+      created_at timestamp with time zone DEFAULT now() NOT NULL,
+      updated_at timestamp with time zone DEFAULT now() NOT NULL
+    )`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS supporting_doc_report_idx ON inspection_supporting_documents (report_id)`);
+
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS inspection_cross_reference_insights (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      report_id uuid NOT NULL UNIQUE REFERENCES inspection_reports(id) ON DELETE CASCADE,
+      insights jsonb NOT NULL,
+      generated_at timestamp with time zone DEFAULT now() NOT NULL
+    )`);
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');

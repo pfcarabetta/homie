@@ -509,6 +509,36 @@ export const inspectService = {
     );
   },
 
+  // ── Supporting documents (multi-doc analysis) ────────────────────────────
+
+  uploadSupportingDocument(reportId: string, params: { documentType: 'pest_report' | 'seller_disclosure'; fileName: string; fileDataUrl: string }) {
+    return fetchAPI<SupportingDocument>(
+      `/api/v1/account/reports/${reportId}/documents`,
+      { method: 'POST', body: JSON.stringify({ document_type: params.documentType, file_name: params.fileName, file_data_url: params.fileDataUrl }) },
+    );
+  },
+
+  listSupportingDocuments(reportId: string) {
+    return fetchAPI<{ documents: SupportingDocument[] }>(`/api/v1/account/reports/${reportId}/documents`);
+  },
+
+  deleteSupportingDocument(reportId: string, docId: string) {
+    return fetchAPI<{ deleted: boolean }>(
+      `/api/v1/account/reports/${reportId}/documents/${docId}`,
+      { method: 'DELETE' },
+    );
+  },
+
+  getCrossReferenceInsights(reportId: string) {
+    return fetchAPI<{ insights: CrossReferenceInsight[]; generatedAt: string | null }>(
+      `/api/v1/account/reports/${reportId}/insights`,
+    );
+  },
+
+  listAllSupportingDocuments() {
+    return fetchAPI<{ documents: SupportingDocumentWithReport[] }>(`/api/v1/account/documents`);
+  },
+
   /** Authenticated: accept a quote for an inspection item */
   bookQuote(reportId: string, itemId: string, providerId: string) {
     return fetchAPI<{ bookingId: string; status: string; providerName: string; providerPhone: string; quotedPrice: string | null; scheduled: string | null }>(
@@ -661,4 +691,31 @@ export interface PortalReport {
   totalQuoteValue: number;
   createdAt: string;
   items: PortalReportItem[];
+}
+
+// ── Supporting Documents + Cross-Reference Insights ────────────────────────
+
+export interface SupportingDocument {
+  id: string;
+  reportId: string;
+  documentType: 'pest_report' | 'seller_disclosure';
+  fileName: string;
+  documentFileUrl: string | null;
+  parsingStatus: 'uploading' | 'processing' | 'parsed' | 'failed';
+  parsingError?: string | null;
+  parsedSummary: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface SupportingDocumentWithReport extends SupportingDocument {
+  reportAddress: string;
+}
+
+export interface CrossReferenceInsight {
+  id: string;
+  title: string;
+  description: string;
+  severity: 'info' | 'warning' | 'concern';
+  relatedDocIds: string[];
+  relatedItemIds: string[];
 }

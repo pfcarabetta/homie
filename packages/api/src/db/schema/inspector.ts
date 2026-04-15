@@ -216,3 +216,35 @@ export const inspectorInboundLeads = pgTable('inspector_inbound_leads', {
 ]);
 
 export type InspectorInboundLead = typeof inspectorInboundLeads.$inferSelect;
+
+// ── Supporting Documents (pest reports, seller disclosures, etc.) ─────────
+export const inspectionSupportingDocuments = pgTable('inspection_supporting_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  reportId: uuid('report_id').notNull().references(() => inspectionReports.id, { onDelete: 'cascade' }),
+  /** pest_report | seller_disclosure (more types later) */
+  documentType: text('document_type').notNull(),
+  fileName: text('file_name').notNull(),
+  documentFileUrl: text('document_file_url'),
+  /** uploading | processing | parsed | failed */
+  parsingStatus: text('parsing_status').notNull().default('uploading'),
+  parsingError: text('parsing_error'),
+  /** Type-specific extracted summary (shape varies by documentType) */
+  parsedSummary: jsonb('parsed_summary'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index('supporting_doc_report_idx').on(t.reportId),
+]);
+
+export type InspectionSupportingDocument = typeof inspectionSupportingDocuments.$inferSelect;
+
+// ── Cross-Reference Insights (AI correlations between docs + items) ───────
+export const inspectionCrossReferenceInsights = pgTable('inspection_cross_reference_insights', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  reportId: uuid('report_id').notNull().unique().references(() => inspectionReports.id, { onDelete: 'cascade' }),
+  /** Array of { id, title, description, severity, relatedDocIds[], relatedItemIds[] } */
+  insights: jsonb('insights').notNull(),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type InspectionCrossReferenceInsights = typeof inspectionCrossReferenceInsights.$inferSelect;
