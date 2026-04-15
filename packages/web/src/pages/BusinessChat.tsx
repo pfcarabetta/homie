@@ -260,17 +260,17 @@ function TrackingShareCard({ jobId, propertyName, trackingUrl, setTrackingUrl }:
   return (
     <div style={{ marginLeft: 42, marginBottom: 16, background: W, borderRadius: 12, padding: 16, border: '1px solid rgba(0,0,0,0.06)', animation: 'fadeSlide 0.3s ease' }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 4 }}>Share maintenance status</div>
-      <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 13, color: 'var(--bp-muted)', marginBottom: 12, lineHeight: 1.5 }}>
         Copy the tracking link or add a phone/email to send automatic updates.
       </div>
 
       {/* Tracking URL */}
       {creating && (
-        <div style={{ fontSize: 13, color: '#9B9490', marginBottom: 8 }}>Creating tracking link...</div>
+        <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginBottom: 8 }}>Creating tracking link...</div>
       )}
       {trackingUrl && (
         <div style={{
-          display: 'flex', gap: 8, alignItems: 'center', background: '#fff', borderRadius: 8,
+          display: 'flex', gap: 8, alignItems: 'center', background: 'var(--bp-card)', borderRadius: 8,
           padding: '8px 10px', border: '1px solid rgba(0,0,0,0.06)', marginBottom: 12,
         }}>
           <input readOnly value={trackingUrl} style={{
@@ -293,7 +293,7 @@ function TrackingShareCard({ jobId, propertyName, trackingUrl, setTrackingUrl }:
       {/* Optional notifications */}
       {trackingUrl && !notifySaved && (
         <>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', marginBottom: 6 }}>Also send updates via (optional)</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', marginBottom: 6 }}>Also send updates via (optional)</div>
           <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
             <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone for SMS updates"
               style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 13, outline: 'none', fontFamily: "'DM Sans', sans-serif" }} />
@@ -303,7 +303,7 @@ function TrackingShareCard({ jobId, propertyName, trackingUrl, setTrackingUrl }:
           {(phone.trim() || email.trim()) && (
             <button disabled={saving} onClick={saveNotify} style={{
               width: '100%', padding: '8px 0', borderRadius: 100, border: '1px solid rgba(0,0,0,0.08)',
-              background: '#fff', color: D, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              background: 'var(--bp-card)', color: D, fontSize: 13, fontWeight: 600, cursor: 'pointer',
               fontFamily: "'DM Sans', sans-serif", opacity: saving ? 0.7 : 1,
             }}>
               {saving ? 'Saving...' : 'Send updates'}
@@ -337,14 +337,14 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
   const isLong = summary.length > 300;
 
   return (
-    <div style={{ marginLeft: 42, marginBottom: 16, background: '#fff', border: `2px solid ${G}22`, borderRadius: 16, overflow: 'hidden' }}>
+    <div style={{ marginLeft: 42, marginBottom: 16, background: 'var(--bp-card)', border: `2px solid ${G}22`, borderRadius: 16, overflow: 'hidden' }}>
       <div style={{ background: `${G}10`, padding: '12px 16px', borderBottom: `1px solid ${G}22`, display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: G }} />
         <span style={{ fontSize: 13, fontWeight: 600, color: G }}>{isService ? 'Scope confirmed' : 'AI diagnosis ready'}</span>
       </div>
       <div style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>{category.icon} {category.label}</div>
-        <div style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.6, marginBottom: isLong && !expanded ? 4 : 12, whiteSpace: 'pre-wrap' }}>
+        <div style={{ fontSize: 14, color: 'var(--bp-muted)', lineHeight: 1.6, marginBottom: isLong && !expanded ? 4 : 12, whiteSpace: 'pre-wrap' }}>
           {expanded || !isLong ? renderBold(summary) : <>{renderBold(summary.slice(0, 300))}...</>}
         </div>
         {isLong && (
@@ -355,15 +355,15 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
         )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
-            <span style={{ color: '#9B9490' }}>Property:</span> <span style={{ fontWeight: 600, color: D }}>{property.name}</span>
+            <span style={{ color: 'var(--bp-subtle)' }}>Property:</span> <span style={{ fontWeight: 600, color: D }}>{property.name}</span>
           </div>
           {property.zipCode && (
             <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
-              <span style={{ color: '#9B9490' }}>Zip:</span> <span style={{ fontWeight: 600, color: D }}>{property.zipCode}</span>
+              <span style={{ color: 'var(--bp-subtle)' }}>Zip:</span> <span style={{ fontWeight: 600, color: D }}>{property.zipCode}</span>
             </div>
           )}
           <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
-            <span style={{ color: '#9B9490' }}>Type:</span> <span style={{ fontWeight: 600, color: D }}>{isService ? 'Service' : 'Repair'}</span>
+            <span style={{ color: 'var(--bp-subtle)' }}>Type:</span> <span style={{ fontWeight: 600, color: D }}>{isService ? 'Service' : 'Repair'}</span>
           </div>
         </div>
         {estimate && (
@@ -371,7 +371,7 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
             <EstimateCard estimate={estimate} />
           </div>
         )}
-        <p style={{ fontSize: 12, color: '#9B9490', lineHeight: 1.5, marginBottom: 16 }}>
+        <p style={{ fontSize: 12, color: 'var(--bp-subtle)', lineHeight: 1.5, marginBottom: 16 }}>
           This {isService ? 'scope' : 'diagnosis'} will be shared with providers so they can respond quickly — no need to explain twice.
         </p>
         <button onClick={onDispatch} disabled={dispatching} style={{
@@ -423,7 +423,7 @@ function PropertySelector({ properties, workspaces, selectedWorkspace, onSelectW
       {selectedWorkspace && (
         <div style={{ marginLeft: 42, display: 'grid', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
           {properties.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#9B9490' }}>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)' }}>
               No properties found. <span onClick={onAddClick} style={{ color: O, cursor: 'pointer', fontWeight: 600 }}>Add properties first.</span>
             </div>
           ) : (
@@ -442,14 +442,14 @@ function PropertySelector({ properties, workspaces, selectedWorkspace, onSelectW
                     onFocus={e => e.target.style.borderColor = O}
                     onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
                   />
-                  <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, color: '#9B9490', pointerEvents: 'none' }}>🔍</span>
+                  <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, color: 'var(--bp-subtle)', pointerEvents: 'none' }}>🔍</span>
                 </div>
               )}
               <div style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
                 {filtered.map(p => (
                   <button key={p.id} onClick={() => onSelect(p)} style={{
                     display: 'flex', alignItems: 'center', padding: '14px 18px', borderRadius: 14, cursor: 'pointer',
-                    border: '2px solid rgba(0,0,0,0.07)', background: 'white', textAlign: 'left', transition: 'all 0.15s',
+                    border: '2px solid rgba(0,0,0,0.07)', background: 'var(--bp-card)', textAlign: 'left', transition: 'all 0.15s',
                     fontFamily: "'DM Sans', sans-serif", width: '100%', marginBottom: 8,
                   }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
@@ -461,18 +461,18 @@ function PropertySelector({ properties, workspaces, selectedWorkspace, onSelectW
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 15, color: D }}>{p.name}</div>
                       {(p.address || p.city) && (
-                        <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {p.address}{p.city ? `, ${p.city}` : ''}{p.state ? `, ${p.state}` : ''}
                         </div>
                       )}
                     </div>
-                    <div style={{ fontSize: 12, color: '#9B9490', background: W, padding: '4px 10px', borderRadius: 8, flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--bp-subtle)', background: W, padding: '4px 10px', borderRadius: 8, flexShrink: 0 }}>
                       {p.unitCount} {p.unitCount === 1 ? 'unit' : 'units'}
                     </div>
                   </button>
                 ))}
                 {search && filtered.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: 24, color: '#9B9490', fontSize: 14 }}>
+                  <div style={{ textAlign: 'center', padding: 24, color: 'var(--bp-subtle)', fontSize: 14 }}>
                     No properties match "{search}"
                   </div>
                 )}
@@ -481,7 +481,7 @@ function PropertySelector({ properties, workspaces, selectedWorkspace, onSelectW
           )}
           {workspaces.length > 1 && (
             <select value={selectedWorkspace} onChange={e => onSelectWorkspace(e.target.value)}
-              style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 13, color: '#6B6560', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+              style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 13, color: 'var(--bp-muted)', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
               {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           )}
@@ -1261,7 +1261,7 @@ export default function BusinessChat() {
 
 
   return (
-    <div style={{ height: '100%', background: 'white', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: '100%', background: 'var(--bp-card)', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <style>{`
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin { to { transform:rotate(360deg); } }
@@ -1332,7 +1332,7 @@ export default function BusinessChat() {
                   }}>
                     {headerOccupancy.occupied ? 'Occupied' : 'Vacant'}
                   </span>
-                  <span className="b2b-occ-detail" style={{ fontSize: 10, color: '#9B9490', fontWeight: 500 }}>
+                  <span className="b2b-occ-detail" style={{ fontSize: 10, color: 'var(--bp-subtle)', fontWeight: 500 }}>
                     {headerOccupancy.occupied && headerOccupancy.reservation
                       ? `${headerOccupancy.reservation.guestName || 'Guest'} · until ${new Date(headerOccupancy.reservation.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
                       : headerOccupancy.nextCheckIn
@@ -1350,7 +1350,7 @@ export default function BusinessChat() {
                   <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowCalendar(false)} />
                   <div className="b2b-cal-popover" style={{
                     position: 'absolute', top: 44, left: 0, zIndex: 100,
-                    background: '#fff', borderRadius: 14, border: '1px solid rgba(0,0,0,0.08)',
+                    background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.08)',
                     boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: 16,
                     width: 'min(460px, calc(100vw - 40px))', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto',
                   }}>
@@ -1358,7 +1358,7 @@ export default function BusinessChat() {
                       {selectedProperty.name} — Reservations
                     </div>
                     {calendarReservations.length === 0 ? (
-                      <div style={{ fontSize: 13, color: '#9B9490', padding: '20px 0', textAlign: 'center' }}>No upcoming reservations</div>
+                      <div style={{ fontSize: 13, color: 'var(--bp-subtle)', padding: '20px 0', textAlign: 'center' }}>No upcoming reservations</div>
                     ) : (
                       <MiniCalendar reservations={calendarReservations} />
                     )}
@@ -1419,7 +1419,7 @@ export default function BusinessChat() {
             sessionIdRef.current = `b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`;
           }} style={{
             background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
-            padding: '5px 12px', fontSize: 13, fontWeight: 600, color: '#6B6560',
+            padding: '5px 12px', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)',
             cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
           }}>+ New</button>
         </div>
@@ -1447,12 +1447,12 @@ export default function BusinessChat() {
               <AssistantMsg text={`How can Homie help at ${selectedProperty?.name}?`} animate />
 
               <div style={{ marginLeft: 42, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6 }}>REPAIR</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', letterSpacing: '0.05em', marginBottom: 6 }}>REPAIR</div>
                 <div className="b2b-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
                   {B2B_CATEGORY_TREE.filter(g => g.type === 'repair').map(g => (
                     <button key={g.label} onClick={() => handleGroupSelect(g)} style={{
                       padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                      background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                      background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
@@ -1464,12 +1464,12 @@ export default function BusinessChat() {
                   ))}
                 </div>
 
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6 }}>SERVICE</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', letterSpacing: '0.05em', marginBottom: 6 }}>SERVICE</div>
                 <div className="b2b-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                   {B2B_CATEGORY_TREE.filter(g => g.type === 'service').map(g => (
                     <button key={g.label} onClick={() => handleGroupSelect(g)} style={{
                       padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                      background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                      background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
@@ -1501,7 +1501,7 @@ export default function BusinessChat() {
                 {activeGroup.subs.map(s => (
                   <button key={s.id} onClick={() => handleSubSelect(s.id)} style={{
                     padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                    background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
@@ -1523,7 +1523,7 @@ export default function BusinessChat() {
                   {category.q1.options.filter(o => o !== 'Other').map(opt => (
                     <button key={opt} onClick={() => handleQ1(opt)} style={{
                       padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                      background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                      background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
@@ -1532,7 +1532,7 @@ export default function BusinessChat() {
                   ))}
                   <button onClick={() => setShowQ1Input(true)} style={{
                     padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px dashed rgba(0,0,0,0.12)',
-                    background: 'white', fontSize: 14, color: '#9B9490', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    background: 'var(--bp-card)', fontSize: 14, color: 'var(--bp-subtle)', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
@@ -1572,7 +1572,7 @@ export default function BusinessChat() {
                   {suggestions.map(s => (
                     <button key={s} onClick={() => handleUserInput(s)} style={{
                       padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                      background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                      background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
@@ -1581,7 +1581,7 @@ export default function BusinessChat() {
                   ))}
                   <button onClick={() => setShowFreeInput(true)} style={{
                     padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px dashed rgba(0,0,0,0.12)',
-                    background: 'white', fontSize: 14, color: '#9B9490', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    background: 'var(--bp-card)', fontSize: 14, color: 'var(--bp-subtle)', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
@@ -1601,7 +1601,7 @@ export default function BusinessChat() {
                         <button onClick={() => { setImgPreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
                           style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', background: D, color: '#fff', border: '2px solid white', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                       </div>
-                      <span style={{ fontSize: 12, color: '#9B9490' }}>Photo attached</span>
+                      <span style={{ fontSize: 12, color: 'var(--bp-subtle)' }}>Photo attached</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
@@ -1615,7 +1615,7 @@ export default function BusinessChat() {
                     <button onClick={() => fileInputRef.current?.click()}
                       style={{
                         width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(0,0,0,0.08)',
-                        background: 'white', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center',
+                        background: 'var(--bp-card)', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center',
                         justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s',
                       }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = O}
@@ -1648,7 +1648,7 @@ export default function BusinessChat() {
           {/* Anything else before dispatch */}
           {step === 'anything_else' && !streaming && (
             <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease', marginBottom: 16 }}>
-              <div style={{ background: '#fff', borderRadius: 14, border: '2px solid rgba(0,0,0,0.06)', padding: 16, marginBottom: 10 }}>
+              <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '2px solid rgba(0,0,0,0.06)', padding: 16, marginBottom: 10 }}>
                 <textarea
                   value={anythingElseText}
                   onChange={e => setAnythingElseText(e.target.value)}
@@ -1664,8 +1664,8 @@ export default function BusinessChat() {
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                   <button onClick={() => anythingElseFileRef.current?.click()} style={{
-                    padding: '6px 12px', borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.08)', background: '#fff',
-                    fontSize: 13, color: '#9B9490', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '6px 12px', borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.08)', background: 'var(--bp-card)',
+                    fontSize: 13, color: 'var(--bp-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                   }}>
                     {'\uD83D\uDCF7'} {anythingElseImage ? 'Change photo' : 'Add photo'}
                   </button>
@@ -1710,7 +1710,7 @@ export default function BusinessChat() {
               {['Under $100', '$100–$250', '$250–$500', '$500–$1,000', '$1,000+'].map(b => (
                 <button key={b} onClick={() => handleBudget(b)} style={{
                   padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                  background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                  background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                   fontFamily: "'DM Sans', sans-serif",
                 }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
@@ -1719,7 +1719,7 @@ export default function BusinessChat() {
               ))}
               <button onClick={() => handleBudget('flexible')} style={{
                 padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px dashed rgba(0,0,0,0.12)',
-                background: 'white', fontSize: 14, color: '#9B9490', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                background: 'var(--bp-card)', fontSize: 14, color: 'var(--bp-subtle)', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                 fontFamily: "'DM Sans', sans-serif",
               }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
@@ -1735,7 +1735,7 @@ export default function BusinessChat() {
                 {['Today', 'Tomorrow', 'This week', 'Flexible'].map(t => (
                   <button key={t} onClick={() => handleTiming(t)} style={{
                     padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                    background: 'white', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
+                    background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
@@ -1812,7 +1812,7 @@ export default function BusinessChat() {
           {/* Occupancy check card — shown when property is occupied */}
           {step === 'summary' && occupancyCheck?.occupied && occupancyCheck.reservation && category && (
             <div style={{
-              marginLeft: 42, marginBottom: 16, background: '#fff', borderRadius: 16,
+              marginLeft: 42, marginBottom: 16, background: 'var(--bp-card)', borderRadius: 16,
               border: `2px solid ${O}22`, overflow: 'hidden', animation: 'fadeSlide 0.3s ease',
               boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
             }}>
@@ -1826,15 +1826,15 @@ export default function BusinessChat() {
               <div style={{ padding: 16 }}>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
                   <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
-                    <span style={{ color: '#9B9490' }}>Guest:</span>{' '}
+                    <span style={{ color: 'var(--bp-subtle)' }}>Guest:</span>{' '}
                     <span style={{ fontWeight: 600, color: D }}>{occupancyCheck.reservation.guestName || 'Unknown guest'}</span>
                   </div>
                   <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
-                    <span style={{ color: '#9B9490' }}>Check-in:</span>{' '}
+                    <span style={{ color: 'var(--bp-subtle)' }}>Check-in:</span>{' '}
                     <span style={{ fontWeight: 600, color: D }}>{new Date(occupancyCheck.reservation.checkIn).toLocaleDateString()}</span>
                   </div>
                   <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
-                    <span style={{ color: '#9B9490' }}>Check-out:</span>{' '}
+                    <span style={{ color: 'var(--bp-subtle)' }}>Check-out:</span>{' '}
                     <span style={{ fontWeight: 600, color: D }}>{new Date(occupancyCheck.reservation.checkOut).toLocaleDateString()}</span>
                   </div>
                 </div>
@@ -1870,7 +1870,7 @@ export default function BusinessChat() {
                     }}
                     style={{
                       padding: '12px 20px', borderRadius: 10, border: `1.5px solid ${O}`,
-                      background: '#fff', color: O, fontSize: 14, fontWeight: 600,
+                      background: 'var(--bp-card)', color: O, fontSize: 14, fontWeight: 600,
                       cursor: dispatching ? 'default' : 'pointer', opacity: dispatching ? 0.7 : 1,
                       fontFamily: "'DM Sans', sans-serif",
                     }}
@@ -1886,7 +1886,7 @@ export default function BusinessChat() {
                       position: 'relative', transition: 'background 0.2s', flexShrink: 0, cursor: 'pointer',
                     }}>
                       <div style={{
-                        width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute',
+                        width: 18, height: 18, borderRadius: '50%', background: 'var(--bp-card)', position: 'absolute',
                         top: 2, left: notifyGuest ? 20 : 2, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                       }} />
                     </div>
@@ -1945,7 +1945,7 @@ export default function BusinessChat() {
               {responses.map((r, i) => (
                 <div key={r.id} style={{ marginLeft: 42, marginBottom: 10, animation: 'fadeSlide 0.4s ease' }}>
                   <div onClick={() => setSelectedResponse(selectedResponse === i ? null : i)} style={{
-                    background: 'white', borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
+                    background: 'var(--bp-card)', borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
                     border: selectedResponse === i ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
                     boxShadow: selectedResponse === i ? `0 4px 20px ${O}18` : '0 1px 4px rgba(0,0,0,0.03)',
                     transition: 'all 0.2s',
@@ -1954,21 +1954,21 @@ export default function BusinessChat() {
                       <div>
                         <span style={{ fontWeight: 700, fontSize: 16, color: D }}>{r.provider.name}</span>
                         {r.provider.google_rating && (
-                          <span style={{ color: '#9B9490', fontSize: 13, marginLeft: 8 }}>{'★'} {r.provider.google_rating} ({r.provider.review_count})</span>
+                          <span style={{ color: 'var(--bp-subtle)', fontSize: 13, marginLeft: 8 }}>{'★'} {r.provider.google_rating} ({r.provider.review_count})</span>
                         )}
                       </div>
                       {r.quoted_price && (
                         <div style={{ textAlign: 'right' }}>
                           <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{r.quoted_price}</span>
-                          <div style={{ fontSize: 11, color: '#9B9490', fontWeight: 500 }}>estimate</div>
+                          <div style={{ fontSize: 11, color: 'var(--bp-subtle)', fontWeight: 500 }}>estimate</div>
                         </div>
                       )}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       {r.availability && <span style={{ fontSize: 14, color: D }}>{'📅'} {r.availability}</span>}
-                      <span style={{ background: W, padding: '2px 10px', borderRadius: 100, fontSize: 11, color: '#9B9490' }}>via {r.channel}</span>
+                      <span style={{ background: W, padding: '2px 10px', borderRadius: 100, fontSize: 11, color: 'var(--bp-subtle)' }}>via {r.channel}</span>
                     </div>
-                    {r.message && <div style={{ fontSize: 13, color: '#6B6560', fontStyle: 'italic', marginTop: 6 }}>"{r.message}"</div>}
+                    {r.message && <div style={{ fontSize: 13, color: 'var(--bp-muted)', fontStyle: 'italic', marginTop: 6 }}>"{r.message}"</div>}
                     {selectedResponse === i && (
                       <div style={{ marginTop: 14 }}>
                         <button onClick={async (e) => {
@@ -1990,14 +1990,14 @@ export default function BusinessChat() {
               {bookedName && (
                 <div style={{ marginLeft: 42, animation: 'fadeSlide 0.4s ease' }}>
                   <div style={{
-                    background: 'white', borderRadius: 16, padding: '28px 24px', textAlign: 'center',
+                    background: 'var(--bp-card)', borderRadius: 16, padding: '28px 24px', textAlign: 'center',
                     border: `2px solid ${G}22`, boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
                   }}>
                     <div style={{ width: 56, height: 56, borderRadius: '50%', background: `${G}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 12.75l6 6 9-13.5" /></svg>
                     </div>
                     <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, marginBottom: 6 }}>You're all set!</div>
-                    <div style={{ fontSize: 14, color: '#6B6560' }}>
+                    <div style={{ fontSize: 14, color: 'var(--bp-muted)' }}>
                       <strong style={{ color: D }}>{bookedName}</strong> has been booked. They'll be in touch to confirm details.
                     </div>
                   </div>
@@ -2006,7 +2006,7 @@ export default function BusinessChat() {
               )}
 
               {step === 'results' && responses.length > 0 && selectedResponse === null && !bookedName && (
-                <div style={{ marginLeft: 42, textAlign: 'center', color: '#9B9490', fontSize: 14, marginTop: 8 }}>{'↑'} Tap a provider to book</div>
+                <div style={{ marginLeft: 42, textAlign: 'center', color: 'var(--bp-subtle)', fontSize: 14, marginTop: 8 }}>{'↑'} Tap a provider to book</div>
               )}
             </>
           )}
