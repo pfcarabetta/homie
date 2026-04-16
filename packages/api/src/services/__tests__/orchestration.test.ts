@@ -94,7 +94,7 @@ const MOCK_PROVIDER_DB = {
   email: 'info@acme.com',
   website: 'https://acme.com',
   googlePlaceId: 'place-123',
-  googleRating: '4.8',
+  rating: '4.8',
   reviewCount: 100,
   categories: ['plumbing'],
   location: null,

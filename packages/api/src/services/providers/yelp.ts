@@ -53,6 +53,8 @@ export interface YelpBusiness {
   reviewCount: number;
   lat: number;
   lng: number;
+  /** Deep-link to the business's Yelp page (reviews, photos, hours). */
+  url: string | null;
 }
 
 // Internal shapes from Yelp Fusion Business Search response
@@ -63,6 +65,7 @@ interface YelpBizResult {
   review_count: number;
   is_closed: boolean;
   coordinates: { latitude: number; longitude: number };
+  url?: string;
 }
 interface YelpSearchResponse {
   businesses: YelpBizResult[];
@@ -118,5 +121,6 @@ export async function searchNearby(params: {
       reviewCount: b.review_count,
       lat: b.coordinates.latitude,
       lng: b.coordinates.longitude,
+      url: b.url ?? null,
     }));
 }

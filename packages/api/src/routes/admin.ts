@@ -293,7 +293,7 @@ router.get('/providers', async (req: Request, res: Response) => {
           phone: providers.phone,
           email: providers.email,
           website: providers.website,
-          googleRating: providers.googleRating,
+          rating: providers.rating,
           reviewCount: providers.reviewCount,
           categories: providers.categories,
           discoveredAt: providers.discoveredAt,
@@ -380,7 +380,7 @@ router.get('/providers/:id', async (req: Request, res: Response) => {
           email: provider.email,
           website: provider.website,
           googlePlaceId: provider.googlePlaceId,
-          googleRating: provider.googleRating,
+          googleRating: provider.rating,
           reviewCount: provider.reviewCount,
           categories: provider.categories,
           notificationPref: provider.notificationPref,
@@ -439,7 +439,7 @@ router.get('/bookings', async (req: Request, res: Response) => {
           providerName: providers.name,
           providerPhone: providers.phone,
           providerEmail: providers.email,
-          providerRating: providers.googleRating,
+          providerRating: providers.rating,
           providerReviewCount: providers.reviewCount,
           googlePlaceId: providers.googlePlaceId,
           homeownerEmail: homeowners.email,
@@ -955,10 +955,10 @@ router.post('/jobs/:jobId/quotes', async (req: Request, res: Response) => {
     try {
       const { emitTrackingEvent } = await import('../services/orchestration');
       const provName = body.provider_name ?? 'A provider';
-      const [provInfo] = await db.select({ googleRating: providers.googleRating }).from(providers).where(eq(providers.id, providerId)).limit(1);
+      const [provInfo] = await db.select({ rating: providers.rating }).from(providers).where(eq(providers.id, providerId)).limit(1);
       void emitTrackingEvent(jobId, 'provider_responded', 'Quote Received',
         `${provName} has responded.`,
-        { provider_name: provName, ...(provInfo?.googleRating ? { rating: `${provInfo.googleRating} ★` } : {}) },
+        { provider_name: provName, ...(provInfo?.rating ? { rating: `${provInfo.rating} ★` } : {}) },
       );
     } catch (err) { logger.warn({ err, jobId }, '[admin] Failed to emit tracking event for quote received'); }
 

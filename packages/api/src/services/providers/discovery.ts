@@ -92,7 +92,7 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
       email: emailResults[i].status === 'fulfilled' ? emailResults[i].value : null,
       website: detailsResults[i].website,
       googlePlaceId: p.placeId,
-      googleRating: p.rating.toFixed(1),
+      rating: p.rating.toFixed(1),
       reviewCount: p.reviewCount,
       categories: [category],
       lat: p.lat.toFixed(7),
@@ -105,7 +105,7 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
       .onConflictDoUpdate({
         target: providers.googlePlaceId,
         set: {
-          googleRating: sql`excluded.google_rating`,
+          rating: sql`excluded.google_rating`,
           reviewCount: sql`excluded.review_count`,
         },
       })
@@ -144,11 +144,12 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
     const yelpValues = newYelpBusinesses.map((b) => ({
       name: b.name,
       phone: b.phone,
-      googleRating: b.rating.toFixed(1),
+      rating: b.rating.toFixed(1),
       reviewCount: b.reviewCount,
       categories: [category],
       lat: b.lat.toFixed(7),
       lng: b.lng.toFixed(7),
+      yelpUrl: b.url,
     }));
 
     // Plain inserts — no googlePlaceId, so no conflict possible
@@ -283,7 +284,7 @@ export async function discoverProviders(params: DiscoveryParams): Promise<Discov
         email: p.email,
         website: p.website,
         google_place_id: p.googlePlaceId,
-        google_rating: p.googleRating,
+        google_rating: p.rating,
         review_count: p.reviewCount,
         categories: p.categories,
         distance_miles: Math.round(distanceMiles * 10) / 10,

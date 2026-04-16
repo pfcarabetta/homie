@@ -89,7 +89,7 @@ trackingPublicRouter.get('/:token', async (req: Request, res: Response) => {
 
     if (booking) {
       const [provider] = await db
-        .select({ name: providers.name, googleRating: providers.googleRating, reviewCount: providers.reviewCount })
+        .select({ name: providers.name, rating: providers.rating, reviewCount: providers.reviewCount })
         .from(providers)
         .where(eq(providers.id, booking.providerId))
         .limit(1);
@@ -97,7 +97,7 @@ trackingPublicRouter.get('/:token', async (req: Request, res: Response) => {
       if (provider) {
         providerInfo = {
           name: provider.name,
-          rating: provider.googleRating,
+          rating: provider.rating,
           reviewCount: provider.reviewCount ?? 0,
         };
       }

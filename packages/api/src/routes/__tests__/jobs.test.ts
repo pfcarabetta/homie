@@ -30,7 +30,7 @@ const mockProvider = {
   email: 'acme@example.com',
   website: null,
   googlePlaceId: 'place-123',
-  googleRating: '4.80',
+  rating: '4.80',
   reviewCount: 42,
   categories: ['plumbing'],
   location: null,

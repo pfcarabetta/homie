@@ -225,7 +225,7 @@ router.post('/signup', async (req: Request, res: Response) => {
         categories: body.categories ?? null,
         serviceZips: [`${body.zip}:25`],
         googlePlaceId: googleMatch?.placeId ?? null,
-        googleRating: googleMatch ? String(googleMatch.rating) : null,
+        rating: googleMatch ? String(googleMatch.rating) : null,
         reviewCount: googleMatch?.reviewCount ?? 0,
       })
       .returning();

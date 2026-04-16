@@ -1331,7 +1331,7 @@ router.post('/reports/:reportId/seed-mock-quotes', async (req: Request, res: Res
         const [created] = await db.insert(providers).values({
           name: mock.name,
           phone: mock.phone,
-          googleRating: mock.rating,
+          rating: mock.rating,
           reviewCount: Math.floor(Math.random() * 200) + 50,
           categories: ['general'],
         }).returning({ id: providers.id });
