@@ -671,6 +671,13 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
 
   const items = fullReport.items;
   const filteredItems = activeCategory ? items.filter(i => i.category === activeCategory) : items;
+  const scrollToItem = useCallback((targetId: string) => {
+    const el = document.getElementById(`item-${targetId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setExpandedItemId(targetId);
+    }
+  }, []);
 
   // Group by category
   const categories = new Map<string, number>();
@@ -754,6 +761,8 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
           <CrossReferenceInsightsPanel
             insights={insights}
             supportingDocs={supportingDocs}
+            allItems={items}
+            onScrollToItem={scrollToItem}
             onAddDocument={() => setShowDocUploadModal(true)}
           />
 
@@ -834,13 +843,7 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
                 reportFileUrl={fullReport?.reportFileUrl ?? null}
                 supportingDocs={supportingDocs}
                 allItems={items}
-                onScrollToItem={(targetId) => {
-                  const el = document.getElementById(`item-${targetId}`);
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    setExpandedItemId(targetId);
-                  }
-                }}
+                onScrollToItem={scrollToItem}
               />
             ))}
           </div>
@@ -1271,9 +1274,11 @@ const SEVERITY_META: Record<'info' | 'warning' | 'concern', { color: string; bg:
   concern: { color: '#DC2626', bg: '#FEE2E2', icon: '\uD83D\uDEA8', label: 'Concern' },
 };
 
-function CrossReferenceInsightsPanel({ insights, supportingDocs, onAddDocument }: {
+function CrossReferenceInsightsPanel({ insights, supportingDocs, allItems, onScrollToItem, onAddDocument }: {
   insights: CrossReferenceInsight[];
   supportingDocs: SupportingDocument[];
+  allItems?: InspectionItem[];
+  onScrollToItem?: (itemId: string) => void;
   onAddDocument: () => void;
 }) {
   const parsedDocCount = supportingDocs.filter(d => d.parsingStatus === 'parsed').length;
@@ -1405,17 +1410,64 @@ function CrossReferenceInsightsPanel({ insights, supportingDocs, onAddDocument }
                       {insight.description}
                     </div>
                     {(insight.relatedDocIds.length > 0 || insight.relatedItemIds.length > 0) && (
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                        {insight.relatedDocIds.length > 0 && (
-                          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: meta.color, opacity: 0.85 }}>
-                            {'\u00B7'} {insight.relatedDocIds.length} related doc{insight.relatedDocIds.length !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                        {insight.relatedItemIds.length > 0 && (
-                          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: meta.color, opacity: 0.85 }}>
-                            {'\u00B7'} {insight.relatedItemIds.length} related inspection item{insight.relatedItemIds.length !== 1 ? 's' : ''}
-                          </span>
-                        )}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                        {/* Doc chips — open the source PDF in a new tab */}
+                        {insight.relatedDocIds.map(docId => {
+                          const doc = supportingDocs.find(d => d.id === docId);
+                          if (!doc) return null;
+                          const icon = doc.documentType === 'pest_report' ? '\uD83D\uDC1B' : '\uD83D\uDCCB';
+                          return doc.documentFileUrl ? (
+                            <a
+                              key={docId}
+                              href={doc.documentFileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`Open ${doc.fileName}`}
+                              style={{
+                                fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600,
+                                padding: '3px 8px', borderRadius: 8,
+                                background: '#fff', color: meta.color,
+                                border: `1px solid ${meta.color}30`, textDecoration: 'none',
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {icon} {doc.fileName}
+                            </a>
+                          ) : (
+                            <span key={docId} style={{
+                              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600,
+                              padding: '3px 8px', borderRadius: 8,
+                              background: '#fff', color: meta.color, opacity: 0.6,
+                              border: `1px solid ${meta.color}30`,
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}>
+                              {icon} {doc.fileName}
+                            </span>
+                          );
+                        })}
+                        {/* Item chips — scroll to the inspection item card */}
+                        {insight.relatedItemIds.map(itemId => {
+                          const item = allItems?.find(i => i.id === itemId);
+                          if (!item) return null;
+                          return (
+                            <button
+                              key={itemId}
+                              onClick={() => onScrollToItem?.(itemId)}
+                              title="Jump to inspection item"
+                              style={{
+                                fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600,
+                                padding: '3px 8px', borderRadius: 8,
+                                background: '#fff', color: meta.color,
+                                border: `1px solid ${meta.color}30`,
+                                cursor: 'pointer',
+                                maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {item.title} {'\u2192'}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
