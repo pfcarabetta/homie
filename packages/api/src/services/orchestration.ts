@@ -124,12 +124,23 @@ async function sendOutreachToProvider(
   let bundle;
   const isInspectJob = (diagnosis as DiagnosisPayload & { source?: string }).source === 'inspection_report';
   if (isInspectJob) {
-    // Inspect jobs have a submission URL baked into the summary. Skip the generic
-    // AI script (which ends with "Reply YES or NO") and use a direct template that
-    // points the provider at the form to submit per-item or bundle pricing.
+    // Inspect jobs: skip the generic AI script and use a SMS-friendly direct template.
+    // Extract the submission URL from the summary and keep the SMS short enough that
+    // the URL stays intact in a single segment. Use GSM-7-safe characters only (no em
+    // dashes) so the SMS doesn't get force-encoded as UCS-2 (which halves the char
+    // limit from 160 to 70 per segment).
     const categoryLabel = diagnosis.category.replace(/_/g, ' ');
     const zipSpoken = (job.zipCode ?? '').split('').join(' ');
-    const directSms = `Hi ${provider.name}! A homeowner near ${job.zipCode} needs ${categoryLabel} work from an inspection report. ${diagnosis.summary}`;
+    // Pull the URL out of the summary; fall back to summary if regex fails.
+    const urlMatch = diagnosis.summary.match(/(https?:\/\/\S+)/);
+    const submissionUrl = urlMatch ? urlMatch[1] : '';
+    // Count items from the item list embedded in the summary if present.
+    const itemCountMatch = diagnosis.summary.match(/(\d+)\s+[a-z_]+\s+items?/i);
+    const itemCount = itemCountMatch ? itemCountMatch[1] : '';
+    const itemCountText = itemCount ? ` (${itemCount} items)` : '';
+    const directSms = submissionUrl
+      ? `Hi ${provider.name}! Homie has a ${categoryLabel} quote request${itemCountText} from an inspection near ${job.zipCode}. Review & submit: ${submissionUrl}`
+      : `Hi ${provider.name}! Homie has a ${categoryLabel} quote request from an inspection near ${job.zipCode}. ${diagnosis.summary}`;
     const directVoice = `Hi ${provider.name}, this is Homie. A homeowner near ${zipSpoken} needs ${categoryLabel} work from an inspection report. We're also texting you a link to review the items and submit your quote per-item or as a bundle. I'll give you a moment to respond.`;
     bundle = { job_id: job.id, provider_id: provider.id, voice: directVoice, sms: directSms, web: directSms, generated_at: new Date().toISOString() };
   } else {

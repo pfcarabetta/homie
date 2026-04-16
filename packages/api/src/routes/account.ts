@@ -1051,7 +1051,7 @@ router.post('/reports/:reportId/dispatch', async (req: Request, res: Response) =
         const diagnosis = {
           category,
           severity: highestSeverity,
-          summary: `Inspection report — ${items.length} ${category.replace(/_/g, ' ')} item${items.length !== 1 ? 's' : ''} at ${report.propertyAddress}, ${report.propertyCity} ${report.propertyState}:\n${itemSummaries.join('\n')}\n\nSubmit your quote (per item or bundle): ${providerReportUrl}`,
+          summary: `Inspection report: ${items.length} ${category.replace(/_/g, ' ')} item${items.length !== 1 ? 's' : ''} at ${report.propertyAddress}, ${report.propertyCity} ${report.propertyState}:\n${itemSummaries.join('\n')}\n\nSubmit your quote (per item or bundle): ${providerReportUrl}`,
           recommendedActions: items.map(i => `Address: ${i.title}`),
           source: 'inspection_report',
           inspectionReportId: report.id,
