@@ -1028,7 +1028,20 @@ router.post('/provider/:providerToken/quote', async (req: Request, res: Response
       .innerJoin(providers, eq(outreachAttempts.providerId, providers.id))
       .where(eq(outreachAttempts.jobId, job.id));
 
-    const match = attempts.find(a => phoneKey(a.providerPhone) === phoneInput);
+    let match = attempts.find(a => phoneKey(a.providerPhone) === phoneInput);
+
+    // Test-mode bypass: when outreach is routed to TEST_PHONE, the provider's real
+    // phone in the DB won't match the phone that actually received the SMS. If the
+    // caller's phone matches TEST_PHONE and we're in TEST_MODE, accept the first
+    // attempt for this job. Only active when TEST_MODE=true in env.
+    if (!match && process.env.TEST_MODE === 'true') {
+      const testPhoneKey = phoneKey(process.env.TEST_PHONE ?? null);
+      if (testPhoneKey && phoneInput === testPhoneKey && attempts.length > 0) {
+        match = attempts[0];
+        logger.info({ jobId: job.id, providerId: match.providerId }, '[POST /inspect/provider/:providerToken/quote] TEST_MODE phone bypass');
+      }
+    }
+
     if (!match) {
       res.status(403).json({
         data: null,
