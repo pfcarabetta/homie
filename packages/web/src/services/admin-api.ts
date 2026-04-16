@@ -144,6 +144,9 @@ export const adminService = {
         providerName: string | null;
         providerPhone: string | null;
         providerEmail: string | null;
+        providerGooglePlaceId: string | null;
+        providerYelpUrl: string | null;
+        providerSource: 'google' | 'yelp' | 'manual';
         attemptedAt: string;
         respondedAt: string | null;
         scriptUsed: string | null;

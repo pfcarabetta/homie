@@ -62,6 +62,9 @@ interface JobDetail {
     providerName: string | null;
     providerPhone: string | null;
     providerEmail: string | null;
+    providerGooglePlaceId: string | null;
+    providerYelpUrl: string | null;
+    providerSource: 'google' | 'yelp' | 'manual';
     attemptedAt: string;
     respondedAt: string | null;
     scriptUsed: string | null;
@@ -367,6 +370,7 @@ function JobDetailView({ detail, onStatusChange }: { detail: JobDetail; onStatus
               return (
                 <details key={a.id} className="bg-white rounded-lg border border-dark/5 group" style={{ overflow: 'hidden', maxWidth: '100%' }}>
                   <summary className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-dark/2 transition-colors text-xs select-none">
+                    <SourceIcon source={a.providerSource} googlePlaceId={a.providerGooglePlaceId} yelpUrl={a.providerYelpUrl} />
                     <span className="text-dark font-semibold flex-1 min-w-0 truncate">{a.providerName ?? '-'}</span>
                     <span className="capitalize text-dark/50 w-12 shrink-0">{a.channel}</span>
                     <span className="w-20 shrink-0"><StatusBadge status={a.status} /></span>
@@ -665,6 +669,47 @@ function InfoCard({ label, value, mono, capitalize, badge }: { label: string; va
       </div>
     </div>
   );
+}
+
+/** Tiny icon showing where the provider was discovered. Click opens the source directory entry. */
+function SourceIcon({ source, googlePlaceId, yelpUrl }: {
+  source: 'google' | 'yelp' | 'manual';
+  googlePlaceId: string | null;
+  yelpUrl: string | null;
+}) {
+  const meta = {
+    google: {
+      label: 'Google',
+      bg: 'bg-blue-50',
+      text: 'text-blue-600',
+      href: googlePlaceId ? `https://www.google.com/maps/place/?q=place_id:${googlePlaceId}` : null,
+      glyph: 'G',
+    },
+    yelp: {
+      label: 'Yelp',
+      bg: 'bg-red-50',
+      text: 'text-red-600',
+      href: yelpUrl,
+      glyph: 'Y',
+    },
+    manual: {
+      label: 'Manually added',
+      bg: 'bg-dark/5',
+      text: 'text-dark/40',
+      href: null,
+      glyph: 'M',
+    },
+  }[source];
+  const className = `w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${meta.bg} ${meta.text}`;
+  if (meta.href) {
+    return (
+      <a href={meta.href} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+        title={`Discovered via ${meta.label} — click to open`} className={`${className} hover:opacity-80`}>
+        {meta.glyph}
+      </a>
+    );
+  }
+  return <span title={meta.label} className={className}>{meta.glyph}</span>;
 }
 
 function StatusBadge({ status }: { status: string }) {

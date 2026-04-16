@@ -206,7 +206,7 @@ router.get('/jobs/:id', async (req: Request, res: Response) => {
     }
 
     // Get outreach attempts
-    const attempts = await db
+    const attemptRows = await db
       .select({
         id: outreachAttempts.id,
         channel: outreachAttempts.channel,
@@ -214,6 +214,8 @@ router.get('/jobs/:id', async (req: Request, res: Response) => {
         providerName: providers.name,
         providerPhone: providers.phone,
         providerEmail: providers.email,
+        providerGooglePlaceId: providers.googlePlaceId,
+        providerYelpUrl: providers.yelpUrl,
         attemptedAt: outreachAttempts.attemptedAt,
         respondedAt: outreachAttempts.respondedAt,
         scriptUsed: outreachAttempts.scriptUsed,
@@ -223,6 +225,16 @@ router.get('/jobs/:id', async (req: Request, res: Response) => {
       .leftJoin(providers, eq(outreachAttempts.providerId, providers.id))
       .where(eq(outreachAttempts.jobId, id))
       .orderBy(desc(outreachAttempts.attemptedAt));
+
+    // Tag each attempt with its discovery source so the admin UI can render the right icon
+    const attempts = attemptRows.map(a => ({
+      ...a,
+      providerSource: a.providerGooglePlaceId
+        ? 'google' as const
+        : a.providerYelpUrl
+          ? 'yelp' as const
+          : 'manual' as const,
+    }));
 
     // Get provider responses
     const responses = await db
