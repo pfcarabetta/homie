@@ -139,8 +139,8 @@ async function sendOutreachToProvider(
     const itemCount = itemCountMatch ? itemCountMatch[1] : '';
     const itemCountText = itemCount ? ` (${itemCount} items)` : '';
     const directSms = submissionUrl
-      ? `Hi ${provider.name}! Homie has a ${categoryLabel} quote request${itemCountText} from an inspection near ${job.zipCode}. Review & submit: ${submissionUrl}`
-      : `Hi ${provider.name}! Homie has a ${categoryLabel} quote request from an inspection near ${job.zipCode}. ${diagnosis.summary}`;
+      ? `Hi ${provider.name}! A homeowner has a ${categoryLabel} quote request${itemCountText} from a home inspection near ${job.zipCode}. Review & submit: ${submissionUrl}`
+      : `Hi ${provider.name}! A homeowner has a ${categoryLabel} quote request from a home inspection near ${job.zipCode}. ${diagnosis.summary}`;
     const directVoice = `Hi ${provider.name}, this is Homie. A homeowner near ${zipSpoken} needs ${categoryLabel} work from an inspection report. We're also texting you a link to review the items and submit your quote per-item or as a bundle. I'll give you a moment to respond.`;
     bundle = { job_id: job.id, provider_id: provider.id, voice: directVoice, sms: directSms, web: directSms, generated_at: new Date().toISOString() };
   } else {
