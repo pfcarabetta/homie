@@ -745,17 +745,17 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
           userSelect: isLocked ? 'none' : 'auto',
           transition: 'filter 0.3s',
         }}>
+          {/* Supporting Documents list */}
+          {supportingDocs.length > 0 && (
+            <SupportingDocsList docs={supportingDocs} onDelete={handleDeleteDoc} onReprocess={handleReprocessDoc} />
+          )}
+
           {/* Cross-Reference Insights panel */}
           <CrossReferenceInsightsPanel
             insights={insights}
             supportingDocs={supportingDocs}
             onAddDocument={() => setShowDocUploadModal(true)}
           />
-
-          {/* Supporting Documents list */}
-          {supportingDocs.length > 0 && (
-            <SupportingDocsList docs={supportingDocs} onDelete={handleDeleteDoc} onReprocess={handleReprocessDoc} />
-          )}
 
           {/* Severity summary */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
