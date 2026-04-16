@@ -1399,9 +1399,10 @@ router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRol
         name: providers.name,
         phone: providers.phone,
         email: providers.email,
-        rating: providers.rating,
+        googleRating: providers.rating,
         reviewCount: providers.reviewCount,
         categories: providers.categories,
+        yelpUrl: providers.yelpUrl,
       })
       .from(providers)
       .where(sql`LOWER(${providers.name}) LIKE ${`%${q.toLowerCase().replace(/[%_\\]/g, '\\$&')}%`}`)

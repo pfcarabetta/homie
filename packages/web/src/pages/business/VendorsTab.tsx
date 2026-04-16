@@ -173,8 +173,14 @@ export function AddVendorModal({ workspaceId, onClose, onAdded, defaultPropertyI
                   onMouseOver={e => (e.currentTarget.style.background = '#FAFAF8')}
                   onMouseOut={e => (e.currentTarget.style.background = '#fff')}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: D }}>{p.name}</div>
-                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4, display: 'flex', gap: 12 }}>
+                  <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                     {p.googleRating && <span>Rating: {p.googleRating} ({p.reviewCount})</span>}
+                    {p.yelpUrl && (
+                      <a href={p.yelpUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                        style={{ color: '#D32323', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+                        View on Yelp
+                      </a>
+                    )}
                     {p.phone && <span>{p.phone}</span>}
                   </div>
                   {p.categories && <div style={{ fontSize: 12, color: '#6B6560', marginTop: 4 }}>{p.categories.join(', ')}</div>}

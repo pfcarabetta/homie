@@ -65,6 +65,7 @@ export interface ProviderProfile {
   business_hours: Record<string, unknown> | null;
   google_rating: string | null;
   review_count: number;
+  yelp_url: string | null;
 }
 
 export interface ProviderSettings {

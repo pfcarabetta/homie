@@ -293,7 +293,7 @@ router.get('/providers', async (req: Request, res: Response) => {
           phone: providers.phone,
           email: providers.email,
           website: providers.website,
-          rating: providers.rating,
+          googleRating: providers.rating,
           reviewCount: providers.reviewCount,
           categories: providers.categories,
           discoveredAt: providers.discoveredAt,
