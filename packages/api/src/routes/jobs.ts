@@ -317,6 +317,7 @@ router.get('/:id/responses', async (req: Request, res: Response) => {
             review_count: p.reviewCount,
             categories: p.categories,
             google_place_id: p.googlePlaceId,
+            yelp_url: p.yelpUrl,
           },
           channel: r.channel,
           quoted_price: r.quotedPrice,

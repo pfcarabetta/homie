@@ -609,7 +609,10 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                                 <div style={{ color: 'var(--bp-subtle)', fontSize: 10, marginTop: 1 }}>
                                   ★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})
                                   {r.provider.google_place_id && (
-                                    <a href={`https://www.google.com/maps/place/?q=place_id:${r.provider.google_place_id}`} target="_blank" rel="noopener" onClick={e => e.stopPropagation()} style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginLeft: 4 }}>Reviews</a>
+                                    <a href={`https://www.google.com/maps/place/?q=place_id:${r.provider.google_place_id}`} target="_blank" rel="noopener" onClick={e => e.stopPropagation()} style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginLeft: 4 }}>Google</a>
+                                  )}
+                                  {r.provider.yelp_url && (
+                                    <a href={r.provider.yelp_url} target="_blank" rel="noopener" onClick={e => e.stopPropagation()} style={{ color: '#D32323', textDecoration: 'none', fontWeight: 600, marginLeft: 4 }}>Yelp</a>
                                   )}
                                 </div>
                               </div>

@@ -163,6 +163,7 @@ export interface ProviderSummary {
   review_count: number;
   categories: string[] | null;
   google_place_id: string | null;
+  yelp_url: string | null;
 }
 
 export interface ProviderResponseItem {
@@ -1144,6 +1145,7 @@ export interface ProviderSearchResult {
   googleRating: string | null;
   reviewCount: number;
   categories: string[] | null;
+  yelpUrl: string | null;
 }
 
 export interface DashboardData {
