@@ -134,7 +134,7 @@ router.post('/jobs/:attemptId/respond', async (req: Request, res: Response) => {
     if (action === 'accept') {
       // Get provider info for the response
       const [provider] = await db
-        .select({ googleRating: providers.googleRating })
+        .select({ rating: providers.rating })
         .from(providers)
         .where(eq(providers.id, req.providerId))
         .limit(1);
@@ -146,7 +146,7 @@ router.post('/jobs/:attemptId/respond', async (req: Request, res: Response) => {
         quotedPrice: quoted_price ?? null,
         availability: availability ?? null,
         message: message ?? null,
-        ratingAtTime: provider?.googleRating ?? null,
+        ratingAtTime: provider?.rating ?? null,
       });
 
       // Workspace notification (Slack + in-app feed) — fire-and-forget.
@@ -161,7 +161,7 @@ router.post('/jobs/:attemptId/respond', async (req: Request, res: Response) => {
         const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
         void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
           `${firstName} ${initial} has responded.`.trim(),
-          { provider_name: `${firstName} ${initial}`.trim(), rating: provider?.googleRating ? `${provider.googleRating} ★` : undefined },
+          { provider_name: `${firstName} ${initial}`.trim(), rating: provider?.rating ? `${provider.rating} ★` : undefined },
         );
       } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[provider-portal] Failed to emit tracking event for provider response'); }
     }
@@ -241,7 +241,7 @@ router.get('/profile', async (req: Request, res: Response) => {
         service_zips: provider.serviceZips,
         license_info: provider.licenseInfo,
         business_hours: provider.businessHours,
-        google_rating: provider.googleRating,
+        google_rating: provider.rating,
         review_count: provider.reviewCount,
       },
       error: null,

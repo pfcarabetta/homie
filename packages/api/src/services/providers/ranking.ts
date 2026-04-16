@@ -25,7 +25,7 @@ export function calculateRankScore(
   const ratingRange = 5 - minRating;
   const normalizedRating =
     ratingRange > 0
-      ? Math.max(0, (parseFloat(provider.googleRating ?? '0') - minRating) / ratingRange)
+      ? Math.max(0, (parseFloat(provider.rating ?? '0') - minRating) / ratingRange)
       : 0;
   const reviewConfidence = Math.min(Math.sqrt(provider.reviewCount / 50), 1); // full at 50+ reviews
   const ratingScore = normalizedRating * reviewConfidence;

@@ -170,12 +170,12 @@ async function createProviderResponse(
   // Emit tracking event for provider response
   try {
     const { emitTrackingEvent } = await import('../services/orchestration');
-    const [prov] = await db.select({ name: providers.name, googleRating: providers.googleRating }).from(providers).where(eq(providers.id, providerId)).limit(1);
+    const [prov] = await db.select({ name: providers.name, rating: providers.rating }).from(providers).where(eq(providers.id, providerId)).limit(1);
     const firstName = prov?.name?.split(' ')[0] ?? 'A provider';
     const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
     void emitTrackingEvent(jobId, 'provider_responded', 'Quote Received',
       `${firstName} ${initial} has responded.`.trim(),
-      { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
+      { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.rating ? `${prov.rating} ★` : undefined },
     );
   } catch (err) { logger.warn({ err, jobId }, '[webhooks] Failed to emit tracking event for provider response'); }
 
@@ -309,12 +309,12 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
           // Emit tracking event
           try {
             const { emitTrackingEvent } = await import('../services/orchestration');
-            const [prov] = await db.select({ name: providers.name, googleRating: providers.googleRating }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+            const [prov] = await db.select({ name: providers.name, rating: providers.rating }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
             const firstName = prov?.name?.split(' ')[0] ?? 'A provider';
             const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
             void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
               `${firstName} ${initial} has responded.`.trim(),
-              { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
+              { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.rating ? `${prov.rating} ★` : undefined },
             );
           } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[webhooks] Failed to emit tracking event for voice conversation response'); }
 
@@ -734,12 +734,12 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
         // Emit tracking event
         try {
           const { emitTrackingEvent } = await import('../services/orchestration');
-          const [provDetail] = await db.select({ googleRating: providers.googleRating }).from(providers).where(eq(providers.id, provider.id)).limit(1);
+          const [provDetail] = await db.select({ rating: providers.rating }).from(providers).where(eq(providers.id, provider.id)).limit(1);
           const firstName = provider.name.split(' ')[0];
           const initial = provider.name.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ');
           void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
             `${firstName} ${initial} has responded.`.trim(),
-            { provider_name: `${firstName} ${initial}`.trim(), ...(provDetail?.googleRating ? { rating: `${provDetail.googleRating} ★` } : {}) },
+            { provider_name: `${firstName} ${initial}`.trim(), ...(provDetail?.rating ? { rating: `${provDetail.rating} ★` } : {}) },
           );
         } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[webhooks] Failed to emit tracking event for SMS conversation response'); }
 
@@ -971,12 +971,12 @@ router.post('/web/submit-quote', async (req: Request, res: Response) => {
   // Emit tracking event
   try {
     const { emitTrackingEvent } = await import('../services/orchestration');
-    const [prov] = await db.select({ name: providers.name, googleRating: providers.googleRating }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
+    const [prov] = await db.select({ name: providers.name, rating: providers.rating }).from(providers).where(eq(providers.id, attempt.providerId)).limit(1);
     const firstName = prov?.name?.split(' ')[0] ?? 'A provider';
     const initial = prov?.name?.split(' ').slice(1).map(n => n.charAt(0) + '.').join(' ') ?? '';
     void emitTrackingEvent(attempt.jobId, 'provider_responded', 'Quote Received',
       `${firstName} ${initial} has responded.`.trim(),
-      { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.googleRating ? `${prov.googleRating} ★` : undefined },
+      { provider_name: `${firstName} ${initial}`.trim(), rating: prov?.rating ? `${prov.rating} ★` : undefined },
     );
   } catch (err) { logger.warn({ err, jobId: attempt.jobId }, '[webhooks] Failed to emit tracking event for web portal response'); }
 

@@ -9,8 +9,11 @@ export const providers = pgTable(
     email: text('email'),
     website: text('website'),
     googlePlaceId: text('google_place_id').unique(),
-    googleRating: numeric('google_rating', { precision: 3, scale: 2 }),
+    // DB column name preserved for backward-compat with API response shapes;
+    // TS property renamed since it's not Google-specific (also holds Yelp ratings)
+    rating: numeric('google_rating', { precision: 3, scale: 2 }),
     reviewCount: integer('review_count').notNull().default(0),
+    yelpUrl: text('yelp_url'),
     categories: text('categories').array(),
     lat: numeric('lat', { precision: 10, scale: 7 }),
     lng: numeric('lng', { precision: 10, scale: 7 }),

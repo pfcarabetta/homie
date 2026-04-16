@@ -1139,7 +1139,7 @@ router.get('/:workspaceId/vendors', requireWorkspace, async (req: Request, res: 
         providerName: providers.name,
         providerPhone: providers.phone,
         providerEmail: providers.email,
-        providerRating: providers.googleRating,
+        providerRating: providers.rating,
         providerReviewCount: providers.reviewCount,
       })
       .from(preferredVendors)
@@ -1399,7 +1399,7 @@ router.get('/:workspaceId/vendors/search', requireWorkspace, requireWorkspaceRol
         name: providers.name,
         phone: providers.phone,
         email: providers.email,
-        googleRating: providers.googleRating,
+        rating: providers.rating,
         reviewCount: providers.reviewCount,
         categories: providers.categories,
       })
@@ -1595,7 +1595,7 @@ router.get('/:workspaceId/reports/vendors', requireWorkspace, async (req: Reques
         providerId: outreachAttempts.providerId,
         providerName: providers.name,
         providerPhone: providers.phone,
-        providerRating: providers.googleRating,
+        providerRating: providers.rating,
         providerReviewCount: providers.reviewCount,
         providerCategories: providers.categories,
         channel: outreachAttempts.channel,
@@ -2203,7 +2203,7 @@ router.get('/:workspaceId/bookings', requireWorkspace, async (req: Request, res:
         providerName: providers.name,
         providerPhone: providers.phone,
         providerEmail: providers.email,
-        providerRating: providers.googleRating,
+        providerRating: providers.rating,
         providerReviewCount: providers.reviewCount,
         diagnosis: jobs.diagnosis,
         zipCode: jobs.zipCode,
@@ -3896,7 +3896,7 @@ router.get('/:workspaceId/jobs/:jobId/estimate-pdf', requireWorkspace, requireWo
         providerPhone: providers.phone,
         providerEmail: providers.email,
         providerWebsite: providers.website,
-        googleRating: providers.googleRating,
+        rating: providers.rating,
         reviewCount: providers.reviewCount,
         channel: providerResponses.channel,
         quotedPrice: providerResponses.quotedPrice,
@@ -3949,7 +3949,7 @@ router.get('/:workspaceId/jobs/:jobId/estimate-pdf', requireWorkspace, requireWo
         providerPhone: r.providerPhone,
         providerEmail: r.providerEmail,
         providerWebsite: r.providerWebsite,
-        googleRating: r.googleRating,
+        rating: r.rating,
         reviewCount: r.reviewCount,
         channel: r.channel,
         isPreferred: preferredSet.has(r.providerId),
@@ -4136,13 +4136,13 @@ router.get('/:workspaceId/dashboard', requireWorkspace, async (req: Request, res
       .select({
         name: providers.name,
         bookingCount: sql<number>`count(*)::int`,
-        avgRating: providers.googleRating,
+        avgRating: providers.rating,
       })
       .from(bookings)
       .innerJoin(jobs, eq(bookings.jobId, jobs.id))
       .innerJoin(providers, eq(bookings.providerId, providers.id))
       .where(eq(jobs.workspaceId, req.workspaceId))
-      .groupBy(providers.id, providers.name, providers.googleRating)
+      .groupBy(providers.id, providers.name, providers.rating)
       .orderBy(sql`count(*) DESC`)
       .limit(5);
 

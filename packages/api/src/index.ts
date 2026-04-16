@@ -123,6 +123,8 @@ async function start() {
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS source_document_id uuid`);
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS cross_referenced_item_ids jsonb`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS inspection_item_source_doc_idx ON inspection_report_items (source_document_id)`);
+    // Yelp review URL (deep-link to the business's Yelp page)
+    await db.execute(sql`ALTER TABLE providers ADD COLUMN IF NOT EXISTS yelp_url text`);
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');

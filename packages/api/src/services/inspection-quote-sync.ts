@@ -37,7 +37,7 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
     // Get provider info
     const [provider] = await db.select({
       name: providers.name,
-      googleRating: providers.googleRating,
+      rating: providers.rating,
     }).from(providers).where(eq(providers.id, providerId)).limit(1);
 
     // Parse the price to cents
@@ -52,7 +52,7 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
     const newQuote = {
       providerId,
       providerName: provider?.name ?? 'Provider',
-      providerRating: provider?.googleRating ?? null,
+      providerRating: provider?.rating ?? null,
       amountCents: priceCents ?? 0,
       availability: null as string | null,
       receivedAt: new Date().toISOString(),
@@ -141,7 +141,7 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
                   <p style="color:#2D2926;font-size:15px;font-weight:600;margin:0 0 8px">${itemIds.length} ${category} item${itemIds.length !== 1 ? 's' : ''}</p>
                   <p style="color:#6B6560;font-size:13px;margin:0 0 8px;line-height:1.5">${itemList}</p>
                   <p style="color:#1B9E77;font-size:22px;font-weight:700;margin:4px 0">${priceDisplay}</p>
-                  <p style="color:#6B6560;font-size:13px;margin:0">${provider?.name ?? 'Provider'}${provider?.googleRating ? ' · ' + provider.googleRating + ' stars' : ''}</p>
+                  <p style="color:#6B6560;font-size:13px;margin:0">${provider?.name ?? 'Provider'}${provider?.rating ? ' · ' + provider.rating + ' stars' : ''}</p>
                 </div>
                 <div style="text-align:center">
                   <a href="${reportUrl}" style="display:inline-block;background:#E8632B;color:white;padding:14px 32px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View all quotes</a>

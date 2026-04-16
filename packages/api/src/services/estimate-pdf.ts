@@ -34,7 +34,7 @@ interface EstimatePDFOptions {
     providerPhone?: string | null;
     providerEmail?: string | null;
     providerWebsite?: string | null;
-    googleRating: string | null;
+    rating: string | null;
     reviewCount: number;
     channel: string;
     isPreferred: boolean;
@@ -246,7 +246,7 @@ export async function generateEstimatePDF(options: EstimatePDFOptions): Promise<
     ch += 14; // name
     // Info line (rating + contact on one line)
     const infoParts: string[] = [];
-    if (est.googleRating) infoParts.push(`★ ${est.googleRating}${est.reviewCount > 0 ? ` (${est.reviewCount})` : ''}`);
+    if (est.rating) infoParts.push(`★ ${est.rating}${est.reviewCount > 0 ? ` (${est.reviewCount})` : ''}`);
     if (est.providerPhone) infoParts.push(est.providerPhone);
     if (est.providerEmail) infoParts.push(est.providerEmail);
     if (infoParts.length > 0) ch += 11;

@@ -403,7 +403,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
         email: pv.email,
         website: pv.website,
         google_place_id: pv.googlePlaceId,
-        google_rating: pv.googleRating,
+        google_rating: pv.rating,
         review_count: pv.reviewCount,
         categories: pv.categories,
         distance_miles: 0,
@@ -815,7 +815,7 @@ export async function expandJobOutreach(jobId: string): Promise<{ expanded: numb
         .from(providers)
         .where(and(
           sql`${providers.lat} IS NOT NULL AND ${providers.lng} IS NOT NULL`,
-          sql`CAST(${providers.googleRating} AS float) >= ${minRating}`,
+          sql`CAST(${providers.rating} AS float) >= ${minRating}`,
           sql`${jobCategory} = ANY(${providers.categories})`,
           excludeIds.size > 0 ? sql`${providers.id} NOT IN (${sql.join(Array.from(excludeIds).map(id => sql`${id}::uuid`), sql`, `)})` : sql`TRUE`,
         ))
@@ -869,7 +869,7 @@ export async function expandJobOutreach(jobId: string): Promise<{ expanded: numb
           email: p.email,
           website: p.website,
           google_place_id: p.googlePlaceId,
-          google_rating: p.googleRating,
+          google_rating: p.rating,
           review_count: p.reviewCount ?? 0,
           categories: p.categories,
           distance_miles: c.distance,
@@ -1040,7 +1040,7 @@ export async function sendBookingNotifications(
   void emitTrackingEvent(jobId, 'provider_booked', 'Appointment Confirmed',
     `${displayName} is booked.${availability ? ` Available: ${availability}` : ''}`, {
     provider_name: displayName,
-    rating: provider.googleRating ?? undefined,
+    rating: provider.rating ?? undefined,
     ...(availability ? { availability } : {}),
   });
 
