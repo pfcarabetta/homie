@@ -91,6 +91,8 @@ export interface QuoteDetails {
   providerRating: number;
   price: number;
   availability: string;
+  /** > 1 means this price is a bundle covering N items. UI should show "Bundle: $X (covers N items)". */
+  bundleSize?: number;
 }
 
 export interface Earning {
@@ -345,6 +347,8 @@ export interface InspectQuote {
   amountCents: number;
   availability: string | null;
   receivedAt: string;
+  /** > 1 means this price is a bundle covering N items (provider didn't itemize). UI should show "Bundle: $X (covers N items)". */
+  bundleSize?: number;
 }
 
 export interface InspectStatusItem {
@@ -661,8 +665,8 @@ export interface PortalReportItem {
   dispatchStatus: string | null;
   quoteAmount: number | null;
   providerName?: string | null;
-  /** All quotes received for this item (full list, not just best) */
-  quotes?: Array<{ providerId: string; providerName: string; providerRating: string | null; amountCents: number; availability: string | null; receivedAt: string }>;
+  /** All quotes received for this item (full list, not just best). bundleSize > 1 = price covers multiple items. */
+  quotes?: Array<{ providerId: string; providerName: string; providerRating: string | null; amountCents: number; availability: string | null; receivedAt: string; bundleSize?: number }>;
   isIncludedInRequest?: boolean;
   homeownerNotes?: string | null;
   sellerAgreedAmountCents?: number | null;

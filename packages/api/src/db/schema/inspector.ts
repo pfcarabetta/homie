@@ -117,8 +117,8 @@ export const inspectionReportItems = pgTable('inspection_report_items', {
   providerName: text('provider_name'),
   providerRating: numeric('provider_rating', { precision: 2, scale: 1 }),
   providerAvailability: text('provider_availability'),
-  /** All quotes received as JSONB array */
-  quotes: jsonb('quotes').$type<Array<{ providerId: string; providerName: string; providerRating: string | null; amountCents: number; availability: string | null; receivedAt: string }>>(),
+  /** All quotes received as JSONB array. bundleSize > 1 indicates this price covers multiple items (provider quoted a single bundle, not per item). */
+  quotes: jsonb('quotes').$type<Array<{ providerId: string; providerName: string; providerRating: string | null; amountCents: number; availability: string | null; receivedAt: string; bundleSize?: number }>>(),
   sortOrder: integer('sort_order').notNull().default(0),
   inspectorAdjusted: boolean('inspector_adjusted').notNull().default(false),
   /** 1-indexed page numbers in the source PDF where this item was found */

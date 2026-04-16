@@ -78,6 +78,9 @@ export default function QuotesTab({ reports, onNavigate, onReportsChange }: Quot
       setFullItems(prev => prev.map(item => {
         const si = updates.get(item.id);
         if (!si) return item;
+        const matchingQuote = si.quoteAmountCents
+          ? si.quotes.find(q => q.amountCents === si.quoteAmountCents)
+          : null;
         return {
           ...item,
           dispatchStatus: si.dispatchStatus as InspectionItem['dispatchStatus'],
@@ -86,6 +89,9 @@ export default function QuotesTab({ reports, onNavigate, onReportsChange }: Quot
             providerRating: parseFloat(si.providerRating ?? '0'),
             price: si.quoteAmountCents / 100,
             availability: si.providerAvailability ?? '',
+            ...(matchingQuote?.bundleSize && matchingQuote.bundleSize > 1
+              ? { bundleSize: matchingQuote.bundleSize }
+              : {}),
           } : item.quoteDetails,
           // Attach full quotes array to item for display
           ...(si.quotes ? { _quotes: si.quotes } as unknown as ItemWithContext : {}),

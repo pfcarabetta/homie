@@ -16,7 +16,7 @@ import { inspectionReportItems, inspectionReports } from '../db/schema/inspector
 import { providers } from '../db/schema/providers';
 import logger from '../logger';
 
-export async function syncInspectionQuote(jobId: string, providerId: string, quotedPrice: string | null): Promise<void> {
+export async function syncInspectionQuote(jobId: string, providerId: string, quotedPrice: string | null, itemPrices?: Record<string, number>): Promise<void> {
   try {
     // Check if this job originated from an inspection dispatch
     const [job] = await db.select({ diagnosis: jobs.diagnosis }).from(jobs).where(eq(jobs.id, jobId)).limit(1);
@@ -40,23 +40,18 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
       rating: providers.rating,
     }).from(providers).where(eq(providers.id, providerId)).limit(1);
 
-    // Parse the price to cents
-    let priceCents: number | null = null;
+    // Parse the bundle price to cents (used as fallback when no per-item prices given)
+    let bundleCents: number | null = null;
     if (quotedPrice) {
       const cleaned = quotedPrice.replace(/[^0-9.]/g, '');
       const parsed = parseFloat(cleaned);
-      if (!isNaN(parsed)) priceCents = Math.round(parsed * 100);
+      if (!isNaN(parsed)) bundleCents = Math.round(parsed * 100);
     }
 
-    // Build the new quote object
-    const newQuote = {
-      providerId,
-      providerName: provider?.name ?? 'Provider',
-      providerRating: provider?.rating ?? null,
-      amountCents: priceCents ?? 0,
-      availability: null as string | null,
-      receivedAt: new Date().toISOString(),
-    };
+    const isItemized = itemPrices && Object.keys(itemPrices).length > 0;
+    // For bundle quotes spanning >1 item, mark each item's quote with bundleSize so the UI
+    // can display "Bundle: $X (covers N items)" instead of misleading per-item totals.
+    const bundleSize = !isItemized && itemIds.length > 1 ? itemIds.length : undefined;
 
     // Update all items in this group (single item for legacy, multiple for category groups)
     let reportId: string | null = null;
@@ -69,9 +64,24 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
 
       reportId = currentItem.reportId;
 
+      // Per-item price wins; otherwise fall back to the bundle total
+      const thisItemCents = isItemized
+        ? (itemPrices![itemId] ?? 0)
+        : (bundleCents ?? 0);
+
+      const newQuote = {
+        providerId,
+        providerName: provider?.name ?? 'Provider',
+        providerRating: provider?.rating ?? null,
+        amountCents: thisItemCents,
+        availability: null as string | null,
+        receivedAt: new Date().toISOString(),
+        ...(bundleSize ? { bundleSize } : {}),
+      };
+
       const existingQuotes = (currentItem.quotes ?? []) as Array<{
         providerId: string; providerName: string; providerRating: string | null;
-        amountCents: number; availability: string | null; receivedAt: string;
+        amountCents: number; availability: string | null; receivedAt: string; bundleSize?: number;
       }>;
       const allQuotes = [...existingQuotes, newQuote];
 
@@ -83,7 +93,7 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
       await db.update(inspectionReportItems).set({
         dispatchStatus: 'quotes_received',
         quotes: allQuotes,
-        quoteAmountCents: best.amountCents || priceCents,
+        quoteAmountCents: best.amountCents || thisItemCents,
         providerName: best.providerName,
         providerRating: best.providerRating,
         updatedAt: new Date(),
@@ -122,7 +132,10 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
           const category = (diag.category as string ?? 'repair').replace(/_/g, ' ');
           const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
           const reportUrl = `${APP_URL}/inspect/${report.clientAccessToken}`;
-          const priceDisplay = priceCents ? `$${(priceCents / 100).toFixed(0)}` : 'See details';
+          const totalCents = isItemized
+            ? Object.values(itemPrices!).reduce((s, c) => s + c, 0)
+            : bundleCents ?? 0;
+          const priceDisplay = totalCents > 0 ? `$${(totalCents / 100).toFixed(0)}` : 'See details';
           const itemList = itemTitles.map(i => `• ${i.title}`).join('<br>');
 
           const { sendEmail } = await import('./notifications');
@@ -155,7 +168,7 @@ export async function syncInspectionQuote(jobId: string, providerId: string, quo
       }
     }
 
-    logger.info({ jobId, itemIds, providerId, priceCents }, '[inspection-quote-sync] Quote synced to inspection items');
+    logger.info({ jobId, itemIds, providerId, bundleCents }, '[inspection-quote-sync] Quote synced to inspection items');
   } catch (err) {
     logger.warn({ err, jobId }, '[inspection-quote-sync] Failed to sync quote');
   }

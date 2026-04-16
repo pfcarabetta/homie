@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, numeric, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, numeric, jsonb, index } from 'drizzle-orm/pg-core';
 import { jobs } from './jobs';
 import { providers } from './providers';
 import { outreachAttempts } from './outreach-attempts';
@@ -18,6 +18,8 @@ export const providerResponses = pgTable(
     }),
     channel: text('channel').notNull(),
     quotedPrice: text('quoted_price'),
+    /** Per-item prices in cents — { [inspectionItemId]: priceCents }. Present when the provider used itemized pricing. */
+    itemPrices: jsonb('item_prices').$type<Record<string, number>>(),
     availability: text('availability'),
     message: text('message'),
     ratingAtTime: numeric('rating_at_time', { precision: 3, scale: 2 }),

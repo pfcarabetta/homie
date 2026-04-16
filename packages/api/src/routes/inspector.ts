@@ -14,8 +14,20 @@ import {
   inspectorPayouts,
   inspectorInboundLeads,
 } from '../db/schema/inspector';
+import { providers } from '../db/schema/providers';
+import { outreachAttempts } from '../db/schema/outreach-attempts';
+import { providerResponses } from '../db/schema/provider-responses';
 import { requireInspectorAuth, signInspectorToken } from '../middleware/inspector-auth';
 import { optionalAuth } from '../middleware/auth';
+
+/** Normalize a phone to digits-only with US country code stripped — for fuzzy matching. */
+function phoneKey(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+  if (digits.length >= 10) return digits;
+  return null;
+}
 
 const router = Router();
 const BCRYPT_ROUNDS = 12;
@@ -719,12 +731,20 @@ router.get('/:token', async (req: Request, res: Response) => {
           costEstimateMax: i.aiCostEstimateHighCents > 0 ? i.aiCostEstimateHighCents / 100 : null,
           confidence: parseFloat(i.aiConfidence),
           dispatchStatus: (i.dispatchStatus === 'not_dispatched' || i.dispatchStatus === 'pending_dispatch') ? null : i.dispatchStatus,
-          quoteDetails: i.quoteAmountCents ? {
-            providerName: i.providerName ?? 'Provider',
-            providerRating: parseFloat(i.providerRating ?? '0'),
-            price: i.quoteAmountCents / 100,
-            availability: i.providerAvailability ?? '',
-          } : null,
+          quoteDetails: i.quoteAmountCents ? (() => {
+            // Find the matching quote in the quotes[] array to surface its bundleSize.
+            // The "best" quote is denormalized into quoteAmountCents/providerName, so match
+            // back by provider+amount.
+            const allQuotes = (i.quotes ?? []) as Array<{ providerId: string; amountCents: number; bundleSize?: number }>;
+            const match = allQuotes.find(q => q.amountCents === i.quoteAmountCents);
+            return {
+              providerName: i.providerName ?? 'Provider',
+              providerRating: parseFloat(i.providerRating ?? '0'),
+              price: i.quoteAmountCents / 100,
+              availability: i.providerAvailability ?? '',
+              ...(match?.bundleSize && match.bundleSize > 1 ? { bundleSize: match.bundleSize } : {}),
+            };
+          })() : null,
           valueImpact: computeValueImpact(i.category, i.severity, i.aiCostEstimateLowCents, i.aiCostEstimateHighCents),
           sourcePages: i.sourcePages ?? null,
           sourceDocumentId: i.sourceDocumentId ?? null,
@@ -950,6 +970,140 @@ router.get('/provider/:providerToken', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /inspect/provider/:providerToken]');
     res.status(500).json({ data: null, error: 'Failed to load report', meta: {} });
+  }
+});
+
+// POST /api/v1/inspect/provider/:providerToken/quote — provider submits per-item or bundle quote
+// No login required. Provider confirms their phone (matched against outreach_attempts) to identify
+// which dispatch they're responding to. Accepts itemPrices (per-item, in dollars) or bundlePrice
+// (single bundle, in dollars). Provide one or the other, not both.
+router.post('/provider/:providerToken/quote', async (req: Request, res: Response) => {
+  const body = req.body as {
+    phone?: string;
+    itemPrices?: Record<string, number>;
+    bundlePrice?: number;
+    availability?: string;
+    message?: string;
+  };
+
+  const phoneInput = phoneKey(body.phone ?? null);
+  if (!phoneInput) {
+    res.status(400).json({ data: null, error: 'Please enter the business phone number you were contacted at.', meta: {} });
+    return;
+  }
+
+  const hasPerItem = body.itemPrices && Object.keys(body.itemPrices).length > 0;
+  const hasBundle = typeof body.bundlePrice === 'number' && body.bundlePrice > 0;
+  if (!hasPerItem && !hasBundle) {
+    res.status(400).json({ data: null, error: 'Enter a price for at least one item, or a bundle total.', meta: {} });
+    return;
+  }
+
+  try {
+    // Find the job by providerToken
+    const [job] = await db.execute(sql`
+      SELECT id, diagnosis FROM jobs
+      WHERE diagnosis->>'providerViewToken' = ${req.params.providerToken}
+        AND diagnosis->>'source' = 'inspection_report'
+      LIMIT 1
+    `) as unknown as Array<{ id: string; diagnosis: Record<string, unknown> }>;
+
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Quote link expired or invalid.', meta: {} });
+      return;
+    }
+
+    const diag = job.diagnosis;
+    const itemIds = (diag.inspectionItemIds ?? (diag.inspectionItemId ? [diag.inspectionItemId] : [])) as string[];
+
+    // Find the matching outreach attempt — by phone match against the providers contacted for this job
+    const attempts = await db.select({
+      attemptId: outreachAttempts.id,
+      providerId: outreachAttempts.providerId,
+      providerPhone: providers.phone,
+      channel: outreachAttempts.channel,
+      attemptedAt: outreachAttempts.attemptedAt,
+    })
+      .from(outreachAttempts)
+      .innerJoin(providers, eq(outreachAttempts.providerId, providers.id))
+      .where(eq(outreachAttempts.jobId, job.id));
+
+    const match = attempts.find(a => phoneKey(a.providerPhone) === phoneInput);
+    if (!match) {
+      res.status(403).json({
+        data: null,
+        error: 'We couldn\'t match this phone to a contact for this job. Double-check the number you were texted/called at.',
+        meta: {},
+      });
+      return;
+    }
+
+    // Validate per-item prices: each key must be in this job's itemIds, each value > 0
+    let normalizedItemPrices: Record<string, number> | null = null;
+    let totalCents: number | null = null;
+    if (hasPerItem) {
+      normalizedItemPrices = {};
+      let total = 0;
+      for (const [itemId, dollars] of Object.entries(body.itemPrices!)) {
+        if (!itemIds.includes(itemId)) continue;
+        if (typeof dollars !== 'number' || dollars <= 0) continue;
+        const cents = Math.round(dollars * 100);
+        normalizedItemPrices[itemId] = cents;
+        total += cents;
+      }
+      if (Object.keys(normalizedItemPrices).length === 0) {
+        res.status(400).json({ data: null, error: 'No valid item prices were provided.', meta: {} });
+        return;
+      }
+      totalCents = total;
+    } else if (hasBundle) {
+      totalCents = Math.round(body.bundlePrice! * 100);
+    }
+
+    // Update outreach attempt status -> accepted
+    await db.update(outreachAttempts).set({
+      status: 'accepted',
+      respondedAt: new Date(),
+    }).where(eq(outreachAttempts.id, match.attemptId));
+
+    // Get provider rating for response record
+    const [prov] = await db.select({ rating: providers.rating, name: providers.name })
+      .from(providers).where(eq(providers.id, match.providerId)).limit(1);
+
+    // Insert provider response — quotedPrice carries the total (display string), itemPrices carries the breakdown
+    await db.insert(providerResponses).values({
+      jobId: job.id,
+      providerId: match.providerId,
+      outreachAttemptId: match.attemptId,
+      channel: match.channel,
+      quotedPrice: totalCents != null ? `$${(totalCents / 100).toFixed(0)}` : null,
+      itemPrices: normalizedItemPrices ?? undefined,
+      availability: body.availability ?? null,
+      message: body.message ?? null,
+      ratingAtTime: prov?.rating ?? null,
+    });
+
+    // Sync to inspection items + send notifications
+    try {
+      const { syncInspectionQuote } = await import('../services/inspection-quote-sync');
+      await syncInspectionQuote(job.id, match.providerId, totalCents != null ? `$${(totalCents / 100).toFixed(0)}` : null, normalizedItemPrices ?? undefined);
+    } catch (err) {
+      logger.warn({ err }, '[POST /inspect/provider/:providerToken/quote] sync failed');
+    }
+
+    res.json({
+      data: {
+        ok: true,
+        providerName: prov?.name ?? 'Provider',
+        itemCount: itemIds.length,
+        totalDollars: totalCents != null ? totalCents / 100 : null,
+        itemized: hasPerItem,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspect/provider/:providerToken/quote]');
+    res.status(500).json({ data: null, error: 'Failed to submit quote', meta: {} });
   }
 });
 

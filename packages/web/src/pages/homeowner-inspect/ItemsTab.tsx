@@ -540,7 +540,9 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                       background: '#10B98110', border: '1px solid #10B98120',
                     }}>
                       <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: '#10B981' }}>
-                        Quote: {formatCurrency(item.quoteDetails.price)}
+                        {item.quoteDetails.bundleSize && item.quoteDetails.bundleSize > 1
+                          ? `Bundle: ${formatCurrency(item.quoteDetails.price)} (covers ${item.quoteDetails.bundleSize} items)`
+                          : `Quote: ${formatCurrency(item.quoteDetails.price)}`}
                       </span>
                       <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)', marginLeft: 8 }}>
                         {item.quoteDetails.providerName}

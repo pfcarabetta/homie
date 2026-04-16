@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 const O = '#E8632B';
@@ -30,6 +30,14 @@ interface ProviderReportData {
   }>;
 }
 
+interface SubmitResult {
+  ok: boolean;
+  providerName: string;
+  itemCount: number;
+  totalDollars: number | null;
+  itemized: boolean;
+}
+
 function formatCurrency(amount: number): string {
   if (!amount || isNaN(amount)) return '$0';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
@@ -45,6 +53,16 @@ export default function InspectProviderView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Submit form state
+  const [phone, setPhone] = useState('');
+  const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
+  const [bundlePrice, setBundlePrice] = useState('');
+  const [availability, setAvailability] = useState('');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState<SubmitResult | null>(null);
+
   useEffect(() => {
     if (!providerToken) return;
     fetch(`${API_BASE}/api/v1/inspect/provider/${providerToken}`)
@@ -56,6 +74,69 @@ export default function InspectProviderView() {
       .catch(err => setError((err as Error).message))
       .finally(() => setLoading(false));
   }, [providerToken]);
+
+  const itemTotal = useMemo(() => {
+    return Object.values(itemPrices).reduce((sum, v) => {
+      const n = parseFloat(v);
+      return sum + (isNaN(n) || n <= 0 ? 0 : n);
+    }, 0);
+  }, [itemPrices]);
+
+  const bundleNum = parseFloat(bundlePrice);
+  const hasItemized = itemTotal > 0;
+  const hasBundle = !isNaN(bundleNum) && bundleNum > 0;
+
+  async function handleSubmit() {
+    if (!data) return;
+    setSubmitError(null);
+
+    if (!phone.trim()) {
+      setSubmitError('Please enter your business phone number.');
+      return;
+    }
+    if (!hasItemized && !hasBundle) {
+      setSubmitError('Enter a price for at least one item, or a bundle total.');
+      return;
+    }
+    if (hasItemized && hasBundle) {
+      setSubmitError('Use either per-item prices OR a bundle total — not both.');
+      return;
+    }
+
+    setSubmitting(true);
+
+    const itemPricesNumeric: Record<string, number> = {};
+    if (hasItemized) {
+      for (const [itemId, raw] of Object.entries(itemPrices)) {
+        const n = parseFloat(raw);
+        if (!isNaN(n) && n > 0) itemPricesNumeric[itemId] = n;
+      }
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/inspect/provider/${providerToken}/quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: phone.trim(),
+          itemPrices: hasItemized ? itemPricesNumeric : undefined,
+          bundlePrice: hasBundle ? bundleNum : undefined,
+          availability: availability.trim() || undefined,
+          message: message.trim() || undefined,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setSubmitError(body.error ?? 'Failed to submit quote');
+        setSubmitting(false);
+        return;
+      }
+      setSubmitted(body.data as SubmitResult);
+    } catch (err) {
+      setSubmitError((err as Error).message ?? 'Network error');
+      setSubmitting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -81,6 +162,36 @@ export default function InspectProviderView() {
   const totalLow = data.items.reduce((s, i) => s + (i.costEstimateMin ?? 0), 0);
   const totalHigh = data.items.reduce((s, i) => s + (i.costEstimateMax ?? 0), 0);
 
+  // ── Submitted state ──────────────────────────────────────────────────────
+  if (submitted) {
+    return (
+      <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
+        <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <div style={{ maxWidth: 520, margin: '0 auto', padding: '60px 16px' }}>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>{'\u2713'}</div>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 28, fontWeight: 700, color: D, marginBottom: 8 }}>Quote submitted</div>
+            <div style={{ fontSize: 14, color: '#6B6560' }}>
+              Thanks {submitted.providerName}. The homeowner has been notified.
+            </div>
+          </div>
+          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 24, textAlign: 'center' }}>
+            <div style={{ fontSize: 12, color: '#9B9490', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              {submitted.itemized ? `Itemized total (${submitted.itemCount} items)` : `Bundle total (covers ${submitted.itemCount} items)`}
+            </div>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 36, fontWeight: 700, color: G }}>
+              {submitted.totalDollars != null ? formatCurrency(submitted.totalDollars) : '\u2014'}
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: '#9B9490' }}>
+            You can close this page. We'll text you if the homeowner accepts.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Default state with submit form ───────────────────────────────────────
   return (
     <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -117,14 +228,14 @@ export default function InspectProviderView() {
           background: `linear-gradient(135deg, ${D} 0%, #3D3936 100%)`, borderRadius: 14, padding: 20, marginBottom: 20, color: '#fff',
         }}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, textTransform: 'capitalize' }}>
-            {data.category} — {data.items.length} item{data.items.length !== 1 ? 's' : ''}
+            {data.category} {'\u2014'} {data.items.length} item{data.items.length !== 1 ? 's' : ''}
           </div>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             {totalLow > 0 && (
               <div>
                 <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Estimated range</div>
                 <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700 }}>
-                  {formatCurrency(totalLow)} – {formatCurrency(totalHigh)}
+                  {formatCurrency(totalLow)} {'\u2013'} {formatCurrency(totalHigh)}
                 </div>
               </div>
             )}
@@ -136,11 +247,11 @@ export default function InspectProviderView() {
             </div>
           </div>
           <div style={{ marginTop: 16, fontSize: 13, color: '#9B9490', lineHeight: 1.6 }}>
-            Please review each item below and reply to the text with your quote for all {data.items.length} {data.category} items.
+            Review each item below, enter a price per item (preferred) or a single bundle total, then submit.
           </div>
         </div>
 
-        {/* Items */}
+        {/* Items with per-item price inputs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {data.items.map((item, idx) => {
             const sevColor = SEVERITY_COLORS[item.severity] ?? '#9B9490';
@@ -171,7 +282,6 @@ export default function InspectProviderView() {
                   </div>
                 )}
 
-                {/* Photo descriptions */}
                 {item.photoDescriptions.length > 0 && (
                   <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {item.photoDescriptions.map((desc, pi) => (
@@ -180,43 +290,179 @@ export default function InspectProviderView() {
                         fontSize: 12, color: '#6B6560', background: '#F5F0EB',
                         padding: '8px 12px', borderRadius: 8, lineHeight: 1.5,
                       }}>
-                        <span style={{ fontSize: 14, lineHeight: '18px' }}>📷</span>
+                        <span style={{ fontSize: 14, lineHeight: '18px' }}>{'\uD83D\uDCF7'}</span>
                         <span style={{ fontStyle: 'italic' }}>{desc}</span>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Cost estimate */}
-                {item.costEstimateMin != null && item.costEstimateMin > 0 && (
-                  <div style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontSize: 13, color: D, fontWeight: 500,
-                    background: W, padding: '4px 10px', borderRadius: 6,
-                  }}>
-                    Est. {formatCurrency(item.costEstimateMin)}
-                    {item.costEstimateMax != null && item.costEstimateMax > 0 && ` – ${formatCurrency(item.costEstimateMax)}`}
-                  </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+                  {item.costEstimateMin != null && item.costEstimateMin > 0 && (
+                    <span style={{
+                      fontSize: 12, color: '#6B6560', background: W, padding: '4px 10px', borderRadius: 6,
+                    }}>
+                      Est. {formatCurrency(item.costEstimateMin)}
+                      {item.costEstimateMax != null && item.costEstimateMax > 0 && ` ${'\u2013'} ${formatCurrency(item.costEstimateMax)}`}
+                    </span>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: D }}>Your price</span>
+                    <span style={{ fontSize: 14, color: '#9B9490', marginRight: -2 }}>$</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="0"
+                      min="0"
+                      step="1"
+                      value={itemPrices[item.id] ?? ''}
+                      onChange={e => setItemPrices(p => ({ ...p, [item.id]: e.target.value }))}
+                      disabled={hasBundle}
+                      style={{
+                        width: 90, padding: '8px 10px', borderRadius: 8,
+                        border: `1px solid ${hasBundle ? '#E0DAD4' : (itemPrices[item.id] ? G : '#D3CEC9')}`,
+                        fontSize: 14, fontWeight: 600, color: D, background: hasBundle ? '#F5F0EB' : '#fff',
+                        textAlign: 'right',
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* Footer CTA */}
-        <div style={{
-          background: '#fff', borderRadius: 14, border: `1px solid ${O}40`, padding: 20, marginTop: 20, textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: D, marginBottom: 8 }}>
-            Ready to quote?
+        {/* Itemized total preview */}
+        {hasItemized && !hasBundle && (
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: `${G}10`, border: `1px solid ${G}30`, borderRadius: 12,
+            padding: '12px 16px', marginTop: 12,
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: D }}>Itemized total</span>
+            <span style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: G }}>
+              {formatCurrency(itemTotal)}
+            </span>
           </div>
-          <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6 }}>
-            Reply to the Homie text message with your quote for all {data.items.length} {data.category} items listed above.
-            Include your total price and earliest availability.
+        )}
+
+        {/* Bundle escape hatch */}
+        <div style={{
+          background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4',
+          padding: '14px 18px', marginTop: 16,
+        }}>
+          <div style={{ fontSize: 12, color: '#9B9490', marginBottom: 6, textAlign: 'center' }}>
+            {'\u2014 or \u2014'}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Bundle price (all items together)</div>
+              <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>
+                Use this if you'd quote one combined price for the whole visit
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 14, color: '#9B9490' }}>$</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="0"
+                min="0"
+                step="1"
+                value={bundlePrice}
+                onChange={e => setBundlePrice(e.target.value)}
+                disabled={hasItemized}
+                style={{
+                  width: 110, padding: '8px 10px', borderRadius: 8,
+                  border: `1px solid ${hasItemized ? '#E0DAD4' : (bundlePrice ? G : '#D3CEC9')}`,
+                  fontSize: 14, fontWeight: 600, color: D, background: hasItemized ? '#F5F0EB' : '#fff',
+                  textAlign: 'right',
+                }}
+              />
+            </div>
+          </label>
+        </div>
+
+        {/* Phone + availability + message */}
+        <div style={{
+          background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4',
+          padding: 20, marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14,
+        }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: D, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Business phone {'\u2217'}
+            </label>
+            <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 6 }}>
+              The phone number Homie reached you at. We use this to verify your quote.
+            </div>
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="(555) 123-4567"
+              style={{
+                width: '100%', padding: '10px 12px', borderRadius: 8,
+                border: '1px solid #D3CEC9', fontSize: 14, color: D,
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: D, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Earliest availability
+            </label>
+            <input
+              type="text"
+              value={availability}
+              onChange={e => setAvailability(e.target.value)}
+              placeholder="e.g. Tomorrow afternoon, next Tuesday"
+              style={{
+                width: '100%', padding: '10px 12px', borderRadius: 8, marginTop: 6,
+                border: '1px solid #D3CEC9', fontSize: 14, color: D,
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: D, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Notes (optional)
+            </label>
+            <textarea
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              placeholder="Anything the homeowner should know"
+              rows={3}
+              style={{
+                width: '100%', padding: '10px 12px', borderRadius: 8, marginTop: 6,
+                border: '1px solid #D3CEC9', fontSize: 14, color: D, resize: 'vertical',
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            />
           </div>
         </div>
 
-        {/* Powered by */}
+        {submitError && (
+          <div style={{
+            background: '#FEE2E2', color: '#DC2626', padding: '10px 14px',
+            borderRadius: 10, fontSize: 13, marginTop: 14,
+          }}>
+            {submitError}
+          </div>
+        )}
+
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          style={{
+            width: '100%', marginTop: 16, padding: '16px 20px', borderRadius: 12,
+            background: O, color: '#fff', border: 'none', cursor: submitting ? 'wait' : 'pointer',
+            fontSize: 16, fontWeight: 700, fontFamily: "'DM Sans', sans-serif",
+            opacity: submitting ? 0.6 : 1,
+          }}
+        >
+          {submitting ? 'Submitting...' : 'Submit quote'}
+        </button>
+
         <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: '#9B9490' }}>
           Powered by <a href="https://homiepro.ai" style={{ color: O, textDecoration: 'none', fontWeight: 600 }}>Homie</a>
         </div>

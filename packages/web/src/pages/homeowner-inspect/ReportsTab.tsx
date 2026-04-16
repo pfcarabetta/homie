@@ -629,6 +629,9 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
               items: prev.items.map(item => {
                 const si = statusMap.get(item.id);
                 if (!si) return item;
+                const matchingQuote = si.quoteAmountCents
+                  ? si.quotes.find(q => q.amountCents === si.quoteAmountCents)
+                  : null;
                 return {
                   ...item,
                   dispatchStatus: si.dispatchStatus as InspectionItem['dispatchStatus'],
@@ -637,6 +640,9 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
                     providerRating: parseFloat(si.providerRating ?? '0'),
                     price: si.quoteAmountCents / 100,
                     availability: si.providerAvailability ?? '',
+                    ...(matchingQuote?.bundleSize && matchingQuote.bundleSize > 1
+                      ? { bundleSize: matchingQuote.bundleSize }
+                      : {}),
                   } : item.quoteDetails,
                 };
               }),
@@ -1187,7 +1193,9 @@ function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive, repo
           background: '#10B98110', border: '1px solid #10B98125',
         }}>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, color: '#10B981' }}>
-            Quote: {formatCurrency(item.quoteDetails.price)}
+            {item.quoteDetails.bundleSize && item.quoteDetails.bundleSize > 1
+              ? `Bundle: ${formatCurrency(item.quoteDetails.price)} (covers ${item.quoteDetails.bundleSize} items)`
+              : `Quote: ${formatCurrency(item.quoteDetails.price)}`}
           </div>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>
             {item.quoteDetails.providerName}
