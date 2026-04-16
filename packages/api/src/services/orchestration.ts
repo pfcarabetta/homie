@@ -122,26 +122,38 @@ async function sendOutreachToProvider(
 
   // Generate scripts for this provider (templates are cached per category:severity)
   let bundle;
-  try {
-    bundle = await generateScripts({
-      jobId: job.id,
-      providerId: provider.id,
-      providerName: provider.name,
-      category: diagnosis.category,
-      severity: diagnosis.severity,
-      summary: diagnosis.summary,
-      recommendedActions: diagnosis.recommendedActions,
-      budget: budgetText ?? 'flexible',
-      zipCode: job.zipCode,
-      timing: job.preferredTiming ?? 'flexible',
-    });
-  } catch (err) {
-    logger.error({ err }, `[orchestration] Script generation failed for ${provider.name}`);
-    const budgetStr = skipQuote ? '' : ` Budget: ${job.budget ?? 'flexible'}.`;
+  const isInspectJob = (diagnosis as DiagnosisPayload & { source?: string }).source === 'inspection_report';
+  if (isInspectJob) {
+    // Inspect jobs have a submission URL baked into the summary. Skip the generic
+    // AI script (which ends with "Reply YES or NO") and use a direct template that
+    // points the provider at the form to submit per-item or bundle pricing.
+    const categoryLabel = diagnosis.category.replace(/_/g, ' ');
     const zipSpoken = (job.zipCode ?? '').split('').join(' ');
-    const voiceFallback = `Hi ${provider.name}, this is Homie. We have a ${diagnosis.category.replace(/_/g, ' ')} job near ${zipSpoken}. ${diagnosis.summary}.${budgetStr} I'll give you a moment to respond.`;
-    const smsFallback = `Hi ${provider.name}! A homeowner near ${job.zipCode} needs ${diagnosis.category.replace(/_/g, ' ')} work. ${diagnosis.summary}.${budgetStr} Interested? Reply YES or NO`;
-    bundle = { job_id: job.id, provider_id: provider.id, voice: voiceFallback, sms: smsFallback, web: smsFallback, generated_at: new Date().toISOString() };
+    const directSms = `Hi ${provider.name}! A homeowner near ${job.zipCode} needs ${categoryLabel} work from an inspection report. ${diagnosis.summary}`;
+    const directVoice = `Hi ${provider.name}, this is Homie. A homeowner near ${zipSpoken} needs ${categoryLabel} work from an inspection report. We're also texting you a link to review the items and submit your quote per-item or as a bundle. I'll give you a moment to respond.`;
+    bundle = { job_id: job.id, provider_id: provider.id, voice: directVoice, sms: directSms, web: directSms, generated_at: new Date().toISOString() };
+  } else {
+    try {
+      bundle = await generateScripts({
+        jobId: job.id,
+        providerId: provider.id,
+        providerName: provider.name,
+        category: diagnosis.category,
+        severity: diagnosis.severity,
+        summary: diagnosis.summary,
+        recommendedActions: diagnosis.recommendedActions,
+        budget: budgetText ?? 'flexible',
+        zipCode: job.zipCode,
+        timing: job.preferredTiming ?? 'flexible',
+      });
+    } catch (err) {
+      logger.error({ err }, `[orchestration] Script generation failed for ${provider.name}`);
+      const budgetStr = skipQuote ? '' : ` Budget: ${job.budget ?? 'flexible'}.`;
+      const zipSpoken = (job.zipCode ?? '').split('').join(' ');
+      const voiceFallback = `Hi ${provider.name}, this is Homie. We have a ${diagnosis.category.replace(/_/g, ' ')} job near ${zipSpoken}. ${diagnosis.summary}.${budgetStr} I'll give you a moment to respond.`;
+      const smsFallback = `Hi ${provider.name}! A homeowner near ${job.zipCode} needs ${diagnosis.category.replace(/_/g, ' ')} work. ${diagnosis.summary}.${budgetStr} Interested? Reply YES or NO`;
+      bundle = { job_id: job.id, provider_id: provider.id, voice: voiceFallback, sms: smsFallback, web: smsFallback, generated_at: new Date().toISOString() };
+    }
   }
 
   const scriptByChannel: Record<OutreachChannel, string> = {

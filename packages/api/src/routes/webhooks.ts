@@ -35,12 +35,15 @@ async function notifyHomeownerOfQuote(jobId: string, providerName: string, quote
     // Normalize the price for display
     const displayPrice = formatQuotedPrice(quotedPrice);
 
-    const diagnosis = job.diagnosis as { category?: string; summary?: string } | null;
+    const diagnosis = job.diagnosis as { category?: string; summary?: string; source?: string } | null;
     const category = diagnosis?.category ? diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Home Service';
     const name = homeowner.firstName ?? 'there';
+    const isInspectJob = diagnosis?.source === 'inspection_report';
     const quotesUrl = job.workspaceId
       ? `${APP_URL}/business?tab=dispatches`
-      : `${APP_URL}/account?tab=quotes`;
+      : isInspectJob
+        ? `${APP_URL}/inspect-portal?tab=quotes`
+        : `${APP_URL}/account?tab=quotes`;
 
     const subject = `You got a quote! ${providerName}${displayPrice ? ` quoted ${displayPrice}` : ''}`;
 
