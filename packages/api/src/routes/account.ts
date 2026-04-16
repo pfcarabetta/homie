@@ -2069,9 +2069,19 @@ async function ownsReport(reportId: string, homeownerId: string): Promise<boolea
   return !!r;
 }
 
-function buildDocSourcePdfUrl(reportId: string, docId: string): string {
+async function getReportToken(reportId: string, homeownerId: string): Promise<string | null> {
+  const [r] = await db.select({ token: inspectionReports.clientAccessToken })
+    .from(inspectionReports)
+    .where(and(eq(inspectionReports.id, reportId), eq(inspectionReports.homeownerId, homeownerId)))
+    .limit(1);
+  return r?.token ?? null;
+}
+
+function buildDocSourcePdfUrl(clientAccessToken: string, docId: string): string {
   const base = (process.env.API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
-  return `${base}/api/v1/account/reports/${reportId}/documents/${docId}/source-pdf`;
+  // Uses the report's clientAccessToken for auth so the link works when a
+  // user clicks "View" — browser navigation doesn't send Authorization headers.
+  return `${base}/api/v1/inspect/${clientAccessToken}/documents/${docId}/source-pdf`;
 }
 
 async function parseSupportingDocAsync(docId: string): Promise<void> {
@@ -2121,7 +2131,8 @@ router.post('/reports/:reportId/documents', async (req: Request, res: Response) 
   }
 
   try {
-    if (!await ownsReport(req.params.reportId, req.homeownerId)) {
+    const token = await getReportToken(req.params.reportId, req.homeownerId);
+    if (!token) {
       res.status(404).json({ data: null, error: 'Report not found', meta: {} });
       return;
     }
@@ -2156,7 +2167,7 @@ router.post('/reports/:reportId/documents', async (req: Request, res: Response) 
         reportId: doc.reportId,
         documentType: doc.documentType,
         fileName: doc.fileName,
-        documentFileUrl: buildDocSourcePdfUrl(doc.reportId, doc.id),
+        documentFileUrl: buildDocSourcePdfUrl(token, doc.id),
         parsingStatus: doc.parsingStatus,
         parsedSummary: null,
         createdAt: doc.createdAt.toISOString(),
@@ -2172,7 +2183,8 @@ router.post('/reports/:reportId/documents', async (req: Request, res: Response) 
 // GET /api/v1/account/reports/:reportId/documents — list documents for a report
 router.get('/reports/:reportId/documents', async (req: Request, res: Response) => {
   try {
-    if (!await ownsReport(req.params.reportId, req.homeownerId)) {
+    const token = await getReportToken(req.params.reportId, req.homeownerId);
+    if (!token) {
       res.status(404).json({ data: null, error: 'Report not found', meta: {} });
       return;
     }
@@ -2187,7 +2199,7 @@ router.get('/reports/:reportId/documents', async (req: Request, res: Response) =
           reportId: d.reportId,
           documentType: d.documentType,
           fileName: d.fileName,
-          documentFileUrl: d.documentFileUrl ? buildDocSourcePdfUrl(d.reportId, d.id) : null,
+          documentFileUrl: d.documentFileUrl ? buildDocSourcePdfUrl(token, d.id) : null,
           parsingStatus: d.parsingStatus,
           parsingError: d.parsingError,
           parsedSummary: d.parsedSummary,
@@ -2352,6 +2364,7 @@ router.get('/documents', async (req: Request, res: Response) => {
     const reports = await db.select({
       id: inspectionReports.id,
       propertyAddress: inspectionReports.propertyAddress,
+      clientAccessToken: inspectionReports.clientAccessToken,
     }).from(inspectionReports)
       .where(eq(inspectionReports.homeownerId, req.homeownerId));
 
@@ -2365,21 +2378,26 @@ router.get('/documents', async (req: Request, res: Response) => {
       .where(inArray(inspectionSupportingDocuments.reportId, reportIds))
       .orderBy(desc(inspectionSupportingDocuments.createdAt));
 
-    const reportMap = new Map(reports.map(r => [r.id, r.propertyAddress]));
+    const reportMap = new Map(reports.map(r => [r.id, r]));
 
     res.json({
       data: {
-        documents: docs.map(d => ({
-          id: d.id,
-          reportId: d.reportId,
-          reportAddress: reportMap.get(d.reportId) ?? '',
-          documentType: d.documentType,
-          fileName: d.fileName,
-          documentFileUrl: d.documentFileUrl ? buildDocSourcePdfUrl(d.reportId, d.id) : null,
-          parsingStatus: d.parsingStatus,
-          parsedSummary: d.parsedSummary,
-          createdAt: d.createdAt.toISOString(),
-        })),
+        documents: docs.map(d => {
+          const report = reportMap.get(d.reportId);
+          return {
+            id: d.id,
+            reportId: d.reportId,
+            reportAddress: report?.propertyAddress ?? '',
+            documentType: d.documentType,
+            fileName: d.fileName,
+            documentFileUrl: d.documentFileUrl && report?.clientAccessToken
+              ? buildDocSourcePdfUrl(report.clientAccessToken, d.id)
+              : null,
+            parsingStatus: d.parsingStatus,
+            parsedSummary: d.parsedSummary,
+            createdAt: d.createdAt.toISOString(),
+          };
+        }),
       },
       error: null, meta: {},
     });

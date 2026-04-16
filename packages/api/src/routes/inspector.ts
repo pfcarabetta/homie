@@ -9,6 +9,7 @@ import {
   inspectorPartners,
   inspectionReports,
   inspectionReportItems,
+  inspectionSupportingDocuments,
   inspectorEarnings,
   inspectorPayouts,
   inspectorInboundLeads,
@@ -1415,6 +1416,45 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[POST /inspect/:token/dispatch]');
     res.status(500).json({ data: null, error: 'Dispatch failed', meta: {} });
+  }
+});
+
+// GET /api/v1/inspect/:token/documents/:docId/source-pdf — serves a supporting-document PDF
+// (pest report / seller disclosure) using the report's clientAccessToken as auth, so it works
+// when opened directly in a new tab (browser navigation doesn't send Authorization headers).
+router.get('/:token/documents/:docId/source-pdf', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select({ id: inspectionReports.id })
+      .from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, req.params.token))
+      .limit(1);
+    if (!report) { res.status(404).send('Not found'); return; }
+
+    const [doc] = await db.select({ documentFileUrl: inspectionSupportingDocuments.documentFileUrl })
+      .from(inspectionSupportingDocuments)
+      .where(and(
+        eq(inspectionSupportingDocuments.id, req.params.docId),
+        eq(inspectionSupportingDocuments.reportId, report.id),
+      ))
+      .limit(1);
+    if (!doc || !doc.documentFileUrl) { res.status(404).send('Document not found'); return; }
+
+    if (doc.documentFileUrl.startsWith('data:')) {
+      const match = doc.documentFileUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) { res.status(500).send('Stored document is malformed'); return; }
+      const mimeType = match[1] || 'application/pdf';
+      const buffer = Buffer.from(match[2], 'base64');
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Content-Length', buffer.length);
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.send(buffer);
+      return;
+    }
+    res.redirect(doc.documentFileUrl);
+  } catch (err) {
+    logger.error({ err }, '[GET /inspect/:token/documents/:docId/source-pdf]');
+    res.status(500).send('Failed to load document');
   }
 });
 
