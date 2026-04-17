@@ -307,7 +307,7 @@ export default function InspectProviderView() {
                     </span>
                   )}
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: D }}>Your price</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: D }}>Estimated price</span>
                     <span style={{ fontSize: 14, color: '#9B9490', marginRight: -2 }}>$</span>
                     <input
                       type="number"
