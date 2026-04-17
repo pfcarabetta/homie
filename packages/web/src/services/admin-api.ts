@@ -31,6 +31,37 @@ async function fetchAdmin<T>(path: string, options?: RequestInit): Promise<{ dat
   return body;
 }
 
+export type RevenuePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
+
+export interface RevenueData {
+  period: RevenuePeriod;
+  periodLabel: string;
+  previousPeriodLabel: string;
+  totals: {
+    grossCents: number;
+    transactionCount: number;
+    avgTransactionCents: number;
+    newPayingCustomers: number;
+  };
+  previousTotals: {
+    grossCents: number;
+    transactionCount: number;
+  };
+  byProduct: {
+    homie_quote: { grossCents: number; transactionCount: number };
+    inspect_report: { grossCents: number; transactionCount: number };
+    workspace_subscription: { grossCents: number; transactionCount: number };
+    unknown: { grossCents: number; transactionCount: number };
+  };
+  timeseries: Array<{
+    label: string;
+    homieCents: number;
+    inspectCents: number;
+    businessCents: number;
+    unknownCents: number;
+  }>;
+}
+
 export const adminService = {
   async getStats() {
     return fetchAdmin<{
@@ -41,6 +72,10 @@ export const adminService = {
       total_outreach: number;
       jobs_by_status: Record<string, number>;
     }>('/api/v1/admin/stats');
+  },
+
+  async getRevenue(period: RevenuePeriod) {
+    return fetchAdmin<RevenueData>(`/api/v1/admin/revenue?period=${period}`);
   },
 
   async getHomeowners(params?: { limit?: number; offset?: number; q?: string }) {

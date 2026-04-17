@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminService } from '@/services/admin-api';
+import RevenueSection from './RevenueSection';
 
 interface Stats {
   total_homeowners: number;
@@ -34,6 +35,8 @@ export default function AdminDashboard() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-dark mb-6">Dashboard</h1>
+
+      <RevenueSection />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         {cards.map((c) => (

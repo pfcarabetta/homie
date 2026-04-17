@@ -1121,4 +1121,229 @@ router.patch('/pricing', async (req: Request, res: Response) => {
   }
 });
 
+// ── Revenue Dashboard ──────────────────────────────────────────────────────
+
+import Stripe from 'stripe';
+import type { HomieProduct } from '../services/stripe';
+
+type Period = 'today' | 'week' | 'month' | 'year' | 'all';
+
+interface PeriodRange {
+  start: Date;
+  end: Date;
+  previousStart: Date;
+  previousEnd: Date;
+  bucketResolution: 'hour' | 'day' | 'month';
+  label: string;
+  previousLabel: string;
+}
+
+function getPeriodRange(period: Period): PeriodRange {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  switch (period) {
+    case 'today': {
+      const start = startOfToday;
+      const end = now;
+      const prevEnd = start;
+      const prevStart = new Date(prevEnd.getTime() - 24 * 60 * 60 * 1000);
+      return { start, end, previousStart: prevStart, previousEnd: prevEnd, bucketResolution: 'hour', label: 'Today', previousLabel: 'Yesterday' };
+    }
+    case 'week': {
+      const start = new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000);
+      const end = now;
+      const prevEnd = start;
+      const prevStart = new Date(prevEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return { start, end, previousStart: prevStart, previousEnd: prevEnd, bucketResolution: 'day', label: 'Last 7 days', previousLabel: 'Previous 7 days' };
+    }
+    case 'month': {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = now;
+      const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevEnd = start;
+      return { start, end, previousStart: prevStart, previousEnd: prevEnd, bucketResolution: 'day', label: 'This month', previousLabel: 'Last month' };
+    }
+    case 'year': {
+      const start = new Date(now.getFullYear(), 0, 1);
+      const end = now;
+      const prevStart = new Date(now.getFullYear() - 1, 0, 1);
+      const prevEnd = start;
+      return { start, end, previousStart: prevStart, previousEnd: prevEnd, bucketResolution: 'month', label: 'This year', previousLabel: 'Last year' };
+    }
+    case 'all':
+    default: {
+      const start = new Date(2024, 0, 1); // Homie launch cutoff
+      const end = now;
+      // No previous period — compare against zero
+      return { start, end, previousStart: start, previousEnd: start, bucketResolution: 'month', label: 'All time', previousLabel: '' };
+    }
+  }
+}
+
+/**
+ * Classify a Stripe charge/payment by product using canonical metadata
+ * with a legacy fallback for pre-canonical transactions.
+ */
+function resolveProduct(md: Stripe.Metadata | null | undefined): HomieProduct | 'unknown' {
+  const m = md ?? {};
+  if (m.product === 'homie_quote' || m.product === 'inspect_report' || m.product === 'workspace_subscription') {
+    return m.product;
+  }
+  if (m.type === 'inspect_report_tier' || m.type === 'inspect_client_dispatch') return 'inspect_report';
+  if (m.workspace_id && m.plan) return 'workspace_subscription';
+  if (m.report_id) return 'inspect_report';
+  if (m.job_id) return 'homie_quote';
+  return 'unknown';
+}
+
+/** Iterate ALL Stripe charges in a date range via auto-pagination. */
+async function fetchAllCharges(stripe: Stripe, startSec: number, endSec: number): Promise<Stripe.Charge[]> {
+  const out: Stripe.Charge[] = [];
+  for await (const charge of stripe.charges.list({ created: { gte: startSec, lte: endSec }, limit: 100 })) {
+    if (charge.status === 'succeeded') out.push(charge);
+  }
+  return out;
+}
+
+function bucketKey(timestampSec: number, resolution: 'hour' | 'day' | 'month'): string {
+  const d = new Date(timestampSec * 1000);
+  if (resolution === 'hour') return `${d.getHours()}`;
+  if (resolution === 'day') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function bucketLabel(key: string, resolution: 'hour' | 'day' | 'month'): string {
+  if (resolution === 'hour') {
+    const h = parseInt(key, 10);
+    const suffix = h < 12 ? 'a' : 'p';
+    const disp = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${disp}${suffix}`;
+  }
+  if (resolution === 'day') {
+    const [, m, d] = key.split('-');
+    return `${parseInt(m, 10)}/${parseInt(d, 10)}`;
+  }
+  const [, m] = key.split('-');
+  return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(m, 10) - 1];
+}
+
+// GET /api/v1/admin/revenue?period=today|week|month|year|all
+router.get('/revenue', async (req: Request, res: Response) => {
+  const periodParam = (req.query.period ?? 'month') as Period;
+  if (!['today', 'week', 'month', 'year', 'all'].includes(periodParam)) {
+    res.status(400).json({ data: null, error: 'Invalid period', meta: {} });
+    return;
+  }
+
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) {
+    res.status(500).json({ data: null, error: 'Stripe not configured', meta: {} });
+    return;
+  }
+
+  try {
+    const range = getPeriodRange(periodParam);
+    const stripe = new Stripe(stripeKey, { apiVersion: '2025-01-27.acacia' as Stripe.LatestApiVersion });
+
+    const [currentCharges, previousCharges] = await Promise.all([
+      fetchAllCharges(stripe, Math.floor(range.start.getTime() / 1000), Math.floor(range.end.getTime() / 1000)),
+      periodParam === 'all'
+        ? Promise.resolve([] as Stripe.Charge[])
+        : fetchAllCharges(stripe, Math.floor(range.previousStart.getTime() / 1000), Math.floor(range.previousEnd.getTime() / 1000)),
+    ]);
+
+    // ── Aggregate current period ──────────────────────────────────────────
+    type ProductAgg = { grossCents: number; transactionCount: number };
+    const byProduct: Record<string, ProductAgg> = {
+      homie_quote: { grossCents: 0, transactionCount: 0 },
+      inspect_report: { grossCents: 0, transactionCount: 0 },
+      workspace_subscription: { grossCents: 0, transactionCount: 0 },
+      unknown: { grossCents: 0, transactionCount: 0 },
+    };
+    const bucketMap = new Map<string, { homieCents: number; inspectCents: number; businessCents: number; unknownCents: number }>();
+    const customersSeen = new Set<string>();
+    let totalGross = 0;
+    for (const c of currentCharges) {
+      const product = resolveProduct(c.metadata);
+      const net = c.amount - (c.amount_refunded ?? 0);
+      if (net <= 0) continue;
+      byProduct[product].grossCents += net;
+      byProduct[product].transactionCount += 1;
+      totalGross += net;
+      if (c.customer) customersSeen.add(typeof c.customer === 'string' ? c.customer : c.customer.id);
+
+      const key = bucketKey(c.created, range.bucketResolution);
+      const b = bucketMap.get(key) ?? { homieCents: 0, inspectCents: 0, businessCents: 0, unknownCents: 0 };
+      if (product === 'homie_quote') b.homieCents += net;
+      else if (product === 'inspect_report') b.inspectCents += net;
+      else if (product === 'workspace_subscription') b.businessCents += net;
+      else b.unknownCents += net;
+      bucketMap.set(key, b);
+    }
+
+    // ── New paying customers: first successful charge inside the period ──
+    // Query all-time charges for these customers to see if their first charge
+    // is within this period.
+    let newPayingCustomers = 0;
+    if (customersSeen.size > 0) {
+      // Lightweight approach: for each customer, check if their EARLIEST
+      // charge is within the current period. Done one-by-one; fine for
+      // admin dashboard scale (dozens/hundreds of unique customers).
+      for (const customerId of customersSeen) {
+        try {
+          const list = await stripe.charges.list({ customer: customerId, limit: 100 });
+          const earliestSucceeded = list.data
+            .filter(c => c.status === 'succeeded')
+            .reduce<Stripe.Charge | null>((acc, c) => (acc === null || c.created < acc.created ? c : acc), null);
+          if (earliestSucceeded && earliestSucceeded.created >= Math.floor(range.start.getTime() / 1000)) {
+            newPayingCustomers += 1;
+          }
+        } catch { /* ignore per-customer errors */ }
+      }
+    }
+
+    // ── Aggregate previous period for % delta ────────────────────────────
+    let prevGross = 0;
+    let prevCount = 0;
+    for (const c of previousCharges) {
+      const net = c.amount - (c.amount_refunded ?? 0);
+      if (net <= 0) continue;
+      prevGross += net;
+      prevCount += 1;
+    }
+
+    // ── Build sorted timeseries ──────────────────────────────────────────
+    const timeseries = Array.from(bucketMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, v]) => ({ label: bucketLabel(key, range.bucketResolution), ...v }));
+
+    const transactionCount = currentCharges.filter(c => (c.amount - (c.amount_refunded ?? 0)) > 0).length;
+    const avgTransactionCents = transactionCount > 0 ? Math.round(totalGross / transactionCount) : 0;
+
+    res.json({
+      data: {
+        period: periodParam,
+        periodLabel: range.label,
+        previousPeriodLabel: range.previousLabel,
+        totals: {
+          grossCents: totalGross,
+          transactionCount,
+          avgTransactionCents,
+          newPayingCustomers,
+        },
+        previousTotals: {
+          grossCents: prevGross,
+          transactionCount: prevCount,
+        },
+        byProduct,
+        timeseries,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/revenue]');
+    res.status(500).json({ data: null, error: 'Failed to load revenue data', meta: {} });
+  }
+});
+
 export default router;
