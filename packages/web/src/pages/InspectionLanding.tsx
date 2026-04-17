@@ -505,41 +505,60 @@ export default function HomieInspectionLanding() {
             </div>
           </FadeIn>
           <FadeIn delay={0.1}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-              <div style={{ background: C.warm, borderRadius: 24, padding: 32, border: `1px solid ${C.grayLight}` }}>
-                <h3 style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, margin: "0 0 4px" }}>Per item</h3>
-                <p style={{ ...dm, fontSize: 13, color: C.gray, margin: "0 0 20px" }}>Dispatch individual inspection items</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 20 }}>
-                  <span style={{ ...fr, fontSize: 40, fontWeight: 700, color: C.dark }}>$9.99</span>
-                  <span style={{ ...dm, fontSize: 14, color: C.gray }}>/item</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {["Dispatch one inspection item", "Real quotes from local pros", "AI cost estimate included", "Full provider details and rating"].map(f => (
-                    <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: C.green, fontSize: 12, fontWeight: 700 }}>{"\u2713"}</span>
-                      <span style={{ ...dm, fontSize: 13, color: C.darkMid }}>{f}</span>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
+              {[
+                {
+                  name: "Essential",
+                  tagline: "Understand what's in your report",
+                  price: 99,
+                  features: ["AI report analysis", "Item details & severity", "Cost estimates", "Category breakdown"],
+                  popular: false,
+                },
+                {
+                  name: "Professional",
+                  tagline: "Get real quotes from local pros",
+                  price: 199,
+                  features: ["Everything in Essential", "Dispatch to providers", "Quote comparison", "Real-time quote tracking"],
+                  popular: true,
+                },
+                {
+                  name: "Premium",
+                  tagline: "Negotiate and plan with confidence",
+                  price: 299,
+                  features: ["Everything in Professional", "Negotiation documents", "Priority dispatch", "Maintenance timeline"],
+                  popular: false,
+                },
+              ].map(tier => (
+                <div key={tier.name} style={{
+                  background: tier.popular ? C.white : C.warm, borderRadius: 24, padding: 28,
+                  border: tier.popular ? `2px solid ${C.orange}` : `1px solid ${C.grayLight}`,
+                  position: "relative",
+                }}>
+                  {tier.popular && (
+                    <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: C.orange, color: C.white, ...dm, fontSize: 12, fontWeight: 700, padding: "5px 16px", borderRadius: 100 }}>
+                      Most popular
                     </div>
-                  ))}
+                  )}
+                  <h3 style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, margin: "0 0 4px" }}>{tier.name}</h3>
+                  <p style={{ ...dm, fontSize: 13, color: C.gray, margin: "0 0 18px", minHeight: 20 }}>{tier.tagline}</p>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 18 }}>
+                    <span style={{ ...fr, fontSize: 40, fontWeight: 700, color: C.dark }}>${tier.price}</span>
+                    <span style={{ ...dm, fontSize: 14, color: C.gray }}>/report</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {tier.features.map(f => (
+                      <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ color: C.green, fontSize: 12, fontWeight: 700 }}>{"\u2713"}</span>
+                        <span style={{ ...dm, fontSize: 13, color: C.darkMid }}>{f}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div style={{ background: C.white, borderRadius: 24, padding: 32, border: `2px solid ${C.orange}`, position: "relative" }}>
-                <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: C.orange, color: C.white, ...dm, fontSize: 12, fontWeight: 700, padding: "5px 16px", borderRadius: 100 }}>Best value</div>
-                <h3 style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, margin: "0 0 4px" }}>Full report bundle</h3>
-                <p style={{ ...dm, fontSize: 13, color: C.gray, margin: "0 0 20px" }}>Dispatch every item at once</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 20 }}>
-                  <span style={{ ...fr, fontSize: 40, fontWeight: 700, color: C.dark }}>$149</span>
-                  <span style={{ ...dm, fontSize: 14, color: C.gray }}>/report</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {["All inspection items dispatched", "Unlimited quotes across all trades", "Priority outreach \u2014 quotes in minutes", "Total cost summary for negotiation", "Shareable report for your agent"].map(f => (
-                    <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: C.green, fontSize: 12, fontWeight: 700 }}>{"\u2713"}</span>
-                      <span style={{ ...dm, fontSize: 13, color: C.darkMid }}>{f}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
+            <p style={{ ...dm, fontSize: 13, color: C.gray, textAlign: "center", marginTop: 28 }}>
+              One-time per report. Free to upload and parse {"\u2014"} pay only when you're ready to unlock quotes.
+            </p>
           </FadeIn>
         </div>
       </section>
