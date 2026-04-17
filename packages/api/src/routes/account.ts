@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { buildStripeMetadata } from '../services/stripe';
 import { eq, desc, and, ne, isNull, inArray, sql, count } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
@@ -900,12 +901,13 @@ router.post('/reports/:reportId/checkout', async (req: Request, res: Response) =
         },
         quantity: 1,
       }],
-      metadata: {
-        report_id: report.id,
-        tier,
+      metadata: buildStripeMetadata({
+        product: 'inspect_report',
         homeowner_id: req.homeownerId,
+        tier,
+        report_id: report.id,
         type: 'inspect_report_tier',
-      },
+      }),
       customer_email: homeowner?.email ?? undefined,
       success_url: `${APP_URL}/inspect-portal?tab=reports&report=${report.id}&payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/inspect-portal?tab=reports&report=${report.id}&payment=canceled`,

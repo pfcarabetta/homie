@@ -20,6 +20,37 @@ const TIER_NAMES: Record<string, string> = {
   emergency: 'Emergency Quote Package',
 };
 
+// ── Canonical Stripe metadata ──────────────────────────────────────────────
+// Every payment-creating call site tags its Stripe objects using this schema
+// so the admin revenue dashboard can slice revenue by product, tier, and
+// customer without ambiguity. Call sites may add extra fields on top (e.g.
+// job_id, report_id, response_id) for webhook routing — those stay alongside.
+
+export type HomieProduct = 'homie_quote' | 'inspect_report' | 'workspace_subscription';
+
+export interface CanonicalStripeMetadata {
+  product: HomieProduct;
+  homeowner_id?: string;
+  workspace_id?: string;
+  tier?: string;          // inspect: essential|professional|premium ; consumer: standard|priority|emergency
+  plan?: string;          // business: subscription plan id
+  [key: string]: string | undefined;
+}
+
+/**
+ * Build a Stripe metadata object using the canonical schema.
+ * Extra product-specific fields (job_id, report_id, response_id, etc.) are
+ * merged in alongside the canonical keys. Undefined values are stripped so
+ * Stripe's metadata API doesn't reject them.
+ */
+export function buildStripeMetadata(input: CanonicalStripeMetadata): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(input)) {
+    if (v != null && v !== '') out[k] = String(v);
+  }
+  return out;
+}
+
 export async function getOrCreateCustomer(homeownerId: string, email: string): Promise<string> {
   const [homeowner] = await db
     .select({ stripeCustomerId: homeowners.stripeCustomerId })
@@ -45,6 +76,7 @@ export async function createCheckoutSession(params: {
   tier: string;
   responseId: string;
   providerId: string;
+  homeownerId: string;
   successUrl: string;
   cancelUrl: string;
 }): Promise<Stripe.Checkout.Session> {
@@ -54,16 +86,21 @@ export async function createCheckoutSession(params: {
   const amount = tierConfig?.promoPriceCents ?? tierConfig?.priceCents;
   if (!amount) throw new Error(`Invalid tier: ${params.tier}`);
 
+  const metadata = buildStripeMetadata({
+    product: 'homie_quote',
+    homeowner_id: params.homeownerId,
+    tier: params.tier,
+    job_id: params.jobId,
+    response_id: params.responseId,
+    provider_id: params.providerId,
+  });
+
   return getStripe().checkout.sessions.create({
     mode: 'payment',
     customer: params.customerId,
     payment_intent_data: {
       capture_method: 'manual', // Authorize only — capture later when results arrive
-      metadata: {
-        job_id: params.jobId,
-        response_id: params.responseId,
-        provider_id: params.providerId,
-      },
+      metadata,
     },
     line_items: [{
       price_data: {
@@ -73,11 +110,7 @@ export async function createCheckoutSession(params: {
       },
       quantity: 1,
     }],
-    metadata: {
-      job_id: params.jobId,
-      response_id: params.responseId,
-      provider_id: params.providerId,
-    },
+    metadata,
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,
   });
@@ -195,16 +228,22 @@ export async function createSubscriptionCheckout(
     });
   }
 
+  const metadata = buildStripeMetadata({
+    product: 'workspace_subscription',
+    workspace_id: workspaceId,
+    plan,
+  });
+
   const session = await getStripe().checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
     line_items: lineItems,
     subscription_data: {
-      metadata: { workspace_id: workspaceId, plan },
+      metadata,
     },
     success_url: `${returnUrl}?session_id={CHECKOUT_SESSION_ID}&success=true`,
     cancel_url: `${returnUrl}?canceled=true`,
-    metadata: { workspace_id: workspaceId, plan },
+    metadata,
   });
 
   return session.url!;

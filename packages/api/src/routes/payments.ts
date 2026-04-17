@@ -64,6 +64,7 @@ router.post('/checkout', async (req: Request, res: Response) => {
       tier: job.tier,
       responseId: response_id ?? '',
       providerId: provider_id ?? '',
+      homeownerId: req.homeownerId,
       successUrl: `${APP_URL}${return_path ?? '/quote'}?paid=1`,
       cancelUrl: `${APP_URL}${return_path ?? '/quote'}`,
     });

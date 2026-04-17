@@ -22,6 +22,7 @@ import { requireInspectorAuth, signInspectorToken } from '../middleware/inspecto
 import { optionalAuth, signToken } from '../middleware/auth';
 import jwt from 'jsonwebtoken';
 import { sendEmail } from '../services/notifications';
+import { buildStripeMetadata } from '../services/stripe';
 
 /** Normalize a phone to digits-only with US country code stripped — for fuzzy matching. */
 function phoneKey(phone: string | null | undefined): string | null {
@@ -1328,13 +1329,17 @@ router.post('/:token/checkout', async (req: Request, res: Response) => {
         },
         quantity: 1,
       }],
-      metadata: {
+      metadata: buildStripeMetadata({
+        product: 'inspect_report',
+        homeowner_id: report.homeownerId ?? undefined,
+        tier: mode,
         report_id: report.id,
         token: req.params.token,
         mode,
         item_count: String(itemsToDispatch.length),
-        inspector_partner_id: report.inspectorPartnerId ?? '',
-      },
+        inspector_partner_id: report.inspectorPartnerId ?? undefined,
+        type: 'inspect_client_dispatch',
+      }),
       customer_email: client_email || report.clientEmail || undefined,
       success_url: `${APP_URL}/inspect/${req.params.token}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/inspect/${req.params.token}?payment=canceled`,
