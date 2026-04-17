@@ -496,22 +496,27 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const docsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load supporting docs + insights
+  // Stable refs to avoid re-creating callbacks
+  const tokenRef = useRef(portalReport?.clientAccessToken);
+  tokenRef.current = portalReport?.clientAccessToken;
+  const reportIdRef = useRef(reportId);
+  reportIdRef.current = reportId;
+
+  // Load supporting docs + insights — stable callback, never changes
   const loadDocsAndInsights = useCallback(async () => {
     try {
+      const rid = reportIdRef.current;
       const [docsRes, insightsRes] = await Promise.all([
-        inspectService.listSupportingDocuments(reportId),
-        inspectService.getCrossReferenceInsights(reportId),
+        inspectService.listSupportingDocuments(rid),
+        inspectService.getCrossReferenceInsights(rid),
       ]);
       if (docsRes.data) setSupportingDocs(docsRes.data.documents);
       if (insightsRes.data) setInsights(insightsRes.data.insights);
     } catch { /* ignore */ }
-  }, [reportId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Stable token ref to avoid re-creating callback when portalReport object changes
-  const tokenRef = useRef(portalReport?.clientAccessToken);
-  tokenRef.current = portalReport?.clientAccessToken;
-
+  // Load full report — stable callback, never changes
   const loadFullReport = useCallback(() => {
     const token = tokenRef.current;
     if (!token) return;
@@ -520,20 +525,17 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
       .catch(() => {})
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    void loadDocsAndInsights();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId]);
 
-  useEffect(() => { void loadDocsAndInsights(); }, [loadDocsAndInsights]);
-
-  // Poll docs while any are still processing (so the UI updates when parsing completes)
-  const prevProcessingRef = useRef(false);
+  // Poll docs while any are still processing
   useEffect(() => {
     const stillProcessing = supportingDocs.some(d => d.parsingStatus === 'processing' || d.parsingStatus === 'uploading');
-    // When transitioning from processing → not processing, a doc just finished parsing.
-    // Refetch the full report so any items extracted from that doc appear in the UI.
-    if (prevProcessingRef.current && !stillProcessing) {
-      loadFullReport();
-    }
-    prevProcessingRef.current = stillProcessing;
     if (!stillProcessing) {
       if (docsPollRef.current) { clearInterval(docsPollRef.current); docsPollRef.current = null; }
       return;
@@ -541,7 +543,8 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
     if (docsPollRef.current) return;
     docsPollRef.current = setInterval(() => { void loadDocsAndInsights(); }, 4000);
     return () => { if (docsPollRef.current) { clearInterval(docsPollRef.current); docsPollRef.current = null; } };
-  }, [supportingDocs, loadDocsAndInsights, loadFullReport]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supportingDocs.length]);
 
   async function handleDeleteDoc(docId: string) {
     if (!window.confirm('Delete this document?')) return;
@@ -565,10 +568,12 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
     }
   }
 
-  // Sync mode when report changes
+  // Sync mode on mount
+  const initialMode = portalReport?.reportMode as ReportMode | undefined;
   useEffect(() => {
-    setReportMode((portalReport?.reportMode as ReportMode | undefined) ?? 'buyer');
-  }, [portalReport?.reportMode, portalReport?.id]);
+    setReportMode(initialMode ?? 'buyer');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportId]);
 
   async function handleModeChange(newMode: ReportMode) {
     setReportMode(newMode);
