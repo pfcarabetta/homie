@@ -199,7 +199,61 @@ export default function HomieInspectionLanding() {
   const [audience, setAudience] = useState("buyer");
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Page-wide drag-and-drop: when the user drags a file over the page, show a
+  // full-screen drop overlay. Drop anywhere triggers the upload. Doesn't affect
+  // mobile / non-drag users — the existing CTA button still works as before.
+  useEffect(() => {
+    let dragCounter = 0; // robustness vs. dragenter/leave firing on children
+
+    function isFileDrag(e: DragEvent): boolean {
+      const types = e.dataTransfer?.types;
+      if (!types) return false;
+      return Array.from(types).includes('Files');
+    }
+
+    function onDragEnter(e: DragEvent) {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      dragCounter++;
+      if (dragCounter === 1) setDragActive(true);
+    }
+    function onDragOver(e: DragEvent) {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+    }
+    function onDragLeave(e: DragEvent) {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        setDragActive(false);
+      }
+    }
+    function onDrop(e: DragEvent) {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      dragCounter = 0;
+      setDragActive(false);
+      const file = e.dataTransfer?.files[0];
+      if (file) void handleFileUpload(file);
+    }
+
+    window.addEventListener('dragenter', onDragEnter);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleFileUpload(file: File) {
     if (file.size > 50 * 1024 * 1024) { alert('File too large (max 50MB)'); return; }
@@ -265,6 +319,30 @@ export default function HomieInspectionLanding() {
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; }}
       />
 
+      {/* Drag-active overlay — appears when user drags a file over the page */}
+      {dragActive && !uploading && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          background: 'rgba(20, 18, 16, 0.85)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            background: C.white, border: `3px dashed ${C.orange}`, borderRadius: 24,
+            padding: '60px 80px', textAlign: 'center', maxWidth: 520,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+          }}>
+            <div style={{ fontSize: 56, marginBottom: 16 }}>📥</div>
+            <div style={{ ...fr, fontSize: 28, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
+              Drop your inspection report
+            </div>
+            <div style={{ ...dm, fontSize: 15, color: C.gray }}>
+              PDF or HTML, up to 50 MB. We'll parse it instantly.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Upload progress overlay */}
       {uploading && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,41,38,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -321,13 +399,17 @@ export default function HomieInspectionLanding() {
             </p>
           </FadeIn>
           <FadeIn delay={0.3}>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
               <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)", display: "inline-block" }} onMouseEnter={e => { e.currentTarget.style.background = C.orangeDark; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.transform = "translateY(0)"; }}>
                 {audience === "buyer" ? "Upload your inspection report" : "Get your pre-listing quotes"}
               </label>
               <button style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.dark, background: "transparent", border: `2px solid ${C.grayLight}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.borderColor = C.orange} onMouseLeave={e => e.currentTarget.style.borderColor = C.grayLight}>
                 {audience === "buyer" ? "Find a Homie inspector" : "How it works"}
               </button>
+            </div>
+            <div style={{ ...dm, fontSize: 13, color: C.gray, marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 14 }}>📄</span>
+              <span>or drag a PDF anywhere on this page · free 30-second AI parse, no signup needed</span>
             </div>
           </FadeIn>
           <FadeIn delay={0.45}>
