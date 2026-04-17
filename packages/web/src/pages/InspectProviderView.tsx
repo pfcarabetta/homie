@@ -230,22 +230,16 @@ export default function InspectProviderView() {
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, textTransform: 'capitalize' }}>
             {data.category} {'\u2014'} {data.items.length} item{data.items.length !== 1 ? 's' : ''}
           </div>
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            {totalLow > 0 && (
+          {totalLow > 0 && (
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Estimated range</div>
                 <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700 }}>
                   {formatCurrency(totalLow)} {'\u2013'} {formatCurrency(totalHigh)}
                 </div>
               </div>
-            )}
-            <div>
-              <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 2 }}>Budget</div>
-              <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700 }}>
-                {data.budget}
-              </div>
             </div>
-          </div>
+          )}
           <div style={{ marginTop: 16, fontSize: 13, color: '#9B9490', lineHeight: 1.6 }}>
             Review each item below, enter a price per item (preferred) or a single bundle total, then submit.
           </div>
