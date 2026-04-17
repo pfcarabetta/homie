@@ -46,6 +46,7 @@ import InspectorLeads from '@/pages/inspector/InspectorLeads';
 import InspectorMarketing from '@/pages/inspector/InspectorMarketing';
 import InspectorSettings from '@/pages/inspector/InspectorSettings';
 import InspectReport from '@/pages/InspectReport';
+import InspectClaim from '@/pages/InspectClaim';
 import InspectProviderView from '@/pages/InspectProviderView';
 import InspectPortal from '@/pages/homeowner-inspect';
 import TrackingStatus from '@/pages/TrackingStatus';
@@ -113,6 +114,7 @@ export default function App() {
             <Route path="/inspector/settings" element={<InspectorSettings />} />
           </Route>
           <Route path="/inspect/provider/:providerToken" element={<InspectProviderView />} />
+          <Route path="/inspect/claim" element={<InspectClaim />} />
           <Route path="/inspect/:token" element={<InspectReport />} />
         </Routes>
       </BrowserRouter>
