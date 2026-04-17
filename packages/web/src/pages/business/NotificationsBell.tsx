@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { businessService, type BusinessNotification } from '@/services/api';
+import BusinessPortalRoot from './BusinessPortalRoot';
 
 function BellIcon() {
   return (
@@ -139,9 +140,7 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
       </button>
 
       {open && pos && createPortal(
-        // Wrap in .bp-portal so CSS variables resolve — createPortal escapes the
-        // parent .bp-portal scope, otherwise var(--bp-card) etc. unset → transparent.
-        <div className="bp-portal" data-theme={typeof document !== 'undefined' ? document.querySelector('.bp-portal')?.getAttribute('data-theme') ?? 'light' : 'light'}>
+        <BusinessPortalRoot>
         <div
           ref={dropdownRef}
           style={{
@@ -228,7 +227,7 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
             ))}
           </div>
         </div>
-        </div>,
+        </BusinessPortalRoot>,
         document.body
       )}
     </>
