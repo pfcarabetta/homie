@@ -17,8 +17,11 @@ import {
 import { providers } from '../db/schema/providers';
 import { outreachAttempts } from '../db/schema/outreach-attempts';
 import { providerResponses } from '../db/schema/provider-responses';
+import { homeowners } from '../db/schema/homeowners';
 import { requireInspectorAuth, signInspectorToken } from '../middleware/inspector-auth';
-import { optionalAuth } from '../middleware/auth';
+import { optionalAuth, signToken } from '../middleware/auth';
+import jwt from 'jsonwebtoken';
+import { sendEmail } from '../services/notifications';
 
 /** Normalize a phone to digits-only with US country code stripped — for fuzzy matching. */
 function phoneKey(phone: string | null | undefined): string | null {
@@ -1727,6 +1730,208 @@ router.get('/:token/pricing', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /inspect/:token/pricing]');
     res.status(500).json({ data: null, error: 'Failed to load pricing', meta: {} });
+  }
+});
+
+// ── Magic-link claim flow ──────────────────────────────────────────────────
+// Used by the public token-based inspect view to convert anonymous viewers
+// into homeowner accounts that own the report. Stateless JWT — no new tables.
+
+interface ClaimTokenPayload { email: string; clientAccessToken: string; iat: number; exp: number }
+
+const EMAIL_RE_CLAIM = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CLAIM_TOKEN_TTL = '15m';
+
+// POST /api/v1/inspect/claim/request — emails a magic link that, when clicked,
+// creates (or finds) a homeowner account and links the inspection report to it.
+router.post('/claim/request', async (req: Request, res: Response) => {
+  const body = req.body as { email?: string; clientAccessToken?: string };
+  if (!body.email || !EMAIL_RE_CLAIM.test(body.email)) {
+    res.status(400).json({ data: null, error: 'Valid email required', meta: {} });
+    return;
+  }
+  if (!body.clientAccessToken) {
+    res.status(400).json({ data: null, error: 'clientAccessToken required', meta: {} });
+    return;
+  }
+
+  // Validate that the report exists (don't 404 — that leaks token validity)
+  const [report] = await db.select({ id: inspectionReports.id, propertyAddress: inspectionReports.propertyAddress })
+    .from(inspectionReports)
+    .where(eq(inspectionReports.clientAccessToken, body.clientAccessToken))
+    .limit(1);
+
+  if (!report) {
+    // Always return 200 so this endpoint can't be used to enumerate tokens
+    res.json({ data: { sent: true }, error: null, meta: {} });
+    return;
+  }
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    res.status(500).json({ data: null, error: 'Server misconfiguration', meta: {} });
+    return;
+  }
+
+  const claimToken = jwt.sign(
+    { email: body.email.toLowerCase().trim(), clientAccessToken: body.clientAccessToken },
+    secret,
+    { expiresIn: CLAIM_TOKEN_TTL, algorithm: 'HS256' },
+  );
+
+  const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+  const claimUrl = `${APP_URL}/inspect/claim?t=${claimToken}`;
+
+  try {
+    await sendEmail(
+      body.email,
+      `Unlock your Homie inspect report — ${report.propertyAddress}`,
+      `<div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;background:#F9F5F2">
+        <div style="background:#2D2926;padding:20px 32px;text-align:center">
+          <span style="color:#E8632B;font-size:24px;font-weight:bold;font-family:Georgia,serif">homie</span>
+          <span style="color:rgba(255,255,255,0.5);font-size:12px;margin-left:8px">inspect</span>
+        </div>
+        <div style="background:white;padding:32px">
+          <p style="color:#2D2926;font-size:18px;font-weight:600;margin:0 0 4px">Your report is ready</p>
+          <p style="color:#9B9490;font-size:14px;margin:0 0 24px">${report.propertyAddress}</p>
+          <p style="color:#6B6560;font-size:14px;line-height:1.6;margin:0 0 24px">
+            Click below to view your full parsed inspection. The link expires in 15 minutes.
+          </p>
+          <div style="text-align:center;margin:24px 0">
+            <a href="${claimUrl}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View my report</a>
+          </div>
+          <p style="color:#9B9490;font-size:12px;margin:0;text-align:center">
+            Didn't request this? You can safely ignore this email.
+          </p>
+        </div>
+      </div>`,
+    );
+  } catch (err) {
+    logger.error({ err }, '[POST /inspect/claim/request] Email send failed');
+  }
+
+  res.json({ data: { sent: true }, error: null, meta: {} });
+});
+
+// POST /api/v1/inspect/claim/now — link a token-accessed report to the
+// already-authenticated homeowner. Used when a logged-in user lands on a token
+// URL — skips the email round-trip since we already have their identity.
+import { requireAuth } from '../middleware/auth';
+router.post('/claim/now', requireAuth, async (req: Request, res: Response) => {
+  const body = req.body as { clientAccessToken?: string };
+  if (!body.clientAccessToken) {
+    res.status(400).json({ data: null, error: 'clientAccessToken required', meta: {} });
+    return;
+  }
+  try {
+    const [report] = await db.select({ id: inspectionReports.id, homeownerId: inspectionReports.homeownerId })
+      .from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, body.clientAccessToken))
+      .limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    // First-claim-wins: don't overwrite an existing claim by another account.
+    if (!report.homeownerId) {
+      await db.update(inspectionReports)
+        .set({ homeownerId: req.homeownerId })
+        .where(eq(inspectionReports.id, report.id));
+    }
+    res.json({
+      data: {
+        reportId: report.id,
+        alreadyClaimed: !!report.homeownerId && report.homeownerId !== req.homeownerId,
+        ownedByYou: !report.homeownerId || report.homeownerId === req.homeownerId,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspect/claim/now]');
+    res.status(500).json({ data: null, error: 'Failed to claim report', meta: {} });
+  }
+});
+
+// POST /api/v1/inspect/claim/verify — exchanges a claim token for an auth JWT.
+// Creates the homeowner account if needed, links the inspection report to them.
+router.post('/claim/verify', async (req: Request, res: Response) => {
+  const body = req.body as { claimToken?: string };
+  if (!body.claimToken) {
+    res.status(400).json({ data: null, error: 'claimToken required', meta: {} });
+    return;
+  }
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    res.status(500).json({ data: null, error: 'Server misconfiguration', meta: {} });
+    return;
+  }
+
+  let payload: ClaimTokenPayload;
+  try {
+    payload = jwt.verify(body.claimToken, secret, { algorithms: ['HS256'] }) as ClaimTokenPayload;
+  } catch {
+    res.status(401).json({ data: null, error: 'This link has expired or is invalid. Request a new one.', meta: {} });
+    return;
+  }
+
+  try {
+    // Find or create the homeowner. New homeowners get a random password hash
+    // (they always log in via magic link until they choose to set a password).
+    let [homeowner] = await db.select()
+      .from(homeowners)
+      .where(eq(homeowners.email, payload.email))
+      .limit(1);
+
+    if (!homeowner) {
+      const randomPasswordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), BCRYPT_ROUNDS);
+      [homeowner] = await db.insert(homeowners).values({
+        email: payload.email,
+        passwordHash: randomPasswordHash,
+        firstName: null,
+        lastName: null,
+        zipCode: '',
+        emailVerified: true,
+      }).returning();
+    }
+
+    // Link the inspection report to this homeowner if it isn't already
+    const [report] = await db.select({ id: inspectionReports.id, homeownerId: inspectionReports.homeownerId })
+      .from(inspectionReports)
+      .where(eq(inspectionReports.clientAccessToken, payload.clientAccessToken))
+      .limit(1);
+
+    let reportId: string | null = null;
+    if (report) {
+      reportId = report.id;
+      // Don't overwrite an existing claim by another account; first-claim-wins.
+      if (!report.homeownerId) {
+        await db.update(inspectionReports)
+          .set({ homeownerId: homeowner.id })
+          .where(eq(inspectionReports.id, report.id));
+      }
+    }
+
+    const authToken = signToken(homeowner.id);
+
+    res.json({
+      data: {
+        token: authToken,
+        homeowner: {
+          id: homeowner.id,
+          first_name: homeowner.firstName,
+          last_name: homeowner.lastName,
+          email: homeowner.email,
+          zip_code: homeowner.zipCode,
+          membership_tier: 'free',
+        },
+        reportId,
+      },
+      error: null, meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspect/claim/verify]');
+    res.status(500).json({ data: null, error: 'Failed to verify claim', meta: {} });
   }
 });
 

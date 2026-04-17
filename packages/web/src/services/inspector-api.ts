@@ -377,6 +377,34 @@ export const inspectService = {
     );
   },
 
+  /** Magic-link claim: emails a one-time link to unlock + claim the report */
+  requestClaimLink(email: string, clientAccessToken: string) {
+    return fetchAPI<{ sent: boolean }>(
+      '/api/v1/inspect/claim/request',
+      { method: 'POST', body: JSON.stringify({ email, clientAccessToken }) },
+    );
+  },
+
+  /** Logged-in claim shortcut — links the report to the current homeowner without an email round-trip */
+  claimNow(clientAccessToken: string) {
+    return fetchAPI<{ reportId: string; alreadyClaimed: boolean; ownedByYou: boolean }>(
+      '/api/v1/inspect/claim/now',
+      { method: 'POST', body: JSON.stringify({ clientAccessToken }) },
+    );
+  },
+
+  /** Magic-link claim: exchanges a claim token for an auth JWT + linked report */
+  verifyClaim(claimToken: string) {
+    return fetchAPI<{
+      token: string;
+      homeowner: { id: string; first_name: string | null; last_name: string | null; email: string; zip_code: string; membership_tier: string };
+      reportId: string | null;
+    }>(
+      '/api/v1/inspect/claim/verify',
+      { method: 'POST', body: JSON.stringify({ claimToken }) },
+    );
+  },
+
   getReport(token: string) {
     return fetchAPI<InspectReportPublic>(`/api/v1/inspect/${token}`);
   },
