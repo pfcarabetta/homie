@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import SEO from '@/components/SEO';
 
 const C = {
@@ -196,6 +197,7 @@ function InspectionDemo() {
 }
 
 export default function HomieInspectionLanding() {
+  const { homeowner } = useAuth();
   const [audience, setAudience] = useState("buyer");
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -284,7 +286,13 @@ export default function HomieInspectionLanding() {
             const status = await inspectService.getUploadStatus(reportId);
             if (status.data?.parsingStatus === 'parsed' || status.data?.parsingStatus === 'review_pending') {
               setUploadStatus(`${status.data.itemsParsed} items found! Redirecting...`);
-              setTimeout(() => { window.location.href = `/inspect/${token}`; }, 1500);
+              // Logged-in homeowners land in the new portal (auto-linked via optionalAuth on
+              // the upload endpoint). Anonymous users get the legacy public token-based view
+              // since they don't have an account to authenticate against the portal.
+              const destination = homeowner
+                ? `/inspect-portal?tab=reports&report=${reportId}`
+                : `/inspect/${token}`;
+              setTimeout(() => { window.location.href = destination; }, 1500);
               return;
             }
             if (status.data?.parsingStatus === 'failed') {
