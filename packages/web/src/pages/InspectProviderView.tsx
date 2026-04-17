@@ -269,7 +269,7 @@ export default function InspectProviderView() {
               </ol>
 
               <div style={{ marginTop: 14, fontSize: 12, color: '#9B9490', lineHeight: 1.6 }}>
-                Questions? Email <a href="mailto:hello@homiepro.ai" style={{ color: O, textDecoration: 'none', fontWeight: 600 }}>hello@homiepro.ai</a>.
+                Questions? Email <a href="mailto:yo@homiepro.ai" style={{ color: O, textDecoration: 'none', fontWeight: 600 }}>yo@homiepro.ai</a>.
               </div>
             </div>
           )}
