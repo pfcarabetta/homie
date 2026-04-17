@@ -11,7 +11,11 @@ import LockedTabPlaceholder from './LockedTabPlaceholder';
 
 const ACCENT = '#2563EB';
 
-const TYPE_META: Record<SupportingDocType, { label: string; icon: string; short: string }> = {
+/** UI doc type — superset of SupportingDocType + the synthetic original inspection report */
+type DocViewType = SupportingDocType | 'inspection_report';
+
+const TYPE_META: Record<DocViewType, { label: string; icon: string; short: string }> = {
+  inspection_report: { label: 'Inspection Report', icon: '\uD83D\uDCC4', short: 'Inspection Reports' },
   pest_report: { label: 'Pest / WDO Report', icon: '\uD83D\uDC1B', short: 'Pest Reports' },
   seller_disclosure: { label: 'Seller Disclosure', icon: '\uD83D\uDCCB', short: 'Seller Disclosures' },
 };
@@ -29,7 +33,26 @@ interface Props {
   onReportsChange: () => void;
 }
 
-type TypeFilter = 'all' | SupportingDocType;
+type TypeFilter = 'all' | DocViewType;
+
+/**
+ * Display item — supporting doc OR a synthetic inspection-report entry.
+ * Inspection reports are read-only here (delete + reprocess are noops).
+ */
+interface DocViewItem {
+  id: string;
+  reportId: string;
+  reportAddress: string;
+  documentType: DocViewType;
+  fileName: string;
+  documentFileUrl: string | null;
+  parsingStatus: 'uploading' | 'processing' | 'parsed' | 'failed';
+  parsingError?: string | null;
+  parsedSummary: Record<string, unknown> | null;
+  createdAt: string;
+  /** Original inspection-report entries can't be deleted/reprocessed from this tab */
+  isOriginalReport?: boolean;
+}
 
 export default function DocumentsTab({ reports, onNavigate, onReportsChange }: Props) {
   const visibleReports = useMemo(() => reportsWithTier(reports, 'essential'), [reports]);
@@ -85,15 +108,48 @@ export default function DocumentsTab({ reports, onNavigate, onReportsChange }: P
     setUploadTargetReportId(reportId);
   }
 
+  // Synthesize an entry for each visible report's original inspection PDF, then
+  // merge with the actual supporting docs so they all appear in one list.
+  const allDocs = useMemo<DocViewItem[]>(() => {
+    const supporting: DocViewItem[] = docs.map(d => ({
+      id: d.id,
+      reportId: d.reportId,
+      reportAddress: d.reportAddress,
+      documentType: d.documentType,
+      fileName: d.fileName,
+      documentFileUrl: d.documentFileUrl,
+      parsingStatus: d.parsingStatus,
+      parsingError: d.parsingError,
+      parsedSummary: d.parsedSummary,
+      createdAt: d.createdAt,
+    }));
+    const originals: DocViewItem[] = visibleReports
+      .filter(r => !!r.reportFileUrl)
+      .map(r => ({
+        id: `original-${r.id}`,
+        reportId: r.id,
+        reportAddress: r.propertyAddress,
+        documentType: 'inspection_report' as const,
+        fileName: `${r.propertyAddress} \u2014 inspection report`,
+        documentFileUrl: r.reportFileUrl ?? null,
+        parsingStatus: 'parsed' as const,
+        parsedSummary: null,
+        createdAt: r.createdAt,
+        isOriginalReport: true,
+      }));
+    // Show originals first within each report's group
+    return [...originals, ...supporting];
+  }, [docs, visibleReports]);
+
   // Filter logic
-  const visibleDocs = docs.filter(d => {
+  const visibleDocs = allDocs.filter(d => {
     if (typeFilter !== 'all' && d.documentType !== typeFilter) return false;
     if (reportFilter !== 'all' && d.reportId !== reportFilter) return false;
     return true;
   });
 
   // Group by report
-  const grouped = new Map<string, SupportingDocumentWithReport[]>();
+  const grouped = new Map<string, DocViewItem[]>();
   visibleDocs.forEach(d => {
     const list = grouped.get(d.reportId) ?? [];
     list.push(d);
@@ -101,9 +157,10 @@ export default function DocumentsTab({ reports, onNavigate, onReportsChange }: P
   });
 
   const counts = {
-    all: docs.length,
-    pest_report: docs.filter(d => d.documentType === 'pest_report').length,
-    seller_disclosure: docs.filter(d => d.documentType === 'seller_disclosure').length,
+    all: allDocs.length,
+    inspection_report: allDocs.filter(d => d.documentType === 'inspection_report').length,
+    pest_report: allDocs.filter(d => d.documentType === 'pest_report').length,
+    seller_disclosure: allDocs.filter(d => d.documentType === 'seller_disclosure').length,
   };
 
   if (visibleReports.length === 0) {
@@ -126,7 +183,7 @@ export default function DocumentsTab({ reports, onNavigate, onReportsChange }: P
         <div>
           <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 24, fontWeight: 700, color: 'var(--bp-text)', margin: 0 }}>Documents</h1>
           <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: '4px 0 0' }}>
-            Pest reports, seller disclosures, and other supporting documents that AI cross-references with your inspection
+            Your original inspection PDFs plus pest reports, seller disclosures, and other supporting documents
           </p>
         </div>
         <button
@@ -148,6 +205,11 @@ export default function DocumentsTab({ reports, onNavigate, onReportsChange }: P
       {/* Type filter pills */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <FilterPill active={typeFilter === 'all'} onClick={() => setTypeFilter('all')} label={`All (${counts.all})`} />
+        <FilterPill
+          active={typeFilter === 'inspection_report'}
+          onClick={() => setTypeFilter('inspection_report')}
+          label={`${TYPE_META.inspection_report.icon} Inspection Reports (${counts.inspection_report})`}
+        />
         <FilterPill
           active={typeFilter === 'pest_report'}
           onClick={() => setTypeFilter('pest_report')}
@@ -223,7 +285,11 @@ export default function DocumentsTab({ reports, onNavigate, onReportsChange }: P
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
                   {reportDocs.map(doc => (
-                    <DocCard key={doc.id} doc={doc} onDelete={() => handleDelete(doc)} />
+                    <DocCard
+                      key={doc.id}
+                      doc={doc}
+                      onDelete={doc.isOriginalReport ? null : () => handleDelete(doc as unknown as SupportingDocumentWithReport)}
+                    />
                   ))}
                 </div>
               </div>
@@ -273,10 +339,10 @@ function FilterPill({ label, active, onClick, small }: { label: string; active: 
   );
 }
 
-function DocCard({ doc, onDelete }: { doc: SupportingDocumentWithReport; onDelete: () => void }) {
+function DocCard({ doc, onDelete }: { doc: DocViewItem; onDelete: (() => void) | null }) {
   const meta = TYPE_META[doc.documentType];
   const status = STATUS_META[doc.parsingStatus] ?? STATUS_META.processing;
-  const summary = summarizeParsedDoc(doc);
+  const summary = doc.documentType === 'inspection_report' ? null : summarizeParsedDoc(doc);
   const sourceUrl = doc.documentFileUrl;
 
   return (
@@ -343,22 +409,24 @@ function DocCard({ doc, onDelete }: { doc: SupportingDocumentWithReport; onDelet
             PDF unavailable
           </span>
         )}
-        <button
-          onClick={onDelete}
-          style={{
-            padding: '7px 12px', borderRadius: 8,
-            border: '1px solid var(--bp-border)', background: 'transparent', color: '#DC2626',
-            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
-          }}
-        >
-          Delete
-        </button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            style={{
+              padding: '7px 12px', borderRadius: 8,
+              border: '1px solid var(--bp-border)', background: 'transparent', color: '#DC2626',
+              cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+            }}
+          >
+            Delete
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function summarizeParsedDoc(doc: SupportingDocumentWithReport): string | null {
+function summarizeParsedDoc(doc: DocViewItem): string | null {
   if (doc.parsingStatus !== 'parsed' || !doc.parsedSummary) return null;
   const summary = doc.parsedSummary as Record<string, unknown>;
 
