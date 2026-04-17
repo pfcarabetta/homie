@@ -50,6 +50,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [activeSellerAction, setActiveSellerAction] = useState<'fix_before_listing' | 'disclose' | 'ignore' | null>(null);
+  const [xrefOnly, setXrefOnly] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<string | null>(null);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -96,8 +97,14 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
     if (activeSeverity) items = items.filter(i => i.severity === activeSeverity);
     if (activeCategory) items = items.filter(i => i.category === activeCategory);
     if (activeSellerAction) items = items.filter(i => i.sellerAction === activeSellerAction);
+    if (xrefOnly) items = items.filter(i => (i.crossReferencedItemIds?.length ?? 0) > 0);
     return items;
-  }, [fullItems, activeReportId, activeSeverity, activeCategory, activeSellerAction]);
+  }, [fullItems, activeReportId, activeSeverity, activeCategory, activeSellerAction, xrefOnly]);
+
+  const xrefCount = useMemo(
+    () => fullItems.filter(i => (i.crossReferencedItemIds?.length ?? 0) > 0).length,
+    [fullItems],
+  );
 
   // Has any items in seller mode — show seller action filter only if so
   const hasSellerModeItems = useMemo(() => fullItems.some(i => i._reportMode === 'seller'), [fullItems]);
@@ -346,6 +353,27 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* Cross-referenced filter */}
+      {xrefCount > 0 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', padding: '5px 0', marginRight: 4 }}>Connections:</span>
+          <button
+            onClick={() => setXrefOnly(v => !v)}
+            title="Items the AI found correlations for across the inspection and supporting documents"
+            style={{
+              fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
+              borderRadius: 20,
+              border: `1px solid ${xrefOnly ? '#7C3AED' : 'var(--bp-border)'}`,
+              background: xrefOnly ? '#F3E8FF' : 'transparent',
+              color: xrefOnly ? '#7C3AED' : 'var(--bp-subtle)', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            {'\uD83D\uDD17'} Cross-referenced ({xrefCount})
+          </button>
         </div>
       )}
 

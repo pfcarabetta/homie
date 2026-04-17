@@ -486,6 +486,7 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   const [fullReport, setFullReport] = useState<InspectReportPublic | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [xrefOnly, setXrefOnly] = useState(false);
   const [pricingTier, setPricingTier] = useState<string | null>(portalReport?.pricingTier ?? null);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -731,7 +732,12 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   }
 
   const items = fullReport.items;
-  const filteredItems = activeCategory ? items.filter(i => i.category === activeCategory) : items;
+  const xrefCount = items.filter(i => (i.crossReferencedItemIds?.length ?? 0) > 0).length;
+  const filteredItems = items.filter(i => {
+    if (activeCategory && i.category !== activeCategory) return false;
+    if (xrefOnly && (i.crossReferencedItemIds?.length ?? 0) === 0) return false;
+    return true;
+  });
 
   // Group by category
   const categories = new Map<string, number>();
@@ -864,7 +870,7 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
             </div>
           )}
 
-          {/* Category filters */}
+          {/* Category + cross-referenced filters */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
             <button onClick={() => setActiveCategory(null)} style={{
               fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, padding: '6px 14px',
@@ -882,6 +888,21 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
                 {CATEGORY_ICONS[cat] || ''} {CATEGORY_LABELS[cat] || cat} ({cnt})
               </button>
             ))}
+            {xrefCount > 0 && (
+              <button
+                onClick={() => setXrefOnly(v => !v)}
+                title="Items the AI found correlations for across the inspection and supporting documents"
+                style={{
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, padding: '6px 14px',
+                  borderRadius: 20,
+                  border: `1px solid ${xrefOnly ? '#7C3AED' : 'var(--bp-border)'}`,
+                  background: xrefOnly ? '#F3E8FF' : 'transparent',
+                  color: xrefOnly ? '#7C3AED' : 'var(--bp-subtle)', cursor: 'pointer',
+                }}
+              >
+                {'\uD83D\uDD17'} Cross-referenced ({xrefCount})
+              </button>
+            )}
           </div>
 
           {/* Item cards */}
