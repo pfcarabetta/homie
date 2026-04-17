@@ -688,6 +688,17 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
       border: `1px solid ${item.isIncludedInRequest ? ACCENT : 'var(--bp-border)'}`,
       padding: '14px 16px',
     }}>
+      <style>{`
+        @media (max-width: 640px) {
+          /* On mobile, the right-side data columns stack horizontally with
+             equal width below the info column instead of wrapping awkwardly */
+          .nego-ask-col, .nego-agreed-col, .nego-status-col {
+            flex: 1 1 0 !important;
+            text-align: left !important;
+            min-width: 0 !important;
+          }
+        }
+      `}</style>
       {/* Top row: checkbox + info + ask + agreed + status */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
         {/* Checkbox */}
@@ -739,7 +750,7 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
         </div>
 
         {/* Ask / Estimated cost + source selector */}
-        <div style={{ flex: '0 0 180px', textAlign: 'right', position: 'relative' }}>
+        <div className="nego-ask-col" style={{ flex: '0 0 180px', textAlign: 'right', position: 'relative' }}>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             {isSellerMode ? 'Estimated cost' : 'Ask amount'}
           </div>
@@ -860,7 +871,7 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
         {/* Buyer-only: Seller agreed input + Status dropdown */}
         {!isSellerMode && (
           <>
-            <div style={{ flex: '0 0 110px' }}>
+            <div className="nego-agreed-col" style={{ flex: '0 0 110px' }}>
               <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
                 Agreed
               </div>
@@ -870,7 +881,7 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
               />
             </div>
 
-            <div style={{ flex: '0 0 130px' }}>
+            <div className="nego-status-col" style={{ flex: '0 0 130px' }}>
               <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
                 Status
               </div>
