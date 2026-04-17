@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { inspectService, type PortalReport, type PortalReportItem } from '@/services/inspector-api';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate, paidReports } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate, paidReports, reportsWithTier } from './constants';
 import type { Tab } from './constants';
 import LockedTabPlaceholder from './LockedTabPlaceholder';
 import { getCurrentSeasonalTasks, getSeasonName, type SeasonalTask } from './seasonalTasks';
@@ -53,7 +53,8 @@ function classifyBucket(item: ItemWithContext): Bucket {
 }
 
 export default function MaintenanceTab({ reports, onNavigate, onReportsChange }: MaintenanceTabProps) {
-  const visibleReports = useMemo(() => paidReports(reports), [reports]);
+  const visibleReports = useMemo(() => reportsWithTier(reports, 'premium'), [reports]);
+  const hasUnderTierReport = paidReports(reports).length > visibleReports.length;
   const [items, setItems] = useState<ItemWithContext[]>([]);
   const [collapsedBuckets, setCollapsedBuckets] = useState<Set<Bucket>>(new Set(['watch']));
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
@@ -144,13 +145,15 @@ export default function MaintenanceTab({ reports, onNavigate, onReportsChange }:
     setPendingActions(prev => { const n = new Set(prev); n.delete(item.id); return n; });
   }, [pendingActions, onReportsChange]);
 
-  // Gate: maintenance is a Premium feature, requires a paid report
+  // Gate: maintenance is Premium-tier only
   if (visibleReports.length === 0) {
     return (
       <LockedTabPlaceholder
         tabName="Maintenance"
         description="Year-round maintenance plan built from your inspection findings"
         hasAnyReports={reports.length > 0}
+        hasUnderTierReport={hasUnderTierReport}
+        requiredTier="premium"
         onNavigate={onNavigate}
       />
     );

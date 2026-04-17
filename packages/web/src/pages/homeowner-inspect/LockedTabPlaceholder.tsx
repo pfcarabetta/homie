@@ -1,4 +1,5 @@
-import type { Tab } from './constants';
+import type { Tab, Tier } from './constants';
+import { TIER_LABEL, TIER_PRICE, tiersAtOrAbove } from './constants';
 
 const ACCENT = '#2563EB';
 
@@ -6,15 +7,51 @@ interface Props {
   tabName: string;
   description: string;
   hasAnyReports: boolean;
+  /** Minimum tier required to unlock this tab. */
+  requiredTier: Tier;
+  /** True when the user has paid reports but none meet the required tier. */
+  hasUnderTierReport?: boolean;
   onNavigate: (tab: Tab) => void;
 }
 
 /**
- * Shown when a cross-report tab (Items / Quotes / Negotiations / Maintenance /
- * Documents) has no data because none of the user's reports have been paid for
- * yet. Routes them back to the Reports tab to choose a tier.
+ * Shown when a cross-report tab can't be opened because none of the user's
+ * reports meet the required tier. Three modes:
+ *   - No reports at all → "Upload one to get started"
+ *   - Has reports but none paid → "Choose a tier"
+ *   - Has paid reports, but on a tier that doesn't include this feature →
+ *     "Upgrade to {Professional / Premium} to unlock"
  */
-export default function LockedTabPlaceholder({ tabName, description, hasAnyReports, onNavigate }: Props) {
+export default function LockedTabPlaceholder({
+  tabName,
+  description,
+  hasAnyReports,
+  requiredTier,
+  hasUnderTierReport,
+  onNavigate,
+}: Props) {
+  const eligibleTiers = tiersAtOrAbove(requiredTier);
+  const tierList = eligibleTiers.map(t => TIER_LABEL[t]).join(' or ');
+  const lowestPrice = TIER_PRICE[requiredTier];
+
+  let headline: string;
+  let body: string;
+  let cta: string;
+
+  if (!hasAnyReports) {
+    headline = 'Upload an inspection report to get started';
+    body = `Upload your first inspection report and choose a tier to unlock items, quotes, negotiations, and maintenance planning.`;
+    cta = 'Go to Reports';
+  } else if (hasUnderTierReport) {
+    headline = `${tabName} is a ${tierList} feature`;
+    body = `Your current report${eligibleTiers.length > 1 ? `'s tier doesn't include ${tabName}` : ` doesn't include ${tabName}`}. Upgrade to ${tierList} (from $${lowestPrice}/report) to unlock.`;
+    cta = `Upgrade to ${TIER_LABEL[requiredTier]}`;
+  } else {
+    headline = 'Unlock this with a paid tier';
+    body = `${tabName} is available once you've chosen a tier for at least one of your reports. Open Reports to pick a plan${eligibleTiers.length === 1 ? ` (${tierList} required)` : ''}.`;
+    cta = 'Choose a tier';
+  }
+
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
@@ -32,12 +69,10 @@ export default function LockedTabPlaceholder({ tabName, description, hasAnyRepor
       }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>{'\uD83D\uDD12'}</div>
         <h3 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 8px' }}>
-          {hasAnyReports ? 'Unlock this with a paid tier' : 'Upload an inspection report to get started'}
+          {headline}
         </h3>
-        <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: '0 auto', maxWidth: 460, lineHeight: 1.6 }}>
-          {hasAnyReports
-            ? `${tabName} is available once you've chosen a tier for at least one of your reports. Open Reports to pick a plan.`
-            : 'Upload your first inspection report and choose a tier to unlock items, quotes, negotiations, and maintenance planning.'}
+        <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: '0 auto', maxWidth: 480, lineHeight: 1.6 }}>
+          {body}
         </p>
         <button
           onClick={() => onNavigate('reports')}
@@ -47,7 +82,7 @@ export default function LockedTabPlaceholder({ tabName, description, hasAnyRepor
             fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600,
           }}
         >
-          {hasAnyReports ? 'Choose a tier' : 'Go to Reports'}
+          {cta}
         </button>
       </div>
     </div>

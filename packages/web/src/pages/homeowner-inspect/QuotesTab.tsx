@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { inspectService, type PortalReport, type InspectionItem, type InspectStatusItem } from '@/services/inspector-api';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, timeAgo, paidReports } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, timeAgo, paidReports, reportsWithTier } from './constants';
 import type { Tab } from './constants';
 import LockedTabPlaceholder from './LockedTabPlaceholder';
 
@@ -22,7 +22,8 @@ interface ItemWithContext extends InspectionItem {
 type StatusFilter = 'all' | 'waiting' | 'quoted' | 'booked';
 
 export default function QuotesTab({ reports, onNavigate, onReportsChange }: QuotesTabProps) {
-  const visibleReports = useMemo(() => paidReports(reports), [reports]);
+  const visibleReports = useMemo(() => reportsWithTier(reports, 'professional'), [reports]);
+  const hasUnderTierReport = paidReports(reports).length > visibleReports.length;
   const [fullItems, setFullItems] = useState<ItemWithContext[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -167,6 +168,8 @@ export default function QuotesTab({ reports, onNavigate, onReportsChange }: Quot
         tabName="Quotes"
         description="Compare provider quotes across your dispatched items"
         hasAnyReports={reports.length > 0}
+        hasUnderTierReport={hasUnderTierReport}
+        requiredTier="professional"
         onNavigate={onNavigate}
       />
     );

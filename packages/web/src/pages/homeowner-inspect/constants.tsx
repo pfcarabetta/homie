@@ -28,16 +28,51 @@ export const TAB_LABELS: Record<Tab, string> = {
 };
 
 // ── Tier gating ──────────────────────────────────────────────────────────────
-// A report is "paid" once the homeowner has chosen any tier (essential+).
-// Cross-report tabs (Items, Quotes, Negotiations, Maintenance, Documents)
-// only surface data from paid reports — unpaid reports are gated to the
-// per-report paywall in the Reports tab.
+// Each cross-report tab requires a minimum pricing tier on at least one of
+// the user's reports. Rankings: essential=1, professional=2, premium=3.
+// Unpaid (null) reports are 0 — never qualify for any tab.
+export type Tier = 'essential' | 'professional' | 'premium';
 export interface ReportLike { pricingTier?: string | null }
-export function isPaidReport(r: ReportLike): boolean {
-  return !!r.pricingTier;
+
+export const TIER_LABEL: Record<Tier, string> = {
+  essential: 'Essential',
+  professional: 'Professional',
+  premium: 'Premium',
+};
+
+export const TIER_PRICE: Record<Tier, number> = {
+  essential: 99,
+  professional: 199,
+  premium: 299,
+};
+
+export function tierRank(tier: string | null | undefined): number {
+  switch (tier) {
+    case 'essential': return 1;
+    case 'professional': return 2;
+    case 'premium': return 3;
+    default: return 0;
+  }
 }
+
+export function isPaidReport(r: ReportLike): boolean {
+  return tierRank(r.pricingTier) >= 1;
+}
+
 export function paidReports<T extends ReportLike>(reports: T[]): T[] {
   return reports.filter(isPaidReport);
+}
+
+/** Returns reports whose tier meets or exceeds the required minimum tier. */
+export function reportsWithTier<T extends ReportLike>(reports: T[], minTier: Tier): T[] {
+  const min = tierRank(minTier);
+  return reports.filter(r => tierRank(r.pricingTier) >= min);
+}
+
+/** Tiers at or above the required minimum (used for "available on X and Y" copy). */
+export function tiersAtOrAbove(minTier: Tier): Tier[] {
+  const rank = tierRank(minTier);
+  return (['essential', 'professional', 'premium'] as Tier[]).filter(t => tierRank(t) >= rank);
 }
 
 // ── Severity ─────────────────────────────────────────────────────────────────

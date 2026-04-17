@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { inspectService, type PortalReport, type InspectionItem } from '@/services/inspector-api';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, paidReports } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, paidReports, reportsWithTier } from './constants';
 import type { Tab } from './constants';
 import ItemDeepDive from './ItemDeepDive';
 import PageCitation from './PageCitation';
@@ -27,11 +27,10 @@ interface ItemWithContext extends InspectionItem {
 const SEVERITY_ORDER = ['safety_hazard', 'urgent', 'recommended', 'monitor', 'informational'];
 
 export default function ItemsTab({ reports, onNavigate, onReportsChange }: ItemsTabProps) {
-  // Gate: only items from paid reports surface here. Unpaid reports stay
-  // gated to the per-report paywall in the Reports tab. The actual locked
-  // placeholder is rendered at the bottom of the function (after all hooks)
-  // to satisfy the rules-of-hooks ordering.
-  const visibleReports = useMemo(() => paidReports(reports), [reports]);
+  // Gate: Items requires Essential or higher. Placeholder rendered after all
+  // hooks (rules-of-hooks ordering).
+  const visibleReports = useMemo(() => reportsWithTier(reports, 'essential'), [reports]);
+  const hasUnderTierReport = paidReports(reports).length > visibleReports.length;
   // Flatten all items from all reports with parent context
   const allItems = useMemo<ItemWithContext[]>(() => {
     const items: ItemWithContext[] = [];
@@ -212,13 +211,15 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
     setDispatching(false);
   }
 
-  // Gate: hide all items behind a paywall reminder if no reports are paid for
+  // Gate: hide all items behind a paywall reminder if no reports meet Essential
   if (visibleReports.length === 0) {
     return (
       <LockedTabPlaceholder
         tabName="Items"
         description="Browse and dispatch every item across your inspection reports"
         hasAnyReports={reports.length > 0}
+        hasUnderTierReport={hasUnderTierReport}
+        requiredTier="essential"
         onNavigate={onNavigate}
       />
     );

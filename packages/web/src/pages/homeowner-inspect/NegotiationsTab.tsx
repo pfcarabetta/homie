@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { inspectService, type PortalReport, type PortalReportItem } from '@/services/inspector-api';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, paidReports } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, paidReports, reportsWithTier } from './constants';
 import type { Tab } from './constants';
 import PageCitation from './PageCitation';
 import { SellerActionBadge } from './ItemsTab';
@@ -35,8 +35,9 @@ const STATUS_COLORS: Record<ConcessionStatus, string> = {
 };
 
 export default function NegotiationsTab({ reports, onNavigate, onReportsChange }: NegotiationsTabProps) {
-  const visibleReports = useMemo(() => paidReports(reports), [reports]);
-  // Filter to reports that have items (any parsed reports), gated to paid reports only
+  const visibleReports = useMemo(() => reportsWithTier(reports, 'premium'), [reports]);
+  const hasUnderTierReport = paidReports(reports).length > visibleReports.length;
+  // Filter to reports that have items (any parsed reports), gated to Premium only
   const reportsWithItems = useMemo(() => visibleReports.filter(r => r.itemCount > 0), [visibleReports]);
 
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
@@ -54,6 +55,8 @@ export default function NegotiationsTab({ reports, onNavigate, onReportsChange }
         tabName="Negotiations"
         description="Build repair requests and track seller concessions"
         hasAnyReports={reports.length > 0}
+        hasUnderTierReport={hasUnderTierReport}
+        requiredTier="premium"
         onNavigate={onNavigate}
       />
     );

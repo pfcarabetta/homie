@@ -4,7 +4,7 @@ import {
   type PortalReport,
   type SupportingDocumentWithReport,
 } from '@/services/inspector-api';
-import { paidReports } from './constants';
+import { paidReports, reportsWithTier } from './constants';
 import type { Tab } from './constants';
 import SupportingDocUploadModal, { type SupportingDocType } from './SupportingDocUploadModal';
 import LockedTabPlaceholder from './LockedTabPlaceholder';
@@ -32,7 +32,8 @@ interface Props {
 type TypeFilter = 'all' | SupportingDocType;
 
 export default function DocumentsTab({ reports, onNavigate, onReportsChange }: Props) {
-  const visibleReports = useMemo(() => paidReports(reports), [reports]);
+  const visibleReports = useMemo(() => reportsWithTier(reports, 'essential'), [reports]);
+  const hasUnderTierReport = paidReports(reports).length > visibleReports.length;
   const [docs, setDocs] = useState<SupportingDocumentWithReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -111,6 +112,8 @@ export default function DocumentsTab({ reports, onNavigate, onReportsChange }: P
         tabName="Documents"
         description="Pest reports, seller disclosures, and other supporting documents"
         hasAnyReports={reports.length > 0}
+        hasUnderTierReport={hasUnderTierReport}
+        requiredTier="essential"
         onNavigate={onNavigate}
       />
     );
