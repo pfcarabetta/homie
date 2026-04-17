@@ -27,6 +27,19 @@ export const TAB_LABELS: Record<Tab, string> = {
   settings: 'Settings',
 };
 
+// ── Tier gating ──────────────────────────────────────────────────────────────
+// A report is "paid" once the homeowner has chosen any tier (essential+).
+// Cross-report tabs (Items, Quotes, Negotiations, Maintenance, Documents)
+// only surface data from paid reports — unpaid reports are gated to the
+// per-report paywall in the Reports tab.
+export interface ReportLike { pricingTier?: string | null }
+export function isPaidReport(r: ReportLike): boolean {
+  return !!r.pricingTier;
+}
+export function paidReports<T extends ReportLike>(reports: T[]): T[] {
+  return reports.filter(isPaidReport);
+}
+
 // ── Severity ─────────────────────────────────────────────────────────────────
 export const SEVERITY_COLORS: Record<string, string> = {
   safety_hazard: '#E24B4A',

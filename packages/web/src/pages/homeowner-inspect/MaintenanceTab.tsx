@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { inspectService, type PortalReport, type PortalReportItem } from '@/services/inspector-api';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate, paidReports } from './constants';
 import type { Tab } from './constants';
+import LockedTabPlaceholder from './LockedTabPlaceholder';
 import { getCurrentSeasonalTasks, getSeasonName, type SeasonalTask } from './seasonalTasks';
 import PageCitation from './PageCitation';
 
@@ -52,14 +53,15 @@ function classifyBucket(item: ItemWithContext): Bucket {
 }
 
 export default function MaintenanceTab({ reports, onNavigate, onReportsChange }: MaintenanceTabProps) {
+  const visibleReports = useMemo(() => paidReports(reports), [reports]);
   const [items, setItems] = useState<ItemWithContext[]>([]);
   const [collapsedBuckets, setCollapsedBuckets] = useState<Set<Bucket>>(new Set(['watch']));
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
 
-  // Build flattened item list from reports
+  // Build flattened item list from paid reports only
   useEffect(() => {
     const out: ItemWithContext[] = [];
-    for (const r of reports) {
+    for (const r of visibleReports) {
       for (const i of r.items) {
         out.push({
           ...i,
@@ -71,7 +73,7 @@ export default function MaintenanceTab({ reports, onNavigate, onReportsChange }:
       }
     }
     setItems(out);
-  }, [reports]);
+  }, [visibleReports]);
 
   // Group items into buckets
   const grouped = useMemo(() => {
@@ -141,6 +143,18 @@ export default function MaintenanceTab({ reports, onNavigate, onReportsChange }:
     }
     setPendingActions(prev => { const n = new Set(prev); n.delete(item.id); return n; });
   }, [pendingActions, onReportsChange]);
+
+  // Gate: maintenance is a Premium feature, requires a paid report
+  if (visibleReports.length === 0) {
+    return (
+      <LockedTabPlaceholder
+        tabName="Maintenance"
+        description="Year-round maintenance plan built from your inspection findings"
+        hasAnyReports={reports.length > 0}
+        onNavigate={onNavigate}
+      />
+    );
+  }
 
   // Empty state
   if (reports.length === 0) {

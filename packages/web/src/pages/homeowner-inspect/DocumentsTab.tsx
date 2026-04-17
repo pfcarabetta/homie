@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   inspectService,
   type PortalReport,
   type SupportingDocumentWithReport,
 } from '@/services/inspector-api';
+import { paidReports } from './constants';
 import type { Tab } from './constants';
 import SupportingDocUploadModal, { type SupportingDocType } from './SupportingDocUploadModal';
+import LockedTabPlaceholder from './LockedTabPlaceholder';
 
 const ACCENT = '#2563EB';
 
@@ -30,6 +32,7 @@ interface Props {
 type TypeFilter = 'all' | SupportingDocType;
 
 export default function DocumentsTab({ reports, onNavigate, onReportsChange }: Props) {
+  const visibleReports = useMemo(() => paidReports(reports), [reports]);
   const [docs, setDocs] = useState<SupportingDocumentWithReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -68,9 +71,9 @@ export default function DocumentsTab({ reports, onNavigate, onReportsChange }: P
   }, [fetchDocs, onReportsChange]);
 
   function openUploadFlow() {
-    if (reports.length === 0) return;
-    if (reports.length === 1) {
-      setUploadTargetReportId(reports[0].id);
+    if (visibleReports.length === 0) return;
+    if (visibleReports.length === 1) {
+      setUploadTargetReportId(visibleReports[0].id);
     } else {
       setShowUploadPicker(true);
     }
@@ -101,6 +104,17 @@ export default function DocumentsTab({ reports, onNavigate, onReportsChange }: P
     pest_report: docs.filter(d => d.documentType === 'pest_report').length,
     seller_disclosure: docs.filter(d => d.documentType === 'seller_disclosure').length,
   };
+
+  if (visibleReports.length === 0) {
+    return (
+      <LockedTabPlaceholder
+        tabName="Documents"
+        description="Pest reports, seller disclosures, and other supporting documents"
+        hasAnyReports={reports.length > 0}
+        onNavigate={onNavigate}
+      />
+    );
+  }
 
   return (
     <div>
@@ -217,7 +231,7 @@ export default function DocumentsTab({ reports, onNavigate, onReportsChange }: P
 
       {showUploadPicker && (
         <UploadReportPicker
-          reports={reports}
+          reports={visibleReports}
           onPick={selectReportToUpload}
           onClose={() => setShowUploadPicker(false)}
         />

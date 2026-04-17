@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { inspectService, type PortalReport, type InspectionItem, type InspectStatusItem } from '@/services/inspector-api';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, timeAgo } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, timeAgo, paidReports } from './constants';
 import type { Tab } from './constants';
+import LockedTabPlaceholder from './LockedTabPlaceholder';
 
 const ACCENT = '#2563EB';
 
@@ -21,6 +22,7 @@ interface ItemWithContext extends InspectionItem {
 type StatusFilter = 'all' | 'waiting' | 'quoted' | 'booked';
 
 export default function QuotesTab({ reports, onNavigate, onReportsChange }: QuotesTabProps) {
+  const visibleReports = useMemo(() => paidReports(reports), [reports]);
   const [fullItems, setFullItems] = useState<ItemWithContext[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -31,10 +33,10 @@ export default function QuotesTab({ reports, onNavigate, onReportsChange }: Quot
   const [bookingResult, setBookingResult] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load all items from all reports
+  // Load all items from all paid reports
   const loadItems = useCallback(async () => {
     const items: ItemWithContext[] = [];
-    for (const report of reports) {
+    for (const report of visibleReports) {
       if (!report.clientAccessToken) continue;
       try {
         const res = await inspectService.getReport(report.clientAccessToken);
@@ -53,7 +55,7 @@ export default function QuotesTab({ reports, onNavigate, onReportsChange }: Quot
     // Only show items that have been dispatched or beyond
     const dispatched = items.filter(i => i.dispatchStatus && i.dispatchStatus !== 'pending');
     setFullItems(dispatched);
-  }, [reports]);
+  }, [visibleReports]);
 
   useEffect(() => {
     loadItems().finally(() => setLoading(false));
@@ -158,6 +160,17 @@ export default function QuotesTab({ reports, onNavigate, onReportsChange }: Quot
     for (const item of fullItems) map.set(item.category, (map.get(item.category) ?? 0) + 1);
     return map;
   }, [fullItems]);
+
+  if (visibleReports.length === 0) {
+    return (
+      <LockedTabPlaceholder
+        tabName="Quotes"
+        description="Compare provider quotes across your dispatched items"
+        hasAnyReports={reports.length > 0}
+        onNavigate={onNavigate}
+      />
+    );
+  }
 
   if (loading) {
     return (

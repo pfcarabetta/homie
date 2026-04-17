@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { inspectService, type PortalReport, type PortalReportItem } from '@/services/inspector-api';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, paidReports } from './constants';
 import type { Tab } from './constants';
 import PageCitation from './PageCitation';
 import { SellerActionBadge } from './ItemsTab';
+import LockedTabPlaceholder from './LockedTabPlaceholder';
 
 const ACCENT = '#2563EB';
 const RED = '#DC2626';
@@ -34,8 +35,9 @@ const STATUS_COLORS: Record<ConcessionStatus, string> = {
 };
 
 export default function NegotiationsTab({ reports, onNavigate, onReportsChange }: NegotiationsTabProps) {
-  // Filter to reports that have items (any parsed reports)
-  const reportsWithItems = useMemo(() => reports.filter(r => r.itemCount > 0), [reports]);
+  const visibleReports = useMemo(() => paidReports(reports), [reports]);
+  // Filter to reports that have items (any parsed reports), gated to paid reports only
+  const reportsWithItems = useMemo(() => visibleReports.filter(r => r.itemCount > 0), [visibleReports]);
 
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
 
@@ -45,6 +47,17 @@ export default function NegotiationsTab({ reports, onNavigate, onReportsChange }
       setActiveReportId(reportsWithItems[0].id);
     }
   }, [reportsWithItems, activeReportId]);
+
+  if (visibleReports.length === 0) {
+    return (
+      <LockedTabPlaceholder
+        tabName="Negotiations"
+        description="Build repair requests and track seller concessions"
+        hasAnyReports={reports.length > 0}
+        onNavigate={onNavigate}
+      />
+    );
+  }
 
   if (reportsWithItems.length === 0) {
     return (
