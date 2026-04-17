@@ -62,6 +62,7 @@ export default function InspectProviderView() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<SubmitResult | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   useEffect(() => {
     if (!providerToken) return;
@@ -204,6 +205,74 @@ export default function InspectProviderView() {
             <span style={{ fontSize: 13, color: '#9B9490', fontWeight: 500 }}>inspect</span>
           </div>
           <div style={{ fontSize: 13, color: '#9B9490', marginTop: 4 }}>Provider quote request</div>
+        </div>
+
+        {/* What is Homie? — expandable explainer for first-time providers */}
+        <div style={{
+          background: '#fff', borderRadius: 14, border: '1px solid #E0DAD4',
+          marginBottom: 16, overflow: 'hidden',
+        }}>
+          <button
+            onClick={() => setAboutOpen(o => !o)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 10, padding: '12px 18px', background: 'transparent', border: 'none',
+              cursor: 'pointer', textAlign: 'left',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 100,
+                background: `${G}18`, color: G, textTransform: 'uppercase', letterSpacing: '0.05em',
+              }}>
+                Free for providers
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: D }}>
+                New to Homie? Learn how it works
+              </span>
+            </div>
+            <span style={{ fontSize: 12, color: '#9B9490', fontWeight: 600 }}>
+              {aboutOpen ? 'Hide \u25B2' : 'Show \u25BC'}
+            </span>
+          </button>
+          {aboutOpen && (
+            <div style={{ padding: '0 18px 18px', borderTop: '1px solid #F0EBE5' }}>
+              <p style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, margin: '14px 0 12px' }}>
+                Homie is an AI-powered platform that connects homeowners with local pros for repair
+                and maintenance work. A homeowner uploaded their inspection report, picked items
+                they'd like quoted, and we found you among the top-rated {data.category} pros in
+                their area.
+              </p>
+
+              <div style={{
+                background: `${G}08`, borderRadius: 10, padding: '12px 14px', marginBottom: 12,
+                border: `1px solid ${G}25`,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: G, marginBottom: 6 }}>
+                  100% free for providers. Always.
+                </div>
+                <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.6 }}>
+                  No subscription. No lead fees. No commissions. The homeowner pays Homie a small
+                  fee for the inspection-to-quote workflow {'\u2014'} you keep your full quote.
+                </div>
+              </div>
+
+              <div style={{ fontSize: 12, fontWeight: 700, color: D, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                How it works
+              </div>
+              <ol style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.7, margin: 0, paddingLeft: 20 }}>
+                <li>Review the items below and submit your estimated price (per item or bundle).</li>
+                <li>The homeowner sees your quote alongside any others and picks the pro they like best.</li>
+                <li>If they pick you, we connect you directly to schedule the work. No middleman.</li>
+                <li>You invoice and get paid by the homeowner the way you normally do.</li>
+              </ol>
+
+              <div style={{ marginTop: 14, fontSize: 12, color: '#9B9490', lineHeight: 1.6 }}>
+                Questions? Email <a href="mailto:hello@homiepro.ai" style={{ color: O, textDecoration: 'none', fontWeight: 600 }}>hello@homiepro.ai</a>.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Property + Job info */}
