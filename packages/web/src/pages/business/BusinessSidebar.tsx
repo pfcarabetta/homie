@@ -336,7 +336,11 @@ export default function BusinessSidebar({
 
       {/* Account menu — bottom sheet on mobile, popover on desktop, portaled to body */}
       {accountOpen && accountMenuPos && createPortal(
-        isMobile ? (
+        // Wrap with bp-portal className so CSS variables (--bp-card, --bp-text, etc.)
+        // resolve correctly. createPortal escapes the parent .bp-portal scope, so
+        // without this wrapper the menu would render with no background (transparent).
+        <div className="bp-portal" data-theme={typeof document !== 'undefined' ? document.querySelector('.bp-portal')?.getAttribute('data-theme') ?? 'light' : 'light'}>
+        {isMobile ? (
           <>
             <style>{`@keyframes bp-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } } @keyframes bp-sheet-fade { from { opacity: 0; } to { opacity: 1; } }`}</style>
             {/* Backdrop */}
@@ -501,7 +505,8 @@ export default function BusinessSidebar({
                 onMouseLeave={e => e.currentTarget.style.background = 'none'}>Sign out</button>
             </div>
           </div>
-        ),
+        )}
+        </div>,
         document.body
       )}
 
