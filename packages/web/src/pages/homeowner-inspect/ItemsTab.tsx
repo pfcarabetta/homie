@@ -76,9 +76,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
       items.sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity));
       setFullItems(items);
 
-      // Initialize selection: all dispatchable items from paid reports
-      const dispatchable = items.filter(i => isDispatchable(i));
-      setSelectedItems(new Set(dispatchable.map(i => i.id)));
+      // Start with no items selected — user picks what to dispatch
 
       setLoading(false);
     })();
