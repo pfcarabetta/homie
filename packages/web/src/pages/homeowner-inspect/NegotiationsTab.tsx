@@ -690,10 +690,12 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
     }}>
       <style>{`
         @media (max-width: 640px) {
-          /* On mobile, the right-side data columns stack horizontally with
-             equal width below the info column instead of wrapping awkwardly */
+          /* On mobile: data columns (Ask/Agreed/Status) wrap together to a
+             second row below the info column and share it evenly. Each gets
+             a 90px flex basis — small enough to fit 3-up on the row, large
+             enough to force them off row 1. */
           .nego-ask-col, .nego-agreed-col, .nego-status-col {
-            flex: 1 1 0 !important;
+            flex: 1 1 90px !important;
             text-align: left !important;
             min-width: 0 !important;
           }
