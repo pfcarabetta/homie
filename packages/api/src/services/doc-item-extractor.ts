@@ -10,7 +10,22 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { inspectionReportItems, inspectionSupportingDocuments } from '../db/schema/inspector';
 import logger from '../logger';
-import type { PestReportSummary, SellerDisclosureSummary } from './document-parsers';
+import type { PestReportSummary, SellerDisclosureSummary, SpecializedInspectionSummary } from './document-parsers';
+import { isSpecializedInspectionType } from './document-parsers';
+
+// Map each specialized inspection type to the inspection-item category that
+// findings should land under. Keeps the cross-tab category filtering coherent.
+const SPEC_DOC_CATEGORY_MAP: Record<string, string> = {
+  sewer_scope: 'plumbing',
+  roof_inspection: 'roofing',
+  foundation_report: 'foundation',
+  hvac_inspection: 'hvac',
+  electrical_inspection: 'electrical',
+  septic_inspection: 'plumbing',
+  mold_inspection: 'general_repair',
+  pool_inspection: 'general_repair',
+  chimney_inspection: 'fireplace',
+};
 
 type ItemSeverity = 'safety_hazard' | 'urgent' | 'recommended' | 'monitor' | 'informational';
 
@@ -146,6 +161,43 @@ export async function extractItemsFromDoc(docId: string): Promise<number> {
           : null,
         aiCostEstimateLowCents: 0,
         aiCostEstimateHighCents: 0,
+      });
+    });
+  } else if (isSpecializedInspectionType(doc.documentType)) {
+    const spec = summary as unknown as SpecializedInspectionSummary;
+    const findings = Array.isArray(spec.findings) ? spec.findings : [];
+    const actionable = findings.filter(f => !isInformational(f.severity));
+    const targetCategory = SPEC_DOC_CATEGORY_MAP[doc.documentType] ?? 'general_repair';
+    logger.info({ docId, docType: doc.documentType, totalFindings: findings.length, actionableFindings: actionable.length }, '[doc-item-extractor] Specialized findings');
+    const perItemLow = spec.estimatedCostRange && actionable.length > 0
+      ? Math.round((spec.estimatedCostRange.lowCents || 0) / actionable.length)
+      : 0;
+    const perItemHigh = spec.estimatedCostRange && actionable.length > 0
+      ? Math.round((spec.estimatedCostRange.highCents || 0) / actionable.length)
+      : 0;
+
+    actionable.forEach((finding, idx) => {
+      const title = truncate(
+        [finding.category, finding.location].filter(Boolean).join(' \u2014 ') || 'Inspection finding',
+        120,
+      );
+      const descParts: string[] = [];
+      if (finding.evidence) descParts.push(finding.evidence);
+      if (finding.recommendation) descParts.push(`Recommended: ${finding.recommendation}`);
+      toInsert.push({
+        reportId: doc.reportId,
+        title,
+        description: descParts.join('\n\n'),
+        category: targetCategory,
+        severity: mapPestSeverity(finding.severity),
+        locationInProperty: finding.location || null,
+        sortOrder: baseSortOrder + idx,
+        sourceDocumentId: doc.id,
+        sourcePages: Array.isArray(finding.sourcePages) && finding.sourcePages.length > 0
+          ? finding.sourcePages
+          : null,
+        aiCostEstimateLowCents: perItemLow,
+        aiCostEstimateHighCents: perItemHigh,
       });
     });
   } else {

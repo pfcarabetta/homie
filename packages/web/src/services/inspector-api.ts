@@ -547,7 +547,7 @@ export const inspectService = {
 
   // ── Supporting documents (multi-doc analysis) ────────────────────────────
 
-  uploadSupportingDocument(reportId: string, params: { documentType: 'pest_report' | 'seller_disclosure'; fileName: string; fileDataUrl: string }) {
+  uploadSupportingDocument(reportId: string, params: { documentType: SupportingDocumentType; fileName: string; fileDataUrl: string }) {
     return fetchAPI<SupportingDocument>(
       `/api/v1/account/reports/${reportId}/documents`,
       { method: 'POST', body: JSON.stringify({ document_type: params.documentType, file_name: params.fileName, file_data_url: params.fileDataUrl }) },
@@ -742,10 +742,24 @@ export interface PortalReport {
 
 // ── Supporting Documents + Cross-Reference Insights ────────────────────────
 
+/** Backend-supported document types for the supporting-docs upload flow. */
+export type SupportingDocumentType =
+  | 'pest_report'
+  | 'seller_disclosure'
+  | 'sewer_scope'
+  | 'roof_inspection'
+  | 'foundation_report'
+  | 'hvac_inspection'
+  | 'electrical_inspection'
+  | 'septic_inspection'
+  | 'mold_inspection'
+  | 'pool_inspection'
+  | 'chimney_inspection';
+
 export interface SupportingDocument {
   id: string;
   reportId: string;
-  documentType: 'pest_report' | 'seller_disclosure';
+  documentType: SupportingDocumentType;
   fileName: string;
   documentFileUrl: string | null;
   parsingStatus: 'uploading' | 'processing' | 'parsed' | 'failed';

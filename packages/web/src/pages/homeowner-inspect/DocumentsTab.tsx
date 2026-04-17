@@ -18,6 +18,15 @@ const TYPE_META: Record<DocViewType, { label: string; icon: string; short: strin
   inspection_report: { label: 'Inspection Report', icon: '\uD83D\uDCC4', short: 'Inspection Reports' },
   pest_report: { label: 'Pest / WDO Report', icon: '\uD83D\uDC1B', short: 'Pest Reports' },
   seller_disclosure: { label: 'Seller Disclosure', icon: '\uD83D\uDCCB', short: 'Seller Disclosures' },
+  sewer_scope: { label: 'Sewer Scope', icon: '\uD83D\uDEBD', short: 'Sewer Scopes' },
+  roof_inspection: { label: 'Roof Inspection', icon: '\uD83C\uDFE0', short: 'Roof Inspections' },
+  foundation_report: { label: 'Foundation / Structural', icon: '\uD83C\uDFD7\uFE0F', short: 'Foundation Reports' },
+  hvac_inspection: { label: 'HVAC Inspection', icon: '\u2744\uFE0F', short: 'HVAC Inspections' },
+  electrical_inspection: { label: 'Electrical Inspection', icon: '\u26A1', short: 'Electrical Inspections' },
+  septic_inspection: { label: 'Septic Inspection', icon: '\uD83D\uDDF3\uFE0F', short: 'Septic Inspections' },
+  mold_inspection: { label: 'Mold / Air Quality', icon: '\uD83E\uDDEA', short: 'Mold / Air Quality' },
+  pool_inspection: { label: 'Pool / Spa Inspection', icon: '\uD83C\uDFCA', short: 'Pool Inspections' },
+  chimney_inspection: { label: 'Chimney / Fireplace', icon: '\uD83D\uDD25', short: 'Chimney Inspections' },
 };
 
 const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {

@@ -169,6 +169,73 @@ export async function parseSellerDisclosure(fileUrl: string): Promise<SellerDisc
   }
 }
 
+// ── Specialized inspections (round 2/3/4) ────────────────────────────────
+// These all share a common parsed shape and a parameterized prompt — a single
+// parser handles all of them with the doc type controlling the system prompt.
+
+export interface SpecializedInspectionSummary {
+  inspectionDate: string | null;
+  inspectorCompany: string | null;
+  overallVerdict: string;
+  findings: Array<{
+    category: string;
+    severity: 'safety_hazard' | 'urgent' | 'recommended' | 'monitor' | 'informational';
+    location: string;
+    evidence: string;
+    recommendation: string;
+    sourcePages: number[];
+  }>;
+  estimatedCostRange: { lowCents: number; highCents: number } | null;
+}
+
+const SPEC_INSPECTION_DESCRIPTIONS: Record<string, string> = {
+  sewer_scope: 'sewer line camera scope inspection (mainline from house to municipal connection)',
+  roof_inspection: 'roof inspection or roofing certification report',
+  foundation_report: 'foundation or structural engineer report',
+  hvac_inspection: 'HVAC system inspection (heating, cooling, ductwork, refrigerant, age/efficiency)',
+  electrical_inspection: 'electrical system inspection (panel, wiring, grounding, outlets, code compliance)',
+  septic_inspection: 'septic system inspection (tank, drain field, perc/percolation testing)',
+  mold_inspection: 'mold or indoor air quality inspection report',
+  pool_inspection: 'pool/spa inspection (equipment, plumbing, leak detection, safety)',
+  chimney_inspection: 'chimney/fireplace Level II inspection',
+};
+
+export function isSpecializedInspectionType(t: string): boolean {
+  return Object.prototype.hasOwnProperty.call(SPEC_INSPECTION_DESCRIPTIONS, t);
+}
+
+function buildSpecializedPrompt(docType: string): string {
+  const desc = SPEC_INSPECTION_DESCRIPTIONS[docType] ?? 'specialized residential inspection';
+  return `You are analyzing a ${desc}.
+
+Extract a structured summary as JSON with exactly these keys:
+- inspectionDate: ISO date (YYYY-MM-DD) or null if not stated
+- inspectorCompany: text name of the inspecting company, or null
+- overallVerdict: short text — one of "clean", "minor", "concerns", "major_issues", or "unknown"
+- findings: array of findings, each with:
+  - category: short topic label (e.g. "Sewer mainline", "Compressor", "Outlet wiring", "Drain field")
+  - severity: one of "safety_hazard", "urgent", "recommended", "monitor", "informational"
+  - location: e.g. "Front yard near street", "Attic", "Master bath", "South side of house"
+  - evidence: brief description of what the inspector observed
+  - recommendation: brief description of recommended action
+  - sourcePages: array of 1-indexed page numbers where this finding appears
+- estimatedCostRange: object with lowCents and highCents (integer cents) for total recommended remediation cost. Use null if no estimate is given.
+
+Return ONLY the JSON object. No preamble, no markdown code fences.`;
+}
+
+export async function parseSpecializedInspection(fileUrl: string, docType: string): Promise<SpecializedInspectionSummary> {
+  const { base64, mimeType } = await fetchFileAsBase64(fileUrl);
+  const raw = await callClaudeForDocument(buildSpecializedPrompt(docType), base64, mimeType);
+  const json = extractJson(raw);
+  try {
+    return JSON.parse(json) as SpecializedInspectionSummary;
+  } catch (err) {
+    logger.error({ err, rawPreview: raw.slice(0, 500), docType }, '[parseSpecializedInspection] Failed to parse JSON');
+    throw new Error(`Failed to parse ${docType} response`);
+  }
+}
+
 // ── Dispatcher ────────────────────────────────────────────────────────────
 
 export async function parseSupportingDoc(documentType: string, fileUrl: string): Promise<unknown> {
@@ -178,6 +245,9 @@ export async function parseSupportingDoc(documentType: string, fileUrl: string):
     case 'seller_disclosure':
       return parseSellerDisclosure(fileUrl);
     default:
+      if (isSpecializedInspectionType(documentType)) {
+        return parseSpecializedInspection(fileUrl, documentType);
+      }
       throw new Error(`Unsupported document type: ${documentType}`);
   }
 }

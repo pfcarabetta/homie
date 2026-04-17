@@ -1,20 +1,78 @@
 import { useState, useRef } from 'react';
-import { inspectService } from '@/services/inspector-api';
+import { inspectService, type SupportingDocumentType } from '@/services/inspector-api';
 
 const ACCENT = '#2563EB';
 
-export type SupportingDocType = 'pest_report' | 'seller_disclosure';
+export type SupportingDocType = SupportingDocumentType;
 
-const DOC_TYPE_META: Record<SupportingDocType, { label: string; icon: string; description: string }> = {
+interface DocTypeMeta { label: string; icon: string; description: string; group: string }
+
+const DOC_TYPE_META: Record<SupportingDocType, DocTypeMeta> = {
   pest_report: {
     label: 'Pest / WDO Report',
     icon: '\uD83D\uDC1B',
     description: 'Termite, wood-destroying organism, or pest inspection report.',
+    group: 'Pest & disclosures',
   },
   seller_disclosure: {
     label: 'Seller Disclosure',
     icon: '\uD83D\uDCCB',
     description: 'Seller\u2019s property condition disclosure form (TDS, RPCDS, etc.).',
+    group: 'Pest & disclosures',
+  },
+  sewer_scope: {
+    label: 'Sewer Scope',
+    icon: '\uD83D\uDEBD',
+    description: 'Camera scope of the sewer mainline from house to municipal connection.',
+    group: 'Specialized inspections',
+  },
+  roof_inspection: {
+    label: 'Roof Inspection',
+    icon: '\uD83C\uDFE0',
+    description: 'Roof inspection or roofing certification report from a licensed roofer.',
+    group: 'Specialized inspections',
+  },
+  foundation_report: {
+    label: 'Foundation / Structural',
+    icon: '\uD83C\uDFD7\uFE0F',
+    description: 'Structural engineer or foundation specialist report.',
+    group: 'Specialized inspections',
+  },
+  hvac_inspection: {
+    label: 'HVAC Inspection',
+    icon: '\u2744\uFE0F',
+    description: 'Heating, cooling, ductwork, refrigerant, age and efficiency assessment.',
+    group: 'Specialized inspections',
+  },
+  electrical_inspection: {
+    label: 'Electrical Inspection',
+    icon: '\u26A1',
+    description: 'Panel, wiring, grounding, outlets, and code-compliance review.',
+    group: 'Specialized inspections',
+  },
+  septic_inspection: {
+    label: 'Septic Inspection',
+    icon: '\uD83D\uDDF3\uFE0F',
+    description: 'Septic tank, drain field, and percolation testing (private septic systems).',
+    group: 'Specialized inspections',
+  },
+  mold_inspection: {
+    label: 'Mold / Air Quality',
+    icon: '\uD83E\uDDEA',
+    description: 'Mold or indoor air quality testing and visible-growth inspection.',
+    group: 'Environmental & specialty',
+  },
+  pool_inspection: {
+    label: 'Pool / Spa Inspection',
+    icon: '\uD83C\uDFCA',
+    description: 'Pool/spa equipment, plumbing, leak detection, and safety inspection.',
+    group: 'Environmental & specialty',
+  },
+  chimney_inspection: {
+    label: 'Chimney / Fireplace',
+    icon: '\uD83D\uDD25',
+    description: 'Chimney/fireplace Level II inspection (liner, flue, structure).',
+    group: 'Environmental & specialty',
   },
 };
 
@@ -92,7 +150,8 @@ export default function SupportingDocUploadModal({ reportId, initialType, onClos
     >
       <div onClick={e => e.stopPropagation()} style={{
         background: 'var(--bp-card)', borderRadius: 16, padding: '28px 24px',
-        maxWidth: 500, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+        maxWidth: 540, width: '100%', maxHeight: '90vh', overflowY: 'auto',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: 'var(--bp-text)', margin: 0 }}>
@@ -111,32 +170,57 @@ export default function SupportingDocUploadModal({ reportId, initialType, onClos
             <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: 'var(--bp-subtle)', margin: '0 0 16px' }}>
               Choose the document type. The AI will parse it and cross-reference against your inspection.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(Object.keys(DOC_TYPE_META) as SupportingDocType[]).map(type => (
-                <button
-                  key={type}
-                  onClick={() => { setDocType(type); setStep('file'); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 14,
-                    padding: '14px 16px', borderRadius: 12,
-                    border: '1px solid var(--bp-border)', background: 'var(--bp-bg)',
-                    cursor: 'pointer', textAlign: 'left',
-                  }}
-                  onMouseOver={e => (e.currentTarget.style.borderColor = ACCENT)}
-                  onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--bp-border)')}
-                >
-                  <span style={{ fontSize: 28 }}>{DOC_TYPE_META[type].icon}</span>
-                  <div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: 'var(--bp-text)' }}>
-                      {DOC_TYPE_META[type].label}
+            {/* Render type cards grouped by category for scannability */}
+            {(() => {
+              const groups = new Map<string, SupportingDocType[]>();
+              for (const t of Object.keys(DOC_TYPE_META) as SupportingDocType[]) {
+                const g = DOC_TYPE_META[t].group;
+                const list = groups.get(g) ?? [];
+                list.push(t);
+                groups.set(g, list);
+              }
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  {Array.from(groups.entries()).map(([groupName, types]) => (
+                    <div key={groupName}>
+                      <div style={{
+                        fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700,
+                        color: 'var(--bp-subtle)', textTransform: 'uppercase',
+                        letterSpacing: '0.06em', marginBottom: 8,
+                      }}>
+                        {groupName}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {types.map(type => (
+                          <button
+                            key={type}
+                            onClick={() => { setDocType(type); setStep('file'); }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 14,
+                              padding: '12px 14px', borderRadius: 12,
+                              border: '1px solid var(--bp-border)', background: 'var(--bp-bg)',
+                              cursor: 'pointer', textAlign: 'left',
+                            }}
+                            onMouseOver={e => (e.currentTarget.style.borderColor = ACCENT)}
+                            onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--bp-border)')}
+                          >
+                            <span style={{ fontSize: 24 }}>{DOC_TYPE_META[type].icon}</span>
+                            <div>
+                              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: 'var(--bp-text)' }}>
+                                {DOC_TYPE_META[type].label}
+                              </div>
+                              <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>
+                                {DOC_TYPE_META[type].description}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)', marginTop: 2 }}>
-                      {DOC_TYPE_META[type].description}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+                  ))}
+                </div>
+              );
+            })()}
           </>
         )}
 

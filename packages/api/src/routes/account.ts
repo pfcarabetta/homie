@@ -2060,7 +2060,20 @@ router.get('/reports/:reportId/pre-listing-plan.pdf', async (req: Request, res: 
 
 // ── Supporting Documents (multi-doc analysis) ──────────────────────────────
 
-const VALID_DOC_TYPES = new Set(['pest_report', 'seller_disclosure']);
+const VALID_DOC_TYPES = new Set([
+  'pest_report',
+  'seller_disclosure',
+  // Specialized inspections (round 2/3/4)
+  'sewer_scope',
+  'roof_inspection',
+  'foundation_report',
+  'hvac_inspection',
+  'electrical_inspection',
+  'septic_inspection',
+  'mold_inspection',
+  'pool_inspection',
+  'chimney_inspection',
+]);
 
 async function ownsReport(reportId: string, homeownerId: string): Promise<boolean> {
   const [r] = await db.select({ id: inspectionReports.id }).from(inspectionReports)

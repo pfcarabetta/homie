@@ -1552,6 +1552,15 @@ function CrossReferenceInsightsPanel({ insights, supportingDocs, allItems, onScr
 const DOC_TYPE_LABEL: Record<string, { label: string; icon: string }> = {
   pest_report: { label: 'Pest Report', icon: '\uD83D\uDC1B' },
   seller_disclosure: { label: 'Seller Disclosure', icon: '\uD83D\uDCCB' },
+  sewer_scope: { label: 'Sewer Scope', icon: '\uD83D\uDEBD' },
+  roof_inspection: { label: 'Roof Inspection', icon: '\uD83C\uDFE0' },
+  foundation_report: { label: 'Foundation / Structural', icon: '\uD83C\uDFD7\uFE0F' },
+  hvac_inspection: { label: 'HVAC Inspection', icon: '\u2744\uFE0F' },
+  electrical_inspection: { label: 'Electrical Inspection', icon: '\u26A1' },
+  septic_inspection: { label: 'Septic Inspection', icon: '\uD83D\uDDF3\uFE0F' },
+  mold_inspection: { label: 'Mold / Air Quality', icon: '\uD83E\uDDEA' },
+  pool_inspection: { label: 'Pool / Spa Inspection', icon: '\uD83C\uDFCA' },
+  chimney_inspection: { label: 'Chimney / Fireplace', icon: '\uD83D\uDD25' },
 };
 
 function SupportingDocsList({ docs, onDelete, onReprocess }: {
