@@ -1341,6 +1341,12 @@ export default function Account() {
             color: O, fontSize: 13, fontWeight: 600,
             cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
           }}>Free Diagnostic Chat</button>
+          <button onClick={() => navigate('/inspect-portal')} style={{
+            padding: '9px 18px', borderRadius: 100,
+            border: '1px solid #1B9E77', background: '#1B9E77',
+            color: '#fff', fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}>Homie Inspect</button>
           {hasWorkspace && (
             <button onClick={() => navigate('/business')} style={{
               padding: '9px 18px', borderRadius: 100,
