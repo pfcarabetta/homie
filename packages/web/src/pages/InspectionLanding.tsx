@@ -366,16 +366,17 @@ export default function HomieInspectionLanding() {
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
       {/* NAV */}
-      <nav style={{ padding: "0 24px", borderBottom: `1px solid ${C.warm}` }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <style>{`@media (max-width: 540px) { .hi-nav-link { display: none !important; } }`}</style>
+      <nav style={{ padding: "0 16px", borderBottom: `1px solid ${C.warm}` }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexShrink: 0 }}>
             <span style={{ ...fr, fontWeight: 700, fontSize: 26, color: C.orange }}>homie</span>
             <span style={{ ...dm, fontSize: 13, color: C.gray, fontWeight: 500 }}>inspect</span>
           </div>
-          <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-            <a href="#how-it-works" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500 }}>How it works</a>
-            <a href="/inspect/inspectors" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500 }}>For inspectors</a>
-            <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "9px 22px", cursor: "pointer", display: "inline-block" }}>Get started</label>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexShrink: 1, minWidth: 0 }}>
+            <a className="hi-nav-link" href="#how-it-works" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}>How it works</a>
+            <a className="hi-nav-link" href="/inspect/inspectors" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}>For inspectors</a>
+            <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "9px 22px", cursor: "pointer", display: "inline-block", whiteSpace: "nowrap", flexShrink: 0 }}>Get started</label>
           </div>
         </div>
       </nav>
