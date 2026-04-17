@@ -119,6 +119,11 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
+  // Compute the effective tier for this job. For B2B workspaces, priority/emergency
+  // tiers require a paid plan (Professional or higher). Starter/trial workspaces get
+  // transparently downgraded to 'standard' so their copy lines up with enforcement.
+  let effectiveTier: JobTier = body.tier;
+
   try {
     // B2B search credit check — credits are a portfolio-wide pool
     if (body.workspace_id) {
@@ -129,6 +134,17 @@ router.post('/', async (req: Request, res: Response) => {
         .limit(1);
 
       if (ws) {
+        // Priority tier gate — only Pro+ plans can dispatch priority/emergency
+        // (unlocks voice outreach via Twilio). Starter/trial → standard.
+        if ((body.tier === 'priority' || body.tier === 'emergency')
+            && (ws.plan === 'trial' || ws.plan === 'starter')) {
+          logger.info(
+            { workspaceId: body.workspace_id, plan: ws.plan, requestedTier: body.tier },
+            '[jobs] Downgraded priority/emergency tier to standard — plan gate',
+          );
+          effectiveTier = 'standard';
+        }
+
         // Fair use: 5 searches per property per month across all plans
         const perProp = 5;
 
@@ -175,7 +191,7 @@ router.post('/', async (req: Request, res: Response) => {
         photoUrls: body.photo_urls,
         preferredTiming: body.timing,
         budget: body.budget,
-        tier: body.tier,
+        tier: effectiveTier,
         status: 'open',
         zipCode: body.zip_code,
         workspaceId: body.workspace_id ?? null,
@@ -205,7 +221,7 @@ router.post('/', async (req: Request, res: Response) => {
         tier: job.tier,
         expires_at: expiresAt.toISOString(),
         providers_contacted: 0,
-        estimated_results_at: estimatedResultsAt(body.tier).toISOString(),
+        estimated_results_at: estimatedResultsAt(effectiveTier).toISOString(),
       },
       error: null,
       meta: {},
