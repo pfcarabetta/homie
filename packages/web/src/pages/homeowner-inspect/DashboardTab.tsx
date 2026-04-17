@@ -153,8 +153,8 @@ export default function DashboardTab({ reports, loading, onNavigate }: Dashboard
         />
       </div>
 
-      {/* Two-column layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      {/* Two-column on desktop, stacks on mobile */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
         {/* Urgent Items */}
         <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 22, gridColumn: urgentItems.length === 0 && reports.length === 0 ? '1 / -1' : undefined }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
