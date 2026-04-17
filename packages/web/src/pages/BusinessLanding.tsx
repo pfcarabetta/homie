@@ -278,11 +278,11 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
   const [propertyCount, setPropertyCount] = useState(20);
   const tiers = [
     { name: "Starter", platformFee: bp.starter?.base ?? 0, promoFee: bp.starter?.promoBase ?? null, promoLabel: bp.starter?.promoLabel ?? null, perProperty: bp.starter?.perProperty ?? 10, maxProperties: bp.starter?.maxProperties ?? 10, members: `${bp.starter?.maxTeamMembers ?? 1} user${(bp.starter?.maxTeamMembers ?? 1) > 1 ? 's' : ''}`, badge: "Free to start", badgeColor: COLORS.green, popular: false,
-      features: ["Unlimited AI diagnostics & estimates", "Automated provider outreach (SMS + email)", "Booking & dispatch management", "Preferred vendors (up to 5)", "Property scans with photo documentation", "Basic cost tracking per job"] },
-    { name: "Professional", platformFee: bp.professional?.base ?? 99, promoFee: bp.professional?.promoBase ?? null, promoLabel: bp.professional?.promoLabel ?? null, perProperty: bp.professional?.perProperty ?? 10, maxProperties: bp.professional?.maxProperties ?? 50, members: `${bp.professional?.maxTeamMembers ?? 5} team members`, badge: "Most popular", badgeColor: COLORS.orange, popular: true,
-      features: ["Everything in Starter, plus:", "PMS sync — Track + iCal", "Unlimited preferred vendors & scorecards", "Cost reporting by property, vendor & date", "Auto-dispatch rules & Slack alerts", "Guest issue portal with QR codes", "Branded estimate PDFs"] },
-    { name: "Business", platformFee: bp.business?.base ?? 249, promoFee: bp.business?.promoBase ?? null, promoLabel: bp.business?.promoLabel ?? null, perProperty: bp.business?.perProperty ?? 10, maxProperties: bp.business?.maxProperties ?? 150, members: `${bp.business?.maxTeamMembers ?? 15} team members with roles`, badge: null, badgeColor: "", popular: false,
-      features: ["Everything in Professional, plus:", "Up to 150 properties (3× Pro)", "Up to 15 team members with roles", "Role-based access controls", "Priority email support", "Custom workspace onboarding", "Quarterly business review"] },
+      features: ["Unlimited AI diagnostics & estimates", "Automated provider outreach (SMS + email)", "Booking & dispatch management", "Preferred vendors (up to 5)", "iCal calendar sync", "Basic cost tracking per job"] },
+    { name: "Professional", platformFee: bp.professional?.base ?? 99, promoFee: bp.professional?.promoBase ?? null, promoLabel: bp.professional?.promoLabel ?? null, perProperty: bp.professional?.perProperty ?? 10, maxProperties: bp.professional?.maxProperties ?? 150, members: `${bp.professional?.maxTeamMembers ?? 5} team members`, badge: "Most popular", badgeColor: COLORS.orange, popular: true,
+      features: ["Everything in Starter, plus:", "Up to 150 properties", "Priority dispatch (phone, text & email)", "Track PMS sync", "Cost reporting & vendor scorecards", "Auto-dispatch rules & Slack alerts", "White-label guest portal with QR codes & property links", "Branded estimate PDFs"] },
+    { name: "Business", platformFee: bp.business?.base ?? 249, promoFee: bp.business?.promoBase ?? null, promoLabel: bp.business?.promoLabel ?? null, perProperty: bp.business?.perProperty ?? 10, maxProperties: bp.business?.maxProperties ?? 500, members: `Unlimited team members`, badge: null, badgeColor: "", popular: false,
+      features: ["Everything in Professional, plus:", "Up to 500 properties", "Unlimited team members with roles", "Dedicated outreach manager", "Priority email support with SLA", "Custom workspace onboarding", "Quarterly business review"] },
   ];
 
   return (
@@ -300,10 +300,10 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: COLORS.dark }}>How many properties?</span>
                 <span style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 700, color: COLORS.orange }}>{propertyCount}</span>
               </div>
-              <input type="range" min={1} max={100} value={propertyCount} onChange={e => setPropertyCount(+e.target.value)}
+              <input type="range" min={1} max={500} value={propertyCount} onChange={e => setPropertyCount(+e.target.value)}
                 style={{ width: "100%", accentColor: COLORS.orange, cursor: "pointer" }} />
               <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: COLORS.gray, marginTop: 4 }}>
-                <span>1</span><span>25</span><span>50</span><span>75</span><span>100</span>
+                <span>1</span><span>125</span><span>250</span><span>375</span><span>500</span>
               </div>
             </div>
           </div>
@@ -369,7 +369,7 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
         </div>
         <FadeIn delay={0.4}>
           <div style={{ textAlign: "center", marginTop: 40 }}>
-            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, color: COLORS.gray }}>Managing 150+ properties? <a href="#" style={{ color: COLORS.orange, fontWeight: 600, textDecoration: "none" }}>Talk to us about Enterprise — custom platform fee, volume discounts, white-label, dedicated account manager →</a></p>
+            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 16, color: COLORS.gray }}>Managing 500+ properties? <a href="#" style={{ color: COLORS.orange, fontWeight: 600, textDecoration: "none" }}>Talk to us about Enterprise — custom platform fee, volume discounts, white-label, dedicated account manager →</a></p>
           </div>
         </FadeIn>
       </div>

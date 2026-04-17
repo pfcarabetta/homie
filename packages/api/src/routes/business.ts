@@ -48,7 +48,7 @@ router.post('/', async (req: Request, res: Response) => {
   const selectedPlan = plan && validPlans.includes(plan) ? plan : 'starter';
   // Per-property model: all plans get 5 searches/property/month (fair use)
   const planSearchLimits: Record<string, number> = { trial: 5, starter: 5, professional: 5, business: 5, enterprise: 5 };
-  const planPropertyLimits: Record<string, number> = { trial: 5, starter: 10, professional: 50, business: 150, enterprise: 9999 };
+  const planPropertyLimits: Record<string, number> = { trial: 5, starter: 10, professional: 150, business: 500, enterprise: 9999 };
 
   try {
     const [workspace] = await db
@@ -1069,7 +1069,7 @@ router.post('/:workspaceId/members', requireWorkspace, requireWorkspaceRole('adm
     }
 
     // Enforce member limit based on plan
-    const planMemberLimits: Record<string, number> = { trial: 1, starter: 1, professional: 5, business: 15, enterprise: 9999 };
+    const planMemberLimits: Record<string, number> = { trial: 1, starter: 1, professional: 5, business: 9999, enterprise: 9999 };
     const [ws] = await db.select({ plan: workspaces.plan }).from(workspaces).where(eq(workspaces.id, req.workspaceId)).limit(1);
     const maxMembers = planMemberLimits[ws?.plan ?? 'starter'] ?? 1;
     const [{ value: currentCount }] = await db.select({ value: count() }).from(workspaceMembers).where(eq(workspaceMembers.workspaceId, req.workspaceId));
