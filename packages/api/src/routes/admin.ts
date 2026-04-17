@@ -3,7 +3,7 @@ import { count, desc, eq, sql, or, ilike, and, gt, lt, isNull, isNotNull, gte, l
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList, workspaces, workspaceMembers, properties } from '../db/schema';
-import { inspectionReports, inspectionSupportingDocuments, inspectionCrossReferenceInsights } from '../db/schema/inspector';
+import { inspectionReports, inspectionReportItems, inspectionSupportingDocuments, inspectionCrossReferenceInsights } from '../db/schema/inspector';
 import { pricingConfig } from '../db/schema/pricing-config';
 import { getPricingConfig, invalidatePricingCache, PricingConfig } from '../services/pricing';
 import { generateCrossReferenceInsights } from '../services/cross-reference';
@@ -1615,6 +1615,213 @@ router.post('/inspect/reports/:id/regenerate-insights', async (req: Request, res
   } catch (err) {
     logger.error({ err }, '[POST /admin/inspect/reports/:id/regenerate-insights]');
     res.status(500).json({ data: null, error: 'Failed to queue regeneration', meta: {} });
+  }
+});
+
+// GET /api/v1/admin/inspect/reports — list (paginated, filterable)
+router.get('/inspect/reports', async (req: Request, res: Response) => {
+  const limit = Math.min(Number(req.query.limit) || 25, 100);
+  const offset = Number(req.query.offset) || 0;
+  const q = String(req.query.q ?? '').trim();
+  const status = String(req.query.status ?? 'all');
+  const tier = String(req.query.tier ?? 'all');
+  const mode = String(req.query.mode ?? 'all');
+
+  try {
+    const conditions = [];
+
+    if (status !== 'all') {
+      conditions.push(eq(inspectionReports.parsingStatus, status));
+    }
+    if (tier === 'free') {
+      conditions.push(isNull(inspectionReports.pricingTier));
+    } else if (tier === 'paid') {
+      conditions.push(isNotNull(inspectionReports.pricingTier));
+    } else if (tier !== 'all') {
+      conditions.push(eq(inspectionReports.pricingTier, tier));
+    }
+    if (mode !== 'all') {
+      conditions.push(eq(inspectionReports.reportMode, mode));
+    }
+    if (q) {
+      const escaped = q.replace(/[%_\\]/g, '\\$&');
+      const likePattern = `%${escaped}%`;
+      conditions.push(
+        or(
+          ilike(inspectionReports.clientEmail, likePattern),
+          ilike(inspectionReports.clientName, likePattern),
+          ilike(inspectionReports.propertyAddress, likePattern),
+          ilike(sql`${inspectionReports.id}::text`, `${escaped}%`),
+        )!,
+      );
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [rows, totalRow] = await Promise.all([
+      db.select({
+        id: inspectionReports.id,
+        propertyAddress: inspectionReports.propertyAddress,
+        propertyCity: inspectionReports.propertyCity,
+        propertyState: inspectionReports.propertyState,
+        clientName: inspectionReports.clientName,
+        clientEmail: inspectionReports.clientEmail,
+        parsingStatus: inspectionReports.parsingStatus,
+        pricingTier: inspectionReports.pricingTier,
+        reportMode: inspectionReports.reportMode,
+        itemsParsed: inspectionReports.itemsParsed,
+        itemsDispatched: inspectionReports.itemsDispatched,
+        itemsQuoted: inspectionReports.itemsQuoted,
+        totalQuoteValueCents: inspectionReports.totalQuoteValueCents,
+        clientAccessToken: inspectionReports.clientAccessToken,
+        createdAt: inspectionReports.createdAt,
+        expiresAt: inspectionReports.expiresAt,
+      })
+        .from(inspectionReports)
+        .where(whereClause)
+        .orderBy(desc(inspectionReports.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ v: count() }).from(inspectionReports).where(whereClause),
+    ]);
+
+    res.json({
+      data: rows,
+      error: null,
+      meta: { total: totalRow[0]?.v ?? 0, limit, offset },
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/inspect/reports]');
+    res.status(500).json({ data: null, error: 'Failed to load reports', meta: {} });
+  }
+});
+
+// GET /api/v1/admin/inspect/reports/:id — detail
+router.get('/inspect/reports/:id', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.id, req.params.id)).limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    const [items, docs, insightRow] = await Promise.all([
+      db.select({
+        id: inspectionReportItems.id,
+        title: inspectionReportItems.title,
+        description: inspectionReportItems.description,
+        category: inspectionReportItems.category,
+        severity: inspectionReportItems.severity,
+        locationInProperty: inspectionReportItems.locationInProperty,
+        dispatchStatus: inspectionReportItems.dispatchStatus,
+        quoteAmountCents: inspectionReportItems.quoteAmountCents,
+        providerName: inspectionReportItems.providerName,
+        aiCostEstimateLowCents: inspectionReportItems.aiCostEstimateLowCents,
+        aiCostEstimateHighCents: inspectionReportItems.aiCostEstimateHighCents,
+        sortOrder: inspectionReportItems.sortOrder,
+        maintenanceCompletedAt: inspectionReportItems.maintenanceCompletedAt,
+        isIncludedInRequest: inspectionReportItems.isIncludedInRequest,
+        concessionStatus: inspectionReportItems.concessionStatus,
+      })
+        .from(inspectionReportItems)
+        .where(eq(inspectionReportItems.reportId, req.params.id))
+        .orderBy(inspectionReportItems.sortOrder),
+      db.select({
+        id: inspectionSupportingDocuments.id,
+        documentType: inspectionSupportingDocuments.documentType,
+        fileName: inspectionSupportingDocuments.fileName,
+        parsingStatus: inspectionSupportingDocuments.parsingStatus,
+        parsingError: inspectionSupportingDocuments.parsingError,
+        createdAt: inspectionSupportingDocuments.createdAt,
+      })
+        .from(inspectionSupportingDocuments)
+        .where(eq(inspectionSupportingDocuments.reportId, req.params.id))
+        .orderBy(desc(inspectionSupportingDocuments.createdAt)),
+      db.select({
+        insights: inspectionCrossReferenceInsights.insights,
+        generatedAt: inspectionCrossReferenceInsights.generatedAt,
+      })
+        .from(inspectionCrossReferenceInsights)
+        .where(eq(inspectionCrossReferenceInsights.reportId, req.params.id))
+        .limit(1),
+    ]);
+
+    // Severity breakdown
+    const severityCounts = items.reduce((acc: Record<string, number>, item) => {
+      acc[item.severity] = (acc[item.severity] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    res.json({
+      data: {
+        report: {
+          id: report.id,
+          propertyAddress: report.propertyAddress,
+          propertyCity: report.propertyCity,
+          propertyState: report.propertyState,
+          propertyZip: report.propertyZip,
+          clientName: report.clientName,
+          clientEmail: report.clientEmail,
+          clientPhone: report.clientPhone,
+          inspectionDate: report.inspectionDate,
+          inspectionType: report.inspectionType,
+          reportFileUrl: report.reportFileUrl,
+          source: report.source,
+          pricingTier: report.pricingTier,
+          reportMode: report.reportMode,
+          parsingStatus: report.parsingStatus,
+          parsingError: report.parsingError,
+          itemsParsed: report.itemsParsed,
+          itemsDispatched: report.itemsDispatched,
+          itemsQuoted: report.itemsQuoted,
+          totalQuoteValueCents: report.totalQuoteValueCents,
+          clientAccessToken: report.clientAccessToken,
+          clientNotifiedAt: report.clientNotifiedAt,
+          clientFirstActionAt: report.clientFirstActionAt,
+          createdAt: report.createdAt,
+          expiresAt: report.expiresAt,
+        },
+        items,
+        supportingDocuments: docs,
+        insights: insightRow[0]?.insights ?? null,
+        insightsGeneratedAt: insightRow[0]?.generatedAt ?? null,
+        severityCounts,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/inspect/reports/:id]');
+    res.status(500).json({ data: null, error: 'Failed to load report detail', meta: {} });
+  }
+});
+
+// POST /api/v1/admin/inspect/reports/:id/comp — grant paid tier (for support saves)
+router.post('/inspect/reports/:id/comp', async (req: Request, res: Response) => {
+  const tier = String(req.body?.tier ?? 'professional');
+  if (!['essential', 'professional', 'premium'].includes(tier)) {
+    res.status(400).json({ data: null, error: 'tier must be essential, professional, or premium', meta: {} });
+    return;
+  }
+
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.id, req.params.id)).limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    await db.update(inspectionReports)
+      .set({ pricingTier: tier, updatedAt: new Date() })
+      .where(eq(inspectionReports.id, req.params.id));
+
+    logger.info({ action: 'admin:comp_report', reportId: req.params.id, tier }, 'Admin comped report to paid tier');
+    res.json({ data: { pricingTier: tier }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/inspect/reports/:id/comp]');
+    res.status(500).json({ data: null, error: 'Failed to comp report', meta: {} });
   }
 });
 

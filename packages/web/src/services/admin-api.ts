@@ -70,6 +70,96 @@ export interface InspectDiagnosticsData {
   zeroItemReports: InspectDiagnosticReport[];
 }
 
+export interface InspectReportRow {
+  id: string;
+  propertyAddress: string;
+  propertyCity: string;
+  propertyState: string;
+  clientName: string;
+  clientEmail: string;
+  parsingStatus: string;
+  pricingTier: string | null;
+  reportMode: string;
+  itemsParsed: number;
+  itemsDispatched: number;
+  itemsQuoted: number;
+  totalQuoteValueCents: number;
+  clientAccessToken: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface InspectReportItemRow {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  severity: string;
+  locationInProperty: string | null;
+  dispatchStatus: string;
+  quoteAmountCents: number | null;
+  providerName: string | null;
+  aiCostEstimateLowCents: number;
+  aiCostEstimateHighCents: number;
+  sortOrder: number;
+  maintenanceCompletedAt: string | null;
+  isIncludedInRequest: boolean;
+  concessionStatus: string | null;
+}
+
+export interface InspectSupportingDocRow {
+  id: string;
+  documentType: string;
+  fileName: string;
+  parsingStatus: string;
+  parsingError: string | null;
+  createdAt: string;
+}
+
+export interface InspectCrossRefInsight {
+  id?: string;
+  title: string;
+  description: string;
+  severity: string;
+  relatedDocIds?: string[];
+  relatedItemIds?: string[];
+}
+
+export interface InspectReportDetailData {
+  report: {
+    id: string;
+    propertyAddress: string;
+    propertyCity: string;
+    propertyState: string;
+    propertyZip: string;
+    clientName: string;
+    clientEmail: string;
+    clientPhone: string | null;
+    inspectionDate: string;
+    inspectionType: string;
+    reportFileUrl: string | null;
+    source: string;
+    pricingTier: string | null;
+    reportMode: string;
+    parsingStatus: string;
+    parsingError: string | null;
+    itemsParsed: number;
+    itemsDispatched: number;
+    itemsQuoted: number;
+    totalQuoteValueCents: number;
+    clientAccessToken: string;
+    clientNotifiedAt: string | null;
+    clientFirstActionAt: string | null;
+    createdAt: string;
+    expiresAt: string;
+  };
+  items: InspectReportItemRow[];
+  supportingDocuments: InspectSupportingDocRow[];
+  insights: InspectCrossRefInsight[] | null;
+  insightsGeneratedAt: string | null;
+  severityCounts: Record<string, number>;
+}
+
 export interface RevenueData {
   period: RevenuePeriod;
   periodLabel: string;
@@ -139,6 +229,28 @@ export const adminService = {
     return fetchAdmin<{ expiresAt: string }>(`/api/v1/admin/inspect/reports/${reportId}/extend`, {
       method: 'POST',
       body: JSON.stringify({ days }),
+    });
+  },
+
+  async getInspectReports(params?: { limit?: number; offset?: number; q?: string; status?: string; tier?: string; mode?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.limit != null) qs.set('limit', String(params.limit));
+    if (params?.offset != null) qs.set('offset', String(params.offset));
+    if (params?.q) qs.set('q', params.q);
+    if (params?.status && params.status !== 'all') qs.set('status', params.status);
+    if (params?.tier && params.tier !== 'all') qs.set('tier', params.tier);
+    if (params?.mode && params.mode !== 'all') qs.set('mode', params.mode);
+    return fetchAdmin<InspectReportRow[]>(`/api/v1/admin/inspect/reports?${qs}`);
+  },
+
+  async getInspectReportDetail(reportId: string) {
+    return fetchAdmin<InspectReportDetailData>(`/api/v1/admin/inspect/reports/${reportId}`);
+  },
+
+  async compInspectReport(reportId: string, tier: 'essential' | 'professional' | 'premium') {
+    return fetchAdmin<{ pricingTier: string }>(`/api/v1/admin/inspect/reports/${reportId}/comp`, {
+      method: 'POST',
+      body: JSON.stringify({ tier }),
     });
   },
 
