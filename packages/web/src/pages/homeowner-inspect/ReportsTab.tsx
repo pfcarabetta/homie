@@ -508,14 +508,19 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
     } catch { /* ignore */ }
   }, [reportId]);
 
-  // Load full report via token — reused whenever we need to refresh items
+  // Stable token ref to avoid re-creating callback when portalReport object changes
+  const tokenRef = useRef(portalReport?.clientAccessToken);
+  tokenRef.current = portalReport?.clientAccessToken;
+
   const loadFullReport = useCallback(() => {
-    if (!portalReport?.clientAccessToken) return;
-    inspectService.getReport(portalReport.clientAccessToken)
+    const token = tokenRef.current;
+    if (!token) return;
+    inspectService.getReport(token)
       .then(res => { if (res.data) setFullReport(res.data); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [portalReport?.clientAccessToken]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportId]);
 
   useEffect(() => { void loadDocsAndInsights(); }, [loadDocsAndInsights]);
 
@@ -573,16 +578,15 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
     } catch { /* revert on error */ }
   }
 
-  // Load full report via token — if portalReport isn't in the list yet
-  // (race after upload), wait for reports to refresh and retry
+  // Load full report on mount or when reportId changes
   useEffect(() => {
     if (!portalReport?.clientAccessToken) {
-      if (!portalReport) return;
       setLoading(false);
       return;
     }
     loadFullReport();
-  }, [portalReport, loadFullReport]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportId]);
 
   // Handle payment return
   useEffect(() => {
