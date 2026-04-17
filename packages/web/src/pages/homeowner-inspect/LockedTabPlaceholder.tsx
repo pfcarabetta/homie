@@ -31,8 +31,13 @@ export default function LockedTabPlaceholder({
   onNavigate,
 }: Props) {
   const eligibleTiers = tiersAtOrAbove(requiredTier);
-  const tierList = eligibleTiers.map(t => TIER_LABEL[t]).join(' or ');
   const lowestPrice = TIER_PRICE[requiredTier];
+
+  // Phrase the tier list naturally: 3 tiers → "any paid tier"; 2 → "Professional or Premium"; 1 → "Premium"
+  const tierPhrase =
+    eligibleTiers.length === 3 ? 'any paid tier' :
+    eligibleTiers.length === 2 ? `${TIER_LABEL[eligibleTiers[0]]} or ${TIER_LABEL[eligibleTiers[1]]}` :
+    `${TIER_LABEL[requiredTier]} only`;
 
   let headline: string;
   let body: string;
@@ -40,15 +45,19 @@ export default function LockedTabPlaceholder({
 
   if (!hasAnyReports) {
     headline = 'Upload an inspection report to get started';
-    body = `Upload your first inspection report and choose a tier to unlock items, quotes, negotiations, and maintenance planning.`;
+    body = 'Upload your first inspection report and choose a tier to unlock items, quotes, negotiations, and maintenance planning.';
     cta = 'Go to Reports';
   } else if (hasUnderTierReport) {
-    headline = `${tabName} is a ${tierList} feature`;
-    body = `Your current report${eligibleTiers.length > 1 ? `'s tier doesn't include ${tabName}` : ` doesn't include ${tabName}`}. Upgrade to ${tierList} (from $${lowestPrice}/report) to unlock.`;
+    headline = eligibleTiers.length === 1
+      ? `${tabName} is a ${TIER_LABEL[requiredTier]}-only feature`
+      : `${tabName} requires ${tierPhrase}`;
+    body = `Your current report's tier doesn't include ${tabName}. Upgrade to ${TIER_LABEL[requiredTier]} (from $${lowestPrice}/report) to unlock.`;
     cta = `Upgrade to ${TIER_LABEL[requiredTier]}`;
   } else {
     headline = 'Unlock this with a paid tier';
-    body = `${tabName} is available once you've chosen a tier for at least one of your reports. Open Reports to pick a plan${eligibleTiers.length === 1 ? ` (${tierList} required)` : ''}.`;
+    body = eligibleTiers.length === 3
+      ? `${tabName} is available once you've chosen any paid tier for at least one of your reports.`
+      : `${tabName} requires ${tierPhrase}. Open Reports and pick a plan.`;
     cta = 'Choose a tier';
   }
 
