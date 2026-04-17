@@ -23,6 +23,7 @@ import { notifications } from '../db/schema/notifications';
 import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/schema/property-scans';
 import { inArray } from 'drizzle-orm';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
+import { requirePlan } from '../middleware/plan-gate';
 import { generateEstimatePDF } from '../services/estimate-pdf';
 import { applyStandardCheckInTime, applyStandardCheckOutTime } from '../services/reservation-times';
 
@@ -161,7 +162,22 @@ router.patch('/:workspaceId', requireWorkspace, requireWorkspaceRole('admin'), a
 
   if (name !== undefined) updates.name = name.trim();
   if (slug !== undefined) updates.slug = slugify(slug);
-  if (logo_url !== undefined) updates.logoUrl = logo_url;
+  if (logo_url !== undefined) {
+    // Logo upload / branding is Pro+ only — check plan before accepting the change
+    const [ws] = await db.select({ plan: workspaces.plan })
+      .from(workspaces)
+      .where(eq(workspaces.id, req.workspaceId))
+      .limit(1);
+    if (!ws || !['professional', 'business', 'enterprise'].includes(ws.plan)) {
+      res.status(403).json({
+        data: null,
+        error: 'Logo upload requires a Professional plan or higher. Upgrade to customize your branding.',
+        meta: { upgradeRequired: true, currentPlan: ws?.plan ?? 'unknown', featureName: 'Logo & branding' },
+      });
+      return;
+    }
+    updates.logoUrl = logo_url;
+  }
   if (company_address !== undefined) updates.companyAddress = company_address;
   if (company_phone !== undefined) updates.companyPhone = company_phone;
   if (company_email !== undefined) updates.companyEmail = company_email;
@@ -213,6 +229,31 @@ router.post('/:workspaceId/properties', requireWorkspace, requireWorkspaceRole('
   }
 
   try {
+    // Enforce per-plan property cap
+    const [ws] = await db
+      .select({ plan: workspaces.plan, customPricing: workspaces.customPricing })
+      .from(workspaces)
+      .where(eq(workspaces.id, req.workspaceId))
+      .limit(1);
+    if (!ws) {
+      res.status(404).json({ data: null, error: 'Workspace not found', meta: {} });
+      return;
+    }
+    const { getWorkspacePlanConfig } = await import('../services/pricing');
+    const planConfig = await getWorkspacePlanConfig(ws.plan, ws.customPricing as Record<string, unknown> | null);
+    const [{ currentCount }] = await db
+      .select({ currentCount: count() })
+      .from(properties)
+      .where(eq(properties.workspaceId, req.workspaceId));
+    if (currentCount >= planConfig.maxProperties) {
+      res.status(403).json({
+        data: null,
+        error: `Property limit reached (${planConfig.maxProperties} on ${planConfig.planLabel} plan). Upgrade to add more.`,
+        meta: { upgradeRequired: true, currentPlan: ws.plan, limit: planConfig.maxProperties, current: currentCount },
+      });
+      return;
+    }
+
     const [property] = await db
       .insert(properties)
       .values({
@@ -367,7 +408,7 @@ router.get('/:workspaceId/pricing', requireWorkspace, async (req: Request, res: 
 // ── PMS Connections ──────────────────────────────────────────────────────────
 
 // GET /:workspaceId/pms/connections
-router.get('/:workspaceId/pms/connections', requireWorkspace, async (req: Request, res: Response) => {
+router.get('/:workspaceId/pms/connections', requireWorkspace, requirePlan('pro', 'PMS integration'), async (req: Request, res: Response) => {
   try {
     const { workspacePmsConnections } = await import('../db/schema/pms-connections');
     const connections = await db.select().from(workspacePmsConnections)
@@ -387,7 +428,7 @@ router.get('/:workspaceId/pms/connections', requireWorkspace, async (req: Reques
 });
 
 // POST /:workspaceId/pms/connect
-router.post('/:workspaceId/pms/connect', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+router.post('/:workspaceId/pms/connect', requireWorkspace, requirePlan('pro', 'PMS integration'), requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
   const { pms_type, credentials, update_existing } = req.body as {
     pms_type: 'track' | 'guesty';
     credentials: Record<string, string>;
@@ -436,7 +477,7 @@ router.post('/:workspaceId/pms/connect', requireWorkspace, requireWorkspaceRole(
 });
 
 // POST /:workspaceId/pms/:connectionId/sync-properties
-router.post('/:workspaceId/pms/:connectionId/sync-properties', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+router.post('/:workspaceId/pms/:connectionId/sync-properties', requireWorkspace, requirePlan('pro', 'PMS integration'), requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
   const { connectionId } = req.params;
   const { update_existing } = req.body as { update_existing?: boolean };
   try {
@@ -496,7 +537,7 @@ router.post('/:workspaceId/pms/:connectionId/sync-properties', requireWorkspace,
 });
 
 // POST /:workspaceId/pms/:connectionId/sync-reservations
-router.post('/:workspaceId/pms/:connectionId/sync-reservations', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
+router.post('/:workspaceId/pms/:connectionId/sync-reservations', requireWorkspace, requirePlan('pro', 'PMS integration'), requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
   const { connectionId } = req.params;
   try {
     const { workspacePmsConnections } = await import('../db/schema/pms-connections');
@@ -526,7 +567,7 @@ router.post('/:workspaceId/pms/:connectionId/sync-reservations', requireWorkspac
 });
 
 // DELETE /:workspaceId/pms/:connectionId — disconnect
-router.delete('/:workspaceId/pms/:connectionId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+router.delete('/:workspaceId/pms/:connectionId', requireWorkspace, requirePlan('pro', 'PMS integration'), requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
   const { connectionId } = req.params;
   try {
     const { workspacePmsConnections } = await import('../db/schema/pms-connections');
@@ -771,6 +812,32 @@ router.post('/:workspaceId/properties/import', requireWorkspace, requireWorkspac
     const lines = csvText.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) {
       res.status(400).json({ data: null, error: 'CSV must have a header row and at least one data row', meta: {} });
+      return;
+    }
+
+    // Enforce per-plan property cap (approximate: count new rows without ids as creates)
+    const [ws] = await db
+      .select({ plan: workspaces.plan, customPricing: workspaces.customPricing })
+      .from(workspaces)
+      .where(eq(workspaces.id, req.workspaceId))
+      .limit(1);
+    if (!ws) {
+      res.status(404).json({ data: null, error: 'Workspace not found', meta: {} });
+      return;
+    }
+    const { getWorkspacePlanConfig } = await import('../services/pricing');
+    const planConfig = await getWorkspacePlanConfig(ws.plan, ws.customPricing as Record<string, unknown> | null);
+    const [{ currentCount }] = await db
+      .select({ currentCount: count() })
+      .from(properties)
+      .where(eq(properties.workspaceId, req.workspaceId));
+    const newRowCount = lines.length - 1; // minus header
+    if (currentCount + newRowCount > planConfig.maxProperties) {
+      res.status(403).json({
+        data: null,
+        error: `Import would exceed property limit (${planConfig.maxProperties} on ${planConfig.planLabel} plan). Currently ${currentCount}, importing ${newRowCount}. Upgrade to raise the cap.`,
+        meta: { upgradeRequired: true, currentPlan: ws.plan, limit: planConfig.maxProperties, current: currentCount, importing: newRowCount },
+      });
       return;
     }
 
@@ -1476,7 +1543,7 @@ router.get('/:workspaceId/usage', requireWorkspace, async (req: Request, res: Re
 });
 
 // GET /:workspaceId/reports/costs
-router.get('/:workspaceId/reports/costs', requireWorkspace, async (req: Request, res: Response) => {
+router.get('/:workspaceId/reports/costs', requireWorkspace, requirePlan('pro', 'Cost reporting'), async (req: Request, res: Response) => {
   try {
     // Get all booked jobs for this workspace with quoted prices
     const rows = await db
@@ -1588,7 +1655,7 @@ router.get('/:workspaceId/reports/costs', requireWorkspace, async (req: Request,
 });
 
 // GET /:workspaceId/reports/vendors — Vendor scorecards
-router.get('/:workspaceId/reports/vendors', requireWorkspace, async (req: Request, res: Response) => {
+router.get('/:workspaceId/reports/vendors', requireWorkspace, requirePlan('pro', 'Vendor scorecards'), async (req: Request, res: Response) => {
   try {
     // Get all outreach attempts for this workspace's jobs
     const attempts = await db

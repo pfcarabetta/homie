@@ -6,6 +6,7 @@ import { db } from '../db';
 import { workspaces } from '../db/schema/workspaces';
 import { workspaceSlackSettings } from '../db/schema/slack-settings';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
+import { requirePlan } from '../middleware/plan-gate';
 import { notifySlack } from '../services/slack-notifier';
 
 // ── Slack API types ──────────────────────────────────────────────────────────
@@ -161,7 +162,7 @@ slackAuthRouter.get('/callback', async (req: Request, res: Response) => {
 });
 
 // DELETE /disconnect — clear slack fields
-slackAuthRouter.delete('/:workspaceId/disconnect', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+slackAuthRouter.delete('/:workspaceId/disconnect', requireWorkspace, requirePlan('pro', 'Slack integration'), requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
   try {
     await db
       .update(workspaces)
@@ -183,7 +184,7 @@ slackAuthRouter.delete('/:workspaceId/disconnect', requireWorkspace, requireWork
 });
 
 // GET /channels — list channels via Slack API
-slackAuthRouter.get('/:workspaceId/channels', requireWorkspace, async (req: Request, res: Response) => {
+slackAuthRouter.get('/:workspaceId/channels', requireWorkspace, requirePlan('pro', 'Slack integration'), async (req: Request, res: Response) => {
   try {
     const [workspace] = await db
       .select({ slackAccessToken: workspaces.slackAccessToken })
@@ -222,7 +223,7 @@ slackAuthRouter.get('/:workspaceId/channels', requireWorkspace, async (req: Requ
 });
 
 // PUT /settings — update slack notification settings
-slackAuthRouter.put('/:workspaceId/settings', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+slackAuthRouter.put('/:workspaceId/settings', requireWorkspace, requirePlan('pro', 'Slack integration'), requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
   const body = req.body as Record<string, unknown>;
 
   const allowedFields: Record<string, string> = {
@@ -303,7 +304,7 @@ slackAuthRouter.put('/:workspaceId/settings', requireWorkspace, requireWorkspace
 });
 
 // POST /test — send test notification
-slackAuthRouter.post('/:workspaceId/test', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
+slackAuthRouter.post('/:workspaceId/test', requireWorkspace, requirePlan('pro', 'Slack integration'), requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
   try {
     const [workspace] = await db
       .select({

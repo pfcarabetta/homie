@@ -278,11 +278,11 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
   const [propertyCount, setPropertyCount] = useState(20);
   const tiers = [
     { name: "Starter", platformFee: bp.starter?.base ?? 0, promoFee: bp.starter?.promoBase ?? null, promoLabel: bp.starter?.promoLabel ?? null, perProperty: bp.starter?.perProperty ?? 10, maxProperties: bp.starter?.maxProperties ?? 10, members: `${bp.starter?.maxTeamMembers ?? 1} user${(bp.starter?.maxTeamMembers ?? 1) > 1 ? 's' : ''}`, badge: "Free to start", badgeColor: COLORS.green, popular: false,
-      features: ["Unlimited diagnostic chats", "Unlimited outreach searches", "Fair use: 5 searches/property/mo", "Preferred vendors (up to 5)", "Basic cost tracking", "Manual property entry"] },
+      features: ["Unlimited AI diagnostics & estimates", "Automated provider outreach (SMS + email)", "Booking & dispatch management", "Preferred vendors (up to 5)", "Property scans with photo documentation", "Basic cost tracking per job"] },
     { name: "Professional", platformFee: bp.professional?.base ?? 99, promoFee: bp.professional?.promoBase ?? null, promoLabel: bp.professional?.promoLabel ?? null, perProperty: bp.professional?.perProperty ?? 10, maxProperties: bp.professional?.maxProperties ?? 50, members: `${bp.professional?.maxTeamMembers ?? 5} team members`, badge: "Most popular", badgeColor: COLORS.orange, popular: true,
-      features: ["PMS import with weekly sync", "Full cost reporting", "Vendor scorecards", "Unlimited preferred vendors", "Slack integration", "Owner estimate summary PDF"] },
+      features: ["Everything in Starter, plus:", "PMS sync — Track + iCal", "Unlimited preferred vendors & scorecards", "Cost reporting by property, vendor & date", "Auto-dispatch rules & Slack alerts", "Guest issue portal with QR codes", "Branded estimate PDFs"] },
     { name: "Business", platformFee: bp.business?.base ?? 249, promoFee: bp.business?.promoBase ?? null, promoLabel: bp.business?.promoLabel ?? null, perProperty: bp.business?.perProperty ?? 10, maxProperties: bp.business?.maxProperties ?? 150, members: `${bp.business?.maxTeamMembers ?? 15} team members with roles`, badge: null, badgeColor: "", popular: false,
-      features: ["Multi-PMS import", "Priority outreach", "Advanced analytics", "Guest diagnostic access", "API access", "All Professional features"] },
+      features: ["Everything in Professional, plus:", "Up to 150 properties (3× Pro)", "Up to 15 team members with roles", "Role-based access controls", "Priority email support", "Custom workspace onboarding", "Quarterly business review"] },
   ];
 
   return (

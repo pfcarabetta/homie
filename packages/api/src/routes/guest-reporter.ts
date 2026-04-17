@@ -18,6 +18,7 @@ import { bookings } from '../db/schema/bookings';
 import { dispatchJob } from '../services/orchestration';
 import { recordHomeownerRating } from '../services/providers/scores';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
+import { requirePlan } from '../middleware/plan-gate';
 
 function timeAgoShort(date: Date): string {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
@@ -1126,6 +1127,7 @@ guestPublicRouter.post('/issues/:issueId/satisfaction', async (req: Request, res
 guestPmRouter.get(
   '/:workspaceId/guest-issues',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId } = req.params;
     const {
@@ -1235,6 +1237,7 @@ guestPmRouter.get(
 guestPmRouter.get(
   '/:workspaceId/guest-issues/:issueId',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId, issueId } = req.params;
 
@@ -1330,6 +1333,7 @@ guestPmRouter.get(
 guestPmRouter.post(
   '/:workspaceId/guest-issues/:issueId/approve',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId, issueId } = req.params;
     const { preferredOnly, preferredVendorIds, preferredVendorId } = (req.body ?? {}) as { preferredOnly?: boolean; preferredVendorIds?: string[]; preferredVendorId?: string };
@@ -1504,6 +1508,7 @@ guestPmRouter.post(
 guestPmRouter.post(
   '/:workspaceId/guest-issues/:issueId/reject',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId, issueId } = req.params;
     const { reason } = req.body as { reason?: string };
@@ -1572,6 +1577,7 @@ guestPmRouter.post(
 guestPmRouter.post(
   '/:workspaceId/guest-issues/:issueId/self-resolve',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId, issueId } = req.params;
     try {
@@ -1606,6 +1612,7 @@ guestPmRouter.post(
 guestPmRouter.post(
   '/:workspaceId/guest-issues/:issueId/cancel',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId, issueId } = req.params;
     try {
@@ -1640,6 +1647,7 @@ guestPmRouter.post(
 guestPmRouter.post(
   '/:workspaceId/guest-issues/:issueId/resolve',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId, issueId } = req.params;
     try {
@@ -1669,6 +1677,7 @@ guestPmRouter.post(
 guestPmRouter.post(
   '/:workspaceId/guest-issues/:issueId/archive',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId, issueId } = req.params;
     try {
@@ -1699,6 +1708,7 @@ guestPmRouter.post(
 guestPmRouter.get(
   '/:workspaceId/guest-reporter/settings',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId } = req.params;
 
@@ -1764,6 +1774,7 @@ guestPmRouter.get(
 guestPmRouter.put(
   '/:workspaceId/guest-reporter/settings',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   requireWorkspaceRole('admin'),
   async (req: Request, res: Response) => {
     const { workspaceId } = req.params;
@@ -1876,6 +1887,7 @@ guestPmRouter.put(
 guestPmRouter.get(
   '/:workspaceId/guest-reporter/auto-dispatch-rules',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   async (req: Request, res: Response) => {
     const { workspaceId } = req.params;
 
@@ -1925,6 +1937,7 @@ guestPmRouter.get(
 guestPmRouter.post(
   '/:workspaceId/guest-reporter/auto-dispatch-rules',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   requireWorkspaceRole('admin'),
   async (req: Request, res: Response) => {
     const { workspaceId } = req.params;
@@ -1986,6 +1999,7 @@ guestPmRouter.post(
 guestPmRouter.put(
   '/:workspaceId/guest-reporter/auto-dispatch-rules/:ruleId',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   requireWorkspaceRole('admin'),
   async (req: Request, res: Response) => {
     const { workspaceId, ruleId } = req.params;
@@ -2056,6 +2070,7 @@ guestPmRouter.put(
 guestPmRouter.delete(
   '/:workspaceId/guest-reporter/auto-dispatch-rules/:ruleId',
   requireWorkspace,
+  requirePlan('pro', 'Guest request portal'),
   requireWorkspaceRole('admin'),
   async (req: Request, res: Response) => {
     const { workspaceId, ruleId } = req.params;

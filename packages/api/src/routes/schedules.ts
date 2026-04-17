@@ -9,6 +9,7 @@ import {
 } from '../db/schema/schedules';
 import { properties } from '../db/schema/properties';
 import { requireWorkspace, requireWorkspaceRole } from '../middleware/workspace-auth';
+import { requirePlan } from '../middleware/plan-gate';
 import type { CadenceConfig } from '../db/schema/schedules';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -94,6 +95,7 @@ export const scheduleRouter = Router({ mergeParams: true });
 scheduleRouter.post(
   '/',
   requireWorkspace,
+  requirePlan('pro', 'Auto-dispatch schedules'),
   requireWorkspaceRole('admin', 'coordinator'),
   async (req: Request, res: Response) => {
     try {
@@ -169,6 +171,7 @@ scheduleRouter.post(
 scheduleRouter.get(
   '/',
   requireWorkspace,
+  requirePlan('pro', 'Auto-dispatch schedules'),
   async (req: Request, res: Response) => {
     try {
       const { property_id, category, status } = req.query as Record<string, string | undefined>;
@@ -198,6 +201,7 @@ scheduleRouter.get(
 scheduleRouter.get(
   '/:id',
   requireWorkspace,
+  requirePlan('pro', 'Auto-dispatch schedules'),
   async (req: Request, res: Response) => {
     try {
       const [schedule] = await db
@@ -235,6 +239,7 @@ scheduleRouter.get(
 scheduleRouter.put(
   '/:id',
   requireWorkspace,
+  requirePlan('pro', 'Auto-dispatch schedules'),
   requireWorkspaceRole('admin', 'coordinator'),
   async (req: Request, res: Response) => {
     try {
@@ -296,6 +301,7 @@ scheduleRouter.put(
 scheduleRouter.put(
   '/:id/pause',
   requireWorkspace,
+  requirePlan('pro', 'Auto-dispatch schedules'),
   requireWorkspaceRole('admin', 'coordinator'),
   async (req: Request, res: Response) => {
     try {
@@ -328,6 +334,7 @@ scheduleRouter.put(
 scheduleRouter.put(
   '/:id/resume',
   requireWorkspace,
+  requirePlan('pro', 'Auto-dispatch schedules'),
   requireWorkspaceRole('admin', 'coordinator'),
   async (req: Request, res: Response) => {
     try {
@@ -372,6 +379,7 @@ scheduleRouter.put(
 scheduleRouter.delete(
   '/:id',
   requireWorkspace,
+  requirePlan('pro', 'Auto-dispatch schedules'),
   requireWorkspaceRole('admin'),
   async (req: Request, res: Response) => {
     try {
@@ -403,6 +411,7 @@ scheduleRouter.delete(
 scheduleRouter.get(
   '/:id/runs',
   requireWorkspace,
+  requirePlan('pro', 'Auto-dispatch schedules'),
   async (req: Request, res: Response) => {
     try {
       // Verify schedule belongs to workspace
