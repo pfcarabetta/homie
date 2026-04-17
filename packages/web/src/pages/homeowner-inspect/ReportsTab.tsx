@@ -509,11 +509,16 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   }, [reportId]);
 
   // Load full report via token — reused whenever we need to refresh items
+  const [loadError, setLoadError] = useState<string | null>(null);
   const loadFullReport = useCallback(() => {
     if (!portalReport?.clientAccessToken) return;
+    setLoadError(null);
     inspectService.getReport(portalReport.clientAccessToken)
-      .then(res => { if (res.data) setFullReport(res.data); })
-      .catch(() => {})
+      .then(res => {
+        if (res.data) setFullReport(res.data);
+        else setLoadError(res.error ?? 'Failed to load report');
+      })
+      .catch(err => setLoadError((err as Error).message ?? 'Failed to load report'))
       .finally(() => setLoading(false));
   }, [portalReport?.clientAccessToken]);
 
@@ -574,15 +579,29 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   }
 
   // Load full report via token — if portalReport isn't in the list yet
-  // (race after upload), wait for reports to refresh and retry
+  // (race after upload OR magic-link claim), trigger one refetch of the
+  // reports list and keep the spinner up until we know for sure.
+  const refetchTriedRef = useRef(false);
   useEffect(() => {
-    if (!portalReport?.clientAccessToken) {
-      if (!portalReport) return;
+    if (!portalReport) {
+      // Report not in parent's list yet. If we haven't already, kick off
+      // a single refetch to handle the post-claim race. Stay in "loading".
+      if (!refetchTriedRef.current) {
+        refetchTriedRef.current = true;
+        onReportsChange();
+        // Give the refetch a few seconds; if still not found, surface the
+        // not-found UI so the user isn't stuck on a spinner forever.
+        const t = setTimeout(() => setLoading(false), 4000);
+        return () => clearTimeout(t);
+      }
+      return;
+    }
+    if (!portalReport.clientAccessToken) {
       setLoading(false);
       return;
     }
     loadFullReport();
-  }, [portalReport, loadFullReport]);
+  }, [portalReport, loadFullReport, onReportsChange]);
 
   // Handle payment return
   useEffect(() => {
@@ -670,7 +689,21 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
     return (
       <div>
         <BackButton onClick={onBack} label="Back to Reports" />
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--bp-subtle)', fontFamily: "'DM Sans',sans-serif" }}>Report not found</div>
+        <div style={{ textAlign: 'center', padding: 40, fontFamily: "'DM Sans',sans-serif" }}>
+          <div style={{ color: 'var(--bp-text)', fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Report not found</div>
+          <div style={{ color: 'var(--bp-subtle)', fontSize: 14, marginBottom: 16 }}>
+            {loadError ?? 'This report may not be linked to your account yet.'}
+          </div>
+          <button
+            onClick={() => { refetchTriedRef.current = false; setLoading(true); onReportsChange(); }}
+            style={{
+              padding: '10px 20px', borderRadius: 10, border: 'none', background: '#2563EB', color: '#fff',
+              fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
