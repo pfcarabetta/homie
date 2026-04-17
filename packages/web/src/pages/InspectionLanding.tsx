@@ -349,7 +349,7 @@ export default function HomieInspectionLanding() {
           <div style={{ background: C.white, borderRadius: 20, padding: '48px 56px', textAlign: 'center', maxWidth: 420 }}>
             <div style={{ width: 48, height: 48, border: `4px solid ${C.warm}`, borderTopColor: C.orange, borderRadius: '50%', margin: '0 auto 24px', animation: 'homie-spin 0.8s linear infinite' }} />
             <p style={{ ...dm, fontSize: 18, fontWeight: 600, color: C.dark, margin: '0 0 8px' }}>{uploadStatus ?? 'Processing...'}</p>
-            <p style={{ ...dm, fontSize: 14, color: C.gray, margin: 0 }}>This usually takes 30–60 seconds</p>
+            <p style={{ ...dm, fontSize: 14, color: C.gray, margin: 0 }}>This can take a few minutes depending on the size of your report. You can leave this page open.</p>
           </div>
           <style>{`@keyframes homie-spin { to { transform: rotate(360deg); } }`}</style>
         </div>
@@ -409,7 +409,7 @@ export default function HomieInspectionLanding() {
             </div>
             <div style={{ ...dm, fontSize: 13, color: C.gray, marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 14 }}>📄</span>
-              <span>or drag a PDF anywhere on this page · free 30-second AI parse, no signup needed</span>
+              <span>or drag a PDF anywhere on this page · free AI parse (a few minutes for larger reports), no signup needed</span>
             </div>
           </FadeIn>
           <FadeIn delay={0.45}>
