@@ -20,7 +20,7 @@ export default function SettingsTab({ resolvedTheme, themeMode, onThemeChange }:
       {/* Profile section */}
       <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 24, marginBottom: 20 }}>
         <h3 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 16px' }}>Profile</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', marginBottom: 6, fontFamily: "'DM Sans',sans-serif" }}>Email</label>
             <div style={{ fontSize: 14, color: 'var(--bp-text)', fontFamily: "'DM Sans',sans-serif" }}>{homeowner?.email || '—'}</div>
