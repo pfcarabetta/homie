@@ -116,6 +116,7 @@ function ReportList({ reports, onUpload, onOpen, onReportsChange }: { reports: P
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <style>{`@media (max-width: 540px) { .hi-report-card-btn { padding: 14px 16px !important; gap: 12px !important; } }`}</style>
           {reports.map(r => (
             <div key={r.id} style={{
               display: 'flex', alignItems: 'center', gap: 0,
@@ -125,23 +126,25 @@ function ReportList({ reports, onUpload, onOpen, onReportsChange }: { reports: P
             onMouseOver={e => (e.currentTarget.style.borderColor = ACCENT)}
             onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--bp-border)')}
             >
-              {/* Report card — clickable */}
-              <button onClick={() => onOpen(r.id)} style={{
+              {/* Report card — clickable. On mobile the meta row (badge + items
+                  + chevron) wraps below the address; on desktop it stays inline. */}
+              <button onClick={() => onOpen(r.id)} className="hi-report-card-btn" style={{
                 display: 'flex', alignItems: 'center', gap: 16, padding: '18px 22px',
                 background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 0,
+                flexWrap: 'wrap',
               }}>
                 <div style={{ width: 44, height: 44, borderRadius: 10, background: `${ACCENT}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
                   {'\uD83C\uDFE0'}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {r.propertyAddress}
                   </div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {r.propertyCity}, {r.propertyState} &middot; {formatDate(r.inspectionDate || r.createdAt)}
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <div className="hi-report-meta" style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
                   {r.parsingStatus === 'processing' ? (
                     <StatusBadge label="Processing" color="#3B82F6" pulse />
                   ) : r.pricingTier ? (
@@ -151,7 +154,7 @@ function ReportList({ reports, onUpload, onOpen, onReportsChange }: { reports: P
                   ) : r.parsingStatus === 'failed' ? (
                     <StatusBadge label="Failed" color="#EF4444" />
                   ) : null}
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', minWidth: 60, textAlign: 'right' }}>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', whiteSpace: 'nowrap' }}>
                     {r.itemCount} item{r.itemCount !== 1 ? 's' : ''}
                   </div>
                   <svg width={16} height={16} viewBox="0 0 20 20" fill="none" stroke="var(--bp-subtle)" strokeWidth="2" strokeLinecap="round"><path d="M8 4l6 6-6 6" /></svg>
