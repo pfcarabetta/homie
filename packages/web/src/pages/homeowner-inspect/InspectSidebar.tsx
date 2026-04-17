@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { businessService } from '@/services/api';
 import type { Tab } from './constants';
 
 interface NavItem {
@@ -80,6 +81,20 @@ export default function InspectSidebar({
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { homeowner, logout } = useAuth();
+
+  // Show the "Homie Business" link only if the homeowner has a workspace
+  const [hasWorkspace, setHasWorkspace] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!homeowner) { setHasWorkspace(false); return; }
+    let cancelled = false;
+    businessService.listWorkspaces()
+      .then(res => {
+        if (cancelled) return;
+        setHasWorkspace(Array.isArray(res.data) && res.data.length > 0);
+      })
+      .catch(() => { if (!cancelled) setHasWorkspace(false); });
+    return () => { cancelled = true; };
+  }, [homeowner]);
 
   useEffect(() => {
     function onResize() { setIsMobile(window.innerWidth < 768); }
@@ -317,23 +332,25 @@ export default function InspectSidebar({
               )}
               <button onClick={() => { setAccountOpen(false); navigate('/account'); }} style={mobileMenuItemStyle}>My Account</button>
               <button onClick={() => { setAccountOpen(false); navigate('/inspect-portal?tab=settings'); }} style={mobileMenuItemStyle}>Settings</button>
-              <div style={{ padding: '14px 16px 4px' }}>
-                <button onClick={() => { setAccountOpen(false); navigate('/business'); }} style={{
-                  width: '100%', background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
-                  border: '1px solid #F5C9A8', borderRadius: 12, padding: '14px 16px', cursor: 'pointer',
-                  fontFamily: "'DM Sans', sans-serif", textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12,
-                }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{'\uD83C\uDFE2'}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2926', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, color: '#E8632B' }}>homie</span>
-                      <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Business</span>
+              {hasWorkspace && (
+                <div style={{ padding: '14px 16px 4px' }}>
+                  <button onClick={() => { setAccountOpen(false); navigate('/business'); }} style={{
+                    width: '100%', background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
+                    border: '1px solid #F5C9A8', borderRadius: 12, padding: '14px 16px', cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif", textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12,
+                  }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{'\uD83C\uDFE2'}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2926', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, color: '#E8632B' }}>homie</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Business</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#6B6560', marginTop: 2 }}>Property management portal</div>
                     </div>
-                    <div style={{ fontSize: 11, color: '#6B6560', marginTop: 2 }}>Property management portal</div>
-                  </div>
-                  <span style={{ color: '#E8632B', fontSize: 18, flexShrink: 0 }}>{'\u2192'}</span>
-                </button>
-              </div>
+                    <span style={{ color: '#E8632B', fontSize: 18, flexShrink: 0 }}>{'\u2192'}</span>
+                  </button>
+                </div>
+              )}
               <div style={{ borderTop: '1px solid #F5F0EB', marginTop: 8 }}>
                 <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...mobileMenuItemStyle, color: '#E24B4A' }}>Sign out</button>
               </div>
@@ -358,27 +375,29 @@ export default function InspectSidebar({
             <button onClick={() => { setAccountOpen(false); navigate('/inspect-portal?tab=settings'); }} style={accountMenuItemStyle}
               onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>Settings</button>
-            <div style={{ padding: '12px 12px 4px' }}>
-              <button onClick={() => { setAccountOpen(false); navigate('/business'); }} style={{
-                width: '100%', background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
-                border: '1px solid #F5C9A8', borderRadius: 10, padding: '10px 12px', cursor: 'pointer',
-                fontFamily: "'DM Sans', sans-serif", textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
-                transition: 'transform 0.1s',
-              }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
-              >
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{'\uD83C\uDFE2'}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#2D2926', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontFamily: 'Fraunces, serif', fontSize: 13, color: '#E8632B' }}>homie</span>
-                    <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Business</span>
+            {hasWorkspace && (
+              <div style={{ padding: '12px 12px 4px' }}>
+                <button onClick={() => { setAccountOpen(false); navigate('/business'); }} style={{
+                  width: '100%', background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
+                  border: '1px solid #F5C9A8', borderRadius: 10, padding: '10px 12px', cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif", textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
+                  transition: 'transform 0.1s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
+                >
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{'\uD83C\uDFE2'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#2D2926', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontFamily: 'Fraunces, serif', fontSize: 13, color: '#E8632B' }}>homie</span>
+                      <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Business</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: '#6B6560', marginTop: 1 }}>Property management portal</div>
                   </div>
-                  <div style={{ fontSize: 10, color: '#6B6560', marginTop: 1 }}>Property management portal</div>
-                </div>
-                <span style={{ color: '#E8632B', fontSize: 15, flexShrink: 0 }}>{'\u2192'}</span>
-              </button>
-            </div>
+                  <span style={{ color: '#E8632B', fontSize: 15, flexShrink: 0 }}>{'\u2192'}</span>
+                </button>
+              </div>
+            )}
             <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 6 }}>
               <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...accountMenuItemStyle, color: '#E24B4A' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#FFF5F5'}
