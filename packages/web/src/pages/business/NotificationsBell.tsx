@@ -139,6 +139,9 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
       </button>
 
       {open && pos && createPortal(
+        // Wrap in .bp-portal so CSS variables resolve — createPortal escapes the
+        // parent .bp-portal scope, otherwise var(--bp-card) etc. unset → transparent.
+        <div className="bp-portal" data-theme={typeof document !== 'undefined' ? document.querySelector('.bp-portal')?.getAttribute('data-theme') ?? 'light' : 'light'}>
         <div
           ref={dropdownRef}
           style={{
@@ -224,6 +227,7 @@ export default function NotificationsBell({ workspaceId }: { workspaceId?: strin
               </a>
             ))}
           </div>
+        </div>
         </div>,
         document.body
       )}
