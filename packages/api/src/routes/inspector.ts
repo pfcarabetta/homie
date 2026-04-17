@@ -1944,7 +1944,7 @@ export default router;
 
 // ── Async parsing helper ──────────────────────────────────────────────────
 
-async function parseInspectionReportAsync(reportId: string): Promise<void> {
+export async function parseInspectionReportAsync(reportId: string): Promise<void> {
   try {
     const [report] = await db.select().from(inspectionReports).where(eq(inspectionReports.id, reportId)).limit(1);
     if (!report || !report.reportFileUrl) return;

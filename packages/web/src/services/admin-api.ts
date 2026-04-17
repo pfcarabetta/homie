@@ -33,6 +33,43 @@ async function fetchAdmin<T>(path: string, options?: RequestInit): Promise<{ dat
 
 export type RevenuePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
 
+export interface InspectStatsData {
+  period: RevenuePeriod;
+  periodLabel: string;
+  reportsUploaded: number;
+  reportsParsed: number;
+  parseSuccessRate: number;
+  paidReports: number;
+  paidConversionRate: number;
+  avgItemsPerReport: number;
+  parseFailureCount: number;
+  parseFailureRate: number;
+  currentlyFailedTotal: number;
+  supportingDocsUploaded: number;
+  activeReports: number;
+}
+
+export interface InspectDiagnosticReport {
+  id: string;
+  propertyAddress: string;
+  clientEmail: string;
+  clientName: string;
+  parsingStatus: string;
+  parsingError: string | null;
+  pricingTier: string | null;
+  itemsParsed: number;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface InspectDiagnosticsData {
+  stuckParsing: InspectDiagnosticReport[];
+  recentFailures: InspectDiagnosticReport[];
+  missingInsights: InspectDiagnosticReport[];
+  expiringSoon: InspectDiagnosticReport[];
+  zeroItemReports: InspectDiagnosticReport[];
+}
+
 export interface RevenueData {
   period: RevenuePeriod;
   periodLabel: string;
@@ -76,6 +113,33 @@ export const adminService = {
 
   async getRevenue(period: RevenuePeriod) {
     return fetchAdmin<RevenueData>(`/api/v1/admin/revenue?period=${period}`);
+  },
+
+  async getInspectStats(period: RevenuePeriod) {
+    return fetchAdmin<InspectStatsData>(`/api/v1/admin/inspect/stats?period=${period}`);
+  },
+
+  async getInspectDiagnostics() {
+    return fetchAdmin<InspectDiagnosticsData>('/api/v1/admin/inspect/diagnostics');
+  },
+
+  async retryInspectParse(reportId: string) {
+    return fetchAdmin<{ queued: boolean }>(`/api/v1/admin/inspect/reports/${reportId}/retry-parse`, { method: 'POST' });
+  },
+
+  async retryInspectDocParse(docId: string) {
+    return fetchAdmin<{ queued: boolean }>(`/api/v1/admin/inspect/documents/${docId}/retry-parse`, { method: 'POST' });
+  },
+
+  async regenerateInspectInsights(reportId: string) {
+    return fetchAdmin<{ queued: boolean }>(`/api/v1/admin/inspect/reports/${reportId}/regenerate-insights`, { method: 'POST' });
+  },
+
+  async extendInspectReport(reportId: string, days = 90) {
+    return fetchAdmin<{ expiresAt: string }>(`/api/v1/admin/inspect/reports/${reportId}/extend`, {
+      method: 'POST',
+      body: JSON.stringify({ days }),
+    });
   },
 
   async getHomeowners(params?: { limit?: number; offset?: number; q?: string }) {

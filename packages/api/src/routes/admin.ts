@@ -1,10 +1,14 @@
 import { Router, Request, Response } from 'express';
-import { count, desc, eq, sql, or, ilike, and } from 'drizzle-orm';
+import { count, desc, eq, sql, or, ilike, and, gt, lt, isNull, isNotNull, gte, lte, inArray, notInArray } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList, workspaces, workspaceMembers, properties } from '../db/schema';
+import { inspectionReports, inspectionSupportingDocuments, inspectionCrossReferenceInsights } from '../db/schema/inspector';
 import { pricingConfig } from '../db/schema/pricing-config';
 import { getPricingConfig, invalidatePricingCache, PricingConfig } from '../services/pricing';
+import { generateCrossReferenceInsights } from '../services/cross-reference';
+import { parseInspectionReportAsync } from './inspector';
+import { parseSupportingDocAsync } from './account';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -1343,6 +1347,302 @@ router.get('/revenue', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /admin/revenue]');
     res.status(500).json({ data: null, error: 'Failed to load revenue data', meta: {} });
+  }
+});
+
+// ── Inspect Admin ──────────────────────────────────────────────────────────
+
+// GET /api/v1/admin/inspect/stats?period=today|week|month|year|all
+router.get('/inspect/stats', async (req: Request, res: Response) => {
+  const periodParam = (req.query.period ?? 'month') as Period;
+  if (!['today', 'week', 'month', 'year', 'all'].includes(periodParam)) {
+    res.status(400).json({ data: null, error: 'Invalid period', meta: {} });
+    return;
+  }
+
+  try {
+    const range = getPeriodRange(periodParam);
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const inPeriod = and(
+      gte(inspectionReports.createdAt, range.start),
+      lte(inspectionReports.createdAt, range.end),
+    );
+
+    const terminalStatuses = ['parsed', 'review_pending', 'sent_to_client'];
+
+    // All in one go
+    const [
+      [{ v: uploaded }],
+      [{ v: parsed }],
+      [{ v: paid }],
+      [{ v: failed }],
+      [{ v: currentlyFailed }],
+      avgItems,
+      [{ v: supportingDocs }],
+      [{ v: activeReports }],
+    ] = await Promise.all([
+      db.select({ v: count() }).from(inspectionReports).where(inPeriod),
+      db.select({ v: count() }).from(inspectionReports).where(and(inPeriod, inArray(inspectionReports.parsingStatus, terminalStatuses))),
+      db.select({ v: count() }).from(inspectionReports).where(and(inPeriod, isNotNull(inspectionReports.pricingTier))),
+      db.select({ v: count() }).from(inspectionReports).where(and(inPeriod, eq(inspectionReports.parsingStatus, 'failed'))),
+      db.select({ v: count() }).from(inspectionReports).where(eq(inspectionReports.parsingStatus, 'failed')),
+      db.select({ v: sql<number>`COALESCE(AVG(${inspectionReports.itemsParsed}), 0)::float` })
+        .from(inspectionReports)
+        .where(and(inPeriod, inArray(inspectionReports.parsingStatus, terminalStatuses))),
+      db.select({ v: count() })
+        .from(inspectionSupportingDocuments)
+        .where(and(
+          gte(inspectionSupportingDocuments.createdAt, range.start),
+          lte(inspectionSupportingDocuments.createdAt, range.end),
+        )),
+      db.select({ v: count() })
+        .from(inspectionReports)
+        .where(and(
+          gt(inspectionReports.expiresAt, now),
+          gte(inspectionReports.clientFirstActionAt, sevenDaysAgo),
+        )),
+    ]);
+
+    const parseSuccessRate = uploaded > 0 ? parsed / uploaded : 0;
+    const paidConversionRate = uploaded > 0 ? paid / uploaded : 0;
+    const parseFailureRate = uploaded > 0 ? failed / uploaded : 0;
+
+    res.json({
+      data: {
+        period: periodParam,
+        periodLabel: range.label,
+        reportsUploaded: uploaded,
+        reportsParsed: parsed,
+        parseSuccessRate,
+        paidReports: paid,
+        paidConversionRate,
+        avgItemsPerReport: Number(avgItems[0]?.v ?? 0),
+        parseFailureCount: failed,
+        parseFailureRate,
+        currentlyFailedTotal: currentlyFailed,
+        supportingDocsUploaded: supportingDocs,
+        activeReports,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/inspect/stats]');
+    res.status(500).json({ data: null, error: 'Failed to load inspect stats', meta: {} });
+  }
+});
+
+// GET /api/v1/admin/inspect/diagnostics
+router.get('/inspect/diagnostics', async (_req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+    const baseCols = {
+      id: inspectionReports.id,
+      propertyAddress: inspectionReports.propertyAddress,
+      clientEmail: inspectionReports.clientEmail,
+      clientName: inspectionReports.clientName,
+      parsingStatus: inspectionReports.parsingStatus,
+      parsingError: inspectionReports.parsingError,
+      pricingTier: inspectionReports.pricingTier,
+      itemsParsed: inspectionReports.itemsParsed,
+      createdAt: inspectionReports.createdAt,
+      expiresAt: inspectionReports.expiresAt,
+    };
+
+    const [stuck, failures, expiringSoon, zeroItems, allReportsWithDocs, insightRows] = await Promise.all([
+      // Stuck: processing/uploading for >10min
+      db.select(baseCols).from(inspectionReports)
+        .where(and(
+          inArray(inspectionReports.parsingStatus, ['uploading', 'processing']),
+          lt(inspectionReports.createdAt, tenMinAgo),
+        ))
+        .orderBy(desc(inspectionReports.createdAt))
+        .limit(50),
+      // Recent failures (last 7 days)
+      db.select(baseCols).from(inspectionReports)
+        .where(and(
+          eq(inspectionReports.parsingStatus, 'failed'),
+          gte(inspectionReports.createdAt, sevenDaysAgo),
+        ))
+        .orderBy(desc(inspectionReports.createdAt))
+        .limit(50),
+      // Paid reports expiring in next 7 days
+      db.select(baseCols).from(inspectionReports)
+        .where(and(
+          isNotNull(inspectionReports.pricingTier),
+          gt(inspectionReports.expiresAt, now),
+          lt(inspectionReports.expiresAt, sevenDaysFromNow),
+        ))
+        .orderBy(inspectionReports.expiresAt)
+        .limit(50),
+      // Zero-item parsed reports (last 14 days)
+      db.select(baseCols).from(inspectionReports)
+        .where(and(
+          inArray(inspectionReports.parsingStatus, ['parsed', 'review_pending', 'sent_to_client']),
+          eq(inspectionReports.itemsParsed, 0),
+          gte(inspectionReports.createdAt, fourteenDaysAgo),
+        ))
+        .orderBy(desc(inspectionReports.createdAt))
+        .limit(50),
+      // Reports that have >=1 supporting doc
+      db.selectDistinct({ reportId: inspectionSupportingDocuments.reportId })
+        .from(inspectionSupportingDocuments)
+        .where(eq(inspectionSupportingDocuments.parsingStatus, 'parsed')),
+      // All insight rows (just ids)
+      db.select({ reportId: inspectionCrossReferenceInsights.reportId })
+        .from(inspectionCrossReferenceInsights),
+    ]);
+
+    // Compute "has docs but no insights" via set diff
+    const withInsights = new Set(insightRows.map(r => r.reportId));
+    const missingInsightReportIds = allReportsWithDocs
+      .map(r => r.reportId)
+      .filter(id => !withInsights.has(id));
+
+    const missingInsights = missingInsightReportIds.length > 0
+      ? await db.select(baseCols).from(inspectionReports)
+          .where(inArray(inspectionReports.id, missingInsightReportIds))
+          .orderBy(desc(inspectionReports.createdAt))
+          .limit(50)
+      : [];
+
+    res.json({
+      data: {
+        stuckParsing: stuck,
+        recentFailures: failures,
+        missingInsights,
+        expiringSoon,
+        zeroItemReports: zeroItems,
+      },
+      error: null,
+      meta: {
+        counts: {
+          stuckParsing: stuck.length,
+          recentFailures: failures.length,
+          missingInsights: missingInsights.length,
+          expiringSoon: expiringSoon.length,
+          zeroItemReports: zeroItems.length,
+        },
+      },
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/inspect/diagnostics]');
+    res.status(500).json({ data: null, error: 'Failed to load diagnostics', meta: {} });
+  }
+});
+
+// POST /api/v1/admin/inspect/reports/:id/retry-parse
+router.post('/inspect/reports/:id/retry-parse', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.id, req.params.id)).limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    if (!report.reportFileUrl) {
+      res.status(400).json({ data: null, error: 'Report has no file URL to re-parse', meta: {} });
+      return;
+    }
+
+    // Reset to processing and kick off async parse
+    await db.update(inspectionReports)
+      .set({ parsingStatus: 'processing', parsingError: null, updatedAt: new Date() })
+      .where(eq(inspectionReports.id, req.params.id));
+
+    void parseInspectionReportAsync(req.params.id).catch(err =>
+      logger.error({ err, reportId: req.params.id }, '[admin] retry-parse failed'),
+    );
+
+    logger.info({ action: 'admin:retry_parse', reportId: req.params.id }, 'Admin retried inspection parse');
+    res.json({ data: { queued: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/inspect/reports/:id/retry-parse]');
+    res.status(500).json({ data: null, error: 'Failed to queue retry', meta: {} });
+  }
+});
+
+// POST /api/v1/admin/inspect/reports/:id/retry-doc-parse — retry a specific supporting doc
+router.post('/inspect/documents/:docId/retry-parse', async (req: Request, res: Response) => {
+  try {
+    const [doc] = await db.select().from(inspectionSupportingDocuments)
+      .where(eq(inspectionSupportingDocuments.id, req.params.docId)).limit(1);
+    if (!doc) {
+      res.status(404).json({ data: null, error: 'Document not found', meta: {} });
+      return;
+    }
+
+    await db.update(inspectionSupportingDocuments)
+      .set({ parsingStatus: 'processing', parsingError: null, updatedAt: new Date() })
+      .where(eq(inspectionSupportingDocuments.id, req.params.docId));
+
+    void parseSupportingDocAsync(req.params.docId).catch(err =>
+      logger.error({ err, docId: req.params.docId }, '[admin] doc retry-parse failed'),
+    );
+
+    logger.info({ action: 'admin:retry_doc_parse', docId: req.params.docId }, 'Admin retried doc parse');
+    res.json({ data: { queued: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/inspect/documents/:docId/retry-parse]');
+    res.status(500).json({ data: null, error: 'Failed to queue doc retry', meta: {} });
+  }
+});
+
+// POST /api/v1/admin/inspect/reports/:id/regenerate-insights
+router.post('/inspect/reports/:id/regenerate-insights', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.id, req.params.id)).limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    // Fire-and-forget — the helper upserts into inspectionCrossReferenceInsights
+    void generateCrossReferenceInsights(req.params.id).catch(err =>
+      logger.error({ err, reportId: req.params.id }, '[admin] regenerate-insights failed'),
+    );
+
+    logger.info({ action: 'admin:regen_insights', reportId: req.params.id }, 'Admin regenerated cross-ref insights');
+    res.json({ data: { queued: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/inspect/reports/:id/regenerate-insights]');
+    res.status(500).json({ data: null, error: 'Failed to queue regeneration', meta: {} });
+  }
+});
+
+// POST /api/v1/admin/inspect/reports/:id/extend — extend expiresAt by N days (default 90)
+router.post('/inspect/reports/:id/extend', async (req: Request, res: Response) => {
+  const days = Math.max(1, Math.min(365, Number(req.body?.days) || 90));
+
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(eq(inspectionReports.id, req.params.id)).limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    const now = new Date();
+    const base = report.expiresAt > now ? report.expiresAt : now;
+    const newExpiresAt = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+
+    await db.update(inspectionReports)
+      .set({ expiresAt: newExpiresAt, updatedAt: new Date() })
+      .where(eq(inspectionReports.id, req.params.id));
+
+    logger.info({ action: 'admin:extend_report', reportId: req.params.id, days }, 'Admin extended report expiration');
+    res.json({ data: { expiresAt: newExpiresAt.toISOString() }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/inspect/reports/:id/extend]');
+    res.status(500).json({ data: null, error: 'Failed to extend expiration', meta: {} });
   }
 });
 

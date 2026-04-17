@@ -30,6 +30,7 @@ import AdminLayout from '@/pages/admin/AdminLayout';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
 import AdminHomeowners from '@/pages/admin/AdminHomeowners';
 import AdminJobs from '@/pages/admin/AdminJobs';
+import AdminInspect from '@/pages/admin/AdminInspect';
 import AdminProviders from '@/pages/admin/AdminProviders';
 import AdminBookings from '@/pages/admin/AdminBookings';
 import AdminBusiness from '@/pages/admin/AdminBusiness';
@@ -96,6 +97,7 @@ export default function App() {
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/homeowners" element={<AdminHomeowners />} />
             <Route path="/admin/jobs" element={<AdminJobs />} />
+            <Route path="/admin/inspect" element={<AdminInspect />} />
             <Route path="/admin/providers" element={<AdminProviders />} />
             <Route path="/admin/bookings" element={<AdminBookings />} />
             <Route path="/admin/business" element={<AdminBusiness />} />

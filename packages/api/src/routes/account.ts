@@ -2099,7 +2099,7 @@ function buildDocSourcePdfUrl(clientAccessToken: string, docId: string): string 
   return `${base}/api/v1/inspect/${clientAccessToken}/documents/${docId}/source-pdf`;
 }
 
-async function parseSupportingDocAsync(docId: string): Promise<void> {
+export async function parseSupportingDocAsync(docId: string): Promise<void> {
   const [doc] = await db.select().from(inspectionSupportingDocuments)
     .where(eq(inspectionSupportingDocuments.id, docId)).limit(1);
   if (!doc) return;
