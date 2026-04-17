@@ -763,34 +763,41 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
       <BackButton onClick={onBack} label="Back to Reports" />
 
       {/* Property header with mode toggle */}
-      <div style={{
+      <style>{`
+        @media (max-width: 640px) {
+          .hi-report-header { padding: 16px !important; }
+          .hi-report-header-actions { width: 100%; justify-content: space-between; gap: 8px !important; }
+          .hi-report-header-actions .hi-mode-label { display: none !important; }
+        }
+      `}</style>
+      <div className="hi-report-header" style={{
         background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)',
         padding: '20px 24px', marginBottom: 16,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
       }}>
-        <div>
-          <h2 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 4px' }}>
+        <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+          <h2 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {fullReport.propertyAddress}
           </h2>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)' }}>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {fullReport.propertyCity}, {fullReport.propertyState} {fullReport.propertyZip}
             {fullReport.inspectionDate && <> &middot; Inspected {formatDate(fullReport.inspectionDate)}</>}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
+        <div className="hi-report-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button
             onClick={() => setShowDocUploadModal(true)}
             style={{
               padding: '7px 14px', borderRadius: 8, border: '1px solid var(--bp-border)',
               background: 'var(--bp-card)', color: 'var(--bp-text)',
               fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
+              display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
             }}
           >
             <span style={{ fontSize: 13 }}>{'\uD83D\uDCC4'}</span> Add Document
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span className="hi-mode-label" style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Mode:
             </span>
             <ModeToggle mode={reportMode} onChange={handleModeChange} />
