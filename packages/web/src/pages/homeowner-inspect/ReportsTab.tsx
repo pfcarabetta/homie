@@ -664,6 +664,15 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [portalReport?.clientAccessToken, pricingTier, fullReport?.items.length]);
 
+  // Must be before any conditional returns — React hooks rule
+  const scrollToItem = useCallback((targetId: string) => {
+    const el = document.getElementById(`item-${targetId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setExpandedItemId(targetId);
+    }
+  }, []);
+
   if (loading || checkingPayment) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 0' }}>
@@ -686,13 +695,6 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
 
   const items = fullReport.items;
   const filteredItems = activeCategory ? items.filter(i => i.category === activeCategory) : items;
-  const scrollToItem = useCallback((targetId: string) => {
-    const el = document.getElementById(`item-${targetId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setExpandedItemId(targetId);
-    }
-  }, []);
 
   // Group by category
   const categories = new Map<string, number>();
