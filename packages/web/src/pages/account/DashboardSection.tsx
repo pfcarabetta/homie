@@ -123,7 +123,7 @@ export default function DashboardSection({ userFirstName, onNavigate, onNewQuote
         Welcome back{userFirstName ? `, ${userFirstName}` : ''}
       </h1>
       <p style={{ fontSize: 14, color: '#6B6560', marginBottom: 24 }}>
-        Here\u2019s what\u2019s happening with your home services.
+        {'Here\u2019s what\u2019s happening with your home services.'}
       </p>
 
       {/* KPI tiles */}
@@ -196,7 +196,7 @@ export default function DashboardSection({ userFirstName, onNavigate, onNewQuote
                       {a.title}
                     </div>
                     <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
-                      {a.meta} \u00B7 {timeAgo(a.timestamp)}
+                      {a.meta} {'\u00B7'} {timeAgo(a.timestamp)}
                     </div>
                   </div>
                   <span style={{
