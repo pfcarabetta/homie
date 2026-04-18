@@ -3,15 +3,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { accountService, jobService, estimateService, businessService, type AccountProfile, type AccountJob, type AccountBooking, type ProviderResponseItem, type HomeData, type PropertyDetails, type PropertyScan, type CostEstimate } from '@/services/api';
-import AvatarDropdown from '@/components/AvatarDropdown';
+import { inspectService } from '@/services/inspector-api';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
+import AccountLayout from './account/AccountLayout';
+import AccountSidebar, { type AccountTab } from './account/AccountSidebar';
+import DashboardSection from './account/DashboardSection';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
-const TABS = ['profile', 'home', 'quotes', 'bookings'] as const;
-type Tab = typeof TABS[number];
-const TAB_LABELS: Record<Tab, string> = { profile: 'Profile', home: 'My Home', quotes: 'My Quotes', bookings: 'Bookings' };
+const TABS = ['dashboard', 'quotes', 'bookings', 'home', 'profile'] as const;
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   open: { bg: '#EFF6FF', text: '#2563EB' },
@@ -1300,80 +1301,107 @@ export default function Account() {
   const navigate = useNavigate();
   const { isAuthenticated, homeowner } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as Tab) || 'profile';
+  const rawTab = searchParams.get('tab');
+  const activeTab: AccountTab = (TABS as readonly string[]).includes(rawTab ?? '')
+    ? (rawTab as AccountTab)
+    : 'dashboard';
+
   const [hasWorkspace, setHasWorkspace] = useState(false);
+  const [hasInspectReports, setHasInspectReports] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('homieAccountSidebarCollapsed') === '1';
+  });
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  function handleSidebarCollapse(v: boolean) {
+    setSidebarCollapsed(v);
+    if (typeof window !== 'undefined') window.localStorage.setItem('homieAccountSidebarCollapsed', v ? '1' : '0');
+  }
 
   useEffect(() => {
-    if (!isAuthenticated) navigate('/login');
-    else businessService.listWorkspaces().then(res => { if (res.data && res.data.length > 0) setHasWorkspace(true); }).catch(() => {});
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    businessService.listWorkspaces().then(res => {
+      if (res.data && res.data.length > 0) setHasWorkspace(true);
+    }).catch(() => {});
+    inspectService.getMyReports().then(res => {
+      if (res.data?.reports && res.data.reports.length > 0) setHasInspectReports(true);
+    }).catch(() => {});
   }, [isAuthenticated, navigate]);
 
   if (!isAuthenticated) return null;
 
+  function handleNavigate(tab: AccountTab) {
+    if (tab === 'dashboard') {
+      // Keep URL clean for the default tab
+      setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ tab });
+    }
+  }
+
+  const userName = homeowner?.first_name && homeowner?.last_name
+    ? `${homeowner.first_name} ${homeowner.last_name}`
+    : homeowner?.first_name || homeowner?.email?.split('@')[0] || 'Account';
+  const userInitials = (() => {
+    const fn = homeowner?.first_name?.[0] ?? '';
+    const ln = homeowner?.last_name?.[0] ?? '';
+    const fallback = homeowner?.email?.[0]?.toUpperCase() ?? 'U';
+    return ((fn + ln) || fallback).toUpperCase();
+  })();
+
+  const sidebar = (
+    <AccountSidebar
+      collapsed={sidebarCollapsed}
+      setCollapsed={handleSidebarCollapse}
+      activeTab={activeTab}
+      onNavigate={handleNavigate}
+      onNewQuote={() => navigate('/quote')}
+      hasInspectReports={hasInspectReports}
+      hasWorkspace={hasWorkspace}
+      userName={userName}
+      userInitials={userInitials}
+    />
+  );
+
+  const sidebarMobile = (
+    <AccountSidebar
+      collapsed={false}
+      setCollapsed={() => {}}
+      activeTab={activeTab}
+      onNavigate={handleNavigate}
+      onNewQuote={() => navigate('/quote')}
+      hasInspectReports={hasInspectReports}
+      hasWorkspace={hasWorkspace}
+      userName={userName}
+      userInitials={userInitials}
+      onNavigateCallback={() => setMobileOpen(false)}
+    />
+  );
+
   return (
-    <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
+    <AccountLayout
+      sidebar={sidebar}
+      sidebarMobile={sidebarMobile}
+      mobileOpen={mobileOpen}
+      setMobileOpen={setMobileOpen}
+    >
       <style>{`@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }`}</style>
-      {/* Header */}
-      <nav style={{
-        position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
-        padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid rgba(0,0,0,0.05)',
-      }}>
-        <span onClick={() => navigate('/')} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
-        <AvatarDropdown />
-      </nav>
-
-      <div style={{ maxWidth: 560, margin: '0 auto', padding: '24px 16px 80px' }}>
-        <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: D, marginBottom: 24 }}>
-          Welcome back{homeowner?.first_name ? `, ${homeowner.first_name}` : ''}!
-        </h1>
-
-        {/* Action buttons */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          <button onClick={() => navigate('/quote')} style={{
-            padding: '9px 18px', borderRadius: 100, border: 'none',
-            background: O, color: '#fff', fontSize: 13, fontWeight: 600,
-            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-          }}>+ Get New Quote</button>
-          <button onClick={() => navigate('/chat')} style={{
-            padding: '9px 18px', borderRadius: 100,
-            border: `1px solid ${O}`, background: '#fff',
-            color: O, fontSize: 13, fontWeight: 600,
-            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-          }}>Free Diagnostic Chat</button>
-          <button onClick={() => navigate('/inspect-portal')} style={{
-            padding: '9px 18px', borderRadius: 100,
-            border: '1px solid #1B9E77', background: '#1B9E77',
-            color: '#fff', fontSize: 13, fontWeight: 600,
-            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-          }}>Homie Inspect</button>
-          {hasWorkspace && (
-            <button onClick={() => navigate('/business')} style={{
-              padding: '9px 18px', borderRadius: 100,
-              border: `1px solid ${D}`, background: D,
-              color: '#fff', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-            }}>Homie for Business</button>
-          )}
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 28, borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: 0 }}>
-          {TABS.map(tab => (
-            <button key={tab} onClick={() => setSearchParams({ tab })} style={{
-              padding: '10px 16px', fontSize: 14, fontWeight: 500, cursor: 'pointer',
-              background: 'none', border: 'none', borderBottom: activeTab === tab ? `2px solid ${O}` : '2px solid transparent',
-              color: activeTab === tab ? O : '#9B9490', fontFamily: "'DM Sans', sans-serif",
-              transition: 'all 0.15s', marginBottom: -1,
-            }}>{TAB_LABELS[tab]}</button>
-          ))}
-        </div>
-
-        {activeTab === 'profile' && <ProfileTab />}
-        {activeTab === 'home' && <MyHomeTab />}
-        {activeTab === 'quotes' && <QuotesTab />}
-        {activeTab === 'bookings' && <BookingsTab />}
-      </div>
-    </div>
+      {activeTab === 'dashboard' && (
+        <DashboardSection
+          userFirstName={homeowner?.first_name ?? null}
+          onNavigate={handleNavigate}
+          onNewQuote={() => navigate('/quote')}
+          onDiagnostic={() => navigate('/chat')}
+        />
+      )}
+      {activeTab === 'profile' && <ProfileTab />}
+      {activeTab === 'home' && <MyHomeTab />}
+      {activeTab === 'quotes' && <QuotesTab />}
+      {activeTab === 'bookings' && <BookingsTab />}
+    </AccountLayout>
   );
 }
