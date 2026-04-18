@@ -1718,8 +1718,16 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         borderBottom: '1px solid rgba(0,0,0,0.05)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', fontSize: 18, color: '#9B9490', display: 'flex', alignItems: 'center' }} title="Back to home">←</button>
-          <span onClick={() => navigate('/')} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
+          {(() => {
+            const backTo = authService.isAuthenticated() ? '/account' : '/';
+            const backTitle = backTo === '/account' ? 'Back to my account' : 'Back to home';
+            return (
+              <>
+                <button onClick={() => navigate(backTo)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', fontSize: 18, color: '#9B9490', display: 'flex', alignItems: 'center' }} title={backTitle}>←</button>
+                <span onClick={() => navigate(backTo)} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
+              </>
+            );
+          })()}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {(() => {
