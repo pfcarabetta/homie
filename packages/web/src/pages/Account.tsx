@@ -818,9 +818,11 @@ function BookingMessageThread({ bookingId, providerName, onMarkedRead }: {
   const [messages, setMessages] = useState<BookingMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const knownIdsRef = useRef<Set<string>>(new Set());
 
@@ -854,10 +856,52 @@ function BookingMessageThread({ bookingId, providerName, onMarkedRead }: {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages]);
 
+  function handlePickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Only image files are supported.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Photo too large (max 5MB).');
+      return;
+    }
+    setError(null);
+    // Downscale large images to keep payload reasonable (~5MB binary cap on the server)
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1600;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { setPhotoDataUrl(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        setPhotoDataUrl(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => setPhotoDataUrl(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function handleSend() {
     const text = input.trim();
-    if (!text || sending) return;
+    const photo = photoDataUrl;
+    if ((!text && !photo) || sending) return;
     setInput('');
+    setPhotoDataUrl(null);
     setSending(true);
     setError(null);
 
@@ -868,14 +912,14 @@ function BookingMessageThread({ bookingId, providerName, onMarkedRead }: {
       senderId: null,
       senderName: 'You',
       content: text,
-      photoUrl: null,
+      photoUrl: photo,
       readAt: null,
       createdAt: new Date().toISOString(),
     };
     setMessages(prev => [...prev, optimistic]);
 
     try {
-      const res = await accountService.sendBookingMessage(bookingId, text);
+      const res = await accountService.sendBookingMessage(bookingId, text, photo ?? undefined);
       if (res.data) {
         setMessages(prev => prev.map(m => m.id === optimistic.id ? res.data! : m));
       }
@@ -894,13 +938,15 @@ function BookingMessageThread({ bookingId, providerName, onMarkedRead }: {
     }
   }
 
+  const canSend = (input.trim().length > 0 || !!photoDataUrl) && !sending;
+
   return (
     <div style={{
       background: '#FAFAF8', borderRadius: 12, padding: 12,
       border: '1px solid rgba(0,0,0,0.05)', marginTop: 4,
     }}>
       <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 8, lineHeight: 1.4 }}>
-        Messages route through {providerName}'s phone via SMS. They'll see your name and reply by texting back.
+        Messages route through {providerName}'s phone via SMS. They'll see your name and reply by texting back. Photos are sent as MMS.
       </div>
 
       <div style={{
@@ -921,7 +967,61 @@ function BookingMessageThread({ bookingId, providerName, onMarkedRead }: {
 
       {error && <div style={{ fontSize: 12, color: '#DC2626', padding: '6px 4px' }}>{error}</div>}
 
+      {/* Photo preview (above textarea) */}
+      {photoDataUrl && (
+        <div style={{
+          marginTop: 10, padding: 8, background: '#fff',
+          border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <img src={photoDataUrl} alt="Attachment preview" style={{
+            width: 56, height: 56, objectFit: 'cover', borderRadius: 8, flexShrink: 0,
+          }} />
+          <div style={{ flex: 1, fontSize: 12, color: '#6B6560' }}>
+            Photo attached
+            <div style={{ fontSize: 11, color: '#9B9490', marginTop: 2 }}>
+              Will send as MMS to {providerName.split(' ')[0]}
+            </div>
+          </div>
+          <button
+            onClick={() => setPhotoDataUrl(null)}
+            aria-label="Remove photo"
+            style={{
+              background: 'rgba(0,0,0,0.05)', border: 'none', borderRadius: 6,
+              padding: '6px 8px', cursor: 'pointer', color: '#6B6560',
+              fontSize: 14, lineHeight: 1, flexShrink: 0,
+            }}
+          >&times;</button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'flex-end' }}>
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handlePickPhoto}
+          style={{ display: 'none' }}
+        />
+        {/* Photo attach button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={sending}
+          aria-label="Attach photo"
+          title="Attach photo"
+          style={{
+            background: '#fff', color: '#6B6560', border: '1px solid rgba(0,0,0,0.1)',
+            borderRadius: 10, padding: '10px 12px', cursor: sending ? 'default' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            opacity: sending ? 0.5 : 1, flexShrink: 0,
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+          </svg>
+        </button>
         <textarea
           value={input}
           onChange={e => setInput(e.target.value)}
@@ -937,11 +1037,11 @@ function BookingMessageThread({ bookingId, providerName, onMarkedRead }: {
         />
         <button
           onClick={handleSend}
-          disabled={!input.trim() || sending}
+          disabled={!canSend}
           style={{
             background: O, color: '#fff', border: 'none', borderRadius: 10,
-            padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: input.trim() && !sending ? 'pointer' : 'default',
-            opacity: input.trim() && !sending ? 1 : 0.5, fontFamily: "'DM Sans', sans-serif",
+            padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: canSend ? 'pointer' : 'default',
+            opacity: canSend ? 1 : 0.5, fontFamily: "'DM Sans', sans-serif",
             flexShrink: 0,
           }}
         >
