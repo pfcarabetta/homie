@@ -18,6 +18,9 @@ export const bookings = pgTable(
     serviceAddress: text('service_address'),
     status: text('status').notNull().default('confirmed'),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }).notNull().defaultNow(),
+    /** When the booking transitioned to 'completed' — set by homeowner action OR
+     *  by the auto-complete sweep 14 days after confirmedAt. Null while confirmed. */
+    completedAt: timestamp('completed_at', { withTimezone: true }),
   },
   (table) => [
     index('bookings_job_id_idx').on(table.jobId),

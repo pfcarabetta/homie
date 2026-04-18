@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { buildStripeMetadata } from '../services/stripe';
-import { eq, desc, and, ne, isNull, inArray, sql, count } from 'drizzle-orm';
+import { eq, desc, and, ne, isNull, inArray, sql, count, lte } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
@@ -624,6 +624,25 @@ Respond with ONLY a valid JSON array. No markdown, no code blocks, no explanatio
 // GET /api/v1/account/bookings
 router.get('/bookings', async (req: Request, res: Response) => {
   try {
+    // Auto-complete sweep — flip any 'confirmed' booking to 'completed' if it's
+    // been more than 14 days since confirmation. Runs lazily on every fetch so
+    // the dashboard tiles stay accurate without a separate cron. Bounded scope:
+    // only this homeowner's rows, only confirmed → completed, never overwrites.
+    try {
+      const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+      await db
+        .update(bookings)
+        .set({ status: 'completed', completedAt: sql`COALESCE(${bookings.completedAt}, NOW())` })
+        .where(and(
+          eq(bookings.homeownerId, req.homeownerId),
+          eq(bookings.status, 'confirmed'),
+          lte(bookings.confirmedAt, cutoff),
+        ));
+    } catch (err) {
+      // Non-fatal — don't block the read on a sweep failure
+      logger.warn({ err, homeownerId: req.homeownerId }, '[bookings] auto-complete sweep failed');
+    }
+
     const rows = await db
       .select({ booking: bookings, provider: providers, response: providerResponses, job: jobs })
       .from(bookings)
@@ -669,6 +688,7 @@ router.get('/bookings', async (req: Request, res: Response) => {
             },
             status: b.status,
             confirmed_at: b.confirmedAt.toISOString(),
+            completed_at: b.completedAt?.toISOString() ?? null,
             quoted_price: r?.quotedPrice ?? null,
             scheduled: r?.availability ?? null,
             response_message: r?.message ?? null,
@@ -834,6 +854,46 @@ router.post('/bookings/:bookingId/messages/read', async (req: Request, res: Resp
   } catch (err) {
     logger.error({ err }, '[POST /account/bookings/:bid/messages/read]');
     res.status(500).json({ data: null, error: 'Failed to mark read', meta: {} });
+  }
+});
+
+// POST /api/v1/account/bookings/:bookingId/complete — homeowner marks the
+// service as done. Idempotent: re-marking a completed booking is a no-op.
+router.post('/bookings/:bookingId/complete', async (req: Request, res: Response) => {
+  try {
+    const owned = await verifyBookingOwnership(req.params.bookingId, req.homeownerId);
+    if (!owned) {
+      res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
+      return;
+    }
+
+    const [updated] = await db
+      .update(bookings)
+      .set({ status: 'completed', completedAt: sql`COALESCE(${bookings.completedAt}, NOW())` })
+      .where(and(
+        eq(bookings.id, req.params.bookingId),
+        eq(bookings.homeownerId, req.homeownerId),
+        ne(bookings.status, 'cancelled'),
+      ))
+      .returning({ id: bookings.id, status: bookings.status, completedAt: bookings.completedAt });
+
+    if (!updated) {
+      res.status(409).json({ data: null, error: 'Booking is cancelled and cannot be completed', meta: {} });
+      return;
+    }
+
+    res.json({
+      data: {
+        id: updated.id,
+        status: updated.status,
+        completed_at: updated.completedAt?.toISOString() ?? null,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/bookings/:bid/complete]');
+    res.status(500).json({ data: null, error: 'Failed to mark complete', meta: {} });
   }
 });
 

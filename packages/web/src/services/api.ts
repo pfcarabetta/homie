@@ -661,6 +661,7 @@ export interface AccountBooking {
   };
   status: string;
   confirmed_at: string;
+  completed_at?: string | null;
   quoted_price: string | null;
   scheduled: string | null;
   response_message?: string | null;
@@ -748,6 +749,12 @@ export const accountService = {
     }),
   markBookingMessagesRead: (bookingId: string) =>
     fetchAPI<{ ok: boolean }>(`/api/v1/account/bookings/${bookingId}/messages/read`, { method: 'POST' }),
+  /** Mark a confirmed booking as completed. Idempotent. */
+  completeBooking: (bookingId: string) =>
+    fetchAPI<{ id: string; status: string; completed_at: string | null }>(
+      `/api/v1/account/bookings/${bookingId}/complete`,
+      { method: 'POST' },
+    ),
   getHome: () => fetchAPI<HomeData>('/api/v1/account/home'),
   updateHome: (data: Partial<HomeData>) => fetchAPI<HomeData>('/api/v1/account/home', { method: 'PATCH', body: JSON.stringify(data) }),
   getSmartSuggestions: (count?: number) =>

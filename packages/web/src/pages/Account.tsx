@@ -809,21 +809,41 @@ function BookingsTab() {
           expanded={expandedId === b.id}
           onToggle={() => setExpandedId(prev => prev === b.id ? null : b.id)}
           onMarkedRead={refetch}
+          onChanged={refetch}
         />
       ))}
     </div>
   );
 }
 
-function BookingCard({ booking, expanded, onToggle, onMarkedRead }: {
+function BookingCard({ booking, expanded, onToggle, onMarkedRead, onChanged }: {
   booking: AccountBooking;
   expanded: boolean;
   onToggle: () => void;
   onMarkedRead: () => void;
+  onChanged: () => void;
 }) {
   const sc = STATUS_COLORS[booking.status] || STATUS_COLORS.confirmed;
   const [showMessages, setShowMessages] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
   const unread = booking.unread_messages ?? 0;
+  const isConfirmed = booking.status === 'confirmed';
+  const isCompleted = booking.status === 'completed';
+
+  async function handleMarkComplete() {
+    if (completing) return;
+    setCompleting(true);
+    setCompleteError(null);
+    try {
+      await accountService.completeBooking(booking.id);
+      onChanged();
+    } catch (err) {
+      setCompleteError((err as Error).message ?? 'Failed to mark complete');
+    } finally {
+      setCompleting(false);
+    }
+  }
 
   return (
     <div style={{
@@ -957,6 +977,61 @@ function BookingCard({ booking, expanded, onToggle, onMarkedRead }: {
           {/* Inline message thread */}
           {showMessages && (
             <BookingMessageThread bookingId={booking.id} providerName={booking.provider.name} onMarkedRead={onMarkedRead} />
+          )}
+
+          {/* Mark complete (confirmed only) OR Service-completed receipt */}
+          {(isConfirmed || isCompleted) && (
+            <div style={{ marginTop: 14 }}>
+              <SectionLabel>Service status</SectionLabel>
+              {isConfirmed && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                  padding: '12px 14px', borderRadius: 10,
+                  background: '#FAFAF8', border: '1px solid rgba(0,0,0,0.05)',
+                }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: D }}>Awaiting service</div>
+                    <div style={{ fontSize: 12, color: '#6B6560', marginTop: 2 }}>
+                      Once {booking.provider.name.split(' ')[0]} finishes the work, mark it complete here.
+                      Otherwise it'll auto-complete 14 days after confirmation.
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleMarkComplete}
+                    disabled={completing}
+                    style={{
+                      background: G, color: '#fff', border: 'none', borderRadius: 8,
+                      padding: '10px 16px', fontSize: 13, fontWeight: 600,
+                      cursor: completing ? 'default' : 'pointer', opacity: completing ? 0.6 : 1,
+                      fontFamily: "'DM Sans', sans-serif", flexShrink: 0, whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {completing ? 'Marking…' : '✓ Mark complete'}
+                  </button>
+                </div>
+              )}
+              {isCompleted && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 14px', borderRadius: 10,
+                  background: '#F0FDF4', border: '1px solid #BBF7D0',
+                }}>
+                  <span style={{ fontSize: 18, color: '#16A34A' }}>✓</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#15803D' }}>Service completed</div>
+                    {booking.completed_at && (
+                      <div style={{ fontSize: 12, color: '#16A34A', marginTop: 2 }}>
+                        {new Date(booking.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {' · '}{timeAgo(booking.completed_at)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {completeError && (
+                <div style={{ fontSize: 12, color: '#DC2626', marginTop: 6 }}>{completeError}</div>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -110,8 +110,17 @@ export default function DashboardSection({ userFirstName, onNavigate, onNewQuote
 
   const activeQuotes = jobs.filter(j => ACTIVE_QUOTE_STATUSES.has(j.status));
   const openBookings = bookings.filter(b => b.status === 'confirmed');
-  const completedBookings = bookings.filter(b => b.status === 'completed').sort((a, b) => new Date(b.confirmed_at).getTime() - new Date(a.confirmed_at).getTime());
+  // Sort completed bookings by completed_at (the service-end timestamp), falling
+  // back to confirmed_at for legacy rows that pre-date the column.
+  const completedBookings = bookings
+    .filter(b => b.status === 'completed')
+    .sort((a, b) => {
+      const ta = new Date(a.completed_at ?? a.confirmed_at).getTime();
+      const tb = new Date(b.completed_at ?? b.confirmed_at).getTime();
+      return tb - ta;
+    });
   const lastService = completedBookings[0];
+  const lastServiceWhen = lastService ? (lastService.completed_at ?? lastService.confirmed_at) : null;
 
   // Recent activity: combine + sort by timestamp, take 5 most recent
   const activity: ActivityItem[] = [
@@ -183,7 +192,7 @@ export default function DashboardSection({ userFirstName, onNavigate, onNewQuote
         />
         <Tile
           label="Last service"
-          value={lastService ? timeAgo(lastService.confirmed_at) : '\u2014'}
+          value={lastServiceWhen ? timeAgo(lastServiceWhen) : '\u2014'}
           sub={lastService ? lastService.provider.name : 'No completed services'}
           accent={G}
           onClick={() => lastService && onNavigate('bookings')}
