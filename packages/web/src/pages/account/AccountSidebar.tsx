@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 const O = '#E8632B'; // Brand orange — primary accent across all 3 products
-const G = '#1B9E77'; // Personal badge color (green for the consumer surface)
+const G = '#1B9E77'; // Avatar accent (green for the consumer surface)
 const D = '#2D2926';
 
 export type AccountTab = 'dashboard' | 'quotes' | 'bookings' | 'home' | 'profile';
@@ -166,13 +166,6 @@ export default function AccountSidebar({
           <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: collapsed ? 22 : 26, color: O }}>
             {collapsed ? 'h' : 'homie'}
           </span>
-          {!collapsed && (
-            <span style={{
-              fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: '#fff', fontWeight: 800,
-              background: G, padding: '2px 6px', borderRadius: 4,
-              letterSpacing: '0.08em', textTransform: 'uppercase', position: 'relative', bottom: 2,
-            }}>Personal</span>
-          )}
         </div>
         <button onClick={() => { onNavigateCallback ? onNavigateCallback() : setCollapsed(!collapsed); }} style={{
           background: 'none', border: 'none', cursor: 'pointer', color: 'var(--bp-subtle)', padding: 4,
