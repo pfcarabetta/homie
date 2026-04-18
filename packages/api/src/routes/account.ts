@@ -355,6 +355,192 @@ router.get('/jobs', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/account/suggestions — AI-generated smart maintenance suggestions
+// Combines seasonal context, location (city/state/zip), and equipment age data
+// from the homeowner's saved home profile + recent job history.
+router.post('/suggestions', async (req: Request, res: Response) => {
+  try {
+    const { count: maxCount } = (req.body ?? {}) as { count?: number };
+    const limit = Math.min(maxCount ?? 6, 8);
+
+    // Load homeowner + home data
+    const [me] = await db
+      .select({
+        zipCode: homeowners.zipCode,
+        homeAddress: homeowners.homeAddress,
+        homeCity: homeowners.homeCity,
+        homeState: homeowners.homeState,
+        homeBedrooms: homeowners.homeBedrooms,
+        homeSqft: homeowners.homeSqft,
+        homeDetails: homeowners.homeDetails,
+      })
+      .from(homeowners)
+      .where(eq(homeowners.id, req.homeownerId))
+      .limit(1);
+
+    if (!me) {
+      res.status(404).json({ data: null, error: 'Homeowner not found', meta: {} });
+      return;
+    }
+
+    // Pull last 6 consumer jobs for context (categories + diagnoses)
+    const recentJobs = await db
+      .select({ diagnosis: jobs.diagnosis, status: jobs.status, createdAt: jobs.createdAt })
+      .from(jobs)
+      .where(and(
+        eq(jobs.homeownerId, req.homeownerId),
+        isNull(jobs.workspaceId),
+        isNull(jobs.propertyId),
+      ))
+      .orderBy(desc(jobs.createdAt))
+      .limit(6);
+
+    // Build context blocks
+    const now = new Date();
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const seasons: Record<number, string> = { 0: 'winter', 1: 'winter', 2: 'spring', 3: 'spring', 4: 'spring', 5: 'summer', 6: 'summer', 7: 'summer', 8: 'fall', 9: 'fall', 10: 'fall', 11: 'winter' };
+    const currentMonth = months[now.getMonth()];
+    const currentSeason = seasons[now.getMonth()];
+
+    const locationParts: string[] = [];
+    if (me.homeCity) locationParts.push(me.homeCity);
+    if (me.homeState) locationParts.push(me.homeState);
+    if (me.zipCode) locationParts.push(me.zipCode);
+    const locationStr = locationParts.length > 0 ? locationParts.join(', ') : 'Unknown location';
+
+    // Equipment summary: only include populated fields, brevity matters for tokens
+    const d = (me.homeDetails ?? {}) as Record<string, Record<string, unknown> | undefined>;
+    const equipmentLines: string[] = [];
+    function fmtAge(label: string, raw: unknown) {
+      if (raw == null || raw === '') return null;
+      return `${label}: ${String(raw)}`;
+    }
+    if (d.hvac) {
+      const hv = d.hvac;
+      const bits = [
+        fmtAge('AC type', hv.acType), fmtAge('AC age', hv.acAge),
+        fmtAge('Heating type', hv.heatingType),
+        fmtAge('Filter size', hv.filterSize),
+      ].filter(Boolean);
+      if (bits.length > 0) equipmentLines.push(`HVAC: ${bits.join(', ')}`);
+    }
+    if (d.waterHeater) {
+      const wh = d.waterHeater;
+      const bits = [
+        fmtAge('Type', wh.type), fmtAge('Age', wh.age), fmtAge('Fuel', wh.fuel),
+      ].filter(Boolean);
+      if (bits.length > 0) equipmentLines.push(`Water heater: ${bits.join(', ')}`);
+    }
+    if (d.exterior) {
+      const ex = d.exterior;
+      const bits = [
+        fmtAge('Roof type', ex.roofType), fmtAge('Roof age', ex.roofAge),
+        fmtAge('Siding', ex.sidingMaterial), fmtAge('Irrigation', ex.irrigationBrand),
+      ].filter(Boolean);
+      if (bits.length > 0) equipmentLines.push(`Exterior: ${bits.join(', ')}`);
+    }
+    if (d.poolSpa) {
+      const ps = d.poolSpa;
+      const bits = [
+        fmtAge('Pool type', ps.poolType), fmtAge('Pool heater', ps.poolHeaterBrand),
+        fmtAge('Hot tub', ps.hotTubBrand),
+      ].filter(Boolean);
+      if (bits.length > 0) equipmentLines.push(`Pool/Spa: ${bits.join(', ')}`);
+    }
+    if (d.electrical) {
+      const el = d.electrical;
+      const bits: string[] = [];
+      if (el.hasGenerator) bits.push('Has generator');
+      if (el.hasSolar) bits.push('Has solar');
+      if (el.hasEvCharger) bits.push('Has EV charger');
+      if (bits.length > 0) equipmentLines.push(`Electrical: ${bits.join(', ')}`);
+    }
+    if (d.general) {
+      const g = d.general;
+      const bits = [
+        fmtAge('Year built', g.yearBuilt),
+        fmtAge('Pest control', g.pestControlProvider),
+      ].filter(Boolean);
+      if (bits.length > 0) equipmentLines.push(`General: ${bits.join(', ')}`);
+    }
+
+    const equipmentSummary = equipmentLines.length > 0
+      ? equipmentLines.join('\n')
+      : '(No equipment details on file — generate broadly applicable seasonal/regional suggestions only.)';
+
+    const recentJobLines = recentJobs
+      .map(j => {
+        const diag = (j.diagnosis ?? null) as { category?: string; summary?: string } | null;
+        const cat = diag?.category ?? 'general';
+        return `- ${cat} (${j.status}, ${new Date(j.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`;
+      })
+      .join('\n');
+    const recentJobsSection = recentJobLines.length > 0
+      ? `\nRecent service history (avoid suggesting things they just did):\n${recentJobLines}`
+      : '';
+
+    // AI call
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      res.json({ data: [], error: null, meta: { reason: 'AI not configured' } });
+      return;
+    }
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const anthropic = new Anthropic({ apiKey });
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      system: 'You are a home maintenance expert advising a single homeowner. Generate personalized maintenance suggestions for THEIR specific home, location, and season. When you reference equipment, tie the suggestion to the actual data given (e.g. "Your 12-year-old gas water heater..."). For location-driven advice, use region-appropriate context (coastal salt air, freeze prep in cold climates, monsoon prep in desert, hurricane prep on Gulf/Atlantic, fire-season prep in west, etc.). Keep titles short and actionable.',
+      messages: [
+        {
+          role: 'user',
+          content: `Current month: ${currentMonth} (${currentSeason})
+Home location: ${locationStr}
+${me.homeBedrooms ? `Size: ${me.homeBedrooms}BR` : ''}${me.homeSqft ? ` ${me.homeSqft}sqft` : ''}
+
+Equipment & systems on file:
+${equipmentSummary}
+${recentJobsSection}
+
+Generate exactly ${limit} maintenance suggestions tailored to this homeowner. Mix categories — favor:
+- 1–2 seasonal/weather-driven items appropriate to ${currentSeason} in ${locationStr || 'their region'}
+- 1–2 location/climate-specific items
+- 2–4 equipment/system-specific items based on what's on file (skip if no equipment data)
+
+Each item: { "title": string (under 50 chars, action-oriented), "description": string (1-2 sentences saying what + why), "category": string (hvac|plumbing|landscaping|pest_control|pool|roofing|electrical|appliance|general|cleaning|safety|exterior), "priority": "low"|"medium"|"high", "reason": string (under 80 chars — why now/why this homeowner specifically), "kind": "seasonal"|"location"|"equipment" }
+
+Respond with ONLY a valid JSON array. No markdown, no code blocks, no explanation.`,
+        },
+      ],
+    });
+
+    const textBlock = message.content.find(b => b.type === 'text');
+    let responseText = textBlock ? textBlock.text.trim() : '[]';
+    responseText = responseText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+
+    let suggestions: Array<{ title: string; description: string; category: string; priority: string; reason: string; kind?: string }> = [];
+    try {
+      suggestions = JSON.parse(responseText);
+    } catch {
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        try { suggestions = JSON.parse(jsonMatch[0]); } catch (err) { logger.warn({ err }, '[account] Failed to parse suggestions JSON'); }
+      }
+    }
+
+    res.json({
+      data: suggestions.slice(0, limit),
+      error: null,
+      meta: { generatedAt: new Date().toISOString(), hasHomeData: equipmentLines.length > 0 },
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/suggestions]');
+    res.status(500).json({ data: null, error: 'Failed to generate suggestions', meta: {} });
+  }
+});
+
 // GET /api/v1/account/bookings
 router.get('/bookings', async (req: Request, res: Response) => {
   try {

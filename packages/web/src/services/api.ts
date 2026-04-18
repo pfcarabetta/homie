@@ -722,6 +722,16 @@ export interface HomeData {
   details: PropertyDetails | null;
 }
 
+export interface SmartSuggestion {
+  title: string;
+  description: string;
+  category: string;
+  priority: 'low' | 'medium' | 'high';
+  reason: string;
+  /** seasonal | location | equipment — drives the chip color */
+  kind?: string;
+}
+
 export const accountService = {
   getProfile: () => fetchAPI<AccountProfile>('/api/v1/account'),
   updateProfile: (data: Partial<{ first_name: string; last_name: string; email: string; phone: string; zip_code: string; current_password: string; new_password: string; title: string; notify_email_quotes: boolean; notify_sms_quotes: boolean; notify_email_bookings: boolean; notify_sms_bookings: boolean }>) =>
@@ -740,6 +750,11 @@ export const accountService = {
     fetchAPI<{ ok: boolean }>(`/api/v1/account/bookings/${bookingId}/messages/read`, { method: 'POST' }),
   getHome: () => fetchAPI<HomeData>('/api/v1/account/home'),
   updateHome: (data: Partial<HomeData>) => fetchAPI<HomeData>('/api/v1/account/home', { method: 'PATCH', body: JSON.stringify(data) }),
+  getSmartSuggestions: (count?: number) =>
+    fetchAPI<SmartSuggestion[]>('/api/v1/account/suggestions', {
+      method: 'POST',
+      body: JSON.stringify({ count }),
+    }),
   // Consumer home scan
   startHomeScan: (scanType: 'full' | 'quick' = 'full') =>
     fetchAPI<PropertyScan>('/api/v1/account/home/scan', { method: 'POST', body: JSON.stringify({ scan_type: scanType }) }),

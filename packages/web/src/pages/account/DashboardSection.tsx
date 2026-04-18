@@ -1,10 +1,49 @@
 import { useEffect, useState } from 'react';
-import { accountService, type AccountJob, type AccountBooking } from '@/services/api';
+import { accountService, type AccountJob, type AccountBooking, type SmartSuggestion } from '@/services/api';
 import type { AccountTab } from './AccountSidebar';
 
 const O = '#E8632B';
 const G = '#1B9E77';
 const D = '#2D2926';
+
+const CATEGORY_ICON: Record<string, string> = {
+  hvac: '\u2744\uFE0F',
+  plumbing: '\uD83D\uDCA7',
+  landscaping: '\uD83C\uDF31',
+  pest_control: '\uD83E\uDEB2',
+  pool: '\uD83C\uDFCA',
+  roofing: '\uD83C\uDFE0',
+  electrical: '\u26A1',
+  appliance: '\uD83C\uDF73',
+  general: '\uD83D\uDD27',
+  cleaning: '\u2728',
+  safety: '\uD83D\uDEE1\uFE0F',
+  exterior: '\uD83C\uDFD8\uFE0F',
+};
+const CATEGORY_LABEL: Record<string, string> = {
+  hvac: 'HVAC',
+  plumbing: 'Plumbing',
+  landscaping: 'Landscaping',
+  pest_control: 'Pest Control',
+  pool: 'Pool & Spa',
+  roofing: 'Roofing',
+  electrical: 'Electrical',
+  appliance: 'Appliance',
+  general: 'General',
+  cleaning: 'Cleaning',
+  safety: 'Safety',
+  exterior: 'Exterior',
+};
+const KIND_ACCENT: Record<string, { bg: string; text: string; label: string }> = {
+  seasonal: { bg: '#FFF7ED', text: '#C2410C', label: 'Seasonal' },
+  location: { bg: '#EFF6FF', text: '#2563EB', label: 'Local' },
+  equipment: { bg: '#F5F3FF', text: '#7C3AED', label: 'Your Home' },
+};
+const PRIORITY_DOT: Record<string, string> = {
+  high: '#DC2626',
+  medium: '#F59E0B',
+  low: '#9B9490',
+};
 
 const ACTIVE_QUOTE_STATUSES = new Set(['open', 'dispatching', 'collecting']);
 
@@ -159,6 +198,9 @@ export default function DashboardSection({ userFirstName, onNavigate, onNewQuote
         />
       </div>
 
+      {/* Smart Suggestions — seasonal + location + equipment-aware */}
+      <SmartSuggestions onNewQuote={onNewQuote} onNavigate={onNavigate} />
+
       {/* Recent activity */}
       <div style={{ background: '#fff', borderRadius: 14, padding: '20px 22px', border: '1px solid rgba(0,0,0,0.06)' }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: D, marginBottom: 14 }}>Recent activity</div>
@@ -242,5 +284,207 @@ function Tile({ label, value, sub, accent, onClick, fontSize = 22 }: {
       </div>
       <div style={{ fontSize: 12, color: '#6B6560' }}>{sub}</div>
     </button>
+  );
+}
+
+// ── Smart Suggestions ──────────────────────────────────────────────────────
+
+function SmartSuggestions({ onNewQuote, onNavigate }: {
+  onNewQuote: () => void;
+  onNavigate: (tab: AccountTab) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<SmartSuggestion[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasHomeData, setHasHomeData] = useState<boolean | null>(null);
+  const [dismissed, setDismissed] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      return new Set(JSON.parse(window.localStorage.getItem('homieDismissedSuggestions') ?? '[]'));
+    } catch { return new Set(); }
+  });
+
+  function load(force = false) {
+    if (force) setRefreshing(true); else setLoading(true);
+    setError(null);
+    accountService.getSmartSuggestions(6)
+      .then(res => {
+        setSuggestions(res.data ?? []);
+        setHasHomeData(res.meta?.hasHomeData !== false);
+      })
+      .catch(err => setError((err as Error).message ?? 'Could not load suggestions'))
+      .finally(() => { setLoading(false); setRefreshing(false); });
+  }
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  function dismiss(key: string) {
+    const next = new Set(dismissed);
+    next.add(key);
+    setDismissed(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('homieDismissedSuggestions', JSON.stringify([...next]));
+    }
+  }
+
+  const visible = (suggestions ?? []).filter(s => !dismissed.has(s.title));
+
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 14, padding: '20px 22px',
+      border: '1px solid rgba(0,0,0,0.06)', marginBottom: 20,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: D, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>{'\u2728'}</span> Smart suggestions
+          </div>
+          <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
+            {hasHomeData === false
+              ? 'Add your home details for personalized picks'
+              : 'Tailored to your home, location, and the season'}
+          </div>
+        </div>
+        <button
+          onClick={() => load(true)}
+          disabled={loading || refreshing}
+          style={{
+            background: 'rgba(0,0,0,0.04)', color: '#6B6560', border: 'none',
+            borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
+            cursor: loading || refreshing ? 'default' : 'pointer',
+            fontFamily: "'DM Sans', sans-serif", opacity: loading || refreshing ? 0.5 : 1,
+          }}
+        >
+          {refreshing ? 'Refreshing\u2026' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 12 }}>{error}</div>}
+
+      {loading ? (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12, marginTop: 16,
+        }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{
+              height: 132, background: '#FAFAF8', borderRadius: 12,
+              border: '1px solid rgba(0,0,0,0.04)',
+              animation: `dash-pulse 1.4s ${i * 0.15}s ease-in-out infinite`,
+            }} />
+          ))}
+          <style>{`@keyframes dash-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }`}</style>
+        </div>
+      ) : visible.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '28px 0', color: '#9B9490' }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83D\uDCAB'}</div>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>No suggestions right now</div>
+          {hasHomeData === false && (
+            <button onClick={() => onNavigate('home')} style={{
+              marginTop: 12, padding: '8px 16px', borderRadius: 100, border: 'none',
+              background: O, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>Complete my home profile</button>
+          )}
+        </div>
+      ) : (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+          gap: 12, marginTop: 16,
+        }}>
+          {visible.map((s, i) => (
+            <SuggestionTile
+              key={`${s.title}-${i}`}
+              suggestion={s}
+              onAct={onNewQuote}
+              onDismiss={() => dismiss(s.title)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SuggestionTile({ suggestion, onAct, onDismiss }: {
+  suggestion: SmartSuggestion;
+  onAct: () => void;
+  onDismiss: () => void;
+}) {
+  const cat = suggestion.category?.toLowerCase() ?? 'general';
+  const icon = CATEGORY_ICON[cat] ?? '\uD83D\uDD27';
+  const catLabel = CATEGORY_LABEL[cat] ?? cat;
+  const kindKey = (suggestion.kind ?? '').toLowerCase();
+  const kind = KIND_ACCENT[kindKey];
+  const dotColor = PRIORITY_DOT[suggestion.priority] ?? PRIORITY_DOT.medium;
+
+  return (
+    <div style={{
+      position: 'relative', background: '#FAFAF8', borderRadius: 12, padding: '14px 14px 12px',
+      border: '1px solid rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
+      {/* Top row: kind chip + dismiss */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {kind && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 100,
+              background: kind.bg, color: kind.text,
+              textTransform: 'uppercase', letterSpacing: 0.5,
+            }}>
+              {kind.label}
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: '#6B6560', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span>{icon}</span>{catLabel}
+          </span>
+          <span title={`${suggestion.priority} priority`} style={{
+            width: 6, height: 6, borderRadius: '50%', background: dotColor, marginLeft: 2,
+          }} />
+        </div>
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss suggestion"
+          title="Not now"
+          style={{
+            background: 'transparent', border: 'none', color: '#C0BBB6', cursor: 'pointer',
+            padding: 2, fontSize: 16, lineHeight: 1, fontWeight: 500,
+          }}
+        >&times;</button>
+      </div>
+
+      {/* Title */}
+      <div style={{ fontSize: 14, fontWeight: 700, color: D, lineHeight: 1.3 }}>
+        {suggestion.title}
+      </div>
+
+      {/* Description (clamped) */}
+      <div style={{
+        fontSize: 12, color: '#6B6560', lineHeight: 1.45,
+        display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const,
+        overflow: 'hidden',
+      }}>
+        {suggestion.description}
+      </div>
+
+      {/* Reason — italic micro-copy */}
+      {suggestion.reason && (
+        <div style={{ fontSize: 11, color: '#9B9490', fontStyle: 'italic', marginTop: 2 }}>
+          {suggestion.reason}
+        </div>
+      )}
+
+      {/* Action */}
+      <button
+        onClick={onAct}
+        style={{
+          marginTop: 6, background: 'transparent', color: O, border: 'none',
+          padding: 0, fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+          fontFamily: "'DM Sans', sans-serif",
+        }}
+      >
+        Get a quote {'\u2192'}
+      </button>
+    </div>
   );
 }
