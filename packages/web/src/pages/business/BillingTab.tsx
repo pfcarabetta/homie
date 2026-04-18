@@ -142,8 +142,9 @@ export default function BillingTab({ workspace, onUpdated }: { workspace: Worksp
             )}
           </div>
 
-          {/* Subscribe CTA if no active subscription */}
-          {!isActive && !isPastDue && usage.plan !== 'trial' && (
+          {/* Subscribe CTA if no active subscription. Now also shown for trialing
+              workspaces so they can convert before the 14-day window closes. */}
+          {!isActive && !isPastDue && (
             <div style={{
               background: `${O}08`, border: `1px solid ${O}30`, borderRadius: 12,
               padding: 20, textAlign: 'center', marginBottom: 16,

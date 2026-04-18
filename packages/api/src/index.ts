@@ -127,6 +127,8 @@ async function start() {
     await db.execute(sql`ALTER TABLE providers ADD COLUMN IF NOT EXISTS yelp_url text`);
     // Per-item prices on a provider response (when the provider itemizes instead of bundling)
     await db.execute(sql`ALTER TABLE provider_responses ADD COLUMN IF NOT EXISTS item_prices jsonb`);
+    // 14-day free trial: trialEndsAt timestamp on workspaces
+    await db.execute(sql`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_ends_at timestamp with time zone`);
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');

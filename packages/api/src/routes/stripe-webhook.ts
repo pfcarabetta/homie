@@ -38,9 +38,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
           await db.update(workspaces).set({
             stripeSubscriptionId: subscriptionId,
             subscriptionStatus: 'active',
+            trialEndsAt: null, // trial is over — they paid
+            searchesUsed: 0, // reset usage counter for paid plan's fair-use window
+            billingCycleStart: new Date(),
             updatedAt: new Date(),
           }).where(eq(workspaces.id, workspaceId));
-          logger.info({ workspaceId, subscriptionId }, '[Stripe webhook] Workspace subscription activated');
+          logger.info({ workspaceId, subscriptionId }, '[Stripe webhook] Workspace subscription activated (trial converted)');
         } catch (err) {
           logger.error({ err }, '[Stripe webhook] Failed to save subscription ID');
         }

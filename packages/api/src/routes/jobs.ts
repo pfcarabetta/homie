@@ -128,12 +128,20 @@ router.post('/', async (req: Request, res: Response) => {
     // B2B search credit check — credits are a portfolio-wide pool
     if (body.workspace_id) {
       const [ws] = await db
-        .select({ searchesUsed: workspaces.searchesUsed, searchesLimit: workspaces.searchesLimit, plan: workspaces.plan })
+        .select({
+          searchesUsed: workspaces.searchesUsed,
+          searchesLimit: workspaces.searchesLimit,
+          plan: workspaces.plan,
+          subscriptionStatus: workspaces.subscriptionStatus,
+          trialEndsAt: workspaces.trialEndsAt,
+        })
         .from(workspaces)
         .where(eq(workspaces.id, body.workspace_id))
         .limit(1);
 
       if (ws) {
+        const isTrialing = ws.subscriptionStatus === 'trialing';
+
         // Priority tier gate — only Pro+ plans can dispatch priority/emergency
         // (unlocks voice outreach via Twilio). Starter/trial → standard.
         if ((body.tier === 'priority' || body.tier === 'emergency')
@@ -148,8 +156,27 @@ router.post('/', async (req: Request, res: Response) => {
         // Fair use: 5 searches per property per month across all plans
         const perProp = 5;
 
-        if (ws.plan === 'trial') {
-          // Trial uses fixed limit from DB
+        if (isTrialing) {
+          // Trial: time-based expiration first
+          if (ws.trialEndsAt && new Date(ws.trialEndsAt) < new Date()) {
+            res.status(403).json({
+              data: null,
+              error: 'Free trial has ended. Upgrade to continue dispatching.',
+              meta: { trialExpired: true, upgradeRequired: true, trialEndedAt: ws.trialEndsAt },
+            });
+            return;
+          }
+          // Trial: hard dispatch cap (25 by default)
+          if (ws.searchesUsed >= ws.searchesLimit) {
+            res.status(403).json({
+              data: null,
+              error: `Trial dispatch limit reached (${ws.searchesLimit}). Upgrade to keep going.`,
+              meta: { trialCapReached: true, upgradeRequired: true, limit: ws.searchesLimit },
+            });
+            return;
+          }
+        } else if (ws.plan === 'trial') {
+          // Legacy trial workspaces — keep existing behavior
           if (ws.searchesUsed >= ws.searchesLimit) {
             res.status(403).json({ data: null, error: `Trial credits exhausted (${ws.searchesLimit}). Upgrade to continue.`, meta: {} });
             return;

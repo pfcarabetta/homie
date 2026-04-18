@@ -272,16 +272,16 @@ function Categories() {
   );
 }
 
-function Pricing({ onSignup }: { onSignup: () => void }) {
+function Pricing({ onSignup }: { onSignup: (plan?: string) => void }) {
   const { pricing } = usePricing();
   const bp = pricing.business;
   const [propertyCount, setPropertyCount] = useState(20);
   const tiers = [
-    { name: "Starter", platformFee: bp.starter?.base ?? 0, promoFee: bp.starter?.promoBase ?? null, promoLabel: bp.starter?.promoLabel ?? null, perProperty: bp.starter?.perProperty ?? 10, maxProperties: bp.starter?.maxProperties ?? 10, members: `${bp.starter?.maxTeamMembers ?? 1} user${(bp.starter?.maxTeamMembers ?? 1) > 1 ? 's' : ''}`, badge: "Free to start", badgeColor: COLORS.green, popular: false,
+    { name: "Starter", planKey: "starter", platformFee: bp.starter?.base ?? 0, promoFee: bp.starter?.promoBase ?? null, promoLabel: bp.starter?.promoLabel ?? null, perProperty: bp.starter?.perProperty ?? 10, maxProperties: bp.starter?.maxProperties ?? 10, members: `${bp.starter?.maxTeamMembers ?? 1} user${(bp.starter?.maxTeamMembers ?? 1) > 1 ? 's' : ''}`, badge: "Free to start", badgeColor: COLORS.green, popular: false,
       features: ["Unlimited AI diagnostics & estimates", "Automated provider outreach (SMS + email)", "Booking & dispatch management", "Preferred vendors (up to 5)", "iCal calendar sync", "Basic cost tracking per job"] },
-    { name: "Professional", platformFee: bp.professional?.base ?? 99, promoFee: bp.professional?.promoBase ?? null, promoLabel: bp.professional?.promoLabel ?? null, perProperty: bp.professional?.perProperty ?? 10, maxProperties: bp.professional?.maxProperties ?? 150, members: `${bp.professional?.maxTeamMembers ?? 5} team members`, badge: "Most popular", badgeColor: COLORS.orange, popular: true,
+    { name: "Professional", planKey: "professional", platformFee: bp.professional?.base ?? 99, promoFee: bp.professional?.promoBase ?? null, promoLabel: bp.professional?.promoLabel ?? null, perProperty: bp.professional?.perProperty ?? 10, maxProperties: bp.professional?.maxProperties ?? 150, members: `${bp.professional?.maxTeamMembers ?? 5} team members`, badge: "Most popular", badgeColor: COLORS.orange, popular: true,
       features: ["Everything in Starter, plus:", "Up to 150 properties", "Priority dispatch (phone, text & email)", "Track PMS sync", "Cost reporting & vendor scorecards", "Auto-dispatch rules & Slack alerts", "White-label guest portal with QR codes & property links", "Branded estimate PDFs"] },
-    { name: "Business", platformFee: bp.business?.base ?? 249, promoFee: bp.business?.promoBase ?? null, promoLabel: bp.business?.promoLabel ?? null, perProperty: bp.business?.perProperty ?? 10, maxProperties: bp.business?.maxProperties ?? 500, members: `Unlimited team members`, badge: null, badgeColor: "", popular: false,
+    { name: "Business", planKey: "business", platformFee: bp.business?.base ?? 249, promoFee: bp.business?.promoBase ?? null, promoLabel: bp.business?.promoLabel ?? null, perProperty: bp.business?.perProperty ?? 10, maxProperties: bp.business?.maxProperties ?? 500, members: `Unlimited team members`, badge: null, badgeColor: "", popular: false,
       features: ["Everything in Professional, plus:", "Up to 500 properties", "Unlimited team members with roles", "Dedicated outreach manager", "Priority email support with SLA", "Custom workspace onboarding", "Quarterly business review"] },
   ];
 
@@ -351,7 +351,7 @@ function Pricing({ onSignup }: { onSignup: () => void }) {
                       </div>
                     )}
                   </div>
-                  <button onClick={onSignup} style={{ width: "100%", fontFamily: "'DM Sans', sans-serif", fontSize: 16, fontWeight: 600, color: t.popular ? COLORS.white : COLORS.dark, background: t.popular ? COLORS.orange : COLORS.warm, border: t.popular ? "none" : `1px solid ${COLORS.grayLight}`, borderRadius: 12, padding: "14px 0", cursor: "pointer", transition: "all 0.2s", marginBottom: 28 }} onMouseEnter={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orangeDark; else (e.target as HTMLElement).style.background = COLORS.grayLight; }} onMouseLeave={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orange; else (e.target as HTMLElement).style.background = COLORS.warm; }}>{t.platformFee === 0 ? 'Start for free' : 'Start free trial'}</button>
+                  <button onClick={() => onSignup(t.planKey)} style={{ width: "100%", fontFamily: "'DM Sans', sans-serif", fontSize: 16, fontWeight: 600, color: t.popular ? COLORS.white : COLORS.dark, background: t.popular ? COLORS.orange : COLORS.warm, border: t.popular ? "none" : `1px solid ${COLORS.grayLight}`, borderRadius: 12, padding: "14px 0", cursor: "pointer", transition: "all 0.2s", marginBottom: 28 }} onMouseEnter={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orangeDark; else (e.target as HTMLElement).style.background = COLORS.grayLight; }} onMouseLeave={e => { if (t.popular) (e.target as HTMLElement).style.background = COLORS.orange; else (e.target as HTMLElement).style.background = COLORS.warm; }}>Start 14-day free trial</button>
                   <div style={{ borderTop: `1px solid ${COLORS.warm}`, paddingTop: 20 }}>
                     {t.features.map((f, j) => (
                       <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -400,14 +400,14 @@ function Testimonial() {
   );
 }
 
-function CTA({ onSignup }: { onSignup: () => void }) {
+function CTA({ onSignup }: { onSignup: (plan?: string) => void }) {
   return (
     <section style={{ background: `linear-gradient(165deg, ${COLORS.white} 0%, ${COLORS.warm} 100%)`, padding: "96px 24px" }}>
       <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
         <FadeIn>
           <h2 style={{ fontFamily: "Fraunces, serif", fontSize: "clamp(32px, 4vw, 52px)", fontWeight: 700, color: COLORS.dark, margin: "0 0 16px", lineHeight: 1.1 }}>Every property needs a Homie</h2>
           <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, color: COLORS.darkMid, lineHeight: 1.6, margin: "0 0 36px" }}>Start your 14-day free trial. Import your properties, dispatch your first job, and see why operators are switching to Homie.</p>
-          <button onClick={onSignup} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "18px 48px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.3)" }} onMouseEnter={e => { (e.target as HTMLElement).style.background = COLORS.orangeDark; (e.target as HTMLElement).style.transform = "translateY(-2px)"; }} onMouseLeave={e => { (e.target as HTMLElement).style.background = COLORS.orange; (e.target as HTMLElement).style.transform = "translateY(0)"; }}>Get started free</button>
+          <button onClick={() => onSignup()} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "18px 48px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.3)" }} onMouseEnter={e => { (e.target as HTMLElement).style.background = COLORS.orangeDark; (e.target as HTMLElement).style.transform = "translateY(-2px)"; }} onMouseLeave={e => { (e.target as HTMLElement).style.background = COLORS.orange; (e.target as HTMLElement).style.transform = "translateY(0)"; }}>Get started free</button>
           <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: COLORS.gray, marginTop: 16 }}>No credit card required. Setup takes 5 minutes.</p>
         </FadeIn>
       </div>
@@ -830,7 +830,10 @@ function OutreachEngine() {
 
 export default function BusinessLanding() {
   const navigate = useNavigate();
-  const handleSignup = () => navigate("/register?redirect=/business");
+  const handleSignup = (plan?: string) => {
+    const planParam = plan ? `&plan=${plan}` : '';
+    navigate(`/register?redirect=/business${planParam}`);
+  };
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: COLORS.white, minHeight: "100vh" }}>
       <SEO

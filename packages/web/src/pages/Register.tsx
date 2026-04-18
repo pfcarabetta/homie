@@ -11,6 +11,10 @@ export default function Register() {
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get('redirect') ?? null;
   const isBusiness = returnTo === '/business';
+  const VALID_PLANS = ['starter', 'professional', 'business'];
+  const planParam = searchParams.get('plan');
+  const selectedPlan = planParam && VALID_PLANS.includes(planParam) ? planParam : 'professional';
+  const tierLabel = selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -52,12 +56,12 @@ export default function Register() {
       return;
     }
 
-    // If business signup, auto-create workspace with trial plan
+    // If business signup, auto-create workspace with the selected tier in trialing state
     if (isBusiness && businessName.trim()) {
       try {
         await fetchAPI('/api/v1/business', {
           method: 'POST',
-          body: JSON.stringify({ name: businessName.trim(), plan: 'trial' }),
+          body: JSON.stringify({ name: businessName.trim(), plan: selectedPlan }),
         });
       } catch {
         // Workspace creation failed — user can create manually later
@@ -85,7 +89,7 @@ export default function Register() {
             <p className="text-dark/40 text-xs mb-8">Click the link in the email to verify your account. You can start using Homie right away — just verify when you get a chance.</p>
             {isBusiness && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-700 mb-6">
-                Your business workspace <strong>{businessName}</strong> has been created with a free 14-day trial.
+                Your <strong>{tierLabel}</strong> workspace <strong>{businessName}</strong> is ready — full access for 14 days, no credit card required.
               </div>
             )}
             <Link to={returnTo ?? '/'} className="inline-block bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-8 rounded-full transition-colors">
@@ -113,8 +117,8 @@ export default function Register() {
 
       <div className="flex-1 flex items-start justify-center px-4 pt-4">
         <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-bold text-center mb-1">{isBusiness ? 'Start your free trial' : "Let's be homies!"}</h1>
-          <p className="text-dark/50 text-sm text-center mb-8">{isBusiness ? 'Create your account to get started with Homie for Business' : 'Get started with Homie in seconds'}</p>
+          <h1 className="text-2xl font-bold text-center mb-1">{isBusiness ? `Start your 14-day ${tierLabel} trial` : "Let's be homies!"}</h1>
+          <p className="text-dark/50 text-sm text-center mb-8">{isBusiness ? 'Full access. No credit card required.' : 'Get started with Homie in seconds'}</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (

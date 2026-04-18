@@ -72,6 +72,68 @@ function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onC
   );
 }
 
+/* ── Trial Banner ───────────────────────────────────────────────────────── */
+
+function TrialBanner({ workspace, onUpgrade }: { workspace: WorkspaceDetail; onUpgrade: () => void }) {
+  const isTrialing = workspace.subscriptionStatus === 'trialing';
+  if (!isTrialing) return null;
+
+  const now = Date.now();
+  const trialEnd = workspace.trialEndsAt ? new Date(workspace.trialEndsAt).getTime() : null;
+  const msLeft = trialEnd ? trialEnd - now : 0;
+  const daysLeft = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+  const expired = msLeft <= 0;
+  const dispatchesUsed = workspace.searchesUsed ?? 0;
+  const dispatchesLimit = workspace.searchesLimit ?? 25;
+  const dispatchesLeft = Math.max(0, dispatchesLimit - dispatchesUsed);
+  const tierLabel = workspace.plan.charAt(0).toUpperCase() + workspace.plan.slice(1);
+
+  // Color shifts as trial winds down
+  const urgencyColor = expired || daysLeft <= 2 ? '#DC2626' /* red-600 */
+    : daysLeft <= 5 ? '#D97706' /* amber-600 */
+    : G;
+  const urgencyBg = expired || daysLeft <= 2 ? '#FEF2F2'
+    : daysLeft <= 5 ? '#FFFBEB'
+    : `${G}10`;
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+      padding: '12px 16px', marginBottom: 16, borderRadius: 10,
+      background: urgencyBg, border: `1px solid ${urgencyColor}30`,
+      fontFamily: "'DM Sans', sans-serif", fontSize: 14,
+    }}>
+      <div style={{ flex: 1, minWidth: 240 }}>
+        {expired ? (
+          <span style={{ color: urgencyColor, fontWeight: 600 }}>
+            Your free trial has ended. Upgrade to keep using Homie.
+          </span>
+        ) : (
+          <>
+            <strong style={{ color: urgencyColor }}>{tierLabel} trial</strong>
+            <span style={{ color: 'var(--bp-text)', marginLeft: 6 }}>
+              · {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
+              {dispatchesLeft > 0 && (
+                <> · {dispatchesLeft} of {dispatchesLimit} dispatches remaining</>
+              )}
+              {dispatchesLeft === 0 && (
+                <> · <strong style={{ color: urgencyColor }}>dispatch limit reached</strong></>
+              )}
+            </span>
+          </>
+        )}
+      </div>
+      <button onClick={onUpgrade} style={{
+        background: O, color: '#fff', border: 'none', borderRadius: 8,
+        padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+        fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap',
+      }}>
+        Upgrade to {tierLabel}
+      </button>
+    </div>
+  );
+}
+
 /* ── Main Page ──────────────────────────────────────────────────────────── */
 
 export default function BusinessPortal() {
@@ -403,6 +465,9 @@ export default function BusinessPortal() {
           </button>
         </div>
       )}
+
+      {/* Trial banner — only when workspace is in trialing state */}
+      {workspace && <TrialBanner workspace={workspace} onUpgrade={() => setTab('billing')} />}
 
       {/* Tab content */}
       {/* dispatch-chat rendered via fullWidthContent prop on BusinessLayout */}

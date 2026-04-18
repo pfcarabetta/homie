@@ -44,20 +44,32 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const finalSlug = slug ? slugify(slug) : slugify(name);
+  // 'trial' kept for backward compatibility but new signups now get the chosen tier
+  // with subscriptionStatus='trialing' instead. Default to 'professional' since
+  // that's the most-popular tier on the pricing page.
   const validPlans = ['trial', 'starter', 'professional', 'business', 'enterprise'];
-  const selectedPlan = plan && validPlans.includes(plan) ? plan : 'starter';
-  // Per-property model: all plans get 5 searches/property/month (fair use)
-  const planSearchLimits: Record<string, number> = { trial: 5, starter: 5, professional: 5, business: 5, enterprise: 5 };
-  const planPropertyLimits: Record<string, number> = { trial: 5, starter: 10, professional: 150, business: 500, enterprise: 9999 };
+  const selectedPlan = plan && validPlans.includes(plan) ? plan : 'professional';
+  const isTrialingPlan = selectedPlan !== 'trial' && selectedPlan !== 'enterprise';
+
+  // Trial dispatch cap (25 over 14 days, regardless of tier — anti-abuse, not
+  // a feature gate). Paid plans use per-property fair use instead.
+  const TRIAL_DISPATCH_CAP = 25;
+  const TRIAL_DAYS = 14;
 
   try {
+    const trialEndsAt = isTrialingPlan
+      ? new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
+      : null;
+
     const [workspace] = await db
       .insert(workspaces)
       .values({
         name: name.trim(),
         slug: finalSlug,
         plan: selectedPlan,
-        searchesLimit: planSearchLimits[selectedPlan] ?? 2,
+        searchesLimit: TRIAL_DISPATCH_CAP,
+        subscriptionStatus: isTrialingPlan ? 'trialing' : null,
+        trialEndsAt,
         ownerId: req.homeownerId,
       })
       .returning();

@@ -777,6 +777,11 @@ export interface WorkspaceDetail extends Workspace {
   contactTitle: string | null;
   slackChannelId: string | null;
   slackTeamId: string | null;
+  subscriptionStatus: string | null;
+  trialEndsAt: string | null;
+  searchesUsed: number;
+  searchesLimit: number;
+  stripeSubscriptionId: string | null;
   updatedAt: string;
 }
 
