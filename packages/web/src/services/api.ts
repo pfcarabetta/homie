@@ -651,11 +651,24 @@ export interface AccountJob {
 export interface AccountBooking {
   id: string;
   job_id: string;
-  provider: { id: string; name: string; phone: string | null };
+  provider: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email?: string | null;
+    rating?: string | null;
+    review_count?: number;
+  };
   status: string;
   confirmed_at: string;
   quoted_price: string | null;
   scheduled: string | null;
+  response_message?: string | null;
+  response_channel?: string | null;
+  job_category?: string | null;
+  job_severity?: string | null;
+  job_summary?: string | null;
+  unread_messages?: number;
 }
 
 // ── Tracking ────────────────────────────────────────────────────────────────
@@ -715,6 +728,16 @@ export const accountService = {
     fetchAPI<AccountProfile>('/api/v1/account', { method: 'PATCH', body: JSON.stringify(data) }),
   getJobs: () => fetchAPI<{ jobs: AccountJob[] }>('/api/v1/account/jobs'),
   getBookings: () => fetchAPI<{ bookings: AccountBooking[] }>('/api/v1/account/bookings'),
+  // Booking messaging — homeowner ↔ provider via SMS bridge (mirrors business)
+  listBookingMessages: (bookingId: string) =>
+    fetchAPI<BookingMessage[]>(`/api/v1/account/bookings/${bookingId}/messages`),
+  sendBookingMessage: (bookingId: string, content: string, photoUrl?: string) =>
+    fetchAPI<BookingMessage>(`/api/v1/account/bookings/${bookingId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, photo_url: photoUrl }),
+    }),
+  markBookingMessagesRead: (bookingId: string) =>
+    fetchAPI<{ ok: boolean }>(`/api/v1/account/bookings/${bookingId}/messages/read`, { method: 'POST' }),
   getHome: () => fetchAPI<HomeData>('/api/v1/account/home'),
   updateHome: (data: Partial<HomeData>) => fetchAPI<HomeData>('/api/v1/account/home', { method: 'PATCH', body: JSON.stringify(data) }),
   // Consumer home scan

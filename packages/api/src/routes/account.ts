@@ -11,6 +11,7 @@ import { jobs } from '../db/schema/jobs';
 import { bookings } from '../db/schema/bookings';
 import { providers } from '../db/schema/providers';
 import { providerResponses } from '../db/schema/provider-responses';
+import { bookingMessages } from '../db/schema/booking-messages';
 import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/schema/property-scans';
 import { inspectionReports, inspectionReportItems, inspectionSupportingDocuments, inspectionCrossReferenceInsights } from '../db/schema/inspector';
 import { computeSellerAction } from './inspector';
@@ -358,24 +359,60 @@ router.get('/jobs', async (req: Request, res: Response) => {
 router.get('/bookings', async (req: Request, res: Response) => {
   try {
     const rows = await db
-      .select({ booking: bookings, provider: providers, response: providerResponses })
+      .select({ booking: bookings, provider: providers, response: providerResponses, job: jobs })
       .from(bookings)
       .innerJoin(providers, eq(bookings.providerId, providers.id))
       .leftJoin(providerResponses, eq(bookings.responseId, providerResponses.id))
+      .leftJoin(jobs, eq(bookings.jobId, jobs.id))
       .where(eq(bookings.homeownerId, req.homeownerId))
       .orderBy(desc(bookings.confirmedAt));
 
+    // Compute unread provider message counts per booking in one query
+    const bookingIds = rows.map(r => r.booking.id);
+    const unreadMap: Record<string, number> = {};
+    if (bookingIds.length > 0) {
+      const unreadRows = await db
+        .select({
+          bookingId: bookingMessages.bookingId,
+          n: count(),
+        })
+        .from(bookingMessages)
+        .where(and(
+          inArray(bookingMessages.bookingId, bookingIds),
+          eq(bookingMessages.senderType, 'provider'),
+          isNull(bookingMessages.readAt),
+        ))
+        .groupBy(bookingMessages.bookingId);
+      for (const u of unreadRows) unreadMap[u.bookingId] = Number(u.n);
+    }
+
     res.json({
       data: {
-        bookings: rows.map(({ booking: b, provider: p, response: r }) => ({
-          id: b.id,
-          job_id: b.jobId,
-          provider: { id: p.id, name: p.name, phone: p.phone },
-          status: b.status,
-          confirmed_at: b.confirmedAt.toISOString(),
-          quoted_price: r?.quotedPrice ?? null,
-          scheduled: r?.availability ?? null,
-        })),
+        bookings: rows.map(({ booking: b, provider: p, response: r, job: j }) => {
+          const diag = (j?.diagnosis ?? null) as { category?: string; severity?: string; summary?: string } | null;
+          return {
+            id: b.id,
+            job_id: b.jobId,
+            provider: {
+              id: p.id,
+              name: p.name,
+              phone: p.phone,
+              email: p.email,
+              rating: p.rating,
+              review_count: p.reviewCount,
+            },
+            status: b.status,
+            confirmed_at: b.confirmedAt.toISOString(),
+            quoted_price: r?.quotedPrice ?? null,
+            scheduled: r?.availability ?? null,
+            response_message: r?.message ?? null,
+            response_channel: r?.channel ?? null,
+            job_category: diag?.category ?? null,
+            job_severity: diag?.severity ?? null,
+            job_summary: diag?.summary ?? null,
+            unread_messages: unreadMap[b.id] ?? 0,
+          };
+        }),
       },
       error: null,
       meta: {},
@@ -383,6 +420,154 @@ router.get('/bookings', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /account/bookings]');
     res.status(500).json({ data: null, error: 'Failed to fetch bookings', meta: {} });
+  }
+});
+
+// ── Booking Messages ────────────────────────────────────────────────────────
+
+/** Verify the booking belongs to the authenticated homeowner. */
+async function verifyBookingOwnership(bookingId: string, homeownerId: string): Promise<{
+  id: string;
+  providerId: string;
+  providerPhone: string | null;
+  providerName: string;
+} | null> {
+  const [row] = await db
+    .select({
+      id: bookings.id,
+      providerId: bookings.providerId,
+      providerPhone: providers.phone,
+      providerName: providers.name,
+    })
+    .from(bookings)
+    .innerJoin(providers, eq(bookings.providerId, providers.id))
+    .where(and(eq(bookings.id, bookingId), eq(bookings.homeownerId, homeownerId)))
+    .limit(1);
+  return row ?? null;
+}
+
+// GET /api/v1/account/bookings/:bookingId/messages
+router.get('/bookings/:bookingId/messages', async (req: Request, res: Response) => {
+  try {
+    const owned = await verifyBookingOwnership(req.params.bookingId, req.homeownerId);
+    if (!owned) {
+      res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
+      return;
+    }
+
+    const messages = await db
+      .select()
+      .from(bookingMessages)
+      .where(eq(bookingMessages.bookingId, req.params.bookingId))
+      .orderBy(bookingMessages.createdAt);
+
+    res.json({ data: messages, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/bookings/:bid/messages]');
+    res.status(500).json({ data: null, error: 'Failed to fetch messages', meta: {} });
+  }
+});
+
+// POST /api/v1/account/bookings/:bookingId/messages — send a message to the provider
+router.post('/bookings/:bookingId/messages', async (req: Request, res: Response) => {
+  const { content, photo_url: photoUrl } = req.body as { content?: string; photo_url?: string };
+  const trimmed = (content ?? '').trim();
+
+  if (!trimmed && !photoUrl) {
+    res.status(400).json({ data: null, error: 'content or photo_url is required', meta: {} });
+    return;
+  }
+  if (photoUrl && photoUrl.length > 7_500_000) {
+    res.status(413).json({ data: null, error: 'Photo too large (max ~5MB)', meta: {} });
+    return;
+  }
+
+  try {
+    const owned = await verifyBookingOwnership(req.params.bookingId, req.homeownerId);
+    if (!owned) {
+      res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
+      return;
+    }
+
+    // Resolve sender display name from homeowner profile
+    const [me] = await db
+      .select({ firstName: homeowners.firstName, lastName: homeowners.lastName, email: homeowners.email })
+      .from(homeowners)
+      .where(eq(homeowners.id, req.homeownerId))
+      .limit(1);
+    const senderName = [me?.firstName, me?.lastName].filter(Boolean).join(' ')
+      || me?.email?.split('@')[0]
+      || 'Homeowner';
+
+    const [msg] = await db
+      .insert(bookingMessages)
+      .values({
+        bookingId: req.params.bookingId,
+        senderType: 'team',
+        senderId: req.homeownerId,
+        senderName,
+        content: trimmed,
+        photoUrl: photoUrl ?? null,
+      })
+      .returning();
+
+    // Outbound SMS/MMS to the provider via Twilio (best-effort)
+    if (owned.providerPhone) {
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+      if (accountSid && authToken && fromNumber) {
+        try {
+          const twilioMod = await import('twilio');
+          const client = twilioMod.default(accountSid, authToken);
+          const apiBase = process.env.API_BASE_URL ?? '';
+          const mediaUrl = photoUrl && apiBase
+            ? [`${apiBase}/api/v1/booking-messages/${msg.id}/photo`]
+            : undefined;
+          const body = trimmed
+            ? `Homie - ${senderName}: ${trimmed}`
+            : `Homie - ${senderName} sent a photo`;
+          await client.messages.create({
+            body,
+            from: fromNumber,
+            to: owned.providerPhone,
+            ...(mediaUrl ? { mediaUrl } : {}),
+          });
+        } catch (err) {
+          logger.warn({ err, bookingId: req.params.bookingId }, '[account-msg] Twilio send failed');
+        }
+      }
+    }
+
+    res.status(201).json({ data: msg, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/bookings/:bid/messages]');
+    res.status(500).json({ data: null, error: 'Failed to send message', meta: {} });
+  }
+});
+
+// POST /api/v1/account/bookings/:bookingId/messages/read — mark provider messages read
+router.post('/bookings/:bookingId/messages/read', async (req: Request, res: Response) => {
+  try {
+    const owned = await verifyBookingOwnership(req.params.bookingId, req.homeownerId);
+    if (!owned) {
+      res.status(404).json({ data: null, error: 'Booking not found', meta: {} });
+      return;
+    }
+
+    await db
+      .update(bookingMessages)
+      .set({ readAt: new Date() })
+      .where(and(
+        eq(bookingMessages.bookingId, req.params.bookingId),
+        eq(bookingMessages.senderType, 'provider'),
+        isNull(bookingMessages.readAt),
+      ));
+
+    res.json({ data: { ok: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/bookings/:bid/messages/read]');
+    res.status(500).json({ data: null, error: 'Failed to mark read', meta: {} });
   }
 });
 

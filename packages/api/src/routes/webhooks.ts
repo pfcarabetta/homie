@@ -624,8 +624,11 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
           link: `/business?tab=bookings&job=${activeBooking.jobId}`,
         });
       } catch (err) { logger.warn({ err, bookingId: activeBooking.id }, '[sms-webhook] notification feed failed'); }
+    }
 
-      // Email the team member who created the booking, if they opted in
+    // Email the homeowner / team member who owns this booking. Works for
+    // both workspace bookings (team member) and consumer bookings (homeowner).
+    {
       try {
         const [member] = await db
           .select({
@@ -638,7 +641,10 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
           .limit(1);
         if (member?.email && member.notifyEmailBookings !== false) {
           const safeBody = Body.replace(/[<>]/g, c => c === '<' ? '&lt;' : '&gt;');
-          const portalLink = `${process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'https://homiepro.ai'}/business?tab=bookings&job=${activeBooking.jobId}`;
+          const origin = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'https://homiepro.ai';
+          const portalLink = activeBooking.workspaceId
+            ? `${origin}/business?tab=bookings&job=${activeBooking.jobId}`
+            : `${origin}/account?tab=bookings`;
           const html = `
             <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
               <div style="background:#2D2926;padding:20px 32px;text-align:center">
@@ -665,7 +671,8 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
       } catch (err) { logger.warn({ err, bookingId: activeBooking.id }, '[sms-webhook] member email failed'); }
     }
 
-    twiml.message("Got it! Your message has been forwarded to the property manager.");
+    const recipientLabel = activeBooking.workspaceId ? 'property manager' : 'homeowner';
+    twiml.message(`Got it! Your message has been forwarded to the ${recipientLabel}.`);
     res.type('text/xml').send(twiml.toString());
     return;
   }

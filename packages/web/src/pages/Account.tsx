@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { accountService, jobService, estimateService, businessService, type AccountProfile, type AccountJob, type AccountBooking, type ProviderResponseItem, type HomeData, type PropertyDetails, type PropertyScan, type CostEstimate } from '@/services/api';
+import { accountService, jobService, estimateService, businessService, type AccountProfile, type AccountJob, type AccountBooking, type BookingMessage, type ProviderResponseItem, type HomeData, type PropertyDetails, type PropertyScan, type CostEstimate } from '@/services/api';
 import { inspectService } from '@/services/inspector-api';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -572,6 +572,13 @@ function QuotesTab() {
 function BookingsTab() {
   const [bookings, setBookings] = useState<AccountBooking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  function refetch() {
+    accountService.getBookings().then(res => {
+      setBookings(res.data?.bookings || []);
+    }).catch(() => {});
+  }
 
   useEffect(() => {
     accountService.getBookings().then(res => {
@@ -591,26 +598,394 @@ function BookingsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {bookings.map(b => {
-        const sc = STATUS_COLORS[b.status] || STATUS_COLORS.confirmed;
-        return (
-          <div key={b.id} style={{
-            background: 'white', borderRadius: 14, padding: '16px 18px',
-            border: '1px solid rgba(0,0,0,0.06)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontWeight: 600, fontSize: 15, color: D }}>{b.provider.name}</div>
-              <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{b.status}</span>
+      {bookings.map(b => (
+        <BookingCard
+          key={b.id}
+          booking={b}
+          expanded={expandedId === b.id}
+          onToggle={() => setExpandedId(prev => prev === b.id ? null : b.id)}
+          onMarkedRead={refetch}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BookingCard({ booking, expanded, onToggle, onMarkedRead }: {
+  booking: AccountBooking;
+  expanded: boolean;
+  onToggle: () => void;
+  onMarkedRead: () => void;
+}) {
+  const sc = STATUS_COLORS[booking.status] || STATUS_COLORS.confirmed;
+  const [showMessages, setShowMessages] = useState(false);
+  const unread = booking.unread_messages ?? 0;
+
+  return (
+    <div style={{
+      background: 'white', borderRadius: 14,
+      border: '1px solid rgba(0,0,0,0.06)', overflow: 'hidden',
+      transition: 'box-shadow 0.15s',
+      boxShadow: expanded ? '0 4px 20px rgba(0,0,0,0.04)' : 'none',
+    }}>
+      {/* Header — always visible, click to expand */}
+      <button onClick={onToggle} style={{
+        width: '100%', textAlign: 'left', background: 'none', border: 'none',
+        padding: '16px 18px', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 15, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {booking.provider.name}
             </div>
-            <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#6B6560', flexWrap: 'wrap' }}>
-              {b.quoted_price && <span style={{ fontWeight: 600, color: O }}>{cleanPrice(b.quoted_price)}</span>}
-              {b.scheduled && <span>&#128197; {b.scheduled}</span>}
-              {b.provider.phone && <a href={`tel:${b.provider.phone}`} style={{ color: G, textDecoration: 'none' }}>&#128222; {b.provider.phone}</a>}
-            </div>
-            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>{timeAgo(b.confirmed_at)}</div>
+            {unread > 0 && (
+              <span style={{
+                background: O, color: '#fff', fontSize: 10, fontWeight: 700,
+                padding: '2px 7px', borderRadius: 100, flexShrink: 0,
+              }}>
+                {unread} new
+              </span>
+            )}
           </div>
-        );
-      })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <span style={{ background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100, fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{booking.status}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9B9490" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#6B6560', flexWrap: 'wrap' }}>
+          {booking.quoted_price && <span style={{ fontWeight: 600, color: O }}>{cleanPrice(booking.quoted_price)}</span>}
+          {booking.scheduled && <span>&#128197; {booking.scheduled}</span>}
+          {booking.job_category && (
+            <span style={{ textTransform: 'capitalize' }}>{booking.job_category.replace(/_/g, ' ')}</span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>{timeAgo(booking.confirmed_at)}</div>
+      </button>
+
+      {/* Expanded body */}
+      {expanded && (
+        <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', padding: '16px 18px' }}>
+          {/* Job details */}
+          {(booking.job_summary || booking.job_severity) && (
+            <div style={{ marginBottom: 14 }}>
+              <SectionLabel>Service request</SectionLabel>
+              <div style={{ fontSize: 13, color: D, lineHeight: 1.5 }}>
+                {booking.job_summary || booking.job_category || 'Service request'}
+              </div>
+              {booking.job_severity && (
+                <div style={{ marginTop: 6 }}>
+                  <SeverityChip severity={booking.job_severity} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Provider quote details */}
+          <div style={{ marginBottom: 14 }}>
+            <SectionLabel>Provider details</SectionLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 14px', fontSize: 13 }}>
+              <span style={{ color: '#9B9490' }}>Confirmed</span>
+              <span style={{ color: D }}>{new Date(booking.confirmed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+              {booking.provider.rating && (
+                <>
+                  <span style={{ color: '#9B9490' }}>Rating</span>
+                  <span style={{ color: D }}>★ {booking.provider.rating} {booking.provider.review_count ? `(${booking.provider.review_count} reviews)` : ''}</span>
+                </>
+              )}
+              {booking.quoted_price && (
+                <>
+                  <span style={{ color: '#9B9490' }}>Quoted</span>
+                  <span style={{ color: D, fontWeight: 600 }}>{cleanPrice(booking.quoted_price)}</span>
+                </>
+              )}
+              {booking.scheduled && (
+                <>
+                  <span style={{ color: '#9B9490' }}>Available</span>
+                  <span style={{ color: D }}>{booking.scheduled}</span>
+                </>
+              )}
+            </div>
+            {booking.response_message && (
+              <div style={{
+                marginTop: 12, padding: '10px 12px',
+                background: '#F9F5F2', borderRadius: 10, fontSize: 13, color: D, lineHeight: 1.5,
+                borderLeft: `3px solid ${G}`,
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9490', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                  Note from provider
+                </div>
+                {booking.response_message}
+              </div>
+            )}
+          </div>
+
+          {/* Contact buttons */}
+          <div style={{ marginBottom: 14 }}>
+            <SectionLabel>Contact</SectionLabel>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {booking.provider.phone && (
+                <ContactButton href={`tel:${booking.provider.phone}`} icon="\uD83D\uDCDE" label="Call" sub={booking.provider.phone} />
+              )}
+              <button
+                onClick={() => setShowMessages(s => !s)}
+                style={contactBtnStyle(showMessages ? O : '#fff', showMessages ? '#fff' : D, showMessages ? O : 'rgba(0,0,0,0.08)')}
+              >
+                <span style={{ fontSize: 16 }}>&#128172;</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{showMessages ? 'Hide messages' : 'Message'}</span>
+                  <span style={{ fontSize: 11, opacity: 0.7 }}>via Homie</span>
+                </div>
+                {!showMessages && unread > 0 && (
+                  <span style={{
+                    background: O, color: '#fff', fontSize: 10, fontWeight: 700,
+                    padding: '2px 6px', borderRadius: 100, marginLeft: 4,
+                  }}>{unread}</span>
+                )}
+              </button>
+              {booking.provider.email && (
+                <ContactButton href={`mailto:${booking.provider.email}`} icon="\u2709\uFE0F" label="Email" sub={booking.provider.email} />
+              )}
+            </div>
+          </div>
+
+          {/* Inline message thread */}
+          {showMessages && (
+            <BookingMessageThread bookingId={booking.id} providerName={booking.provider.name} onMarkedRead={onMarkedRead} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9490', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+      {children}
+    </div>
+  );
+}
+
+function SeverityChip({ severity }: { severity: string }) {
+  const colors: Record<string, { bg: string; text: string }> = {
+    safety_hazard: { bg: '#FEF2F2', text: '#DC2626' },
+    urgent: { bg: '#FFF7ED', text: '#C2410C' },
+    recommended: { bg: '#FFFBEB', text: '#B45309' },
+    monitor: { bg: '#EFF6FF', text: '#2563EB' },
+    informational: { bg: '#F5F5F5', text: '#6B6560' },
+  };
+  const c = colors[severity] || colors.informational;
+  return (
+    <span style={{
+      background: c.bg, color: c.text, padding: '3px 10px', borderRadius: 100,
+      fontSize: 11, fontWeight: 600, textTransform: 'capitalize',
+    }}>
+      {severity.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+function contactBtnStyle(bg: string, color: string, border: string): React.CSSProperties {
+  return {
+    background: bg, color, border: `1px solid ${border}`,
+    borderRadius: 10, padding: '10px 14px',
+    display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+    fontFamily: "'DM Sans', sans-serif",
+    transition: 'all 0.15s', textDecoration: 'none',
+  };
+}
+
+function ContactButton({ href, icon, label, sub }: { href: string; icon: string; label: string; sub: string }) {
+  return (
+    <a href={href} style={contactBtnStyle('#fff', D, 'rgba(0,0,0,0.08)')}>
+      <span style={{ fontSize: 16 }}>{icon}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 11, color: '#9B9490', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>
+      </div>
+    </a>
+  );
+}
+
+/* -- Booking Message Thread (inline, polls every 5s) -- */
+function BookingMessageThread({ bookingId, providerName, onMarkedRead }: {
+  bookingId: string;
+  providerName: string;
+  onMarkedRead: () => void;
+}) {
+  const [messages, setMessages] = useState<BookingMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const knownIdsRef = useRef<Set<string>>(new Set());
+
+  async function loadMessages() {
+    try {
+      const res = await accountService.listBookingMessages(bookingId);
+      if (!res.data) return;
+      for (const m of res.data) knownIdsRef.current.add(m.id);
+      setMessages(res.data);
+    } catch { /* silent */ }
+  }
+
+  useEffect(() => {
+    setLoading(true);
+    knownIdsRef.current = new Set();
+    loadMessages().finally(() => setLoading(false));
+    accountService.markBookingMessagesRead(bookingId).then(() => onMarkedRead()).catch(() => null);
+
+    pollRef.current = setInterval(() => {
+      loadMessages();
+      accountService.markBookingMessagesRead(bookingId).then(() => onMarkedRead()).catch(() => null);
+    }, 5000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [messages]);
+
+  async function handleSend() {
+    const text = input.trim();
+    if (!text || sending) return;
+    setInput('');
+    setSending(true);
+    setError(null);
+
+    const optimistic: BookingMessage = {
+      id: `opt-${Date.now()}`,
+      bookingId,
+      senderType: 'team',
+      senderId: null,
+      senderName: 'You',
+      content: text,
+      photoUrl: null,
+      readAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, optimistic]);
+
+    try {
+      const res = await accountService.sendBookingMessage(bookingId, text);
+      if (res.data) {
+        setMessages(prev => prev.map(m => m.id === optimistic.id ? res.data! : m));
+      }
+    } catch {
+      setError('Failed to send. Please try again.');
+      setMessages(prev => prev.filter(m => m.id !== optimistic.id));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  return (
+    <div style={{
+      background: '#FAFAF8', borderRadius: 12, padding: 12,
+      border: '1px solid rgba(0,0,0,0.05)', marginTop: 4,
+    }}>
+      <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 8, lineHeight: 1.4 }}>
+        Messages route through {providerName}'s phone via SMS. They'll see your name and reply by texting back.
+      </div>
+
+      <div style={{
+        maxHeight: 320, overflowY: 'auto',
+        display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 0',
+      }}>
+        {loading ? (
+          <div style={{ color: '#9B9490', fontSize: 13, padding: '12px 0', textAlign: 'center' }}>Loading messages...</div>
+        ) : messages.length === 0 ? (
+          <div style={{ color: '#9B9490', fontSize: 13, padding: '20px 12px', textAlign: 'center' }}>
+            No messages yet. Send the first one below.
+          </div>
+        ) : (
+          messages.map(m => <MessageBubble key={m.id} message={m} />)
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {error && <div style={{ fontSize: 12, color: '#DC2626', padding: '6px 4px' }}>{error}</div>}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'flex-end' }}>
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={`Message ${providerName.split(' ')[0]}...`}
+          rows={1}
+          style={{
+            flex: 1, padding: '10px 12px', borderRadius: 10,
+            border: '1px solid rgba(0,0,0,0.1)', fontSize: 13, resize: 'none',
+            fontFamily: "'DM Sans', sans-serif", outline: 'none', minHeight: 40, maxHeight: 120,
+            background: '#fff',
+          }}
+        />
+        <button
+          onClick={handleSend}
+          disabled={!input.trim() || sending}
+          style={{
+            background: O, color: '#fff', border: 'none', borderRadius: 10,
+            padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: input.trim() && !sending ? 'pointer' : 'default',
+            opacity: input.trim() && !sending ? 1 : 0.5, fontFamily: "'DM Sans', sans-serif",
+            flexShrink: 0,
+          }}
+        >
+          {sending ? 'Sending\u2026' : 'Send'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({ message }: { message: BookingMessage }) {
+  const fromMe = message.senderType === 'team';
+  const time = new Date(message.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  return (
+    <div style={{
+      display: 'flex', justifyContent: fromMe ? 'flex-end' : 'flex-start',
+    }}>
+      <div style={{
+        maxWidth: '78%',
+        background: fromMe ? O : '#fff',
+        color: fromMe ? '#fff' : D,
+        borderRadius: 14,
+        padding: '8px 12px',
+        border: fromMe ? 'none' : '1px solid rgba(0,0,0,0.06)',
+        fontSize: 13, lineHeight: 1.4,
+      }}>
+        {!fromMe && message.senderName && (
+          <div style={{ fontSize: 10, fontWeight: 700, color: G, marginBottom: 2 }}>
+            {message.senderName}
+          </div>
+        )}
+        {message.photoUrl && (
+          <img src={message.photoUrl} alt="" style={{ maxWidth: '100%', borderRadius: 8, marginBottom: message.content ? 6 : 0 }} />
+        )}
+        {message.content && <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{message.content}</div>}
+        <div style={{
+          fontSize: 10, marginTop: 4,
+          color: fromMe ? 'rgba(255,255,255,0.7)' : '#9B9490',
+          textAlign: 'right',
+        }}>
+          {time}
+        </div>
+      </div>
     </div>
   );
 }
