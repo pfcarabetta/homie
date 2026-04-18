@@ -755,6 +755,16 @@ export const accountService = {
       method: 'POST',
       body: JSON.stringify({ count }),
     }),
+  // Notifications — homeowner-scoped, mirrors business notifications
+  listNotifications: (limit?: number) =>
+    fetchAPI<{ items: AccountNotification[]; unreadCount: number }>(
+      `/api/v1/account/notifications${limit ? `?limit=${limit}` : ''}`,
+    ),
+  markNotificationsRead: (body: { ids?: string[]; all?: boolean }) =>
+    fetchAPI<{ ok: boolean }>('/api/v1/account/notifications/mark-read', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   // Consumer home scan
   startHomeScan: (scanType: 'full' | 'quick' = 'full') =>
     fetchAPI<PropertyScan>('/api/v1/account/home/scan', { method: 'POST', body: JSON.stringify({ scan_type: scanType }) }),
@@ -1048,6 +1058,20 @@ export interface BusinessNotification {
   jobId: string | null;
   propertyId: string | null;
   guestIssueId: string | null;
+  link: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface AccountNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  jobId: string | null;
+  propertyId: string | null;
+  guestIssueId: string | null;
+  bookingId: string | null;
   link: string | null;
   read: boolean;
   createdAt: string;

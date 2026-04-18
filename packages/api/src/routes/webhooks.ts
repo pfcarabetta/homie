@@ -609,11 +609,11 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
       content: Body,
     }).catch(err => logger.warn({ err, bookingId: activeBooking.id }, '[sms-webhook] Failed to save booking message'));
 
-    // Notification feed + email — fire-and-forget
-    if (activeBooking.workspaceId) {
-      try {
-        const { recordNotification } = await import('../services/notification-feed');
-        const trimmed = Body.length > 120 ? Body.slice(0, 117) + '...' : Body;
+    // Notification feed — workspace OR homeowner (fire-and-forget)
+    try {
+      const { recordNotification } = await import('../services/notification-feed');
+      const trimmed = Body.length > 120 ? Body.slice(0, 117) + '...' : Body;
+      if (activeBooking.workspaceId) {
         void recordNotification({
           workspaceId: activeBooking.workspaceId,
           type: 'provider_response',
@@ -621,10 +621,21 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
           body: trimmed,
           jobId: activeBooking.jobId,
           propertyId: activeBooking.propertyId,
+          bookingId: activeBooking.id,
           link: `/business?tab=bookings&job=${activeBooking.jobId}`,
         });
-      } catch (err) { logger.warn({ err, bookingId: activeBooking.id }, '[sms-webhook] notification feed failed'); }
-    }
+      } else if (activeBooking.homeownerId) {
+        void recordNotification({
+          homeownerId: activeBooking.homeownerId,
+          type: 'booking_message',
+          title: `New message from ${provider.name}`,
+          body: trimmed,
+          jobId: activeBooking.jobId,
+          bookingId: activeBooking.id,
+          link: `/account?tab=bookings`,
+        });
+      }
+    } catch (err) { logger.warn({ err, bookingId: activeBooking.id }, '[sms-webhook] notification feed failed'); }
 
     // Email the homeowner / team member who owns this booking. Works for
     // both workspace bookings (team member) and consumer bookings (homeowner).

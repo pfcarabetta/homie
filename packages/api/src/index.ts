@@ -129,6 +129,11 @@ async function start() {
     await db.execute(sql`ALTER TABLE provider_responses ADD COLUMN IF NOT EXISTS item_prices jsonb`);
     // 14-day free trial: trialEndsAt timestamp on workspaces
     await db.execute(sql`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_ends_at timestamp with time zone`);
+    // Consumer-side notifications: extend notifications table to support homeowner-scoped rows
+    await db.execute(sql`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS homeowner_id uuid`);
+    await db.execute(sql`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS booking_id uuid`);
+    await db.execute(sql`ALTER TABLE notifications ALTER COLUMN workspace_id DROP NOT NULL`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS notifications_homeowner_id_idx ON notifications (homeowner_id)`);
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');

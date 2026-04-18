@@ -1069,7 +1069,7 @@ export async function sendBookingNotifications(
     ...(availability ? { availability } : {}),
   });
 
-  // Slack notification — fire-and-forget
+  // Slack notification — workspace only, fire-and-forget
   if (job.workspaceId) {
     try {
       const { notifySlack } = await import('./slack-notifier');
@@ -1082,12 +1082,15 @@ export async function sendBookingNotifications(
         category: bookingDiagnosis?.category ?? 'maintenance',
       });
     } catch (err) { logger.warn({ err, jobId }, '[orchestration] Slack notification failed during booking'); }
+  }
 
-    // In-app notification feed
-    try {
-      const { recordNotification } = await import('./notification-feed');
-      const bookingDiagnosis = job.diagnosis as DiagnosisPayload | null;
-      const cat = (bookingDiagnosis?.category || 'job').replace(/_/g, ' ');
+  // In-app notification feed — routes to workspace OR homeowner depending on
+  // whether the job is a Business dispatch or a consumer booking.
+  try {
+    const { recordNotification } = await import('./notification-feed');
+    const bookingDiagnosis = job.diagnosis as DiagnosisPayload | null;
+    const cat = (bookingDiagnosis?.category || 'job').replace(/_/g, ' ');
+    if (job.workspaceId) {
       void recordNotification({
         workspaceId: job.workspaceId,
         type: 'booking_confirmed',
@@ -1097,8 +1100,17 @@ export async function sendBookingNotifications(
         propertyId: job.propertyId,
         link: `/business?tab=bookings&job=${jobId}`,
       });
-    } catch (err) { logger.warn({ err, jobId }, '[orchestration] notification feed failed'); }
-  }
+    } else {
+      void recordNotification({
+        homeownerId: job.homeownerId,
+        type: 'booking_confirmed',
+        title: `Booking confirmed: ${displayName}`,
+        body: `${displayName} is booked for ${cat}${availability ? ` — ${availability}` : ''}.`,
+        jobId,
+        link: `/account?tab=bookings`,
+      });
+    }
+  } catch (err) { logger.warn({ err, jobId }, '[orchestration] notification feed failed'); }
 
   const category = ((job.diagnosis as DiagnosisPayload | null)?.category ?? 'home maintenance').replace(/_/g, ' ');
 

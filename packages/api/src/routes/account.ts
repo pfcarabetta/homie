@@ -12,6 +12,7 @@ import { bookings } from '../db/schema/bookings';
 import { providers } from '../db/schema/providers';
 import { providerResponses } from '../db/schema/provider-responses';
 import { bookingMessages } from '../db/schema/booking-messages';
+import { notifications } from '../db/schema/notifications';
 import { propertyScans, propertyRooms, propertyInventoryItems } from '../db/schema/property-scans';
 import { inspectionReports, inspectionReportItems, inspectionSupportingDocuments, inspectionCrossReferenceInsights } from '../db/schema/inspector';
 import { computeSellerAction } from './inspector';
@@ -352,6 +353,85 @@ router.get('/jobs', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /account/jobs]');
     res.status(500).json({ data: null, error: 'Failed to fetch jobs', meta: {} });
+  }
+});
+
+// ── Notifications ───────────────────────────────────────────────────────────
+
+// GET /api/v1/account/notifications?limit=30 — list + unread count
+router.get('/notifications', async (req: Request, res: Response) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
+  try {
+    const [items, unread] = await Promise.all([
+      db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.homeownerId, req.homeownerId))
+        .orderBy(desc(notifications.createdAt))
+        .limit(limit),
+      db
+        .select({ n: count() })
+        .from(notifications)
+        .where(and(
+          eq(notifications.homeownerId, req.homeownerId),
+          eq(notifications.read, false),
+        )),
+    ]);
+
+    res.json({
+      data: {
+        items: items.map(n => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          body: n.body,
+          jobId: n.jobId,
+          propertyId: n.propertyId,
+          guestIssueId: n.guestIssueId,
+          bookingId: n.bookingId,
+          link: n.link,
+          read: n.read,
+          createdAt: n.createdAt.toISOString(),
+        })),
+        unreadCount: Number(unread[0]?.n ?? 0),
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/notifications]');
+    res.status(500).json({ data: null, error: 'Failed to load notifications', meta: {} });
+  }
+});
+
+// POST /api/v1/account/notifications/mark-read — mark by ids OR all unread
+router.post('/notifications/mark-read', async (req: Request, res: Response) => {
+  const body = req.body as { ids?: string[]; all?: boolean };
+  try {
+    if (body?.all) {
+      await db
+        .update(notifications)
+        .set({ read: true })
+        .where(and(
+          eq(notifications.homeownerId, req.homeownerId),
+          eq(notifications.read, false),
+        ));
+    } else if (Array.isArray(body?.ids) && body.ids.length > 0) {
+      await db
+        .update(notifications)
+        .set({ read: true })
+        .where(and(
+          eq(notifications.homeownerId, req.homeownerId),
+          inArray(notifications.id, body.ids),
+        ));
+    } else {
+      res.status(400).json({ data: null, error: 'Provide ids[] or all:true', meta: {} });
+      return;
+    }
+    res.json({ data: { ok: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/notifications/mark-read]');
+    res.status(500).json({ data: null, error: 'Failed to mark read', meta: {} });
   }
 });
 

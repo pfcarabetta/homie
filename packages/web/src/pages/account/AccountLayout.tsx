@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import AccountNotificationsBell from './AccountNotificationsBell';
 
 const W = '#F9F5F2';
 const D = '#2D2926';
@@ -83,7 +84,8 @@ export default function AccountLayout({
             <HamburgerIcon />
           </button>
           <div />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <AccountNotificationsBell />
             <span style={{ fontSize: 12, color: 'var(--bp-subtle)', fontFamily: "'DM Sans', sans-serif" }}>Homie Personal</span>
           </div>
         </div>
