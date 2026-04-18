@@ -660,7 +660,6 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
             <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
               <div style="background:#2D2926;padding:20px 32px;text-align:center">
                 <span style="color:#E8632B;font-size:24px;font-weight:bold;font-family:Georgia,serif">homie</span>
-                <span style="background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-size:10px;font-weight:bold;padding:2px 8px;border-radius:4px;margin-left:8px;vertical-align:super">PRO</span>
               </div>
               <div style="background:white;padding:32px">
                 <h1 style="color:#2D2926;font-size:20px;font-weight:bold;margin:0 0 8px">New message from ${provider.name}</h1>
