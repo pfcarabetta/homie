@@ -169,6 +169,16 @@ export function cleanPrice(price: string): string {
   return p;
 }
 
+/** Extract the lowest-bound dollar amount from a price string for sorting/comparison.
+ *  e.g. "$210" → 21000, "$210-$280" → 21000, "$1,500 flat fee" → 150000. Returns null
+ *  if no number was found. Cents are used so we can compare integers. */
+export function priceToCents(price: string | null | undefined): number | null {
+  if (!price) return null;
+  const match = price.replace(/,/g, '').match(/(\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  return Math.round(parseFloat(match[1]) * 100);
+}
+
 export function renderBold(text: string) {
   const parts = text.split(/\*\*(.+?)\*\*/g);
   return parts.map((part, i) =>

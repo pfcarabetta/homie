@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { O, G, D, W, cleanPrice, renderBold, timeAgo, type Tab } from './constants';
+import { O, G, D, W, cleanPrice, renderBold, timeAgo, priceToCents, type Tab } from './constants';
 import { businessService, jobService, trackingService, estimateService, getToken, type WorkspaceDispatch, type ProviderResponseItem, type CostEstimate } from '@/services/api';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -591,74 +591,16 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
                         )}
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {jobResponses.map(r => (
-                          <div key={r.id} style={{ background: W, borderRadius: 10, padding: '10px 12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                                  <span style={{ fontWeight: 600, fontSize: 13, color: D }}>{r.provider.name}</span>
-                                  {preferredProviderIds.has(r.provider.id) && (
-                                    <span style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: O, padding: '2px 5px', borderRadius: 3, letterSpacing: '0.04em' }}>PREFERRED</span>
-                                  )}
-                                  {r.is_late && (
-                                    <span title="Quote arrived after the dispatch auto-expired"
-                                      style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: '#D4A437', padding: '2px 5px', borderRadius: 3, letterSpacing: '0.04em' }}>LATE</span>
-                                  )}
-                                </div>
-                                <div style={{ color: 'var(--bp-subtle)', fontSize: 10, marginTop: 1 }}>
-                                  ★ {r.provider.google_rating ?? 'N/A'} ({r.provider.review_count})
-                                  {r.provider.google_place_id && (
-                                    <a href={`https://www.google.com/maps/place/?q=place_id:${r.provider.google_place_id}`} target="_blank" rel="noopener" onClick={e => e.stopPropagation()} style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginLeft: 4 }}>Google</a>
-                                  )}
-                                  {r.provider.yelp_url && (
-                                    <a href={r.provider.yelp_url} target="_blank" rel="noopener" onClick={e => e.stopPropagation()} style={{ color: '#D32323', textDecoration: 'none', fontWeight: 600, marginLeft: 4 }}>Yelp</a>
-                                  )}
-                                </div>
-                              </div>
-                              {r.quoted_price && (
-                                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                                  <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700, color: O }}>{cleanPrice(r.quoted_price)}</span>
-                                  {estimates[j.id] ? (
-                                    <EstimateBadge quotedPrice={cleanPrice(r.quoted_price)} estimateLow={estimates[j.id].estimateLowCents} estimateHigh={estimates[j.id].estimateHighCents} />
-                                  ) : (
-                                    <div style={{ fontSize: 10, color: 'var(--bp-subtle)', fontWeight: 500 }}>quoted price</div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {r.availability && <div style={{ fontSize: 12, color: D, marginBottom: 3 }}>📅 {r.availability}</div>}
-                            {r.message && <div style={{ fontSize: 12, color: 'var(--bp-muted)', fontStyle: 'italic' }}>"{r.message}"</div>}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, gap: 8, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 11, color: 'var(--bp-subtle)' }}>via {r.channel} · {timeAgo(r.responded_at)}</span>
-                              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                {r.provider.phone && (
-                                  <a href={`tel:${r.provider.phone}`} style={{ fontSize: 12, color: G, textDecoration: 'none', fontWeight: 600 }}>📞 Call</a>
-                                )}
-                              </div>
-                            </div>
-                            {j.status !== 'archived' && j.status !== 'refunded' && (
-                              j.status === 'completed' ? (
-                                <div style={{ width: '100%', padding: '10px 0', borderRadius: 100, marginTop: 10, background: '#E0DAD4', color: 'var(--bp-subtle)', fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", textAlign: 'center' }}>Booked</div>
-                              ) : (
-                                <button onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try {
-                                    const propertyAddr = j.propertyAddress || j.propertyName || undefined;
-                                    await jobService.bookProvider(j.id, r.id, r.provider.id, propertyAddr);
-                                    setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'completed' } : d));
-                                    if (onTabChange) onTabChange('bookings');
-                                  } catch (err) {
-                                    alert((err as Error).message || 'Booking failed');
-                                  }
-                                }} style={{ width: '100%', padding: '10px 0', borderRadius: 100, border: 'none', marginTop: 10, background: O, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40` }}>
-                                  Book {r.provider.name.split(' ')[0]}
-                                </button>
-                              )
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                      <BusinessQuoteGrid
+                        dispatch={j}
+                        responses={jobResponses}
+                        estimate={estimates[j.id]}
+                        preferredProviderIds={preferredProviderIds}
+                        onBooked={() => {
+                          setDispatches(prev => prev.map(d => d.id === j.id ? { ...d, status: 'completed' } : d));
+                          if (onTabChange) onTabChange('bookings');
+                        }}
+                      />
                     )}
                   </div>
 
@@ -802,5 +744,251 @@ export default function DispatchesTab({ workspaceId, onTabChange, plan, focusJob
         div::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
+  );
+}
+
+/* ── Provider Quote Grid (Inspect-style) ─────────────────────────────────── */
+
+function BusinessQuoteGrid({ dispatch, responses, estimate, preferredProviderIds, onBooked }: {
+  dispatch: WorkspaceDispatch;
+  responses: ProviderResponseItem[];
+  estimate: CostEstimate | undefined;
+  preferredProviderIds: Set<string>;
+  onBooked: () => void;
+}) {
+  const enriched = responses
+    .map(r => ({ r, cents: priceToCents(r.quoted_price), rating: parseFloat(r.provider.google_rating ?? '0') }))
+    .sort((a, b) => {
+      if (a.cents == null && b.cents == null) return 0;
+      if (a.cents == null) return 1;
+      if (b.cents == null) return -1;
+      return a.cents - b.cents;
+    });
+
+  const quotedOnly = enriched.filter(q => q.cents != null);
+  const lowestCents = quotedOnly.length > 0 ? Math.min(...quotedOnly.map(q => q.cents as number)) : null;
+  const highestRating = quotedOnly.length > 0 ? Math.max(...quotedOnly.map(q => q.rating)) : 0;
+  // Only show comparison badges if there are 2+ quotes to compare
+  const showCompareBadges = quotedOnly.length > 1;
+
+  const canBook = dispatch.status !== 'archived' && dispatch.status !== 'refunded' && dispatch.status !== 'completed';
+  const isCompleted = dispatch.status === 'completed';
+
+  return (
+    <div onClick={e => e.stopPropagation()} style={{
+      display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12,
+      paddingTop: 4, // room for top-edge badges
+    }}>
+      {enriched.map(({ r, rating }) => (
+        <BusinessQuoteCard
+          key={r.id}
+          r={r}
+          rating={rating}
+          isBestPrice={showCompareBadges && priceToCents(r.quoted_price) === lowestCents}
+          isTopRated={showCompareBadges && rating > 0 && rating === highestRating && priceToCents(r.quoted_price) !== lowestCents}
+          isPreferred={preferredProviderIds.has(r.provider.id)}
+          estimate={estimate}
+          canBook={canBook}
+          isCompleted={isCompleted}
+          dispatch={dispatch}
+          onBookSuccess={onBooked}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BusinessQuoteCard({
+  r, rating, isBestPrice, isTopRated, isPreferred, estimate, canBook, isCompleted, dispatch, onBookSuccess,
+}: {
+  r: ProviderResponseItem;
+  rating: number;
+  isBestPrice: boolean;
+  isTopRated: boolean;
+  isPreferred: boolean;
+  estimate: CostEstimate | undefined;
+  canBook: boolean;
+  isCompleted: boolean;
+  dispatch: WorkspaceDispatch;
+  onBookSuccess: () => void;
+}) {
+  const [booking, setBooking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleBook(e: React.MouseEvent) {
+    e.stopPropagation();
+    setBooking(true);
+    setError(null);
+    try {
+      const propertyAddr = dispatch.propertyAddress || dispatch.propertyName || undefined;
+      await jobService.bookProvider(dispatch.id, r.id, r.provider.id, propertyAddr);
+      onBookSuccess();
+    } catch (err) {
+      setError((err as Error).message || 'Booking failed');
+    } finally {
+      setBooking(false);
+    }
+  }
+
+  return (
+    <div style={{
+      position: 'relative',
+      background: isBestPrice ? `${O}06` : 'var(--bp-card)',
+      border: `1px solid ${isBestPrice ? `${O}50` : 'var(--bp-border)'}`,
+      borderRadius: 12, padding: '16px 16px 14px',
+    }}>
+      {/* Floating badge row (top, absolute) */}
+      {(isBestPrice || isTopRated || isPreferred || r.is_late) && (
+        <div style={{ position: 'absolute', top: -9, right: 12, display: 'flex', gap: 4 }}>
+          {isBestPrice && <BizTag bg={O} label="Best Price" />}
+          {isTopRated && <BizTag bg="#F59E0B" label="Top Rated" />}
+          {isPreferred && <BizTag bg="#7C3AED" label="Preferred" />}
+          {r.is_late && <BizTag bg="#9B7137" label="Late" title="Quote arrived after the dispatch auto-expired" />}
+        </div>
+      )}
+
+      {/* Provider name */}
+      <div style={{
+        fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600,
+        color: 'var(--bp-text)', marginBottom: 2,
+      }}>
+        {r.provider.name || 'Provider'}
+      </div>
+
+      {/* Rating row */}
+      {rating > 0 && (
+        <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span>
+            <span style={{ color: '#F59E0B' }}>{'★'.repeat(Math.round(rating))}</span>
+            <span style={{ opacity: 0.25 }}>{'★'.repeat(5 - Math.round(rating))}</span>
+          </span>
+          <span style={{ color: 'var(--bp-text)', fontWeight: 600 }}>{rating.toFixed(1)}</span>
+          <span>({r.provider.review_count})</span>
+          {r.provider.google_place_id && (
+            <a
+              href={`https://www.google.com/maps/place/?q=place_id:${r.provider.google_place_id}`}
+              target="_blank" rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}
+            >
+              Google
+            </a>
+          )}
+          {r.provider.yelp_url && (
+            <a
+              href={r.provider.yelp_url}
+              target="_blank" rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ color: '#D32323', textDecoration: 'none', fontWeight: 600 }}
+            >
+              Yelp
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Price */}
+      {r.quoted_price ? (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{
+            fontFamily: "'DM Sans', sans-serif", fontSize: 22, fontWeight: 700,
+            color: 'var(--bp-text)', lineHeight: 1.1,
+          }}>
+            {cleanPrice(r.quoted_price)}
+          </div>
+          {estimate && (
+            <div style={{ marginTop: 4 }}>
+              <EstimateBadge
+                quotedPrice={cleanPrice(r.quoted_price)}
+                estimateLow={estimate.estimateLowCents}
+                estimateHigh={estimate.estimateHighCents}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: 'var(--bp-subtle)', marginBottom: 8, fontStyle: 'italic' }}>
+          No price quoted yet
+        </div>
+      )}
+
+      {/* Availability */}
+      {r.availability && (
+        <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginBottom: 8 }}>
+          {r.availability}
+        </div>
+      )}
+
+      {/* Message (truncated 2-line clamp) */}
+      {r.message && (
+        <div style={{
+          fontSize: 12, color: 'var(--bp-muted)', fontStyle: 'italic', marginBottom: 10,
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+          overflow: 'hidden', lineHeight: 1.4,
+        }}>
+          "{renderBold(r.message)}"
+        </div>
+      )}
+
+      {/* Footer meta */}
+      <div style={{
+        fontSize: 10, color: 'var(--bp-subtle)', opacity: 0.85,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8,
+      }}>
+        <span>via {r.channel} · {timeAgo(r.responded_at)}</span>
+        {r.provider.phone && (
+          <a href={`tel:${r.provider.phone}`}
+            onClick={e => e.stopPropagation()}
+            style={{ color: G, textDecoration: 'none', fontWeight: 600 }}>
+            Call →
+          </a>
+        )}
+      </div>
+
+      {/* Action */}
+      {canBook && (
+        <button
+          onClick={handleBook}
+          disabled={booking}
+          style={{
+            width: '100%', padding: '9px 0', borderRadius: 8,
+            border: isBestPrice ? 'none' : '1px solid var(--bp-border)',
+            background: isBestPrice ? O : 'var(--bp-card)',
+            color: isBestPrice ? '#fff' : 'var(--bp-text)',
+            cursor: booking ? 'default' : 'pointer',
+            fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600,
+            opacity: booking ? 0.6 : 1, transition: 'opacity 0.15s',
+          }}
+        >
+          {booking ? 'Booking…' : `Book ${r.provider.name.split(' ')[0]}`}
+        </button>
+      )}
+      {!canBook && (
+        <div style={{
+          width: '100%', padding: '9px 0', borderRadius: 8,
+          background: '#F0FDF4', color: '#16A34A',
+          fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600,
+          textAlign: 'center',
+        }}>
+          {isCompleted ? '✓ Booked' : 'Closed'}
+        </div>
+      )}
+      {error && (
+        <div style={{ fontSize: 11, color: '#DC2626', marginTop: 6, textAlign: 'center' }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BizTag({ bg, label, title }: { bg: string; label: string; title?: string }) {
+  return (
+    <span title={title} style={{
+      fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700,
+      padding: '3px 8px', borderRadius: 100, background: bg, color: '#fff',
+      textTransform: 'uppercase', letterSpacing: '0.05em',
+      boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+    }}>{label}</span>
   );
 }
