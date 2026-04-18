@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Homie",
+    "slug": "homie",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "homie",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F9F5F2"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ai.homiepro.consumer",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F9F5F2"
+      },
+      "package": "ai.homiepro.consumer"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#F9F5F2"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiBaseUrl": "https://api.homiepro.ai"
+    }
+  }
+}

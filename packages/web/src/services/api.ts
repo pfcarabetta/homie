@@ -1,13 +1,20 @@
-// ── Shared types ────────────────────────────────────────────────────────────
+// ── Shared types + utilities ────────────────────────────────────────────────
+//
+// Type definitions and pure helpers live in @homie/shared so the mobile apps
+// can import the same contract. This file keeps platform-specific bits:
+//   • token storage in localStorage
+//   • fetchAPI wired to Vite's import.meta.env
+//   • service objects + WebSocket helpers (web's existing import surface)
+//
+// Re-exports below preserve every existing `from '@/services/api'` import
+// across the web codebase — no caller needs to change.
+
+export * from '@homie/shared';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const TOKEN_KEY = 'homie_token';
 
-export interface ApiResponse<T> {
-  data: T | null;
-  error: string | null;
-  meta: Record<string, unknown>;
-}
+import type { ApiResponse } from '@homie/shared';
 
 export class ApiError extends Error {
   constructor(
@@ -91,18 +98,38 @@ export async function fetchAPI<T>(
 }
 
 // ── Domain types ────────────────────────────────────────────────────────────
+// Most types now live in @homie/shared and are re-exported above. The handful
+// imported below are referenced inside this file (in service signatures,
+// callback shapes, etc.). DiagnosticStreamCallbacks stays here because it
+// holds function references — those don't belong in shared (which is pure data).
 
-// Diagnosis
-
-export interface DiagnosisPayload {
-  category: string;
-  subcategory?: string;
-  severity: 'low' | 'medium' | 'high' | 'emergency';
-  summary: string;
-  recommendedActions: string[];
-  estimatedCost?: { min: number; max: number };
-  source?: string;
-}
+import type {
+  DiagnosisPayload,
+  JobSummary,
+  JobTier,
+  JobTiming,
+  CreateJobResponse,
+  JobStatusResponse,
+  JobResponsesResponse,
+  BookJobResponse,
+  ChargeResponse,
+  ImageUploadResult,
+  AuthResponse,
+  AccountProfile,
+  AccountJob,
+  AccountBooking,
+  TrackingStatus,
+  HomeData,
+  SmartSuggestion,
+  PropertyScan,
+  PropertyInventoryItem,
+  PropertyInventoryResponse,
+  AccountNotification,
+  BookingMessage,
+  BedConfig,
+  PropertyDetails,
+  MaintenanceFlag,
+} from '@homie/shared';
 
 export interface DiagnosticStreamCallbacks {
   onToken: (text: string) => void;
@@ -110,116 +137,6 @@ export interface DiagnosticStreamCallbacks {
   onJobSummary: (summary: JobSummary) => void;
   onDone: () => void;
   onError: (error: Error) => void;
-}
-
-export interface JobSummary {
-  title: string;
-  category: string;
-  severity: string;
-  estimatedCost: { min: number; max: number };
-}
-
-// Jobs
-
-export type JobTier = 'standard' | 'priority' | 'emergency';
-export type JobTiming = 'asap' | 'this_week' | 'this_month' | 'flexible';
-export type JobStatus = 'created' | 'dispatching' | 'collecting' | 'completed' | 'expired' | 'refunded';
-
-export interface ChannelStats {
-  attempted: number;
-  connected: number;
-}
-
-export interface CreateJobResponse {
-  id: string;
-  status: JobStatus;
-  tier: string;
-  expires_at: string;
-  providers_contacted: number;
-  estimated_results_at: string;
-}
-
-export interface JobStatusResponse {
-  id: string;
-  status: string;
-  tier: string;
-  providers_contacted: number;
-  providers_responded: number;
-  providers_accepted: number;
-  outreach_channels: {
-    voice: ChannelStats;
-    sms: ChannelStats;
-    web: ChannelStats;
-  };
-  expires_at: string | null;
-  created_at: string;
-}
-
-export interface ProviderSummary {
-  id: string;
-  name: string;
-  phone: string | null;
-  google_rating: string | null;
-  review_count: number;
-  categories: string[] | null;
-  google_place_id: string | null;
-  yelp_url: string | null;
-}
-
-export interface ProviderResponseItem {
-  id: string;
-  provider: ProviderSummary;
-  channel: string;
-  quoted_price: string | null;
-  availability: string | null;
-  message: string | null;
-  responded_at: string;
-  /** True if this response arrived after the dispatch's auto-expire window */
-  is_late?: boolean;
-}
-
-export interface JobResponsesResponse {
-  responses: ProviderResponseItem[];
-  pending_count: number;
-  more_expected: boolean;
-}
-
-export interface BookJobResponse {
-  booking_id: string;
-  status: string;
-  provider: {
-    name: string;
-    phone: string | null;
-  };
-  scheduled: string | null;
-  quoted_price: string | null;
-}
-
-// Payments
-
-export interface ChargeResponse {
-  payment_id: string;
-  status: 'succeeded' | 'failed';
-  amount: number;
-  tier: JobTier;
-}
-
-// WebSocket events
-
-export type JobSocketEvent =
-  | { type: 'outreach.started'; data: { provider_id: string; channel: string } }
-  | { type: 'outreach.response'; data: { provider_id: string; channel: string; accepted: boolean } }
-  | { type: 'outreach.voicemail'; data: { provider_id: string } }
-  | { type: 'job.threshold_met'; data: { providers_accepted: number } }
-  | { type: 'job.expired'; data: { job_id: string } }
-  | { type: 'job.completed'; data: { job_id: string } };
-
-// ── Image upload ────────────────────────────────────────────────────────────
-
-export interface ImageUploadResult {
-  url: string;
-  thumbnailUrl: string;
-  publicId: string;
 }
 
 /**
@@ -409,20 +326,6 @@ function parseStructuredTags(
 }
 
 // ── authService ─────────────────────────────────────────────────────────────
-
-export interface AuthHomeowner {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string;
-  zip_code: string;
-  membership_tier: string;
-}
-
-export interface AuthResponse {
-  token: string;
-  homeowner: AuthHomeowner;
-}
 
 export const authService = {
   async register(params: {
@@ -617,81 +520,11 @@ export function connectJobSocket(
 }
 
 // ── accountService ─────────────────────────────────────────────────────────
-
-export interface AccountProfile {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string;
-  phone: string | null;
-  zip_code: string;
-  membership_tier: string;
-  title: string | null;
-  notify_email_quotes: boolean;
-  notify_sms_quotes: boolean;
-  notify_email_bookings: boolean;
-  notify_sms_bookings: boolean;
-  created_at: string;
-}
-
-export interface AccountJob {
-  id: string;
-  status: string;
-  payment_status: string;
-  tier: string;
-  zip_code: string;
-  budget: string | null;
-  preferred_timing: string | null;
-  diagnosis: DiagnosisPayload | null;
-  created_at: string;
-  expires_at: string | null;
-  has_booking: boolean;
-}
-
-export interface AccountBooking {
-  id: string;
-  job_id: string;
-  provider: {
-    id: string;
-    name: string;
-    phone: string | null;
-    email?: string | null;
-    rating?: string | null;
-    review_count?: number;
-  };
-  status: string;
-  confirmed_at: string;
-  completed_at?: string | null;
-  quoted_price: string | null;
-  scheduled: string | null;
-  response_message?: string | null;
-  response_channel?: string | null;
-  job_category?: string | null;
-  job_severity?: string | null;
-  job_summary?: string | null;
-  unread_messages?: number;
-}
+// Account-shaped types (AccountProfile, AccountJob, AccountBooking) are
+// re-exported above from @homie/shared.
 
 // ── Tracking ────────────────────────────────────────────────────────────────
-
-export interface TrackingStatus {
-  property_name: string;
-  job_title: string;
-  job_category: string;
-  severity: string;
-  status: string;
-  timeline: Array<{
-    event_type: string;
-    title: string;
-    description: string | null;
-    metadata: Record<string, unknown> | null;
-    created_at: string;
-  }>;
-  provider: { name: string; rating: string | null; reviewCount?: number } | null;
-  last_updated: string;
-  brand_logo_url?: string | null;
-  expired?: boolean;
-}
+// TrackingStatus is re-exported above from @homie/shared.
 
 export const trackingService = {
   getStatus: (token: string) =>
@@ -712,26 +545,7 @@ export const trackingService = {
 };
 
 // ── accountService ─────────────────────────────────────────────────────────
-
-export interface HomeData {
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  bedrooms: number | null;
-  bathrooms: string | null;
-  sqft: number | null;
-  details: PropertyDetails | null;
-}
-
-export interface SmartSuggestion {
-  title: string;
-  description: string;
-  category: string;
-  priority: 'low' | 'medium' | 'high';
-  reason: string;
-  /** seasonal | location | equipment — drives the chip color */
-  kind?: string;
-}
+// HomeData + SmartSuggestion are re-exported above from @homie/shared.
 
 export const accountService = {
   getProfile: () => fetchAPI<AccountProfile>('/api/v1/account'),
@@ -840,62 +654,7 @@ export interface WorkspaceDetail extends Workspace {
   updatedAt: string;
 }
 
-export interface BedConfig {
-  type: string;
-  count: number;
-}
-
-export interface PropertyDetails {
-  hvac?: {
-    acType?: string; acBrand?: string; acModel?: string; acAge?: string;
-    heatingType?: string; heatingBrand?: string; heatingModel?: string;
-    thermostatBrand?: string; thermostatModel?: string;
-    filterSize?: string;
-  };
-  waterHeater?: {
-    type?: string; brand?: string; model?: string; age?: string;
-    fuel?: string; capacity?: string; location?: string;
-  };
-  appliances?: {
-    refrigerator?: { brand?: string; model?: string };
-    washer?: { brand?: string; model?: string };
-    dryer?: { brand?: string; model?: string; fuel?: string };
-    dishwasher?: { brand?: string; model?: string };
-    oven?: { brand?: string; model?: string; fuel?: string };
-    disposal?: { brand?: string };
-    microwave?: { brand?: string; type?: string };
-  };
-  plumbing?: {
-    kitchenFaucetBrand?: string; bathroomFaucetBrand?: string;
-    toiletBrand?: string; waterSoftener?: string;
-    septicOrSewer?: string; mainShutoffLocation?: string;
-  };
-  electrical?: {
-    breakerBoxLocation?: string; panelAmperage?: string;
-    hasGenerator?: boolean; generatorType?: string;
-    hasSolar?: boolean; solarSystem?: string;
-    hasEvCharger?: boolean; evChargerBrand?: string;
-  };
-  poolSpa?: {
-    poolType?: string; poolHeaterBrand?: string; poolPumpBrand?: string;
-    hotTubBrand?: string; hotTubModel?: string;
-  };
-  exterior?: {
-    roofType?: string; roofAge?: string; sidingMaterial?: string;
-    fenceMaterial?: string; garageDoorBrand?: string;
-    irrigationBrand?: string;
-  };
-  access?: {
-    lockboxCode?: string; gateCode?: string;
-    alarmBrand?: string; alarmCode?: string;
-    wifiNetwork?: string; wifiPassword?: string;
-  };
-  general?: {
-    yearBuilt?: string; hasHoa?: boolean; hoaContact?: string;
-    pestControlProvider?: string; pestControlFrequency?: string;
-    cleaningNotes?: string;
-  };
-}
+// BedConfig + PropertyDetails are re-exported above from @homie/shared.
 
 export interface ReservationTimelineRun {
   id: string;
@@ -955,91 +714,9 @@ export interface TurnoverItem {
   runCount: number;
 }
 
-export interface PropertyScan {
-  id: string;
-  propertyId: string;
-  workspaceId: string;
-  scanType: 'full' | 'quick';
-  scannedBy: string | null;
-  status: 'in_progress' | 'processing' | 'review_pending' | 'completed' | 'failed';
-  durationSeconds: number | null;
-  roomsScanned: number;
-  itemsCataloged: number;
-  itemsConfirmed: number;
-  itemsFlaggedForReview: number;
-  changesDetected: number;
-  scanNotes: string | null;
-  createdAt: string;
-  completedAt: string | null;
-}
-
-export interface PropertyInventoryItem {
-  id: string;
-  propertyId: string;
-  roomId: string | null;
-  scanId: string | null;
-  category: 'appliance' | 'fixture' | 'system' | 'safety' | 'amenity' | 'infrastructure';
-  itemType: string;
-  brand: string | null;
-  modelNumber: string | null;
-  serialNumber: string | null;
-  manufactureDate: string | null;
-  estimatedAgeYears: string | null;
-  fuelType: string | null;
-  capacity: string | null;
-  condition: string | null;
-  identificationMethod: 'label_ocr' | 'visual_classification' | 'pm_manual';
-  confidenceScore: string;
-  photoFrameUrl: string | null;
-  labelPhotoUrl: string | null;
-  maintenanceFlags: string[] | null;
-  notes: string | null;
-  status: 'ai_identified' | 'pm_confirmed' | 'pm_corrected' | 'pm_dismissed';
-  confirmedBy: string | null;
-  confirmedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PropertyRoomWithItems {
-  id: string;
-  propertyId: string;
-  scanId: string | null;
-  roomType: string;
-  roomLabel: string;
-  floorLevel: number;
-  flooringType: string | null;
-  generalCondition: string | null;
-  photoUrl: string | null;
-  notes: string | null;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-  items: PropertyInventoryItem[];
-  /** Number of physical room rows merged into this group (>=1) */
-  roomCount?: number;
-  /** All underlying room ids that were collapsed into this group */
-  mergedRoomIds?: string[];
-}
-
-export interface PropertyInventoryResponse {
-  rooms: PropertyRoomWithItems[];
-  unassignedItems: PropertyInventoryItem[];
-  summary: {
-    totalItems: number;
-    averageAge: number | null;
-    agingItems: number;
-    safetyFlags: number;
-  };
-}
-
-export interface MaintenanceFlag {
-  itemId: string;
-  itemType: string;
-  brand: string | null;
-  description: string;
-  severity: 'info' | 'attention' | 'urgent';
-}
+// PropertyScan, PropertyInventoryItem, PropertyRoomWithItems,
+// PropertyInventoryResponse, and MaintenanceFlag are re-exported above
+// from @homie/shared.
 
 export interface CalendarSource {
   id: string;
@@ -1070,19 +747,7 @@ export interface BusinessNotification {
   createdAt: string;
 }
 
-export interface AccountNotification {
-  id: string;
-  type: string;
-  title: string;
-  body: string;
-  jobId: string | null;
-  propertyId: string | null;
-  guestIssueId: string | null;
-  bookingId: string | null;
-  link: string | null;
-  read: boolean;
-  createdAt: string;
-}
+// AccountNotification is re-exported above from @homie/shared.
 
 export interface Property {
   id: string;
@@ -1176,18 +841,7 @@ export interface WorkspaceBooking {
   unreadMessageCount: number;
 }
 
-export interface BookingMessage {
-  id: string;
-  bookingId: string;
-  /** 'team' | 'provider' | 'system' */
-  senderType: string;
-  senderId: string | null;
-  senderName: string | null;
-  content: string;
-  photoUrl: string | null;
-  readAt: string | null;
-  createdAt: string;
-}
+// BookingMessage is re-exported above from @homie/shared.
 
 export interface VendorSchedule {
   [day: string]: { start: string; end: string } | null;
