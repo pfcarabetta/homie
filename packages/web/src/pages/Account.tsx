@@ -726,7 +726,7 @@ function BookingCard({ booking, expanded, onToggle, onMarkedRead }: {
             <SectionLabel>Contact</SectionLabel>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {booking.provider.phone && (
-                <ContactButton href={`tel:${booking.provider.phone}`} icon="\uD83D\uDCDE" label="Call" sub={booking.provider.phone} />
+                <ContactButton href={`tel:${booking.provider.phone}`} icon={'\uD83D\uDCDE'} label="Call" sub={booking.provider.phone} />
               )}
               <button
                 onClick={() => setShowMessages(s => !s)}
@@ -745,7 +745,7 @@ function BookingCard({ booking, expanded, onToggle, onMarkedRead }: {
                 )}
               </button>
               {booking.provider.email && (
-                <ContactButton href={`mailto:${booking.provider.email}`} icon="\u2709\uFE0F" label="Email" sub={booking.provider.email} />
+                <ContactButton href={`mailto:${booking.provider.email}`} icon={'\u2709\uFE0F'} label="Email" sub={booking.provider.email} />
               )}
             </div>
           </div>
