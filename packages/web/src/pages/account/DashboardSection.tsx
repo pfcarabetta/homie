@@ -307,6 +307,8 @@ function SmartSuggestions({ onNewQuote, onNavigate }: {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasHomeData, setHasHomeData] = useState<boolean | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [nextRefreshAt, setNextRefreshAt] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(() => {
     if (typeof window === 'undefined') return new Set();
     try {
@@ -317,16 +319,31 @@ function SmartSuggestions({ onNewQuote, onNavigate }: {
   function load(force = false) {
     if (force) setRefreshing(true); else setLoading(true);
     setError(null);
-    accountService.getSmartSuggestions(6)
+    accountService.getSmartSuggestions(6, force)
       .then(res => {
         setSuggestions(res.data ?? []);
         setHasHomeData(res.meta?.hasHomeData !== false);
+        setGeneratedAt((res.meta?.generatedAt as string | undefined) ?? null);
+        setNextRefreshAt((res.meta?.nextRefreshAt as string | undefined) ?? null);
       })
       .catch(err => setError((err as Error).message ?? 'Could not load suggestions'))
       .finally(() => { setLoading(false); setRefreshing(false); });
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  // Build the freshness label: "Updated 2d ago · refreshes in 5d"
+  const freshnessLabel = (() => {
+    if (!generatedAt) return null;
+    const ageMs = Date.now() - new Date(generatedAt).getTime();
+    const ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+    const ageHrs = Math.floor(ageMs / (60 * 60 * 1000));
+    const updatedStr = ageDays >= 1 ? `${ageDays}d ago` : ageHrs >= 1 ? `${ageHrs}h ago` : 'just now';
+    if (!nextRefreshAt) return `Updated ${updatedStr}`;
+    const remainingMs = new Date(nextRefreshAt).getTime() - Date.now();
+    const remainingDays = Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
+    return `Updated ${updatedStr} · refreshes in ${remainingDays}d`;
+  })();
 
   function dismiss(key: string) {
     const next = new Set(dismissed);
@@ -352,7 +369,7 @@ function SmartSuggestions({ onNewQuote, onNavigate }: {
           <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
             {hasHomeData === false
               ? 'Add your home details for personalized picks'
-              : 'Tailored to your home, location, and the season'}
+              : freshnessLabel ?? 'Tailored to your home, location, and the season'}
           </div>
         </div>
         <button

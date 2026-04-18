@@ -440,10 +440,12 @@ router.post('/notifications/mark-read', async (req: Request, res: Response) => {
 // from the homeowner's saved home profile + recent job history.
 router.post('/suggestions', async (req: Request, res: Response) => {
   try {
-    const { count: maxCount } = (req.body ?? {}) as { count?: number };
-    const limit = Math.min(maxCount ?? 6, 8);
+    const body = (req.body ?? {}) as { count?: number; force?: boolean };
+    const limit = Math.min(body.count ?? 6, 8);
+    const force = body.force === true;
+    const SUGGESTIONS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-    // Load homeowner + home data
+    // Load homeowner + home data + cached suggestions
     const [me] = await db
       .select({
         zipCode: homeowners.zipCode,
@@ -453,6 +455,8 @@ router.post('/suggestions', async (req: Request, res: Response) => {
         homeBedrooms: homeowners.homeBedrooms,
         homeSqft: homeowners.homeSqft,
         homeDetails: homeowners.homeDetails,
+        smartSuggestionsCache: homeowners.smartSuggestionsCache,
+        smartSuggestionsGeneratedAt: homeowners.smartSuggestionsGeneratedAt,
       })
       .from(homeowners)
       .where(eq(homeowners.id, req.homeownerId))
@@ -461,6 +465,25 @@ router.post('/suggestions', async (req: Request, res: Response) => {
     if (!me) {
       res.status(404).json({ data: null, error: 'Homeowner not found', meta: {} });
       return;
+    }
+
+    // Cache hit — return stored suggestions if within the 7-day TTL and not forced
+    if (!force && me.smartSuggestionsGeneratedAt && me.smartSuggestionsCache) {
+      const ageMs = Date.now() - new Date(me.smartSuggestionsGeneratedAt).getTime();
+      if (ageMs < SUGGESTIONS_TTL_MS) {
+        const cached = (me.smartSuggestionsCache as Array<unknown>) ?? [];
+        res.json({
+          data: cached.slice(0, limit),
+          error: null,
+          meta: {
+            generatedAt: me.smartSuggestionsGeneratedAt.toISOString(),
+            cached: true,
+            nextRefreshAt: new Date(me.smartSuggestionsGeneratedAt.getTime() + SUGGESTIONS_TTL_MS).toISOString(),
+            hasHomeData: Object.keys(me.homeDetails ?? {}).length > 0,
+          },
+        });
+        return;
+      }
     }
 
     // Pull last 6 consumer jobs for context (categories + diagnoses)
@@ -610,10 +633,32 @@ Respond with ONLY a valid JSON array. No markdown, no code blocks, no explanatio
       }
     }
 
+    // Persist to cache so the next 7 days of dashboard loads serve from DB,
+    // not Claude. Failure is non-fatal — the caller still gets the fresh batch.
+    const generatedAt = new Date();
+    if (suggestions.length > 0) {
+      try {
+        await db
+          .update(homeowners)
+          .set({
+            smartSuggestionsCache: suggestions as never,
+            smartSuggestionsGeneratedAt: generatedAt,
+          })
+          .where(eq(homeowners.id, req.homeownerId));
+      } catch (err) {
+        logger.warn({ err, homeownerId: req.homeownerId }, '[account] Failed to cache suggestions');
+      }
+    }
+
     res.json({
       data: suggestions.slice(0, limit),
       error: null,
-      meta: { generatedAt: new Date().toISOString(), hasHomeData: equipmentLines.length > 0 },
+      meta: {
+        generatedAt: generatedAt.toISOString(),
+        cached: false,
+        nextRefreshAt: new Date(generatedAt.getTime() + SUGGESTIONS_TTL_MS).toISOString(),
+        hasHomeData: equipmentLines.length > 0,
+      },
     });
   } catch (err) {
     logger.error({ err }, '[POST /account/suggestions]');

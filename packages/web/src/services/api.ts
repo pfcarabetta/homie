@@ -757,10 +757,10 @@ export const accountService = {
     ),
   getHome: () => fetchAPI<HomeData>('/api/v1/account/home'),
   updateHome: (data: Partial<HomeData>) => fetchAPI<HomeData>('/api/v1/account/home', { method: 'PATCH', body: JSON.stringify(data) }),
-  getSmartSuggestions: (count?: number) =>
+  getSmartSuggestions: (count?: number, force?: boolean) =>
     fetchAPI<SmartSuggestion[]>('/api/v1/account/suggestions', {
       method: 'POST',
-      body: JSON.stringify({ count }),
+      body: JSON.stringify({ count, force }),
     }),
   // Notifications — homeowner-scoped, mirrors business notifications
   listNotifications: (limit?: number) =>

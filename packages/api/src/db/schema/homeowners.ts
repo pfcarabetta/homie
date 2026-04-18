@@ -31,6 +31,10 @@ export const homeowners = pgTable('homeowners', {
   notifySmsQuotes: boolean('notify_sms_quotes').notNull().default(true),
   notifyEmailBookings: boolean('notify_email_bookings').notNull().default(true),
   notifySmsBookings: boolean('notify_sms_bookings').notNull().default(true),
+  /** Cached AI-generated maintenance suggestions for the dashboard. Refreshed
+   *  on a 7-day TTL or via manual refresh — not regenerated on every page load. */
+  smartSuggestionsCache: jsonb('smart_suggestions_cache'),
+  smartSuggestionsGeneratedAt: timestamp('smart_suggestions_generated_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

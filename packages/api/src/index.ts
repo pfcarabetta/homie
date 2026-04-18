@@ -136,6 +136,9 @@ async function start() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS notifications_homeowner_id_idx ON notifications (homeowner_id)`);
     // Booking completion timestamp — supports manual "Mark complete" + 14-day auto-complete sweep
     await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS completed_at timestamp with time zone`);
+    // Smart suggestions cache (7-day TTL, refresh on demand) on consumer dashboard
+    await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS smart_suggestions_cache jsonb`);
+    await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS smart_suggestions_generated_at timestamp with time zone`);
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');
