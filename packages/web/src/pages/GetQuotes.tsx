@@ -2386,7 +2386,7 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
               </div>
             </div>
 
-            {/* Assurance card — "Free until you pick a pro" */}
+            {/* Assurance card — "Speed" preset (⚡) per design spec */}
             <div style={{
               marginTop: 14, padding: '14px 18px',
               background: `linear-gradient(135deg, ${D} 0%, #3A3430 100%)`,
@@ -2394,10 +2394,10 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
               display: 'flex', alignItems: 'center', gap: 12,
               boxShadow: `0 10px 30px -12px ${D}66`,
             }}>
-              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{'\uD83D\uDD12'}</div>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{'\u26A1'}</div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>Free until you pick a pro</div>
-                <div style={{ fontSize: 12, opacity: .75, marginTop: 2 }}>Pros pay us — not you.</div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>Quotes in ~2 minutes</div>
+                <div style={{ fontSize: 12, opacity: .75, marginTop: 2 }}>No calling around. No endless forms.</div>
               </div>
             </div>
           </div>
