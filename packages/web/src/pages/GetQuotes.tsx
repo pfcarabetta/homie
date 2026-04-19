@@ -400,6 +400,158 @@ function TextInput({ placeholder, onSubmit }: { placeholder: string; onSubmit: (
   );
 }
 
+/**
+ * Big Fraunces textarea + photo/video/voice upload buttons — the Q2 design's
+ * "just describe it" fast path. Appears in the category phase alongside
+ * the tile grid so the user can bypass tile → sub → q1 entirely.
+ *
+ * Photo upload is wired to the existing file-picker handler. Video and voice
+ * are placeholder buttons for now — they open the same photo picker (users
+ * with video/audio files can attach them via the photo button today; we'll
+ * wire dedicated handlers when backend support lands).
+ */
+function DirectInput({ onSubmit, onPhoto, examples, disabled }: {
+  onSubmit: (text: string) => void;
+  onPhoto: (dataUrl: string) => void;
+  examples: string[];
+  disabled?: boolean;
+}) {
+  const [text, setText] = useState('');
+  const [focus, setFocus] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const ready = text.trim().length >= 12;
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => onPhoto(ev.target?.result as string);
+    reader.readAsDataURL(f);
+  }
+
+  function submit() {
+    if (ready && !disabled) onSubmit(text.trim());
+  }
+
+  return (
+    <div style={{ marginLeft: 42, marginBottom: 14 }}>
+      {/* "or just describe it" divider */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ height: 1, flex: '0 0 16px', background: BORDER }} />
+        <span style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.5, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>or just describe it</span>
+        <span style={{ height: 1, flex: 1, background: BORDER }} />
+      </div>
+
+      <div style={{
+        background: '#fff', borderRadius: 20,
+        border: focus ? `2px solid ${O}` : `2px solid ${BORDER}`,
+        boxShadow: focus ? `0 20px 60px -24px ${O}44` : '0 12px 40px -20px rgba(0,0,0,.08)',
+        padding: '20px 22px 16px', transition: 'all .2s',
+      }}>
+        <textarea
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); }}
+          placeholder="My dishwasher makes a grinding noise when it drains…"
+          disabled={disabled}
+          style={{
+            width: '100%', border: 'none', outline: 'none', resize: 'none',
+            fontFamily: "'Fraunces',serif", fontSize: 22, lineHeight: 1.3,
+            color: D, background: 'transparent',
+            minHeight: 96, padding: 0, letterSpacing: '-.01em',
+          }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input ref={fileRef} type="file" accept="image/*,video/*,audio/*" onChange={handleFile} style={{ display: 'none' }} />
+            <button onClick={() => fileRef.current?.click()} style={uploadBtnStyle} title="Add photo">
+              <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><path d="M3 5h4l2-2h6l2 2h4v12H3V5z" stroke={D} strokeWidth="1.8" /><circle cx="12" cy="11" r="3.5" stroke={D} strokeWidth="1.8" /></svg>
+              Photo
+            </button>
+            <button onClick={() => fileRef.current?.click()} style={uploadBtnStyle} title="Add video">
+              <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><rect x="2" y="4" width="14" height="12" rx="2" stroke={D} strokeWidth="1.8" /><path d="M16 9l6-3v8l-6-3V9z" stroke={D} strokeWidth="1.8" strokeLinejoin="round" /></svg>
+              Video
+            </button>
+            <button onClick={() => fileRef.current?.click()} style={uploadBtnStyle} title="Add voice memo">
+              <svg width="13" height="14" viewBox="0 0 18 20" fill="none"><rect x="6" y="1" width="6" height="11" rx="3" stroke={D} strokeWidth="1.8" /><path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke={D} strokeWidth="1.8" strokeLinecap="round" /></svg>
+              Voice memo
+            </button>
+          </div>
+          {text.length > 0 && (
+            <span style={{ fontSize: 11, fontFamily: "'DM Mono',monospace", color: DIM, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700 }}>
+              {text.length} chars · {ready ? 'ready' : `${12 - text.length} more`}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Submit CTA + ⌘↵ hint */}
+      <button
+        onClick={submit}
+        disabled={!ready || disabled}
+        style={{
+          marginTop: 14, width: '100%',
+          background: ready && !disabled ? O : 'rgba(0,0,0,.06)',
+          color: ready && !disabled ? '#fff' : '#9B9490',
+          border: 'none', borderRadius: 16, padding: '16px 24px',
+          fontSize: 15, fontWeight: 700,
+          cursor: ready && !disabled ? 'pointer' : 'not-allowed',
+          boxShadow: ready && !disabled ? `0 12px 32px -10px ${O}8c` : 'none',
+          fontFamily: "'DM Sans', sans-serif",
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          transition: 'all .2s',
+        }}
+      >
+        {ready ? <>Continue with this description →</> : 'Type a few words, or pick a category above'}
+      </button>
+
+      {/* Examples */}
+      {text.length === 0 && (
+        <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: DIM, padding: '8px 0', fontFamily: "'DM Mono',monospace", letterSpacing: 1, textTransform: 'uppercase' }}>examples:</span>
+          {examples.slice(0, 3).map((ex, i) => (
+            <button key={i} onClick={() => setText(ex)} style={{
+              background: 'transparent', border: 'none', fontSize: 12, color: DIM,
+              cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+              textDecoration: 'underline', textDecorationColor: 'rgba(0,0,0,.15)', padding: '6px 0',
+            }}>
+              "{ex.slice(0, 42)}…"
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const uploadBtnStyle: React.CSSProperties = {
+  background: W,
+  border: `1px solid ${BORDER}`,
+  color: D,
+  borderRadius: 100,
+  padding: '10px 14px',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 8,
+  fontFamily: "'DM Sans',sans-serif",
+  transition: 'all .15s',
+};
+
+// Short example prompts shown under the DirectInput when the textarea is empty
+const DIRECT_EXAMPLES = [
+  "Kitchen faucet is dripping from the base, worse when hot water's on",
+  "AC won't cool below 78\u00B0 — it's 92 outside",
+  "Bedroom outlet is warm and sometimes sparks when I unplug",
+  "Garbage disposal hums but won't spin",
+  "Water stain growing on bedroom ceiling after last storm",
+];
+
 function PhotoUpload({ onUpload }: { onUpload: (url: string) => void }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
@@ -1693,6 +1845,21 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     scrollDown();
   };
 
+  // Direct-path: user types a description on the initial screen without
+  // picking a category tile. We bypass the tile → sub → q1 pipeline and go
+  // straight into the AI follow-up conversation. Category defaults to
+  // 'general' (Handyman) — the AI clarifies as needed, and the diagnosis
+  // summary step re-classifies from the full conversation context.
+  const handleDirectText = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (trimmed.length < 12) return;
+    setData(d => ({ ...d, category: 'general', a1: trimmed }));
+    setPhase('waiting');
+    addUser(trimmed);
+    askFollowUp(trimmed, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addUser]);
+
   const repairGroups = CATEGORY_TREE.filter(g => g.type === 'repair').map(g => ({ id: g.label, icon: g.icon, label: g.label }));
   const serviceGroups = CATEGORY_TREE.filter(g => g.type === 'service').map(g => ({ id: g.label, icon: g.icon, label: g.label }));
 
@@ -1868,6 +2035,13 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
                     const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
                     if (group) handleGroupSelect(group);
                   }} columns={4} />
+
+                  {/* Direct-path fast lane — type a description and bypass the tile picker */}
+                  <DirectInput
+                    examples={DIRECT_EXAMPLES}
+                    onSubmit={handleDirectText}
+                    onPhoto={handlePhoto}
+                  />
                 </>
               )}
               {phase === 'subcategory' && activeGroup && (
