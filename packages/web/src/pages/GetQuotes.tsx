@@ -1679,6 +1679,29 @@ export default function GetQuotes() {
     }
   }, []);
 
+  // Live estimate fetch — fires as soon as we have a category + subcategory,
+  // so the "Homie thinks" status card can show severity + $ range while the
+  // user is still chatting. Re-fetches if category/subcategory/zip change.
+  // Uses a neutral fallback zip (92103) when the user hasn't entered one;
+  // once the Continue modal captures the real zip, that triggers a refetch
+  // here with more accurate location data.
+  useEffect(() => {
+    if (!data.category || !data.a1) return;
+    const zip = data.zip || '92103';
+    let cancelled = false;
+    estimateService.generate({
+      category: data.category,
+      subcategory: data.a1,
+      zip_code: zip,
+      complexity: 'medium',
+      urgency: data.timing || undefined,
+    }).then(res => {
+      if (cancelled) return;
+      if (res.data) setCostEstimate(res.data);
+    }).catch(() => { /* silent — status card falls back to category-only */ });
+    return () => { cancelled = true; };
+  }, [data.category, data.a1, data.zip, data.timing]);
+
   const flow = data.category ? CATEGORY_FLOWS[data.category] : null;
   const [activeGroup, setActiveGroup] = useState<CatGroup | null>(null);
 
