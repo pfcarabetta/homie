@@ -1946,14 +1946,20 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
         @media (max-width: 980px) {
-          .gq-split { grid-template-columns: 1fr !important; }
-          .gq-right-panel { position: static !important; }
+          .gq-split { grid-template-columns: 1fr !important; gap: 12px !important; }
+          /* Drop the full desktop right panel on mobile — replaced by compact
+             .gq-mobile-strip above the chat. Keeps the page from stacking a
+             second full-height card below the conversation. */
+          .gq-right-panel { display: none !important; }
+          .gq-mobile-strip { display: flex !important; }
           .gq-hero-h1 { font-size: 26px !important; }
         }
         @media (max-width: 480px) {
           .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; margin-left: 0 !important; }
           .gq-replies { margin-left: 0 !important; }
-          .gq-section { padding: 20px 16px 80px !important; }
+          .gq-section { padding: 16px 16px 80px !important; }
+          .gq-mobile-strip { padding: 8px 10px !important; }
+          .gq-mobile-strip-chips { gap: 6px !important; }
         }
       `}</style>
 
@@ -2011,6 +2017,64 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         }}>
           {/* LEFT — progressive chat-style intake */}
           <div>
+            {/* Mobile-only compact status strip — replaces the full right
+                panel (which is display:none below 980px) with a single row
+                showing the pulsing "homie is listening" indicator plus
+                whatever category/severity we've inferred so far. Keeps the
+                mobile page scannable without stacking a second giant card
+                below the chat. */}
+            <div
+              className="gq-mobile-strip"
+              style={{
+                display: 'none',
+                alignItems: 'center', gap: 10,
+                padding: '10px 12px',
+                marginBottom: 14,
+                borderRadius: 14,
+                background: '#fff',
+                border: `1px solid ${BORDER}`,
+                boxShadow: '0 6px 20px -12px rgba(0,0,0,.08)',
+              }}
+            >
+              <div style={{ width: 24, height: 24, borderRadius: 8, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', flexShrink: 0 }}>
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M12 2l2 7 7 2-7 2-2 7-2-7-7-2 7-2 2-7z" fill="#fff" />
+                </svg>
+                <span style={{ position: 'absolute', top: -2, right: -2, width: 7, height: 7, borderRadius: '50%', background: G, border: '1.5px solid #fff', animation: 'pulse 1.8s infinite' }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 700, fontSize: 14, color: D, lineHeight: 1.1 }}>homie is listening</div>
+                <div className="gq-mobile-strip-chips" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, fontSize: 11, color: DIM, fontFamily: "'DM Mono',monospace", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {repairGroupMeta?.label || catMeta?.label ? (
+                    <span style={{ color: D, fontWeight: 700 }}>{repairGroupMeta?.label || catMeta?.label}</span>
+                  ) : (
+                    <span>waiting for details…</span>
+                  )}
+                  {severityLabel && (
+                    <>
+                      <span style={{ opacity: .4 }}>·</span>
+                      <span style={{ color: severityLabel === 'Medium' ? AMBER : G, fontWeight: 700 }}>{severityLabel}</span>
+                    </>
+                  )}
+                  {estRange && (
+                    <>
+                      <span style={{ opacity: .4 }}>·</span>
+                      <span style={{ color: D, fontWeight: 700 }}>{estRange}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {/* Progress dots — one per checklist step, filled = done */}
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                {checklist.map((p, i) => (
+                  <span key={i} style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: p.done ? G : (i === nextIdx ? O : 'rgba(0,0,0,.12)'),
+                  }} />
+                ))}
+              </div>
+            </div>
+
             {/* Live status pill — business hours = Online, otherwise After hours */}
             {(() => {
               const hour = new Date().getHours();
