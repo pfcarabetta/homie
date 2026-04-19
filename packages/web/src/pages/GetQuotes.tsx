@@ -8,7 +8,7 @@ import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 import VideoRecorder from '@/components/VideoRecorder';
-import VoiceConversationModal from '@/components/VoiceConversationModal';
+import InlineVoicePanel from '@/components/InlineVoicePanel';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 const DIM = '#6B6560';
@@ -1891,30 +1891,47 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     scrollDown();
   };
 
-  // Voice-path: user finished a spoken conversation with Homie. The modal
-  // returns the joined transcript (user turns only) plus the full history.
-  // We skip the text follow-up loop — Homie already emitted <ready/> in the
-  // voice channel — and land directly on the 'extra' phase so the homeowner
-  // can optionally tack on a photo before we generate the dispatch summary.
+  // Voice-turn: each completed exchange from the inline voice panel. Pushes
+  // both the user's spoken turn and Homie's reply into the main chat scroll
+  // as normal bubbles so the checklist + status card update naturally as if
+  // the user were typing. Also keeps aiConvoRef in sync in case the user
+  // drops out of voice mode mid-way and the existing text-chat pipeline
+  // needs to pick up.
+  const handleVoiceTurn = useCallback((userText: string, assistantText: string) => {
+    const userTrimmed = userText.trim();
+    const botTrimmed = assistantText.trim();
+    if (!userTrimmed) return;
+    setMessages(m => {
+      const next = [...m];
+      next.push({ role: 'user', text: `\uD83C\uDFA4 ${userTrimmed}` });
+      if (botTrimmed) next.push({ role: 'assistant', text: botTrimmed });
+      return next;
+    });
+    // Keep the shared chat history aligned so downstream flows see the turns.
+    aiConvoRef.current = [
+      ...aiConvoRef.current,
+      { role: 'user', content: userTrimmed },
+      ...(botTrimmed ? [{ role: 'assistant' as const, content: botTrimmed }] : []),
+    ];
+    // Seed the first user turn as the "problem description" so the status
+    // card populates with something meaningful right away.
+    setData(d => (d.a1 ? d : { ...d, a1: userTrimmed, category: d.category ?? 'general' }));
+    scrollDown();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Voice-ready: <ready/> tag detected OR user hit "I'm done". Closes the
+  // inline panel, finalises the seeded data, and jumps to the 'extra' phase
+  // so the homeowner can optionally tack on a photo before the dispatch
+  // summary is generated.
   const handleVoiceComplete = useCallback((payload: { transcript: string; history: { role: 'user' | 'assistant'; content: string }[] }) => {
     const { transcript, history } = payload;
     const trimmed = transcript.trim();
-    if (!trimmed) {
-      setVoiceOpen(false);
-      return;
-    }
-    // Seed data + aiConvoRef so downstream generateDiagnosis has full context
+    setVoiceOpen(false);
+    if (!trimmed) return;
     setData(d => ({ ...d, category: d.category ?? 'general', a1: trimmed, extra: trimmed }));
     aiConvoRef.current = history.map(h => ({ role: h.role, content: h.content }));
-
-    // Render a compact echo of the conversation into the main chat transcript
-    setMessages(m => {
-      const added: { role: 'assistant' | 'user'; text: string }[] = [];
-      added.push({ role: 'user', text: `\uD83C\uDFA4 Voice: ${trimmed}` });
-      added.push({ role: 'assistant', text: "Got it. Want to attach a photo, or shall we go find you a pro?" });
-      return [...m, ...added];
-    });
-    setVoiceOpen(false);
+    setMessages(m => [...m, { role: 'assistant', text: "Got it. Want to attach a photo, or shall we go find you a pro?" }]);
     setPhase('extra');
     scrollDown();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2162,14 +2179,29 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
                     </button>
                   )}
 
-                  {/* Direct-path fast lane — type a description and bypass the tile picker */}
-                  <DirectInput
-                    examples={DIRECT_EXAMPLES}
-                    onSubmit={handleDirectText}
-                    onPhoto={handlePhoto}
-                    onVideoClick={() => setVideoRecorderOpen(true)}
-                    onVoiceClick={() => setVoiceOpen(true)}
-                  />
+                  {/* Direct-path fast lane — typing input OR inline voice
+                      panel depending on whether the user tapped "Talk to
+                      Homie". We swap the two in place so the chat + status
+                      card stay visible during voice turns. */}
+                  {voiceOpen ? (
+                    <div style={{ marginLeft: 42, marginBottom: 14 }} className="gq-direct">
+                      <InlineVoicePanel
+                        active={voiceOpen}
+                        onExit={() => setVoiceOpen(false)}
+                        category={data.category}
+                        onTurn={handleVoiceTurn}
+                        onReady={handleVoiceComplete}
+                      />
+                    </div>
+                  ) : (
+                    <DirectInput
+                      examples={DIRECT_EXAMPLES}
+                      onSubmit={handleDirectText}
+                      onPhoto={handlePhoto}
+                      onVideoClick={() => setVideoRecorderOpen(true)}
+                      onVoiceClick={() => setVoiceOpen(true)}
+                    />
+                  )}
                 </>
               )}
               {phase === 'subcategory' && activeGroup && (
@@ -2379,13 +2411,9 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         onUse={handleVideo}
       />
 
-      {/* Voice conversation — opens from DirectInput's "Talk to Homie" button */}
-      <VoiceConversationModal
-        open={voiceOpen}
-        onClose={() => setVoiceOpen(false)}
-        category={data.category}
-        onComplete={handleVoiceComplete}
-      />
+      {/* Voice conversation is rendered INLINE inside the chat column now —
+          see `<InlineVoicePanel>` above where DirectInput would otherwise
+          sit. No page-level modal mount needed. */}
 
       {/* Quote Outreach Modal */}
       <QuoteOutreachModal
