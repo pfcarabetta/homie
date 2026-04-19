@@ -9,6 +9,9 @@ import EstimateBadge from '@/components/EstimateBadge';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
+const DIM = '#6B6560';
+const BORDER = 'rgba(0,0,0,.08)';
+const AMBER = '#EF9F27';
 
 /* -- Category tree: top-level groups → subcategories -- */
 interface SubCat { id: string; icon: string; label: string }
@@ -1693,8 +1696,30 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
   const repairGroups = CATEGORY_TREE.filter(g => g.type === 'repair').map(g => ({ id: g.label, icon: g.icon, label: g.label }));
   const serviceGroups = CATEGORY_TREE.filter(g => g.type === 'service').map(g => ({ id: g.label, icon: g.icon, label: g.label }));
 
+  // ── Right panel derived values ─────────────────────────────────────────
+  // Distill current state into the fields the live "homie is listening"
+  // card needs. Falls back to soft "—" when a section isn't known yet.
+  const catMeta = data.category ? CATEGORY_FLOWS[data.category] : null;
+  const repairGroupMeta = catMeta ? CATEGORY_TREE.find(g => g.subs.some(s => s.id === data.category)) : null;
+  const severityLabel: string | null = costEstimate
+    ? (costEstimate.estimateHighCents > 50000 ? 'Medium' : 'Minor')
+    : null;
+  const estRange: string | null = costEstimate
+    ? `$${Math.round(costEstimate.estimateLowCents / 100)}–$${Math.round(costEstimate.estimateHighCents / 100)}`
+    : null;
+  // Reused: the existing phase pipeline drives the checklist
+  const checklist = [
+    { done: !!data.category, txt: data.category ? `Category: ${catMeta?.label ?? data.category}` : 'Matching a category' },
+    { done: !!data.a1, txt: data.a1 ? 'Problem area located' : 'Locating the problem' },
+    { done: phase === 'extra' || phase === 'diagnosis', txt: 'Severity & specifics assessed' },
+    { done: !!data.photo, txt: 'Photo / video / voice attached', opt: true },
+    { done: phase === 'diagnosis', txt: 'Dispatch brief ready' },
+    { done: false, txt: 'Next: confirm zip, urgency & tier', opt: true },
+  ];
+  const nextIdx = checklist.findIndex(x => !x.done);
+
   return (
-    <div style={{ minHeight: '100vh', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
       <SEO
         title="Get Home Repair Quotes"
         description="Get multiple quotes from local service providers in minutes. Homie contacts pros for you via phone, text, and email — no more calling around."
@@ -1705,17 +1730,24 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
+        @media (max-width: 980px) {
+          .gq-split { grid-template-columns: 1fr !important; }
+          .gq-right-panel { position: static !important; }
+          .gq-hero-h1 { font-size: 26px !important; }
+        }
         @media (max-width: 480px) {
           .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; margin-left: 0 !important; }
           .gq-replies { margin-left: 0 !important; }
+          .gq-section { padding: 20px 16px 80px !important; }
         }
       `}</style>
 
-      {/* Header */}
+      {/* Sticky nav — homie wordmark + back + avatar */}
       <nav style={{
-        position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)',
-        padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid rgba(0,0,0,0.05)',
+        position: 'sticky', top: 0, zIndex: 50,
+        background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(16px) saturate(180%)',
+        padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: `1px solid ${BORDER}`,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {(() => {
@@ -1723,31 +1755,22 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             const backTitle = backTo === '/account' ? 'Back to my account' : 'Back to home';
             return (
               <>
-                <button onClick={() => navigate(backTo)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', fontSize: 18, color: '#9B9490', display: 'flex', alignItems: 'center' }} title={backTitle}>←</button>
-                <span onClick={() => navigate(backTo)} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, cursor: 'pointer' }}>homie</span>
+                <button onClick={() => navigate(backTo)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', fontSize: 18, color: DIM, display: 'flex', alignItems: 'center' }} title={backTitle}>←</button>
+                {/* Mark — 48×48, rx14, orange tile, white house, orange circle in gable */}
+                <svg width={30} height={30} viewBox="0 0 48 48" onClick={() => navigate(backTo)} style={{ cursor: 'pointer' }}>
+                  <rect width="48" height="48" rx="14" fill={O} />
+                  <path d="M24 12L10 23H14V35H21V28H27V35H34V23H38L24 12Z" fill="#fff" />
+                  <circle cx="24" cy="22" r="3" fill={O} />
+                </svg>
+                <span onClick={() => navigate(backTo)} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, cursor: 'pointer', letterSpacing: '-.01em' }}>homie</span>
               </>
             );
           })()}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {(() => {
-            const hour = new Date().getHours();
-            const isBusinessHours = hour >= 8 && hour < 18;
-            return isBusinessHours ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1B9E77', boxShadow: '0 0 0 3px rgba(27,158,119,0.15)' }} />
-                <span style={{ fontSize: 13, color: '#1B9E77', fontWeight: 600 }}>Online</span>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'default' }} title="Some businesses may not be reachable outside business hours. Responses may be limited and take longer.">
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF9F27', boxShadow: '0 0 0 3px rgba(239,159,39,0.15)' }} />
-                <span style={{ fontSize: 12, color: '#EF9F27', fontWeight: 600 }}>After hours</span>
-              </div>
-            );
-          })()}
           <button onClick={() => { window.location.href = '/quote'; }} style={{
-            background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
-            padding: '5px 12px', fontSize: 13, fontWeight: 600, color: '#6B6560',
+            background: 'none', border: `1px solid ${BORDER}`, borderRadius: 8,
+            padding: '5px 12px', fontSize: 13, fontWeight: 600, color: DIM,
             cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
           }}>+ New</button>
           <AvatarDropdown />
@@ -1765,100 +1788,236 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         </div>
       )}
 
-      {/* After hours notice */}
-      {(() => {
-        const hour = new Date().getHours();
-        return (hour < 8 || hour >= 18) ? (
-          <div style={{
-            background: '#FFF8F0', borderBottom: '1px solid rgba(239,159,39,0.15)',
-            padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            fontSize: 13, color: '#9B7A3C', lineHeight: 1.4, textAlign: 'center',
-          }}>
-            <span style={{ fontSize: 16, flexShrink: 0 }}>{'\uD83C\uDF19'}</span>
-            <span>Some businesses may not be reachable outside business hours (8 AM – 6 PM). Responses may be limited and take longer.</span>
+      {/* Main split layout — left intake chat, right live status */}
+      <section className="gq-section" style={{ padding: '32px 24px 80px' }}>
+        <div className="gq-split" style={{
+          maxWidth: 1280, margin: '0 auto',
+          display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 28, alignItems: 'flex-start',
+        }}>
+          {/* LEFT — progressive chat-style intake */}
+          <div>
+            {/* Live status pill — business hours = Online, otherwise After hours */}
+            {(() => {
+              const hour = new Date().getHours();
+              const bizOpen = hour >= 8 && hour < 18;
+              return (
+                <div title={bizOpen ? undefined : 'Some businesses may not be reachable outside 8am–6pm. Responses may be limited.'} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  padding: '5px 11px 5px 10px', borderRadius: 100,
+                  background: bizOpen ? 'rgba(27,158,119,.1)' : 'rgba(239,159,39,.12)',
+                  border: `1px solid ${bizOpen ? 'rgba(27,158,119,.22)' : 'rgba(239,159,39,.28)'}`,
+                  fontSize: 11.5, fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
+                  color: bizOpen ? G : AMBER, letterSpacing: '.02em',
+                }}>
+                  <span style={{
+                    width: 7, height: 7, borderRadius: '50%', background: bizOpen ? G : AMBER, flexShrink: 0,
+                    boxShadow: bizOpen ? `0 0 0 3px ${G}22` : 'none',
+                    animation: bizOpen ? 'pulse 1.8s infinite' : 'none',
+                  }} />
+                  {bizOpen ? 'Online' : 'After hours · messaging only'}
+                  <span style={{ color: DIM, fontWeight: 600, fontSize: 10.5 }}>· 8am–6pm</span>
+                </div>
+              );
+            })()}
+
+            {/* Hero */}
+            <h1 className="gq-hero-h1" style={{
+              fontFamily: "'Fraunces',serif", fontWeight: 700, lineHeight: 1.05,
+              letterSpacing: '-.03em', color: D, margin: '14px 0 10px', fontSize: 34,
+            }}>
+              Describe it once.<br />Homie takes it from here.
+            </h1>
+            <p style={{ fontSize: 16, color: DIM, marginBottom: 28, lineHeight: 1.55, maxWidth: 520 }}>
+              Homie's AI guides you, then writes the perfect brief for local pros.
+            </p>
+
+            {/* Chat log — existing AssistantMsg/UserMsg bubbles */}
+            <div className="gq-chat-area">
+              {messages.map((m, i) => (
+                m.role === 'assistant'
+                  ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1 && i > 0} />
+                  : <UserMsg key={i} text={m.text} />
+              ))}
+
+              {phase === 'diagnosis' && data.a1 && (
+                <>
+                  <DiagnosisSummary data={data} />
+                  {costEstimate && (
+                    <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+                      <EstimateCard estimate={costEstimate} />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {phase === 'category' && (
+                <>
+                  <div style={{ marginLeft: 42, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                    <span style={{ fontSize: 9.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>Repair · most common</span>
+                    <span style={{ height: 1, flex: 1, background: BORDER }} />
+                  </div>
+                  <QuickReplies options={repairGroups} onSelect={(opt) => {
+                    const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
+                    if (group) handleGroupSelect(group);
+                  }} columns={4} />
+                  <div style={{ marginLeft: 42, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                    <span style={{ fontSize: 9.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>Services · scheduled work</span>
+                    <span style={{ height: 1, flex: 1, background: BORDER }} />
+                  </div>
+                  <QuickReplies options={serviceGroups} onSelect={(opt) => {
+                    const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
+                    if (group) handleGroupSelect(group);
+                  }} columns={4} />
+                </>
+              )}
+              {phase === 'subcategory' && activeGroup && (
+                <QuickReplies
+                  options={activeGroup.subs.map(s => ({ id: s.id, icon: s.icon, label: s.label }))}
+                  onSelect={(opt) => {
+                    const sub = activeGroup.subs.find(s => s.id === (typeof opt === 'string' ? opt : opt.id));
+                    if (sub) handleSubcategorySelect(sub);
+                  }}
+                  columns={activeGroup.subs.length <= 3 ? activeGroup.subs.length : 3}
+                />
+              )}
+              {phase === 'q1' && flow && <QuickReplies options={flow.q1.options} onSelect={(opt) => handleQ1(opt as string)} />}
+              {phase === 'ai_followup' && !streaming && (
+                <>
+                  <TextInput placeholder="Type your answer..." onSubmit={handleFollowUpAnswer} />
+                  <div style={{ marginLeft: 42, marginBottom: 16 }}>
+                    <button onClick={handleSkipFollowUp} style={{
+                      padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
+                      color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                    }}>No, that covers it →</button>
+                  </div>
+                </>
+              )}
+              {phase === 'extra' && !streaming && (
+                <>
+                  <TextInput placeholder="Any other details..." onSubmit={handleExtraDetails} />
+                  <PhotoUpload onUpload={handlePhoto} />
+                  <div style={{ marginLeft: 42, marginBottom: 16 }}>
+                    <button onClick={handleSkipExtra} style={{
+                      padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
+                      color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                    }}>Skip — that's everything →</button>
+                  </div>
+                </>
+              )}
+              {phase === 'diagnosis' && !modalOpen && data.a1 && (
+                <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+                  <button onClick={() => setModalOpen(true)} style={{
+                    padding: '16px 28px', borderRadius: 16, border: 'none', fontSize: 15, fontWeight: 700,
+                    background: O, color: 'white', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                    boxShadow: `0 12px 32px -10px ${O}8c`,
+                    display: 'inline-flex', alignItems: 'center', gap: 10,
+                  }}>Continue — confirm zip &amp; urgency →</button>
+                </div>
+              )}
+
+              <div ref={bottomRef} />
+            </div>
           </div>
-        ) : null;
-      })()}
 
-      {/* Chat area */}
-      <div className="gq-chat-area" style={{ maxWidth: 600, margin: '0 auto', padding: '16px 16px 120px' }}>
-        {messages.map((m, i) => (
-          m.role === 'assistant'
-            ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1 && i > 0} />
-            : <UserMsg key={i} text={m.text} />
-        ))}
-
-        {phase === 'diagnosis' && data.a1 && (
-          <>
-            <DiagnosisSummary data={data} />
-            {costEstimate && (
-              <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
-                <EstimateCard estimate={costEstimate} />
+          {/* RIGHT — live "homie is listening" panel */}
+          <div className="gq-right-panel" style={{ position: 'sticky', top: 92 }}>
+            <div style={{
+              background: '#fff', borderRadius: 24, border: `1px solid ${BORDER}`,
+              padding: '24px 24px 22px', boxShadow: '0 20px 60px -24px rgba(0,0,0,.1)',
+            }}>
+              {/* Panel header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                  <svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2l2 7 7 2-7 2-2 7-2-7-7-2 7-2 2-7z" fill="#fff" />
+                  </svg>
+                  <span style={{ position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: '50%', background: G, border: '2px solid #fff', animation: 'pulse 1.8s infinite' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 700, fontSize: 18, color: D }}>homie is listening</div>
+                  <div style={{ fontSize: 12, color: DIM, fontFamily: "'DM Mono',monospace" }}>updates as you chat</div>
+                </div>
               </div>
-            )}
-          </>
-        )}
 
-        {phase === 'category' && (
-          <>
-            <div style={{ marginLeft: 42, fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6, animation: 'fadeSlide 0.3s ease' }}>REPAIR</div>
-            <QuickReplies options={repairGroups} onSelect={(opt) => {
-              const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
-              if (group) handleGroupSelect(group);
-            }} columns={4} />
-            <div style={{ marginLeft: 42, fontSize: 12, fontWeight: 600, color: '#9B9490', letterSpacing: '0.05em', marginBottom: 6, animation: 'fadeSlide 0.3s ease' }}>SERVICES</div>
-            <QuickReplies options={serviceGroups} onSelect={(opt) => {
-              const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
-              if (group) handleGroupSelect(group);
-            }} columns={4} />
-          </>
-        )}
-        {phase === 'subcategory' && activeGroup && (
-          <QuickReplies
-            options={activeGroup.subs.map(s => ({ id: s.id, icon: s.icon, label: s.label }))}
-            onSelect={(opt) => {
-              const sub = activeGroup.subs.find(s => s.id === (typeof opt === 'string' ? opt : opt.id));
-              if (sub) handleSubcategorySelect(sub);
-            }}
-            columns={activeGroup.subs.length <= 3 ? activeGroup.subs.length : 3}
-          />
-        )}
-        {phase === 'q1' && flow && <QuickReplies options={flow.q1.options} onSelect={(opt) => handleQ1(opt as string)} />}
-        {phase === 'ai_followup' && !streaming && (
-          <>
-            <TextInput placeholder="Type your answer..." onSubmit={handleFollowUpAnswer} />
-            <div style={{ marginLeft: 42, marginBottom: 16 }}>
-              <button onClick={handleSkipFollowUp} style={{
-                padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
-                color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-              }}>No, that covers it →</button>
+              {/* Diagnosis grid — populated progressively */}
+              {(catMeta || costEstimate || data.aiDiagnosis) ? (
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: 14, borderRadius: 14, background: W }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: DIM, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Problem</div>
+                      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 600, color: D, marginTop: 3, lineHeight: 1.25 }}>
+                        {data.aiDiagnosis
+                          ? (data.aiDiagnosis.length > 68 ? data.aiDiagnosis.slice(0, 65) + '…' : data.aiDiagnosis)
+                          : (data.a1 || '—')}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: DIM, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Category</div>
+                      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: D, marginTop: 3 }}>
+                        {repairGroupMeta?.label || catMeta?.label || '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: DIM, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Severity</div>
+                      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: severityLabel === 'Medium' ? AMBER : severityLabel === 'Minor' ? G : D, marginTop: 3 }}>
+                        {severityLabel || '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: DIM, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Est.</div>
+                      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: D, marginTop: 3 }}>
+                        {estRange || '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: '20px 14px', borderRadius: 14, background: W, textAlign: 'center', color: DIM, fontSize: 13, marginBottom: 18, border: `1px dashed ${BORDER}` }}>
+                  Start describing — I'll read along ↗
+                </div>
+              )}
+
+              {/* Checklist */}
+              <div style={{ fontSize: 11, color: DIM, textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: 700, marginBottom: 10, fontFamily: "'DM Mono',monospace" }}>Checklist</div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                {checklist.map((p, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
+                    background: p.done ? 'rgba(27,158,119,.07)' : 'transparent',
+                    border: `1px solid ${p.done ? 'rgba(27,158,119,.2)' : 'transparent'}`,
+                    transition: 'all .2s',
+                  }}>
+                    <div style={{ width: 18, height: 18, borderRadius: '50%', background: p.done ? G : 'transparent', border: p.done ? 'none' : `1.5px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                      {p.done && '✓'}
+                    </div>
+                    <div style={{ flex: 1, fontSize: 13, color: p.done ? D : DIM, fontWeight: p.done ? 600 : 500, fontFamily: "'DM Sans',sans-serif" }}>
+                      {p.txt} {p.opt && <span style={{ fontSize: 10, color: DIM, fontWeight: 500, marginLeft: 4 }}>(optional)</span>}
+                    </div>
+                    {i === nextIdx && (
+                      <span style={{ fontSize: 10, color: O, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700 }}>NEXT</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          </>
-        )}
-        {phase === 'extra' && !streaming && (
-          <>
-            <TextInput placeholder="Any other details..." onSubmit={handleExtraDetails} />
-            <PhotoUpload onUpload={handlePhoto} />
-            <div style={{ marginLeft: 42, marginBottom: 16 }}>
-              <button onClick={handleSkipExtra} style={{
-                padding: '8px 18px', borderRadius: 100, border: 'none', background: 'rgba(0,0,0,0.04)',
-                color: '#9B9490', fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-              }}>Skip — that's everything →</button>
+
+            {/* Assurance card — "Free until you pick a pro" */}
+            <div style={{
+              marginTop: 14, padding: '14px 18px',
+              background: `linear-gradient(135deg, ${D} 0%, #3A3430 100%)`,
+              color: '#fff', borderRadius: 16, fontFamily: "'DM Sans',sans-serif",
+              display: 'flex', alignItems: 'center', gap: 12,
+              boxShadow: `0 10px 30px -12px ${D}66`,
+            }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{'\uD83D\uDD12'}</div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>Free until you pick a pro</div>
+                <div style={{ fontSize: 12, opacity: .75, marginTop: 2 }}>Pros pay us — not you.</div>
+              </div>
             </div>
-          </>
-        )}
-        {phase === 'diagnosis' && !modalOpen && data.a1 && (
-          <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
-            <button onClick={() => setModalOpen(true)} style={{
-              padding: '14px 28px', borderRadius: 100, border: 'none', fontSize: 16, fontWeight: 600,
-              background: O, color: 'white', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-              boxShadow: `0 4px 16px ${O}40`,
-            }}>Find a Pro</button>
           </div>
-        )}
-
-        <div ref={bottomRef} />
-      </div>
+        </div>
+      </section>
 
       {/* Quote Outreach Modal */}
       <QuoteOutreachModal
