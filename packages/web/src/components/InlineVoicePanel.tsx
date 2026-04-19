@@ -50,6 +50,11 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
   const [lastTranscript, setLastTranscript] = useState<string>('');
   const [lastReply, setLastReply] = useState<string>('');
   const [turnCount, setTurnCount] = useState(0);
+  // Hands-free mode auto-listens + auto-stops using in-browser VAD.
+  // Persisted so returning users keep their preferred mode.
+  const [handsFree, setHandsFree] = useState<boolean>(() => {
+    try { return localStorage.getItem('homieVoiceHandsFree') !== 'false'; } catch { return true; }
+  });
 
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -59,6 +64,43 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
   const historyRef = useRef<HistoryMessage[]>([]);
   const recordingStartRef = useRef<number>(0);
   const lastAudioUrlRef = useRef<string | null>(null);
+  // Mirror the handsFree state into a ref so async callbacks (mic permission,
+  // playMp3 completion) read the latest value without needing to be in the
+  // closure's dependency list.
+  const handsFreeRef = useRef(handsFree);
+  useEffect(() => {
+    handsFreeRef.current = handsFree;
+    try { localStorage.setItem('homieVoiceHandsFree', String(handsFree)); } catch { /* noop */ }
+    // If the user flips ON hands-free while the panel's already idle, kick
+    // off the listening loop so they don't have to tap anything. If they
+    // flip it OFF mid-listening, drop the VAD so their current recording
+    // requires a manual stop.
+    if (!active) return;
+    if (handsFree && streamRef.current && recorderRef.current === null) {
+      // Only auto-start from idle (not during thinking/speaking etc.)
+      const okPhase = ['idle', 'error'].includes(phase);
+      if (okPhase) setTimeout(() => { if (handsFreeRef.current) startListening(); }, 100);
+    } else if (!handsFree && phase === 'listening') {
+      stopVAD();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handsFree]);
+
+  // ── VAD (Voice Activity Detection) refs ──────────────────────────────────
+  // Web Audio API-based silence detection. On each animation frame we sample
+  // the mic's RMS volume; once we've heard speech AND then detected silence
+  // for >SILENCE_DURATION_MS, we auto-finalize the turn.
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const vadRafRef = useRef<number | null>(null);
+  const speechDetectedRef = useRef<boolean>(false);
+  const silenceStartRef = useRef<number | null>(null);
+  const speechStartRef = useRef<number | null>(null);
+  // VAD thresholds — tuned for the typical laptop/phone mic after AGC kicks in
+  const SILENCE_THRESHOLD = 0.02;     // RMS below this = silence
+  const SILENCE_DURATION_MS = 1400;   // post-speech quiet window before auto-stop
+  const MIN_SPEECH_DURATION_MS = 400; // ignore clicks and ultra-short triggers
+  const MAX_RECORDING_MS = 30000;     // safety ceiling
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -81,6 +123,7 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
   }, [active]);
 
   const tearDown = () => {
+    stopVAD();
     try { recorderRef.current?.stop(); } catch { /* noop */ }
     recorderRef.current = null;
     try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
@@ -91,6 +134,90 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
       lastAudioUrlRef.current = null;
     }
     chunksRef.current = [];
+  };
+
+  // ── VAD ────────────────────────────────────────────────────────────────────
+  // Starts a requestAnimationFrame loop that samples the mic's RMS volume.
+  // When we detect voice (>threshold) and then a silent stretch of
+  // SILENCE_DURATION_MS, we auto-trigger stopListening. Also caps the total
+  // recording length at MAX_RECORDING_MS as a safety belt.
+  const startVAD = (stream: MediaStream) => {
+    stopVAD();
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      audioContextRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+      const dataArray = new Uint8Array(analyser.fftSize);
+
+      speechDetectedRef.current = false;
+      silenceStartRef.current = null;
+      speechStartRef.current = null;
+
+      const tick = () => {
+        const a = analyserRef.current;
+        if (!a) return;
+        a.getByteTimeDomainData(dataArray);
+        // RMS of the centered waveform (128 = silence baseline for u8)
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const v = (dataArray[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / dataArray.length);
+        const now = Date.now();
+
+        // Total recording safety cap
+        if (recordingStartRef.current && now - recordingStartRef.current >= MAX_RECORDING_MS) {
+          stopListening();
+          return;
+        }
+
+        if (rms > SILENCE_THRESHOLD) {
+          // Voice heard — reset the silence timer and mark speech detected.
+          if (!speechDetectedRef.current) {
+            speechDetectedRef.current = true;
+            speechStartRef.current = now;
+          }
+          silenceStartRef.current = null;
+        } else if (speechDetectedRef.current) {
+          // Post-speech quiet — start/continue the silence timer.
+          if (silenceStartRef.current === null) {
+            silenceStartRef.current = now;
+          } else {
+            const silenceElapsed = now - silenceStartRef.current;
+            const speechElapsed = now - (speechStartRef.current ?? now);
+            if (silenceElapsed >= SILENCE_DURATION_MS && speechElapsed >= MIN_SPEECH_DURATION_MS) {
+              stopListening();
+              return;
+            }
+          }
+        }
+
+        vadRafRef.current = requestAnimationFrame(tick);
+      };
+      vadRafRef.current = requestAnimationFrame(tick);
+    } catch {
+      // AudioContext not available — fall back silently, user can tap to stop
+    }
+  };
+
+  const stopVAD = () => {
+    if (vadRafRef.current !== null) {
+      cancelAnimationFrame(vadRafRef.current);
+      vadRafRef.current = null;
+    }
+    analyserRef.current = null;
+    try { audioContextRef.current?.close(); } catch { /* noop */ }
+    audioContextRef.current = null;
+    speechDetectedRef.current = false;
+    silenceStartRef.current = null;
+    speechStartRef.current = null;
   };
 
   // ── Mic init ───────────────────────────────────────────────────────────────
@@ -118,6 +245,12 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
       streamRef.current = stream;
       mimeTypeRef.current = pickMime();
       setPhase('idle');
+      // Hands-free: immediately start listening once the mic is ready. A tiny
+      // delay lets React paint the "idle" state first so the user sees the
+      // transition rather than jumping straight to "listening".
+      if (handsFreeRef.current) {
+        setTimeout(() => startListening(), 150);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Microphone permission denied';
       setError(msg);
@@ -136,12 +269,18 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
       rec.onstop = () => {
+        stopVAD();
         void finalizeTurn();
       };
       recorderRef.current = rec;
       recordingStartRef.current = Date.now();
       rec.start(100);
       setPhase('listening');
+      // Kick off VAD in hands-free mode — in manual mode the user will tap
+      // to stop, so the volume-watching loop isn't needed.
+      if (handsFreeRef.current) {
+        startVAD(stream);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not start recording';
       setError(msg);
@@ -152,9 +291,12 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
   const stopListening = () => {
     const rec = recorderRef.current;
     if (!rec || rec.state === 'inactive') return;
+    stopVAD();
     const elapsed = Date.now() - recordingStartRef.current;
-    if (elapsed < 400) {
-      // Ignore accidental taps shorter than 400ms
+    // In hands-free mode, VAD already filters out junk via MIN_SPEECH_DURATION,
+    // so anything that makes it here is legitimate. In manual mode we still
+    // want to guard against accidental taps shorter than 400ms.
+    if (!handsFreeRef.current && elapsed < 400) {
       try { rec.stop(); } catch { /* noop */ }
       recorderRef.current = null;
       chunksRef.current = [];
@@ -229,9 +371,29 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
         });
       } else {
         setPhase('idle');
+        // Hands-free: auto-resume listening so the user can just keep
+        // talking. Short delay gives React time to repaint idle before
+        // we jump back to listening, and lets the mic settle after
+        // Homie's playback stops.
+        if (handsFreeRef.current && active) {
+          setTimeout(() => {
+            if (handsFreeRef.current && streamRef.current) startListening();
+          }, 400);
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Something went wrong';
+      // Hands-free: soft-recover from transient failures (empty Whisper
+      // transcript from ambient noise, etc.) by quietly resuming listening
+      // instead of parking on an error screen. Persistent errors will keep
+      // firing — user can tap "back to typing" if something's really broken.
+      if (handsFreeRef.current && active && /No speech detected|Whisper/i.test(msg)) {
+        setPhase('idle');
+        setTimeout(() => {
+          if (handsFreeRef.current && streamRef.current) startListening();
+        }, 500);
+        return;
+      }
       setError(msg);
       setPhase('error');
     }
@@ -298,8 +460,8 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
         animation: 'fadeSlide 0.25s ease',
       }}
     >
-      {/* Top row — exit link + status */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      {/* Top row — exit link + hands-free toggle + status */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
         <button
           onClick={onExit}
           style={{
@@ -310,14 +472,39 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
         >
           ← back to typing
         </button>
-        <div
-          style={{
-            fontFamily: "'DM Mono',monospace", fontSize: 10,
-            letterSpacing: 1.3, textTransform: 'uppercase',
-            color: phase === 'error' ? '#c94223' : DIM, fontWeight: 700,
-          }}
-        >
-          {phaseLabel(phase, turnCount)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Hands-free toggle — pill-shaped two-option switch */}
+          <button
+            onClick={() => setHandsFree(v => !v)}
+            title={handsFree ? 'Switch to tap-to-record' : 'Switch to hands-free (auto-stop on silence)'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '4px 10px', borderRadius: 999,
+              background: handsFree ? `${O}18` : 'rgba(0,0,0,.04)',
+              border: `1px solid ${handsFree ? O + '66' : BORDER}`,
+              cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+              fontSize: 11, fontWeight: 700, color: handsFree ? O : DIM,
+              letterSpacing: '.01em',
+            }}
+          >
+            <span
+              style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: handsFree ? O : DIM,
+                boxShadow: handsFree ? `0 0 0 2px ${O}33` : 'none',
+              }}
+            />
+            {handsFree ? 'Hands-free' : 'Tap to talk'}
+          </button>
+          <div
+            style={{
+              fontFamily: "'DM Mono',monospace", fontSize: 10,
+              letterSpacing: 1.3, textTransform: 'uppercase',
+              color: phase === 'error' ? '#c94223' : DIM, fontWeight: 700,
+            }}
+          >
+            {phaseLabel(phase, turnCount)}
+          </div>
         </div>
       </div>
 
@@ -352,7 +539,7 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
               fontWeight: 600, lineHeight: 1.2, color: D,
             }}
           >
-            {hintText(phase)}
+            {hintText(phase, handsFree)}
           </div>
           {(lastTranscript || phase === 'error') && (
             <div
@@ -448,10 +635,18 @@ function phaseLabel(phase: Phase, turnCount: number): string {
   return 'Error';
 }
 
-function hintText(phase: Phase): string {
+function hintText(phase: Phase, handsFree: boolean): string {
   if (phase === 'permission') return 'Setting up the mic — allow access when prompted.';
-  if (phase === 'idle') return "Tap the mic and describe what's going on.";
-  if (phase === 'listening') return 'Keep going — Homie\'s listening.';
+  if (phase === 'idle') {
+    return handsFree
+      ? 'Just start talking — Homie will pick up automatically.'
+      : "Tap the mic and describe what's going on.";
+  }
+  if (phase === 'listening') {
+    return handsFree
+      ? "Go ahead — I'll stop listening when you pause."
+      : "Keep going — Homie's listening.";
+  }
   if (phase === 'thinking') return 'Homie is thinking it over…';
   if (phase === 'speaking') return 'Homie is talking — listen up.';
   return 'Something went sideways — try again?';
