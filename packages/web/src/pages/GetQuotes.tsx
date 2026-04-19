@@ -442,7 +442,7 @@ function DirectInput({ onSubmit, onPhoto, onVideoClick, onVoiceClick, examples, 
   }
 
   return (
-    <div style={{ marginLeft: 42, marginBottom: 14 }}>
+    <div className="gq-direct" style={{ marginLeft: 42, marginBottom: 14 }}>
       {/* "or just describe it" divider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <span style={{ height: 1, flex: '0 0 16px', background: BORDER }} />
@@ -1953,10 +1953,17 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
           .gq-right-panel { display: none !important; }
           .gq-mobile-strip { display: flex !important; }
           .gq-hero-h1 { font-size: 26px !important; }
+          /* Desktop indents the chat column by 42px to align with the
+             assistant avatar. On mobile that eats a big chunk of a narrow
+             viewport — collapse all 42px left-indents inside the chat to 0
+             so the text input, quick replies, and action rows fill the
+             available width. Targets any element whose inline style has
+             "margin-left: 42px" (how React serialises marginLeft: 42). */
+          .gq-split [style*="margin-left: 42px"] { margin-left: 0 !important; }
+          .gq-direct { margin-left: 0 !important; }
         }
         @media (max-width: 480px) {
-          .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; margin-left: 0 !important; }
-          .gq-replies { margin-left: 0 !important; }
+          .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; }
           .gq-section { padding: 16px 16px 80px !important; }
           .gq-mobile-strip { padding: 8px 10px !important; }
           .gq-mobile-strip-chips { gap: 6px !important; }
