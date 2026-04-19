@@ -1542,6 +1542,9 @@ export default function GetQuotes() {
   const [modalOpen, setModalOpen] = useState(false);
   const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  // Mobile: show the Service tier of categories behind an expander ("+ 8 more")
+  // per design spec. Always visible on desktop via CSS.
+  const [showAllCats, setShowAllCats] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -1827,9 +1830,10 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             const cleaned = diagText.replace(/\n\n.*\?$/s, '').replace(/Do you.*\?/g, '').replace(/Is there.*\?/g, '').trim();
             setData(d => ({ ...d, aiDiagnosis: cleaned || diagText.trim() }));
             setTimeout(() => {
-              addAssistant("Got it \u2014 I've prepared your diagnosis. Let's find you a pro!");
+              addAssistant("Got it \u2014 I've prepared your diagnosis. Tap Continue when you're ready to find a pro.");
               setPhase('diagnosis');
-              setModalOpen(true);
+              // Don't auto-open the pricing modal — the Continue bar below
+              // becomes the explicit user-initiated gate into zip/timing/tier.
               scrollDown();
             }, 300);
           },
@@ -1837,9 +1841,9 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             setStreaming(false);
             setData(d => ({ ...d, aiDiagnosis: `${catLabel} issue: ${context}` }));
             setTimeout(() => {
-              addAssistant("Got it \u2014 I've prepared your diagnosis. Let's find you a pro!");
+              addAssistant("Got it \u2014 I've prepared your diagnosis. Tap Continue when you're ready to find a pro.");
               setPhase('diagnosis');
-              setModalOpen(true);
+              // Don't auto-open the pricing modal — user taps Continue.
               scrollDown();
             }, 300);
           },
@@ -1947,11 +1951,12 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
         @media (max-width: 980px) {
           .gq-split { grid-template-columns: 1fr !important; gap: 12px !important; }
-          /* Drop the full desktop right panel on mobile — replaced by compact
-             .gq-mobile-strip above the chat. Keeps the page from stacking a
-             second full-height card below the conversation. */
+          /* Drop the full desktop right panel on mobile — replaced by the
+             compact .gq-mobile-status block at the bottom of the chat.
+             Keeps the page from stacking a second full-height card below
+             the conversation. */
           .gq-right-panel { display: none !important; }
-          .gq-mobile-strip { display: flex !important; }
+          .gq-mobile-status { display: flex !important; }
           .gq-hero-h1 { font-size: 26px !important; }
           /* Desktop indents the chat column by 42px to align with the
              assistant avatar. On mobile that eats a big chunk of a narrow
@@ -1961,12 +1966,16 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
              "margin-left: 42px" (how React serialises marginLeft: 42). */
           .gq-split [style*="margin-left: 42px"] { margin-left: 0 !important; }
           .gq-direct { margin-left: 0 !important; }
+
+          /* Expandable categories — service tier hidden until user taps
+             "+ 8 more". The .gq-cat-expanded class is toggled via React
+             state when the pill is pressed. */
+          .gq-cat-service:not(.gq-cat-expanded) { display: none !important; }
+          .gq-cat-more-btn { display: block !important; }
         }
         @media (max-width: 480px) {
           .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; }
           .gq-section { padding: 16px 16px 80px !important; }
-          .gq-mobile-strip { padding: 8px 10px !important; }
-          .gq-mobile-strip-chips { gap: 6px !important; }
         }
       `}</style>
 
@@ -2024,64 +2033,6 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         }}>
           {/* LEFT — progressive chat-style intake */}
           <div>
-            {/* Mobile-only compact status strip — replaces the full right
-                panel (which is display:none below 980px) with a single row
-                showing the pulsing "homie is listening" indicator plus
-                whatever category/severity we've inferred so far. Keeps the
-                mobile page scannable without stacking a second giant card
-                below the chat. */}
-            <div
-              className="gq-mobile-strip"
-              style={{
-                display: 'none',
-                alignItems: 'center', gap: 10,
-                padding: '10px 12px',
-                marginBottom: 14,
-                borderRadius: 14,
-                background: '#fff',
-                border: `1px solid ${BORDER}`,
-                boxShadow: '0 6px 20px -12px rgba(0,0,0,.08)',
-              }}
-            >
-              <div style={{ width: 24, height: 24, borderRadius: 8, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', flexShrink: 0 }}>
-                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path d="M12 2l2 7 7 2-7 2-2 7-2-7-7-2 7-2 2-7z" fill="#fff" />
-                </svg>
-                <span style={{ position: 'absolute', top: -2, right: -2, width: 7, height: 7, borderRadius: '50%', background: G, border: '1.5px solid #fff', animation: 'pulse 1.8s infinite' }} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 700, fontSize: 14, color: D, lineHeight: 1.1 }}>homie is listening</div>
-                <div className="gq-mobile-strip-chips" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, fontSize: 11, color: DIM, fontFamily: "'DM Mono',monospace", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {repairGroupMeta?.label || catMeta?.label ? (
-                    <span style={{ color: D, fontWeight: 700 }}>{repairGroupMeta?.label || catMeta?.label}</span>
-                  ) : (
-                    <span>waiting for details…</span>
-                  )}
-                  {severityLabel && (
-                    <>
-                      <span style={{ opacity: .4 }}>·</span>
-                      <span style={{ color: severityLabel === 'Medium' ? AMBER : G, fontWeight: 700 }}>{severityLabel}</span>
-                    </>
-                  )}
-                  {estRange && (
-                    <>
-                      <span style={{ opacity: .4 }}>·</span>
-                      <span style={{ color: D, fontWeight: 700 }}>{estRange}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              {/* Progress dots — one per checklist step, filled = done */}
-              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                {checklist.map((p, i) => (
-                  <span key={i} style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: p.done ? G : (i === nextIdx ? O : 'rgba(0,0,0,.12)'),
-                  }} />
-                ))}
-              </div>
-            </div>
-
             {/* Live status pill — business hours = Online, otherwise After hours */}
             {(() => {
               const hour = new Date().getHours();
@@ -2146,14 +2097,47 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
                     const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
                     if (group) handleGroupSelect(group);
                   }} columns={4} />
-                  <div style={{ marginLeft: 42, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
-                    <span style={{ fontSize: 9.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>Services · scheduled work</span>
-                    <span style={{ height: 1, flex: 1, background: BORDER }} />
+
+                  {/* Service tier — always visible on desktop; on mobile sits
+                      behind a dashed "+ 8 more" pill per design spec. The
+                      class pair `gq-cat-service` + showAllCats state is
+                      used by the @media query below. */}
+                  <div className={`gq-cat-service ${showAllCats ? 'gq-cat-expanded' : ''}`}>
+                    <div style={{ marginLeft: 42, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                      <span style={{ fontSize: 9.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>Services · scheduled work</span>
+                      <span style={{ height: 1, flex: 1, background: BORDER }} />
+                    </div>
+                    <QuickReplies options={serviceGroups} onSelect={(opt) => {
+                      const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
+                      if (group) handleGroupSelect(group);
+                    }} columns={4} />
                   </div>
-                  <QuickReplies options={serviceGroups} onSelect={(opt) => {
-                    const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
-                    if (group) handleGroupSelect(group);
-                  }} columns={4} />
+
+                  {/* Mobile-only "+ 8 more …" expand pill. Hidden on desktop and
+                      when already expanded (both via CSS). */}
+                  {!showAllCats && (
+                    <button
+                      type="button"
+                      className="gq-cat-more-btn"
+                      onClick={() => setShowAllCats(true)}
+                      style={{
+                        display: 'none', // overridden to 'block' on mobile via CSS
+                        width: '100%',
+                        marginBottom: 14,
+                        background: 'transparent',
+                        border: `1px dashed ${BORDER}`,
+                        borderRadius: 100,
+                        padding: '10px 14px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: DIM,
+                        cursor: 'pointer',
+                        fontFamily: "'DM Sans',sans-serif",
+                      }}
+                    >
+                      + 8 more · cleaning, landscape, painting, moving…
+                    </button>
+                  )}
 
                   {/* Direct-path fast lane — type a description and bypass the tile picker */}
                   <DirectInput
@@ -2207,6 +2191,57 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
                     boxShadow: `0 12px 32px -10px ${O}8c`,
                     display: 'inline-flex', alignItems: 'center', gap: 10,
                   }}>Continue — confirm zip &amp; urgency →</button>
+                </div>
+              )}
+
+              {/* Mobile-only bottom status card — "Homie thinks" pattern from
+                  the design. Shown once we have enough context to display
+                  something meaningful (category inferred OR diagnosis ready).
+                  Sits just above the final scroll anchor so it's the last
+                  thing visible before the user acts. */}
+              {(repairGroupMeta || catMeta || data.aiDiagnosis) && (
+                <div
+                  className="gq-mobile-status"
+                  style={{
+                    display: 'none', // flex on mobile via @media rule
+                    alignItems: 'center', gap: 10,
+                    padding: 12,
+                    marginTop: 4,
+                    marginBottom: 16,
+                    background: '#fff',
+                    borderRadius: 14,
+                    border: `1px solid ${BORDER}`,
+                    boxShadow: '0 6px 20px -12px rgba(0,0,0,.08)',
+                    animation: 'fadeSlide 0.3s ease',
+                  }}
+                >
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 9,
+                    background: `${O}22`, border: `1px solid ${O}33`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 15, flexShrink: 0,
+                  }}>
+                    {repairGroupMeta?.icon || catMeta?.icon || '✨'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 700 }}>
+                      Homie thinks
+                    </div>
+                    <div style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, color: D, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {data.aiDiagnosis
+                        ? (data.aiDiagnosis.length > 60 ? data.aiDiagnosis.slice(0, 57) + '…' : data.aiDiagnosis)
+                        : (catMeta?.label || repairGroupMeta?.label || data.a1 || '—')}
+                    </div>
+                    {(severityLabel || estRange) && (
+                      <div style={{ fontSize: 10.5, color: DIM, marginTop: 1, fontFamily: "'DM Sans',sans-serif" }}>
+                        {severityLabel && (
+                          <span style={{ color: severityLabel === 'Medium' ? AMBER : G, fontWeight: 700 }}>{severityLabel}</span>
+                        )}
+                        {severityLabel && estRange && <span style={{ opacity: .4, margin: '0 6px' }}>·</span>}
+                        {estRange && <span style={{ color: D, fontWeight: 700 }}>{estRange}</span>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
