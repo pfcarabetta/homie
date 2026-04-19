@@ -24,8 +24,12 @@ interface Props {
   onExit: () => void;
   /** Optional category hint (the tile the user already chose). */
   category?: string | null;
-  /** Fires after every successful turn — parent pushes both into the chat. */
-  onTurn: (user: string, assistant: string) => void;
+  /**
+   * Fires after every successful turn — parent pushes both into the chat.
+   * `category` is Homie's current best category ID guess (from its
+   * <category> tag) or null if it couldn't classify yet.
+   */
+  onTurn: (user: string, assistant: string, category: string | null) => void;
   /** Fires when <ready/> is detected or user taps "I'm done". */
   onReady: (payload: { transcript: string; history: HistoryMessage[] }) => void;
 }
@@ -196,10 +200,11 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
           audio_base64: string;
           audio_mime: string;
           is_ready: boolean;
+          category: string | null;
         };
       };
 
-      const { transcript, reply, audio_base64, audio_mime, is_ready } = json.data;
+      const { transcript, reply, audio_base64, audio_mime, is_ready, category: inferredCategory } = json.data;
 
       historyRef.current = [
         ...historyRef.current,
@@ -212,7 +217,7 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
 
       // Fire the turn callback immediately so the parent can push both
       // bubbles into the main chat while Homie's audio plays
-      onTurn(transcript, reply);
+      onTurn(transcript, reply, inferredCategory);
 
       await playMp3(audio_base64, audio_mime);
 

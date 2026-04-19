@@ -51,11 +51,39 @@ GOAL:
 - Ask at most 3 focused follow-up questions (when it started, severity, location/symptoms)
 - Never ask for zip code, address, or budget — the app collects that separately
 
+CLASSIFY THE JOB:
+On EVERY reply, after your spoken response, emit a hidden tag with your best category guess so the UI can show the right icon and cost range. Use exactly one of these IDs:
+- plumbing (leaks, drains, toilets, faucets, water pressure)
+- water_heater (hot water issues, tankless)
+- septic_sewer (sewer backup, septic tank)
+- electrical (outlets, breakers, wiring, lights flickering)
+- hvac (AC, heat, furnace, thermostat)
+- appliance (fridge, washer, dryer, dishwasher, oven)
+- roofing (leaks from ceiling, shingles, gutters, siding)
+- general (drywall, doors, shelves, handyman odds and ends)
+- garage_door (opener, springs, off-track)
+- locksmith (locked out, rekey, new lock)
+- security_systems (cameras, alarms, doorbell cams)
+- house_cleaning (recurring or one-time cleaning)
+- landscaping (mowing, yard cleanup, garden)
+- tree_trimming (trimming, removal, branches)
+- pool (pool cleaning, green water, equipment)
+- pest_control (ants, roaches, mice, RATS, termites, spiders, bed bugs, ANY rodent/insect/pest)
+- painting (interior/exterior paint)
+- flooring (hardwood, tile, carpet install/repair)
+- kitchen_remodel (kitchen remodel, cabinets, counters)
+- bathroom_remodel (bathroom remodel, shower, tub)
+- other (only when nothing above fits)
+
+Format: <category>ID</category> — for example <category>pest_control</category>.
+
+Pick from memory of the FULL conversation so far, not just the latest turn. If the homeowner mentions rats/mice/pests/bugs at ANY point, the category stays pest_control even if later turns talk about drywall damage.
+
 WHEN YOU HAVE ENOUGH:
 After at most 3 follow-ups (or sooner if you have a clear picture), tell the homeowner you've got what you need and end your reply with the exact tag <ready/> on its own. Example:
-"Alright, I've got enough to start matching you with a pro. <ready/>"
+"Alright, I've got enough to start matching you with a pro. <category>pest_control</category> <ready/>"
 
-Do NOT include <ready/> on earlier turns — only the final one.`;
+Do NOT include <ready/> on earlier turns — only the final one. Always include <category>ID</category>.`;
 
 // ElevenLabs voice preset — "Adam" is warm/American/conversational and fits the
 // friendly-Californian brief from the product spec. Override via env if needed.
@@ -234,8 +262,18 @@ router.post('/turn', async (req: Request, res: Response) => {
     const firstBlock = claudeRes.content[0];
     const replyRaw = firstBlock && firstBlock.type === 'text' ? firstBlock.text : '';
     const isReady = /<ready\s*\/?\s*>/i.test(replyRaw);
-    // Strip the <ready/> tag so it doesn't get spoken
-    const replyClean = replyRaw.replace(/<ready\s*\/?\s*>/gi, '').trim();
+    // Extract category hint (e.g. <category>pest_control</category>) so the
+    // frontend can light up the right icon + cost estimate. Non-fatal if
+    // missing — we fall back to whatever category the UI already had.
+    const catMatch = replyRaw.match(/<category>\s*([a-z0-9_-]+)\s*<\/category>/i);
+    const category = catMatch ? catMatch[1].toLowerCase() : null;
+    // Strip both the <ready/> and <category>…</category> tags before TTS so
+    // they don't get read aloud.
+    const replyClean = replyRaw
+      .replace(/<category>[\s\S]*?<\/category>/gi, '')
+      .replace(/<ready\s*\/?\s*>/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     const replyForTts = replyClean || 'Got it. Give me a sec.';
 
     // 3. ElevenLabs TTS
@@ -243,12 +281,13 @@ router.post('/turn', async (req: Request, res: Response) => {
     const audioBase64 = audioBuf.toString('base64');
 
     logger.info(
-      { transcriptLen: transcript.length, replyLen: replyClean.length, isReady, turn: history.length / 2 + 1 },
+      { transcriptLen: transcript.length, replyLen: replyClean.length, isReady, category, turn: history.length / 2 + 1 },
       '[voice/turn] ok',
     );
 
     res.json({
       data: {
+        category,
         transcript,
         reply: replyClean,
         audio_base64: audioBase64,

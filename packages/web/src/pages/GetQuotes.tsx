@@ -1896,8 +1896,10 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
   // as normal bubbles so the checklist + status card update naturally as if
   // the user were typing. Also keeps aiConvoRef in sync in case the user
   // drops out of voice mode mid-way and the existing text-chat pipeline
-  // needs to pick up.
-  const handleVoiceTurn = useCallback((userText: string, assistantText: string) => {
+  // needs to pick up. `inferredCategory` comes from Homie's <category> tag
+  // on each voice reply — falls back to whatever the UI already had (and
+  // only lands on 'general' if Homie genuinely couldn't classify).
+  const handleVoiceTurn = useCallback((userText: string, assistantText: string, inferredCategory: string | null) => {
     const userTrimmed = userText.trim();
     const botTrimmed = assistantText.trim();
     if (!userTrimmed) return;
@@ -1907,15 +1909,21 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
       if (botTrimmed) next.push({ role: 'assistant', text: botTrimmed });
       return next;
     });
-    // Keep the shared chat history aligned so downstream flows see the turns.
     aiConvoRef.current = [
       ...aiConvoRef.current,
       { role: 'user', content: userTrimmed },
       ...(botTrimmed ? [{ role: 'assistant' as const, content: botTrimmed }] : []),
     ];
-    // Seed the first user turn as the "problem description" so the status
-    // card populates with something meaningful right away.
-    setData(d => (d.a1 ? d : { ...d, a1: userTrimmed, category: d.category ?? 'general' }));
+    // Category precedence: if Homie's classifier returned a valid ID that
+    // exists in our flow map, use it (even if the UI already had a guess —
+    // Homie sees the full conversation and can correct earlier misses).
+    // Otherwise keep whatever the UI already had, falling back to 'general'
+    // only on the first turn when nothing else is known.
+    const validCategory = inferredCategory && CATEGORY_FLOWS[inferredCategory] ? inferredCategory : null;
+    setData(d => {
+      const nextCategory = validCategory ?? d.category ?? 'general';
+      return { ...d, category: nextCategory, a1: d.a1 || userTrimmed };
+    });
     scrollDown();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
