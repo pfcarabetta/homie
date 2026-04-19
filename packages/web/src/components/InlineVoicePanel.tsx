@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getSharedAudio, primeAudio } from './audioUnlocker';
 
 // ── Visual tokens ────────────────────────────────────────────────────────────
 const O = '#E8632B';
@@ -128,6 +129,9 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
     recorderRef.current = null;
     try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
     streamRef.current = null;
+    // Pause but DO NOT destroy the audio element — it's a module-level
+    // singleton kept primed for iOS. Destroying it would require re-priming
+    // on the next voice session, which won't be inside a user gesture.
     try { audioRef.current?.pause(); } catch { /* noop */ }
     if (lastAudioUrlRef.current) {
       try { URL.revokeObjectURL(lastAudioUrlRef.current); } catch { /* noop */ }
@@ -400,6 +404,9 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
   };
 
   // ── Audio playback ─────────────────────────────────────────────────────────
+  // Reuses the shared HTMLAudioElement that was "primed" by the Talk-to-Homie
+  // button click. Critical for iOS Safari — only an element .play()'d during
+  // a user gesture is allowed to play later from async code.
   const playMp3 = useCallback((base64: string, mime: string) => new Promise<void>((resolve) => {
     const byteChars = atob(base64);
     const bytes = new Uint8Array(byteChars.length);
@@ -411,12 +418,20 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
     }
     lastAudioUrlRef.current = url;
 
-    const audio = new Audio(url);
+    const audio = getSharedAudio();
     audioRef.current = audio;
+    // Reset any prior state (from silent-prime or a previous reply)
+    audio.pause();
+    audio.currentTime = 0;
+    audio.src = url;
+    audio.volume = 1;
     audio.onplay = () => setPhase('speaking');
     audio.onended = () => resolve();
     audio.onerror = () => resolve();
-    audio.play().catch(() => resolve());
+    const p = audio.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => resolve());
+    }
   }), []);
 
   // ── Helpers ────────────────────────────────────────────────────────────────

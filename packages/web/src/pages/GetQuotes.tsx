@@ -9,6 +9,7 @@ import EstimateBadge from '@/components/EstimateBadge';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 import VideoRecorder from '@/components/VideoRecorder';
 import InlineVoicePanel from '@/components/InlineVoicePanel';
+import { primeAudio } from '@/components/audioUnlocker';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 const DIM = '#6B6560';
@@ -340,7 +341,7 @@ function AssistantMsg({ text, animate = true }: { text: string; animate?: boolea
       <div style={{ width: 32, height: 32, borderRadius: 10, background: O, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15 }}>h</span>
       </div>
-      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D }}>{renderBold(text)}</div>
+      <div style={{ background: W, padding: '12px 16px', borderRadius: '16px 16px 16px 4px', maxWidth: '80%', fontSize: 15, lineHeight: 1.6, color: D, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{renderBold(text)}</div>
     </div>
   );
 }
@@ -348,7 +349,7 @@ function AssistantMsg({ text, animate = true }: { text: string; animate?: boolea
 function UserMsg({ text }: { text: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, animation: 'fadeSlide 0.2s ease' }}>
-      <div style={{ background: O, color: 'white', padding: '10px 18px', borderRadius: '16px 16px 4px 16px', maxWidth: '75%', fontSize: 15, lineHeight: 1.5 }}>{text}</div>
+      <div style={{ background: O, color: 'white', padding: '10px 18px', borderRadius: '16px 16px 4px 16px', maxWidth: '75%', fontSize: 15, lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{text}</div>
     </div>
   );
 }
@@ -2167,7 +2168,7 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
       )}
 
       {/* Main split layout — left intake chat, right live status */}
-      <section className="gq-section" style={{ padding: '32px 24px 80px' }}>
+      <section className="gq-section" style={{ padding: '32px 24px 80px', overflowX: 'hidden' }}>
         <div className="gq-split" style={{
           maxWidth: 1280, margin: '0 auto',
           display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 28, alignItems: 'flex-start',
@@ -2300,7 +2301,14 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
                       onSubmit={handleDirectText}
                       onPhoto={handlePhoto}
                       onVideoClick={() => setVideoRecorderOpen(true)}
-                      onVoiceClick={() => setVoiceOpen(true)}
+                      onVoiceClick={() => {
+                        // Unlock audio output for iOS Safari — must fire
+                        // within this synchronous tap handler so the shared
+                        // <audio> element becomes playable from the async
+                        // Whisper/Claude/ElevenLabs chain later.
+                        primeAudio();
+                        setVoiceOpen(true);
+                      }}
                     />
                   )}
                 </>
