@@ -62,9 +62,20 @@ Do NOT include <ready/> on earlier turns — only the final one.`;
 const DEFAULT_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'; // Adam
 
 function parseDataUrl(input: string): { mime: string; buffer: Buffer } | null {
-  const m = input.match(/^data:([^;]+);base64,(.+)$/);
+  // Data URL shape: data:<mime>[;param=value]*;base64,<payload>
+  // Browsers frequently include codec params (e.g. "audio/webm;codecs=opus"),
+  // so we capture everything between "data:" and ";base64," as the full MIME
+  // descriptor, then strip params for the base type we return. The earlier
+  // regex only allowed a single `;` before `base64`, which false-rejected any
+  // recorder output that included codecs.
+  const m = input.match(/^data:([^,]+);base64,(.+)$/);
   if (!m) return null;
-  return { mime: m[1], buffer: Buffer.from(m[2], 'base64') };
+  const fullMime = m[1];
+  // Drop codec/charset params so downstream code sees a clean base MIME
+  // (e.g. "audio/webm") — keeps Whisper's multipart upload simple and lets
+  // mimeToWhisperFilename() work with a predictable input.
+  const baseMime = fullMime.split(';')[0].trim().toLowerCase();
+  return { mime: baseMime, buffer: Buffer.from(m[2], 'base64') };
 }
 
 // Turn a Whisper-friendly Buffer into a File the Whisper multipart upload
@@ -151,6 +162,11 @@ router.post('/turn', async (req: Request, res: Response) => {
 
   const parsed = parseDataUrl(body.audio_data_url);
   if (!parsed || !parsed.mime.startsWith('audio/')) {
+    // Peek at the first ~40 chars of the URL prefix so we can see what shape
+    // the frontend sent without logging the whole payload.
+    const urlStr = body.audio_data_url as string;
+    const prefix = urlStr.slice(0, Math.min(60, urlStr.indexOf(',') + 1 || 60));
+    logger.warn({ prefix, detectedMime: parsed?.mime }, '[voice/turn] invalid audio_data_url shape');
     const out: ApiResponse<null> = { data: null, error: 'audio_data_url must be a base64 audio/* data URL', meta: {} };
     res.status(400).json(out);
     return;
