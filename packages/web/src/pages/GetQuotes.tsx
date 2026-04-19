@@ -7,6 +7,8 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
+import VideoRecorder from '@/components/VideoRecorder';
+import VoiceConversationModal from '@/components/VoiceConversationModal';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 const DIM = '#6B6560';
@@ -300,6 +302,9 @@ interface QuoteData {
   aiDiagnosis: string | null;
   extra: string | null;
   photo: string | null;
+  /** Optional secondary video clip captured via the in-app recorder */
+  video?: string | null;
+  videoSeconds?: number;
   zip: string;
   timing: string | null;
   tier: string | null;
@@ -410,9 +415,11 @@ function TextInput({ placeholder, onSubmit }: { placeholder: string; onSubmit: (
  * with video/audio files can attach them via the photo button today; we'll
  * wire dedicated handlers when backend support lands).
  */
-function DirectInput({ onSubmit, onPhoto, examples, disabled }: {
+function DirectInput({ onSubmit, onPhoto, onVideoClick, onVoiceClick, examples, disabled }: {
   onSubmit: (text: string) => void;
   onPhoto: (dataUrl: string) => void;
+  onVideoClick: () => void;
+  onVoiceClick: () => void;
   examples: string[];
   disabled?: boolean;
 }) {
@@ -466,18 +473,18 @@ function DirectInput({ onSubmit, onPhoto, examples, disabled }: {
         />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input ref={fileRef} type="file" accept="image/*,video/*,audio/*" onChange={handleFile} style={{ display: 'none' }} />
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
             <button onClick={() => fileRef.current?.click()} style={uploadBtnStyle} title="Add photo">
               <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><path d="M3 5h4l2-2h6l2 2h4v12H3V5z" stroke={D} strokeWidth="1.8" /><circle cx="12" cy="11" r="3.5" stroke={D} strokeWidth="1.8" /></svg>
               Photo
             </button>
-            <button onClick={() => fileRef.current?.click()} style={uploadBtnStyle} title="Add video">
+            <button onClick={onVideoClick} style={uploadBtnStyle} title="Record video">
               <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><rect x="2" y="4" width="14" height="12" rx="2" stroke={D} strokeWidth="1.8" /><path d="M16 9l6-3v8l-6-3V9z" stroke={D} strokeWidth="1.8" strokeLinejoin="round" /></svg>
               Video
             </button>
-            <button onClick={() => fileRef.current?.click()} style={uploadBtnStyle} title="Add voice memo">
+            <button onClick={onVoiceClick} style={uploadBtnStyle} title="Talk with Homie">
               <svg width="13" height="14" viewBox="0 0 18 20" fill="none"><rect x="6" y="1" width="6" height="11" rx="3" stroke={D} strokeWidth="1.8" /><path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke={D} strokeWidth="1.8" strokeLinecap="round" /></svg>
-              Voice memo
+              Talk to Homie
             </button>
           </div>
           {text.length > 0 && (
@@ -1533,6 +1540,8 @@ export default function GetQuotes() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -1845,6 +1854,45 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     scrollDown();
   };
 
+  // Video recorder — attaches the clip alongside any photo as an additional
+  // piece of context. For now we reuse data.photo for single-attachment flow;
+  // video clips drop an announcement message in the chat and keep the blob
+  // as a secondary attachment on data.video (new optional field).
+  const handleVideo = (dataUrl: string, durationSec: number) => {
+    setData(d => ({ ...d, video: dataUrl, videoSeconds: durationSec }));
+    setMessages(m => [...m, { role: 'user', text: `\uD83C\uDFAC Video clip attached · ${durationSec}s` }]);
+    scrollDown();
+  };
+
+  // Voice-path: user finished a spoken conversation with Homie. The modal
+  // returns the joined transcript (user turns only) plus the full history.
+  // We skip the text follow-up loop — Homie already emitted <ready/> in the
+  // voice channel — and land directly on the 'extra' phase so the homeowner
+  // can optionally tack on a photo before we generate the dispatch summary.
+  const handleVoiceComplete = useCallback((payload: { transcript: string; history: { role: 'user' | 'assistant'; content: string }[] }) => {
+    const { transcript, history } = payload;
+    const trimmed = transcript.trim();
+    if (!trimmed) {
+      setVoiceOpen(false);
+      return;
+    }
+    // Seed data + aiConvoRef so downstream generateDiagnosis has full context
+    setData(d => ({ ...d, category: d.category ?? 'general', a1: trimmed, extra: trimmed }));
+    aiConvoRef.current = history.map(h => ({ role: h.role, content: h.content }));
+
+    // Render a compact echo of the conversation into the main chat transcript
+    setMessages(m => {
+      const added: { role: 'assistant' | 'user'; text: string }[] = [];
+      added.push({ role: 'user', text: `\uD83C\uDFA4 Voice: ${trimmed}` });
+      added.push({ role: 'assistant', text: "Got it. Want to attach a photo, or shall we go find you a pro?" });
+      return [...m, ...added];
+    });
+    setVoiceOpen(false);
+    setPhase('extra');
+    scrollDown();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Direct-path: user types a description on the initial screen without
   // picking a category tile. We bypass the tile → sub → q1 pipeline and go
   // straight into the AI follow-up conversation. Category defaults to
@@ -2041,6 +2089,8 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
                     examples={DIRECT_EXAMPLES}
                     onSubmit={handleDirectText}
                     onPhoto={handlePhoto}
+                    onVideoClick={() => setVideoRecorderOpen(true)}
+                    onVoiceClick={() => setVoiceOpen(true)}
                   />
                 </>
               )}
@@ -2192,6 +2242,21 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
           </div>
         </div>
       </section>
+
+      {/* In-app video recorder — opens from DirectInput's Video button */}
+      <VideoRecorder
+        open={videoRecorderOpen}
+        onClose={() => setVideoRecorderOpen(false)}
+        onUse={handleVideo}
+      />
+
+      {/* Voice conversation — opens from DirectInput's "Talk to Homie" button */}
+      <VoiceConversationModal
+        open={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        category={data.category}
+        onComplete={handleVoiceComplete}
+      />
 
       {/* Quote Outreach Modal */}
       <QuoteOutreachModal
