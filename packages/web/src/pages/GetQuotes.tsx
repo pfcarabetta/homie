@@ -1527,18 +1527,56 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
   );
 }
 
+/* -- Local storage snapshot of the in-flight quote intake -- */
+// Survives page reloads / tab close so a user can pop back into /quote
+// and pick up where they left off. Keyed with a version suffix so shape
+// changes invalidate the cache automatically.
+const QUOTE_STATE_KEY = 'homie_quote_state_v1';
+const QUOTE_STATE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+interface QuoteStateSnapshot {
+  data: QuoteData;
+  messages: { role: string; text: string }[];
+  aiConvo: { role: 'user' | 'assistant'; content: string }[];
+  phase: string;
+  costEstimate: CostEstimate | null;
+  savedAt: number;
+}
+
+function loadQuoteSnapshot(): QuoteStateSnapshot | null {
+  try {
+    const raw = localStorage.getItem(QUOTE_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as QuoteStateSnapshot;
+    if (!parsed || typeof parsed.savedAt !== 'number') return null;
+    if (Date.now() - parsed.savedAt > QUOTE_STATE_TTL_MS) {
+      localStorage.removeItem(QUOTE_STATE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 /* -- MAIN COMPONENT -- */
 export default function GetQuotes() {
   const navigate = useNavigate();
   const { pricing } = usePricing();
   const isDemo = new URLSearchParams(window.location.search).has('demo');
-  const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
-  const [phase, setPhase] = useState('greeting');
-  const [data, setData] = useState<QuoteData>({ category: null, a1: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
-  const aiConvoRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
+
+  // Try to restore the in-flight intake from localStorage so a user who
+  // closed the pricing modal (or the tab entirely) can come back and find
+  // the chat / diagnosis exactly as they left it.
+  const snapshot = (typeof window !== 'undefined') ? loadQuoteSnapshot() : null;
+
+  const [messages, setMessages] = useState<{ role: string; text: string }[]>(() => snapshot?.messages ?? []);
+  const [phase, setPhase] = useState(() => snapshot?.phase ?? 'greeting');
+  const [data, setData] = useState<QuoteData>(() => snapshot?.data ?? { category: null, a1: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
+  const aiConvoRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>(snapshot?.aiConvo ?? []);
   const [streaming, setStreaming] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(() => snapshot?.costEstimate ?? null);
   const [modalOpen, setModalOpen] = useState(false);
   const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
@@ -1657,11 +1695,16 @@ export default function GetQuotes() {
       } catch { /* ignore bad data */ }
     }
 
+    // If we restored a snapshot (messages already present), skip the fresh
+    // greeting — the user is picking up where they left off.
+    if (messages.length > 0) return;
+
     const t = setTimeout(() => {
       addAssistant("Hey! \uD83D\uDC4B I'm Homie. Let's get you some quotes. What kind of help do you need?");
       setPhase('category');
     }, 400);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addAssistant]);
 
   useEffect(() => {
@@ -1677,6 +1720,56 @@ export default function GetQuotes() {
         }
       }).catch(() => { /* ignore */ });
     }
+  }, []);
+
+  // Persist the in-flight intake to localStorage so closing the pricing
+  // modal (or even the whole tab) doesn't lose the user's chat + diagnosis.
+  // Only snapshots once there's something worth restoring — guards against
+  // writing an empty shell over a more complete prior snapshot on first
+  // render if restore didn't kick in.
+  useEffect(() => {
+    const meaningful = messages.length > 0 || !!data.a1 || !!data.category || !!data.aiDiagnosis;
+    if (!meaningful) return;
+    try {
+      // Strip media data URLs (photo / video) — they can be multi-MB and
+      // would blow the ~5MB localStorage quota fast. The user would have
+      // to re-attach media on return, which is an acceptable tradeoff
+      // for not losing the entire chat on quota-exceeded.
+      const lightData: QuoteData = { ...data, photo: null, video: null, videoSeconds: undefined };
+      // Also drop media-heavy chat bubbles to the same effect — the
+      // "📸 Photo added" / "🎬 Video clip attached …s" bubbles stay,
+      // but any raw data URLs embedded in message text get trimmed.
+      const lightMessages = messages.map(m => {
+        if (typeof m.text === 'string' && m.text.startsWith('data:')) {
+          return { ...m, text: '(media attachment)' };
+        }
+        return m;
+      });
+      const snap: QuoteStateSnapshot = {
+        data: lightData,
+        messages: lightMessages,
+        aiConvo: aiConvoRef.current,
+        phase,
+        costEstimate,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(QUOTE_STATE_KEY, JSON.stringify(snap));
+    } catch { /* quota / disabled / whatever — best-effort only */ }
+  }, [messages, data, phase, costEstimate]);
+
+  // Hard-reset helper: wipes in-flight state + the snapshot. Wired into
+  // the nav "+ New" button (below) and available for future "start over"
+  // affordances without needing a full page reload.
+  const resetQuoteFlow = useCallback(() => {
+    try { localStorage.removeItem(QUOTE_STATE_KEY); } catch { /* noop */ }
+    aiConvoRef.current = [];
+    setMessages([]);
+    setData({ category: null, a1: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
+    setPhase('greeting');
+    setCostEstimate(null);
+    setJobId(null);
+    setModalOpen(false);
+    setVoiceOpen(false);
   }, []);
 
   // Live estimate fetch — fires as soon as we have a category + subcategory,
@@ -2053,7 +2146,7 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
           })()}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => { window.location.href = '/quote'; }} style={{
+          <button onClick={() => { resetQuoteFlow(); window.location.href = '/quote'; }} style={{
             background: 'none', border: `1px solid ${BORDER}`, borderRadius: 8,
             padding: '5px 12px', fontSize: 13, fontWeight: 600, color: DIM,
             cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
@@ -2429,15 +2522,14 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         onClose={(hasJob) => {
           setModalOpen(false);
           if (hasJob) {
+            // Booked — drop the snapshot so the next /quote visit starts
+            // fresh instead of restoring the completed conversation.
+            try { localStorage.removeItem(QUOTE_STATE_KEY); } catch { /* noop */ }
             navigate('/account?tab=quotes');
-          } else {
-            // Restart the chat
-            setPhase('greeting');
-            setData({ category: null, a1: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
-            setMessages([{ role: 'assistant', text: "Hey! I'm Homie. Let's get you some quotes. What kind of help do you need?" }]);
-            setCostEstimate(null);
-            setJobId(null);
           }
+          // If !hasJob: keep every piece of state (chat, diagnosis, phase,
+          // estimate) intact so the user can review what they told Homie
+          // and re-tap Continue without starting over.
         }}
         diagnosis={data.aiDiagnosis || ''}
         category={data.category || ''}
