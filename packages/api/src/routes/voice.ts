@@ -18,6 +18,12 @@ const router = Router();
 interface VoiceTurnBody {
   /** Data URL (audio/webm or audio/mp4) from the browser's MediaRecorder */
   audio_data_url?: unknown;
+  /**
+   * Optional JPEG/PNG data URL of the current video frame — sent by the
+   * video-chat panel each turn. When present, we switch to the
+   * vision-aware system prompt so Claude can describe what it sees.
+   */
+  frame_data_url?: unknown;
   /** Prior turns — each entry is the transcript OR the reply text */
   history?: unknown;
   /** Optional hint from the UI (category tile already chosen) */
@@ -84,6 +90,42 @@ After at most 3 follow-ups (or sooner if you have a clear picture), tell the hom
 "Alright, I've got enough to start matching you with a pro. <category>pest_control</category> <ready/>"
 
 Do NOT include <ready/> on earlier turns — only the final one. Always include <category>ID</category>.`;
+
+// Video-chat system prompt — same rules as voice, plus vision awareness.
+// Claude receives the current video frame alongside the transcript so it
+// can describe what it sees (brand, model, visible damage, etc.) and
+// guide the homeowner to reveal the right details.
+const VIDEO_SYSTEM_PROMPT = `You are Homie, a friendly AI home maintenance assistant on a live VIDEO call with the homeowner. They're holding their phone and pointing the camera at the issue. You can SEE what they're showing you AND HEAR what they're saying.
+
+YOU CAN SEE — LEAN INTO IT:
+- Identify brand/model of appliances from visible labels ("Looks like a Samsung dishwasher, is that right?")
+- Spot visible damage: leaks, rust, cracks, burn marks, stains, discoloration, frayed wires, standing water
+- Reference details directly ("That crack along the base — is that new?") ("I see the drip right there at the valve")
+- If the frame is blurry, dark, or not showing the issue, ask the homeowner to move closer, turn on a light, or angle differently
+- Ask for specific shots: model-number sticker, inside the panel, the connection at the back, the leak when it happens
+
+VOICE RULES (your reply will be spoken):
+- Keep replies SHORT — 1-2 sentences, ideally under 40 words
+- Never use markdown or emoji (get read as symbols)
+- Talk like a warm friend: "Yeah, I see that — that's a classic sign of…"
+- One question at a time
+
+GOAL:
+- Gather enough to brief a pro: what it is, what's wrong, when it started, severity
+- Ask for brand/model when relevant (you can often read it off the frame)
+- Never ask for zip, address, or budget — collected separately
+
+CLASSIFY THE JOB:
+On EVERY reply, after your spoken response, emit a hidden tag with your best category guess using exactly one of:
+plumbing, water_heater, septic_sewer, electrical, hvac, appliance, roofing, general, garage_door, locksmith, security_systems, house_cleaning, landscaping, tree_trimming, pool, pest_control, painting, flooring, kitchen_remodel, bathroom_remodel, other.
+
+Format: <category>ID</category>. Use the FULL conversation context — if the first frame shows a dishwasher, it stays 'appliance' even if later turns reveal drywall damage from the leak.
+
+WHEN YOU HAVE ENOUGH:
+After at most 3-4 turns (or sooner if the picture is clear), wrap up and end with <ready/>. Example:
+"Alright, I've got a good picture of what's going on. <category>appliance</category> <ready/>"
+
+Do NOT include <ready/> on earlier turns. Always include <category>ID</category>.`;
 
 // ElevenLabs voice preset — "Adam" is warm/American/conversational and fits the
 // friendly-Californian brief from the product spec. Override via env if needed.
@@ -222,15 +264,42 @@ router.post('/turn', async (req: Request, res: Response) => {
   const categoryHint = typeof body.category === 'string' ? body.category : null;
   const isFirst = body.is_first === true;
 
+  // Optional video frame (only sent by the video-chat panel). When present
+  // we swap to the vision-aware system prompt so Claude can describe what
+  // it sees.
+  let frameBlock: Anthropic.ImageBlockParam | null = null;
+  if (typeof body.frame_data_url === 'string' && body.frame_data_url.startsWith('data:image/')) {
+    const imgMatch = body.frame_data_url.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (imgMatch) {
+      frameBlock = {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: imgMatch[1] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+          data: imgMatch[2],
+        },
+      };
+    } else {
+      logger.warn('[voice/turn] frame_data_url present but unparseable');
+    }
+  }
+  const hasFrame = frameBlock !== null;
+
   try {
     // 1. Whisper STT
     const transcript = await transcribeWithWhisper(parsed.buffer, parsed.mime);
-    if (!transcript) {
+    if (!transcript && !hasFrame) {
+      // Audio-only mode with no speech detected — user either tapped the
+      // mic without speaking or ambient noise tripped VAD. Worth retrying.
       logger.warn('[voice/turn] empty Whisper transcript');
       const out: ApiResponse<null> = { data: null, error: 'No speech detected — try again', meta: {} };
       res.status(422).json(out);
       return;
     }
+    // In video mode, an empty transcript is OK — the user might be
+    // silently pointing the camera. Synthesize a placeholder so Claude
+    // still has a text turn to anchor its reply.
+    const effectiveTranscript = transcript || (hasFrame ? '(showing camera — no audio this turn)' : '');
 
     // 2. Claude
     const client = new Anthropic({ apiKey: anthropicKey });
@@ -244,18 +313,24 @@ router.post('/turn', async (req: Request, res: Response) => {
     // Current user turn — prepend a tiny scaffold on the very first turn so
     // Homie greets warmly before diving in, and optionally carries the
     // category hint the homeowner already picked (if any).
-    let userText = transcript;
+    let userText = effectiveTranscript;
     if (isFirst && categoryHint) {
-      userText = `The homeowner already chose the "${categoryHint}" category. They said out loud: "${transcript}"`;
+      userText = `The homeowner already chose the "${categoryHint}" category. ${hasFrame ? 'They just opened the camera and said' : 'They said out loud'}: "${effectiveTranscript}"`;
     } else if (isFirst) {
-      userText = `The homeowner opened the voice channel and said: "${transcript}"`;
+      userText = `The homeowner ${hasFrame ? 'opened the video channel and is pointing the camera at the issue. They said' : 'opened the voice channel and said'}: "${effectiveTranscript}"`;
     }
-    messages.push({ role: 'user', content: userText });
+
+    // Pack the turn as a content array — image block first (so Claude
+    // grounds the reply in what it sees), then the text transcript.
+    const userContent: Anthropic.ContentBlockParam[] = [];
+    if (frameBlock) userContent.push(frameBlock);
+    userContent.push({ type: 'text', text: userText });
+    messages.push({ role: 'user', content: userContent });
 
     const claudeRes = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 400,
-      system: VOICE_SYSTEM_PROMPT,
+      system: hasFrame ? VIDEO_SYSTEM_PROMPT : VOICE_SYSTEM_PROMPT,
       messages,
     });
 
@@ -281,7 +356,7 @@ router.post('/turn', async (req: Request, res: Response) => {
     const audioBase64 = audioBuf.toString('base64');
 
     logger.info(
-      { transcriptLen: transcript.length, replyLen: replyClean.length, isReady, category, turn: history.length / 2 + 1 },
+      { mode: hasFrame ? 'video' : 'voice', transcriptLen: transcript.length, replyLen: replyClean.length, isReady, category, turn: history.length / 2 + 1 },
       '[voice/turn] ok',
     );
 

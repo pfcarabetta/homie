@@ -7,8 +7,8 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
-import VideoRecorder from '@/components/VideoRecorder';
 import InlineVoicePanel from '@/components/InlineVoicePanel';
+import VideoChatPanel from '@/components/VideoChatPanel';
 import { primeAudio } from '@/components/audioUnlocker';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -1579,7 +1579,7 @@ export default function GetQuotes() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(() => snapshot?.costEstimate ?? null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
+  const [videoChatOpen, setVideoChatOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   // Mobile: show the Service tier of categories behind an expander ("+ 8 more")
   // per design spec. Always visible on desktop via CSS.
@@ -2322,12 +2322,28 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
                         onReady={handleVoiceComplete}
                       />
                     </div>
+                  ) : videoChatOpen ? (
+                    <div style={{ marginLeft: 42, marginBottom: 14 }} className="gq-direct">
+                      <VideoChatPanel
+                        active={videoChatOpen}
+                        onExit={() => setVideoChatOpen(false)}
+                        category={data.category}
+                        onTurn={handleVoiceTurn}
+                        onReady={handleVoiceComplete}
+                      />
+                    </div>
                   ) : (
                     <DirectInput
                       examples={DIRECT_EXAMPLES}
                       onSubmit={handleDirectText}
                       onPhoto={handlePhoto}
-                      onVideoClick={() => setVideoRecorderOpen(true)}
+                      onVideoClick={() => {
+                        // Same iOS audio-unlock trick as voice — prime the
+                        // shared <audio> element inside this gesture so
+                        // Homie's TTS replies play later.
+                        primeAudio();
+                        setVideoChatOpen(true);
+                      }}
                       onVoiceClick={() => {
                         // Unlock audio output for iOS Safari — must fire
                         // within this synchronous tap handler so the shared
@@ -2540,12 +2556,10 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         </div>
       </section>
 
-      {/* In-app video recorder — opens from DirectInput's Video button */}
-      <VideoRecorder
-        open={videoRecorderOpen}
-        onClose={() => setVideoRecorderOpen(false)}
-        onUse={handleVideo}
-      />
+      {/* Video chat panel is rendered INLINE inside the chat column (see
+          `<VideoChatPanel>` above). The standalone VideoRecorder modal has
+          been retired — the Video button now opens a live video chat with
+          Homie instead of recording a detached clip. */}
 
       {/* Voice conversation is rendered INLINE inside the chat column now —
           see `<InlineVoicePanel>` above where DirectInput would otherwise
