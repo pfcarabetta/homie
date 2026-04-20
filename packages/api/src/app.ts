@@ -4,6 +4,7 @@ import healthRouter from './routes/health';
 import authRouter from './routes/auth';
 import diagnosticRouter from './routes/diagnostic';
 import voiceRouter from './routes/voice';
+import geoRouter from './routes/geo';
 import jobsRouter from './routes/jobs';
 import bookingsRouter from './routes/bookings';
 import providersRouter from './routes/providers';
@@ -32,6 +33,12 @@ import { authLimiter, diagnosticLimiter, apiLimiter } from './middleware/rate-li
 import { Sentry } from './sentry';
 
 const app = express();
+
+// Railway (and any similar ingress) terminates TLS upstream and forwards
+// the real client IP in X-Forwarded-For. Trust one hop so req.ip reflects
+// the actual caller — needed for the /geo/ip-zip lookup to resolve the
+// user's region instead of Railway's edge IP.
+app.set('trust proxy', 1);
 
 const ALLOWED_ORIGINS = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
@@ -71,6 +78,7 @@ app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/auth', authLimiter, authRouter);
 app.use('/api/v1/diagnostic', diagnosticLimiter, diagnosticRouter);
 app.use('/api/v1/voice', diagnosticLimiter, voiceRouter);
+app.use('/api/v1/geo', apiLimiter, geoRouter);
 app.use('/api/v1/jobs', apiLimiter, requireAuth, jobsRouter);
 app.use('/api/v1/bookings', apiLimiter, requireAuth, bookingsRouter);
 app.use('/api/v1/providers', apiLimiter, providersRouter);

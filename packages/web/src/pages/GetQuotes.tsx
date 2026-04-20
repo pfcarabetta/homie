@@ -1622,6 +1622,11 @@ export default function GetQuotes() {
   // Homeowner's first name — fetched once at mount for authenticated users
   // and used to personalise the voice/video-chat greeting.
   const [firstName, setFirstName] = useState<string | null>(null);
+  // Best-effort IP-based zip fallback so the pros-nearby badge shows a
+  // location that actually makes sense for the visitor (not a hardcoded
+  // San Diego zip). Stays null if private network / upstream fails —
+  // badge gracefully drops the "near <zip>" clause in that case.
+  const [ipZip, setIpZip] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -1764,8 +1769,27 @@ export default function GetQuotes() {
       accountService.getProfile().then(res => {
         const fn = res.data?.first_name?.trim();
         if (fn) setFirstName(fn);
+        // If the account has a zip on file, prefer it over IP lookup so we
+        // respect the user's explicit location.
+        const z = res.data?.zip_code?.trim();
+        if (z && /^\d{5}$/.test(z)) setIpZip(z);
       }).catch(() => { /* ignore */ });
     }
+  }, []);
+
+  // Best-effort IP-based zip fallback. Fires independently of auth so
+  // anonymous visitors also get a sensible "near <zip>" in the
+  // pros-nearby badge instead of a hardcoded San Diego placeholder.
+  useEffect(() => {
+    // Skip if we already have a zip (either from account or user input).
+    if (ipZip || data.zip) return;
+    fetchAPI<{ zip: string | null; city: string | null; region: string | null }>('/api/v1/geo/ip-zip')
+      .then(res => {
+        const z = res.data?.zip;
+        if (z && /^\d{5}$/.test(z)) setIpZip(z);
+      })
+      .catch(() => { /* best-effort — silent */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Persist the in-flight intake to localStorage so closing the pricing
@@ -1821,12 +1845,11 @@ export default function GetQuotes() {
   // Live estimate fetch — fires as soon as we have a category + subcategory,
   // so the "Homie thinks" status card can show severity + $ range while the
   // user is still chatting. Re-fetches if category/subcategory/zip change.
-  // Uses a neutral fallback zip (92103) when the user hasn't entered one;
-  // once the Continue modal captures the real zip, that triggers a refetch
-  // here with more accurate location data.
+  // Zip precedence: user-entered data.zip → IP-derived ipZip → hard fallback
+  // (only as a last resort — lets the API respond with a regional default).
   useEffect(() => {
     if (!data.category || !data.a1) return;
-    const zip = data.zip || '92103';
+    const zip = data.zip || ipZip || '10001';
     let cancelled = false;
     estimateService.generate({
       category: data.category,
@@ -1839,7 +1862,7 @@ export default function GetQuotes() {
       if (res.data) setCostEstimate(res.data);
     }).catch(() => { /* silent — status card falls back to category-only */ });
     return () => { cancelled = true; };
-  }, [data.category, data.a1, data.zip, data.timing]);
+  }, [data.category, data.a1, data.zip, data.timing, ipZip]);
 
   const flow = data.category ? CATEGORY_FLOWS[data.category] : null;
   const [activeGroup, setActiveGroup] = useState<CatGroup | null>(null);
@@ -2324,14 +2347,13 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                 <>
                   <DiagnosisSummary data={data} />
                   {/* Pros-nearby badge — concrete local-supply signal under
-                      the dispatch brief. Matches the design: orange pulsing
-                      dot, category-tinted count, zip from data.zip when the
-                      user has entered it (falls back to the same 92103
-                      placeholder we use for the live estimate API). */}
+                      the dispatch brief. Zip precedence: user-entered →
+                      IP-derived → "near you" fallback (no zip shown). */}
                   {(repairGroupMeta || catMeta) && (() => {
                     const groupLabel = repairGroupMeta?.label || catMeta?.label || 'home service';
                     const count = prosNearbyForGroup(groupLabel);
-                    const zipShown = data.zip && /^\d{5}$/.test(data.zip) ? data.zip : '92103';
+                    const userZip = data.zip && /^\d{5}$/.test(data.zip) ? data.zip : null;
+                    const zipShown = userZip || ipZip;
                     return (
                       <div style={{
                         marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease',
@@ -2346,7 +2368,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                         </div>
                         <div style={{ fontSize: 12.5, color: D, fontWeight: 600, fontFamily: "'DM Sans',sans-serif", flex: 1, minWidth: 0 }}>
                           <span style={{ color: O, fontWeight: 700 }}>{count} {groupLabel.toLowerCase()} pros</span>
-                          <span style={{ color: DIM, fontWeight: 500 }}> available near {zipShown}</span>
+                          <span style={{ color: DIM, fontWeight: 500 }}> available {zipShown ? `near ${zipShown}` : 'near you'}</span>
                         </div>
                         <div style={{ fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0 }}>Live</div>
                       </div>
@@ -2664,6 +2686,36 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                   Start describing — I'll read along ↗
                 </div>
               )}
+
+              {/* Pros-nearby badge — same pattern as the one below the
+                  dispatch brief in the chat column; shown here as soon as
+                  a category is known so the user sees live-supply signal
+                  while still chatting. */}
+              {(repairGroupMeta || catMeta) && (() => {
+                const groupLabel = repairGroupMeta?.label || catMeta?.label || 'home service';
+                const count = prosNearbyForGroup(groupLabel);
+                const userZip = data.zip && /^\d{5}$/.test(data.zip) ? data.zip : null;
+                const zipShown = userZip || ipZip;
+                return (
+                  <div style={{
+                    marginBottom: 18,
+                    padding: '10px 14px', borderRadius: 12,
+                    background: `linear-gradient(90deg, ${O}14, ${O}06)`,
+                    border: `1px solid ${O}22`,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    <div style={{ position: 'relative', width: 10, height: 10, flexShrink: 0 }}>
+                      <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: G }} />
+                      <span style={{ position: 'absolute', inset: -4, borderRadius: '50%', background: G, opacity: .25, animation: 'pulse 2s infinite' }} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: D, fontWeight: 600, fontFamily: "'DM Sans',sans-serif", flex: 1, minWidth: 0 }}>
+                      <span style={{ color: O, fontWeight: 700 }}>{count} {groupLabel.toLowerCase()} pros</span>
+                      <span style={{ color: DIM, fontWeight: 500 }}> {zipShown ? `near ${zipShown}` : 'near you'}</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0 }}>Live</div>
+                  </div>
+                );
+              })()}
 
               {/* Checklist */}
               <div style={{ fontSize: 11, color: DIM, textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: 700, marginBottom: 10, fontFamily: "'DM Mono',monospace" }}>Checklist</div>
