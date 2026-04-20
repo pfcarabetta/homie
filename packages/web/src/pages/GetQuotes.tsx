@@ -2347,13 +2347,12 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                 <>
                   <DiagnosisSummary data={data} />
                   {/* Pros-nearby badge — concrete local-supply signal under
-                      the dispatch brief. Zip precedence: user-entered →
-                      IP-derived → "near you" fallback (no zip shown). */}
+                      the dispatch brief. Always says "near you" regardless
+                      of whether we have a zip resolved (feels friendlier
+                      than surfacing a raw zip back at the user). */}
                   {(repairGroupMeta || catMeta) && (() => {
                     const groupLabel = repairGroupMeta?.label || catMeta?.label || 'home service';
                     const count = prosNearbyForGroup(groupLabel);
-                    const userZip = data.zip && /^\d{5}$/.test(data.zip) ? data.zip : null;
-                    const zipShown = userZip || ipZip;
                     return (
                       <div style={{
                         marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease',
@@ -2368,7 +2367,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                         </div>
                         <div style={{ fontSize: 12.5, color: D, fontWeight: 600, fontFamily: "'DM Sans',sans-serif", flex: 1, minWidth: 0 }}>
                           <span style={{ color: O, fontWeight: 700 }}>{count} {groupLabel.toLowerCase()} pros</span>
-                          <span style={{ color: DIM, fontWeight: 500 }}> available {zipShown ? `near ${zipShown}` : 'near you'}</span>
+                          <span style={{ color: DIM, fontWeight: 500 }}> available near you</span>
                         </div>
                         <div style={{ fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0 }}>Live</div>
                       </div>
@@ -2694,8 +2693,6 @@ Write ONLY the summary — no questions, no conversational language, no greeting
               {(repairGroupMeta || catMeta) && (() => {
                 const groupLabel = repairGroupMeta?.label || catMeta?.label || 'home service';
                 const count = prosNearbyForGroup(groupLabel);
-                const userZip = data.zip && /^\d{5}$/.test(data.zip) ? data.zip : null;
-                const zipShown = userZip || ipZip;
                 return (
                   <div style={{
                     marginBottom: 18,
@@ -2710,7 +2707,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                     </div>
                     <div style={{ fontSize: 12.5, color: D, fontWeight: 600, fontFamily: "'DM Sans',sans-serif", flex: 1, minWidth: 0 }}>
                       <span style={{ color: O, fontWeight: 700 }}>{count} {groupLabel.toLowerCase()} pros</span>
-                      <span style={{ color: DIM, fontWeight: 500 }}> {zipShown ? `near ${zipShown}` : 'near you'}</span>
+                      <span style={{ color: DIM, fontWeight: 500 }}> near you</span>
                     </div>
                     <div style={{ fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0 }}>Live</div>
                   </div>
