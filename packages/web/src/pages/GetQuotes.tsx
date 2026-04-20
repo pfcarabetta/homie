@@ -2274,7 +2274,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
               Describe it once.<br />Homie takes it from here.
             </h1>
             <p style={{ fontSize: 16, color: DIM, marginBottom: 28, lineHeight: 1.55, maxWidth: 520 }}>
-              Homie's AI guides you, then writes the perfect brief for local pros.
+              Homie asks, scopes, and delivers quotes from local pros &mdash; usually in minutes.
             </p>
 
             {/* Chat log — existing AssistantMsg/UserMsg bubbles */}
