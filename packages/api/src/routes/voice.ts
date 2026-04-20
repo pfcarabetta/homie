@@ -65,29 +65,42 @@ On EVERY reply, after your spoken response, emit a hidden tag with your best cat
 - electrical (outlets, breakers, wiring, lights flickering)
 - hvac (AC, heat, furnace, thermostat)
 - appliance (fridge, washer, dryer, dishwasher, oven)
-- roofing (leaks from ceiling, shingles, gutters, siding)
-- general (drywall, doors, shelves, handyman odds and ends)
+- roofing (leaks from ceiling, shingles)
+- gutter (gutter cleaning, gutter guards, downspouts)
+- chimney (chimney sweep, inspection, cap, damper, smoke inside)
+- general (drywall, doors, shelves, TV mounts, handyman odds and ends)
 - garage_door (opener, springs, off-track)
 - locksmith (locked out, rekey, new lock)
 - security_systems (cameras, alarms, doorbell cams)
-- house_cleaning (recurring or one-time cleaning)
-- landscaping (mowing, yard cleanup, garden)
-- tree_trimming (trimming, removal, branches)
+- house_cleaning (RECURRING or one-time indoor cleaning — does NOT include pressure washing)
+- window_cleaning (exterior window washing, interior + exterior combos)
+- pressure_washing (power wash / pressure wash: patios, decks, driveways, siding, fences, concrete — ANY outdoor surface hose-down)
+- landscaping (mowing, yard cleanup, garden, hedge)
+- tree_trimming (trimming, removal, branches, stump)
+- deck_patio (build, repair, stain/seal a deck or patio — NOT cleaning)
+- fencing (new fence, fence repair, gates)
 - pool (pool cleaning, green water, equipment)
 - pest_control (ants, roaches, mice, RATS, termites, spiders, bed bugs, ANY rodent/insect/pest)
 - painting (interior/exterior paint)
 - flooring (hardwood, tile, carpet install/repair)
 - kitchen_remodel (kitchen remodel, cabinets, counters)
 - bathroom_remodel (bathroom remodel, shower, tub)
+- moving (moving/relocating)
+- junk_removal (haul away, junk removal, debris)
 - other (only when nothing above fits)
 
 Format: <category>ID</category> — for example <category>pest_control</category>.
 
 Pick from memory of the FULL conversation so far, not just the latest turn. If the homeowner mentions rats/mice/pests/bugs at ANY point, the category stays pest_control even if later turns talk about drywall damage.
 
+IMPORTANT TAXONOMY NOTES:
+- "Power washing" / "pressure washing" the patio/deck/driveway/house/siding/fence is ALWAYS pressure_washing. Never house_cleaning.
+- Gutter cleaning is gutter, not house_cleaning.
+- Deck staining / repair is deck_patio; pressure-washing the deck before staining is pressure_washing.
+
 WHEN YOU HAVE ENOUGH:
 After at most 3 follow-ups (or sooner if you have a clear picture), tell the homeowner you've got what you need and end your reply with the exact tag <ready/> on its own. Example:
-"Alright, I've got enough to start matching you with a pro. <category>pest_control</category> <ready/>"
+"Alright, I've got enough to start matching you with a pro. <category>pressure_washing</category> <ready/>"
 
 Do NOT include <ready/> on earlier turns — only the final one. Always include <category>ID</category>.`;
 
@@ -117,7 +130,12 @@ GOAL:
 
 CLASSIFY THE JOB:
 On EVERY reply, after your spoken response, emit a hidden tag with your best category guess using exactly one of:
-plumbing, water_heater, septic_sewer, electrical, hvac, appliance, roofing, general, garage_door, locksmith, security_systems, house_cleaning, landscaping, tree_trimming, pool, pest_control, painting, flooring, kitchen_remodel, bathroom_remodel, other.
+plumbing, water_heater, septic_sewer, electrical, hvac, appliance, roofing, gutter, chimney, general, garage_door, locksmith, security_systems, house_cleaning, window_cleaning, pressure_washing, landscaping, tree_trimming, deck_patio, fencing, pool, pest_control, painting, flooring, kitchen_remodel, bathroom_remodel, moving, junk_removal, other.
+
+IMPORTANT TAXONOMY NOTES:
+- "Power washing" / "pressure washing" the patio/deck/driveway/house/siding/fence is ALWAYS pressure_washing. Never house_cleaning.
+- Gutter cleaning is gutter, not house_cleaning.
+- Deck staining / repair is deck_patio; pressure-washing the deck before staining is pressure_washing.
 
 Format: <category>ID</category>. Use the FULL conversation context — if the first frame shows a dishwasher, it stays 'appliance' even if later turns reveal drywall damage from the leak.
 

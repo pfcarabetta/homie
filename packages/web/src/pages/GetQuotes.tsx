@@ -105,15 +105,18 @@ const CATEGORY_TREE: CatGroup[] = [
     { id: 'house_cleaning', icon: '✨', label: 'House Cleaning' },
     { id: 'carpet_cleaning', icon: '🧹', label: 'Carpet Cleaning' },
     { id: 'window_cleaning', icon: '🪟', label: 'Window Cleaning' },
-    { id: 'pressure_washing', icon: '💦', label: 'Pressure Washing' },
     { id: 'steam_cleaning', icon: '♨️', label: 'Steam Cleaning' },
   ]},
+  // Pressure washing moves here alongside deck/patio/fencing — matches
+  // Google Business Profile's standalone exterior placement. Handymen and
+  // landscapers both serve this, but the specialist market is outdoor.
   { icon: '🌿', label: 'Outdoor & Landscaping', type: 'service', subs: [
     { id: 'landscaping', icon: '🌿', label: 'Landscaping' },
     { id: 'tree_trimming', icon: '🌳', label: 'Tree Trimming' },
     { id: 'stump_removal', icon: '🪵', label: 'Stump Removal' },
     { id: 'fencing', icon: '🏡', label: 'Fencing' },
     { id: 'deck_patio', icon: '🪵', label: 'Deck & Patio' },
+    { id: 'pressure_washing', icon: '💦', label: 'Pressure Washing' },
   ]},
   { icon: '🏊', label: 'Pool & Spa', type: 'service', subs: [
     { id: 'pool', icon: '🏊', label: 'Pool Service' },
