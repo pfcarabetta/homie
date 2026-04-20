@@ -2260,7 +2260,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                     boxShadow: bizOpen ? `0 0 0 3px ${G}22` : 'none',
                     animation: bizOpen ? 'pulse 1.8s infinite' : 'none',
                   }} />
-                  {bizOpen ? 'Online' : 'After hours · messaging only'}
+                  {bizOpen ? 'Online' : 'After hours · responses may take longer'}
                   <span style={{ color: DIM, fontWeight: 600, fontSize: 10.5 }}>· 8am–6pm</span>
                 </div>
               );
