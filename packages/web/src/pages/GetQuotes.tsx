@@ -2261,7 +2261,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                     animation: bizOpen ? 'pulse 1.8s infinite' : 'none',
                   }} />
                   {bizOpen ? 'Online' : 'After hours · responses may take longer'}
-                  <span style={{ color: DIM, fontWeight: 600, fontSize: 10.5 }}>· 8am–6pm</span>
+                  {bizOpen && <span style={{ color: DIM, fontWeight: 600, fontSize: 10.5 }}>· 8am–6pm</span>}
                 </div>
               );
             })()}
