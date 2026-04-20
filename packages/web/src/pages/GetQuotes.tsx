@@ -2174,13 +2174,14 @@ Write ONLY the summary — no questions, no conversational language, no greeting
              "margin-left: 42px" (how React serialises marginLeft: 42). */
           .gq-split [style*="margin-left: 42px"] { margin-left: 0 !important; }
           .gq-direct { margin-left: 0 !important; }
-
-          /* Expandable categories — service tier hidden until user taps
-             "+ 8 more". The .gq-cat-expanded class is toggled via React
-             state when the pill is pressed. */
-          .gq-cat-service:not(.gq-cat-expanded) { display: none !important; }
-          .gq-cat-more-btn { display: block !important; }
         }
+        /* Expandable categories — service tier stays hidden on BOTH
+           desktop and mobile until the user taps "+ 8 more". The
+           .gq-cat-expanded class is toggled via React state (showAllCats)
+           when the pill is pressed. Applying globally keeps the desktop
+           grid compact: only 8 Repair tiles show up front. */
+        .gq-cat-service:not(.gq-cat-expanded) { display: none !important; }
+        .gq-cat-more-btn { display: block !important; }
         @media (max-width: 480px) {
           .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; }
           .gq-section { padding: 16px 16px 80px !important; }
@@ -2306,10 +2307,10 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                     if (group) handleGroupSelect(group);
                   }} columns={4} />
 
-                  {/* Service tier — always visible on desktop; on mobile sits
-                      behind a dashed "+ 8 more" pill per design spec. The
-                      class pair `gq-cat-service` + showAllCats state is
-                      used by the @media query below. */}
+                  {/* Service tier — collapsed by default on both desktop and
+                      mobile. The class pair `gq-cat-service` + showAllCats
+                      state is used by the global CSS rule above to toggle
+                      visibility when the "+ 8 more" pill is pressed. */}
                   <div className={`gq-cat-service ${showAllCats ? 'gq-cat-expanded' : ''}`}>
                     <div style={{ marginLeft: 42, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
                       <span style={{ fontSize: 9.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>Services · scheduled work</span>
@@ -2321,15 +2322,16 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                     }} columns={4} />
                   </div>
 
-                  {/* Mobile-only "+ 8 more …" expand pill. Hidden on desktop and
-                      when already expanded (both via CSS). */}
+                  {/* "+ 8 more …" expand pill. Rendered only when collapsed
+                      (React-controlled via showAllCats) so it disappears once
+                      the service tier is revealed. */}
                   {!showAllCats && (
                     <button
                       type="button"
                       className="gq-cat-more-btn"
                       onClick={() => setShowAllCats(true)}
                       style={{
-                        display: 'none', // overridden to 'block' on mobile via CSS
+                        display: 'block', // global — service tier collapsible on all breakpoints
                         width: '100%',
                         marginBottom: 14,
                         background: 'transparent',
