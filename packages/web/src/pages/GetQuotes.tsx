@@ -2226,7 +2226,6 @@ Write ONLY the summary — no questions, no conversational language, no greeting
              the conversation. */
           .gq-right-panel { display: none !important; }
           .gq-mobile-status { display: flex !important; }
-          .gq-hero-h1 { font-size: 26px !important; }
           /* Desktop indents the chat column by 42px to align with the
              assistant avatar. On mobile that eats a big chunk of a narrow
              viewport — collapse all 42px left-indents inside the chat to 0
@@ -2327,16 +2326,9 @@ Write ONLY the summary — no questions, no conversational language, no greeting
               );
             })()}
 
-            {/* Hero */}
-            <h1 className="gq-hero-h1" style={{
-              fontFamily: "'Fraunces',serif", fontWeight: 700, lineHeight: 1.05,
-              letterSpacing: '-.03em', color: D, margin: '14px 0 10px', fontSize: 34,
-            }}>
-              Describe it once.<br />Homie takes it from here.
-            </h1>
-            <p style={{ fontSize: 16, color: DIM, marginBottom: 28, lineHeight: 1.55, maxWidth: 520 }}>
-              Homie asks, scopes, and delivers quotes from local pros &mdash; usually in minutes.
-            </p>
+            {/* Hero removed — chat area sits directly under the status
+                pill so users land straight on the intake. */}
+            <div style={{ height: 14 }} />
 
             {/* Chat log — existing AssistantMsg/UserMsg bubbles */}
             <div className="gq-chat-area">
