@@ -1916,18 +1916,23 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
     const catLabel = cat?.label ?? data.category ?? 'home service';
 
-    // Build a factual summary from collected data instead of using the chat AI
-    const parts: string[] = [];
-    if (data.a1) parts.push(data.a1);
-    // Gather all AI conversation user answers (skip the AI questions)
-    const userAnswers = aiConvoRef.current
-      .filter(m => m.role === 'user')
-      .map(m => m.content)
-      .filter(c => c.length > 3);
-    if (userAnswers.length > 0) parts.push(...userAnswers);
-    if (extraDetails) parts.push(extraDetails);
-
-    const context = parts.join('. ').replace(/\.\./g, '.').trim();
+    // Build the full dialog transcript — INCLUDING Homie's side of the
+    // conversation. When the user came through video chat, Homie often
+    // identified brand/model ("that's a Samsung DW80K5050US") or read
+    // error codes off a display. Those observations only live in the
+    // assistant turns, so filtering them out (as the old code did) threw
+    // away exactly the details that make a dispatch summary useful.
+    const dialogLines: string[] = [];
+    if (data.a1) dialogLines.push(`Homeowner (opening): ${data.a1}`);
+    for (const m of aiConvoRef.current) {
+      const content = (m.content || '').trim();
+      if (content.length < 3) continue;
+      dialogLines.push(`${m.role === 'user' ? 'Homeowner' : 'Homie (AI)'}: ${content}`);
+    }
+    if (extraDetails && extraDetails.trim().length > 3) {
+      dialogLines.push(`Homeowner (extras): ${extraDetails.trim()}`);
+    }
+    const dialog = dialogLines.join('\n');
 
     // Use a fresh session to generate the summary (not the chat session)
     const summarySessionId = crypto.randomUUID();
@@ -1936,7 +1941,22 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     setTimeout(() => {
       abortRef.current = diagnosticService.sendMessage(
         summarySessionId,
-        `Write a 2-3 sentence provider-ready dispatch summary for a ${catLabel} job. Here are the details the homeowner provided: ${context}. Write ONLY the summary — no questions, no conversational language, no greetings. Start with what the issue is. This will be sent directly to service providers.`,
+        `Write a 2-4 sentence provider-ready dispatch summary for a ${catLabel} job.
+
+A homeowner just had a live consultation with an AI assistant (possibly over video, which means the AI may have visually identified appliances, read error codes off panels, or spotted damage directly). The full transcript is below.
+
+CRITICAL: The summary MUST include any of these details that appear anywhere in the transcript — especially when the AI assistant identified them:
+- Brand and model number (e.g. "Samsung DW80K5050US", "LG WM3900HWA")
+- Error codes or fault codes (e.g. "5C", "E1")
+- Specific failing component named by the AI (e.g. "drain pump", "igniter")
+- Visible damage described by the AI (e.g. "water stain on cabinet base", "corrosion at valve")
+- How long the problem has been happening
+- Any safety concerns (water active, gas smell, sparking, etc.)
+
+Transcript:
+${dialog}
+
+Write ONLY the summary — no questions, no conversational language, no greetings, no markdown. Start with the specific appliance/system and model if known. End with the likely cause or symptom. This text goes straight to service providers so they can decide whether to bid.`,
         {
           onToken: (token: string) => { diagText += token; },
           onDiagnosis: () => {},
@@ -1956,7 +1976,16 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
           },
           onError: () => {
             setStreaming(false);
-            setData(d => ({ ...d, aiDiagnosis: `${catLabel} issue: ${context}` }));
+            // Fallback summary — concatenate the user's side of the dialog
+            // (we don't have `context` anymore because we now pass the full
+            // dialog to Claude; reconstruct a minimal one-liner here).
+            const fallbackUserParts = aiConvoRef.current
+              .filter(m => m.role === 'user')
+              .map(m => m.content.trim())
+              .filter(c => c.length > 3);
+            const fallback = (data.a1 ? `${data.a1}. ` : '') + fallbackUserParts.join('. ') +
+              (extraDetails ? `. ${extraDetails}` : '');
+            setData(d => ({ ...d, aiDiagnosis: `${catLabel} issue: ${fallback.trim()}` }));
             setTimeout(() => {
               addAssistant("Got it \u2014 I've prepared your diagnosis. Tap Continue when you're ready to find a pro.");
               setPhase('diagnosis');
