@@ -16,6 +16,41 @@ const DIM = '#6B6560';
 const BORDER = 'rgba(0,0,0,.08)';
 const AMBER = '#EF9F27';
 
+/* -- Pros-nearby count (simulated local supply by category) --
+   Mirrors the design's PROS_NEARBY map — deterministic per category so
+   the badge below the dispatch brief shows a concrete "X pros available
+   near <zip>" reassurance without hitting the discovery API. Falls back
+   to 12 for anything unmapped. Replace with a real /api/v1/providers
+   count endpoint when the data pipeline is ready. */
+const PROS_NEARBY_BY_GROUP: Record<string, number> = {
+  Plumbing: 18,
+  Electrical: 14,
+  HVAC: 11,
+  'Appliance Repair': 9,
+  Roofing: 7,
+  'Roofing & Exterior': 7,
+  Handyman: 26,
+  'Handyman & Structural': 26,
+  'Garage Door': 13,
+  Locksmith: 8,
+  'Locksmith & Security': 8,
+  Cleaning: 22,
+  'House Cleaning': 22,
+  'Outdoor & Landscaping': 15,
+  Landscaping: 15,
+  'Pool & Spa': 10,
+  'Pest Control': 8,
+  Painting: 17,
+  'Painting & Flooring': 17,
+  Remodeling: 12,
+  'Moving & Hauling': 14,
+  Photography: 9,
+};
+function prosNearbyForGroup(label: string | null | undefined): number {
+  if (!label) return 12;
+  return PROS_NEARBY_BY_GROUP[label] ?? 12;
+}
+
 /* -- Category tree: top-level groups → subcategories -- */
 interface SubCat { id: string; icon: string; label: string }
 interface CatGroup { icon: string; label: string; type: 'repair' | 'service'; subs: SubCat[] }
@@ -2288,6 +2323,35 @@ Write ONLY the summary — no questions, no conversational language, no greeting
               {phase === 'diagnosis' && data.a1 && (
                 <>
                   <DiagnosisSummary data={data} />
+                  {/* Pros-nearby badge — concrete local-supply signal under
+                      the dispatch brief. Matches the design: orange pulsing
+                      dot, category-tinted count, zip from data.zip when the
+                      user has entered it (falls back to the same 92103
+                      placeholder we use for the live estimate API). */}
+                  {(repairGroupMeta || catMeta) && (() => {
+                    const groupLabel = repairGroupMeta?.label || catMeta?.label || 'home service';
+                    const count = prosNearbyForGroup(groupLabel);
+                    const zipShown = data.zip && /^\d{5}$/.test(data.zip) ? data.zip : '92103';
+                    return (
+                      <div style={{
+                        marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease',
+                        padding: '10px 14px', borderRadius: 12,
+                        background: `linear-gradient(90deg, ${O}14, ${O}06)`,
+                        border: `1px solid ${O}22`,
+                        display: 'flex', alignItems: 'center', gap: 10,
+                      }}>
+                        <div style={{ position: 'relative', width: 10, height: 10, flexShrink: 0 }}>
+                          <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: G }} />
+                          <span style={{ position: 'absolute', inset: -4, borderRadius: '50%', background: G, opacity: .25, animation: 'pulse 2s infinite' }} />
+                        </div>
+                        <div style={{ fontSize: 12.5, color: D, fontWeight: 600, fontFamily: "'DM Sans',sans-serif", flex: 1, minWidth: 0 }}>
+                          <span style={{ color: O, fontWeight: 700 }}>{count} {groupLabel.toLowerCase()} pros</span>
+                          <span style={{ color: DIM, fontWeight: 500 }}> available near {zipShown}</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0 }}>Live</div>
+                      </div>
+                    );
+                  })()}
                   {costEstimate && (
                     <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
                       <EstimateCard estimate={costEstimate} />
@@ -2302,10 +2366,34 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                     <span style={{ fontSize: 9.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>Repair · most common</span>
                     <span style={{ height: 1, flex: 1, background: BORDER }} />
                   </div>
-                  <QuickReplies options={repairGroups} onSelect={(opt) => {
-                    const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
-                    if (group) handleGroupSelect(group);
-                  }} columns={4} />
+                  {/* Pill cloud — compact, flow-wrapped category tiles per
+                      design spec (borderRadius 100, 8/12 padding, icon + label
+                      inline). Replaces the old 4-column grid on both desktop
+                      and mobile. */}
+                  <div style={{ marginLeft: 42, marginBottom: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {repairGroups.map(group => (
+                      <button
+                        key={group.id}
+                        onClick={() => {
+                          const g = CATEGORY_TREE.find(x => x.label === group.label);
+                          if (g) handleGroupSelect(g);
+                        }}
+                        style={{
+                          background: '#fff', color: D,
+                          border: `1px solid ${BORDER}`, borderRadius: 100,
+                          padding: '8px 12px', fontSize: 13, fontWeight: 600,
+                          cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          transition: 'all .15s',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = O; (e.currentTarget as HTMLButtonElement).style.background = `${O}0a`; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER; (e.currentTarget as HTMLButtonElement).style.background = '#fff'; }}
+                      >
+                        <span style={{ fontSize: 14 }}>{group.icon}</span>
+                        {group.label}
+                      </button>
+                    ))}
+                  </div>
 
                   {/* Service tier — collapsed by default on both desktop and
                       mobile. The class pair `gq-cat-service` + showAllCats
@@ -2316,10 +2404,30 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                       <span style={{ fontSize: 9.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>Services · scheduled work</span>
                       <span style={{ height: 1, flex: 1, background: BORDER }} />
                     </div>
-                    <QuickReplies options={serviceGroups} onSelect={(opt) => {
-                      const group = CATEGORY_TREE.find(g => g.label === (typeof opt === 'string' ? opt : opt.label));
-                      if (group) handleGroupSelect(group);
-                    }} columns={4} />
+                    <div style={{ marginLeft: 42, marginBottom: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {serviceGroups.map(group => (
+                        <button
+                          key={group.id}
+                          onClick={() => {
+                            const g = CATEGORY_TREE.find(x => x.label === group.label);
+                            if (g) handleGroupSelect(g);
+                          }}
+                          style={{
+                            background: '#fff', color: D,
+                            border: `1px solid ${BORDER}`, borderRadius: 100,
+                            padding: '8px 12px', fontSize: 13, fontWeight: 600,
+                            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            transition: 'all .15s',
+                          }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = O; (e.currentTarget as HTMLButtonElement).style.background = `${O}0a`; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER; (e.currentTarget as HTMLButtonElement).style.background = '#fff'; }}
+                        >
+                          <span style={{ fontSize: 14 }}>{group.icon}</span>
+                          {group.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* "+ 8 more …" expand pill. Rendered only when collapsed
