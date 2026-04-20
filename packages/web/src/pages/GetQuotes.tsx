@@ -479,9 +479,9 @@ function DirectInput({ onSubmit, onPhoto, onVideoClick, onVoiceClick, examples, 
               <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><path d="M3 5h4l2-2h6l2 2h4v12H3V5z" stroke={D} strokeWidth="1.8" /><circle cx="12" cy="11" r="3.5" stroke={D} strokeWidth="1.8" /></svg>
               Photo
             </button>
-            <button onClick={onVideoClick} style={uploadBtnStyle} title="Record video">
+            <button onClick={onVideoClick} style={uploadBtnStyle} title="Live video chat with Homie — point your camera at the issue and let Homie see it">
               <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><rect x="2" y="4" width="14" height="12" rx="2" stroke={D} strokeWidth="1.8" /><path d="M16 9l6-3v8l-6-3V9z" stroke={D} strokeWidth="1.8" strokeLinejoin="round" /></svg>
-              Video
+              Video Chat with Homie
             </button>
             <button onClick={onVoiceClick} style={uploadBtnStyle} title="Talk with Homie">
               <svg width="13" height="14" viewBox="0 0 18 20" fill="none"><rect x="6" y="1" width="6" height="11" rx="3" stroke={D} strokeWidth="1.8" /><path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke={D} strokeWidth="1.8" strokeLinecap="round" /></svg>
