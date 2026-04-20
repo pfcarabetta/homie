@@ -2095,7 +2095,7 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
   const nextIdx = checklist.findIndex(x => !x.done);
 
   return (
-    <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif", overflowX: 'hidden', maxWidth: '100vw' }}>
       <SEO
         title="Get Home Repair Quotes"
         description="Get multiple quotes from local service providers in minutes. Homie contacts pros for you via phone, text, and email — no more calling around."
@@ -2108,6 +2108,18 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
         @media (max-width: 980px) {
           .gq-split { grid-template-columns: 1fr !important; gap: 12px !important; }
+          /* Critical: grid items default to min-width: auto which prevents
+             them from shrinking below their content's intrinsic width. A
+             long voice-chat bubble (or any unbreakable string) would push
+             the column — and the whole page — wider than the viewport.
+             Forcing min-width:0 + max-width:100% lets the column clip to
+             the viewport so word-wrap can do its job inside the bubbles. */
+          .gq-split > * { min-width: 0 !important; max-width: 100% !important; }
+          .gq-chat-area { min-width: 0 !important; max-width: 100% !important; }
+          /* Flex rows (chat bubbles are flex containers with avatar +
+             bubble) also need min-width:0 on the whole row to shrink. */
+          .gq-chat-area > div { min-width: 0; }
+          .gq-chat-area > div > div { min-width: 0; }
           /* Drop the full desktop right panel on mobile — replaced by the
              compact .gq-mobile-status block at the bottom of the chat.
              Keeps the page from stacking a second full-height card below
