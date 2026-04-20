@@ -463,7 +463,7 @@ function DirectInput({ onSubmit, onPhoto, onVideoClick, onVoiceClick, examples, 
           onFocus={() => setFocus(true)}
           onBlur={() => setFocus(false)}
           onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); }}
-          placeholder="My dishwasher makes a grinding noise when it drains…"
+          placeholder="Describe it here, or chat with Homie by video or voice below."
           disabled={disabled}
           style={{
             width: '100%', border: 'none', outline: 'none', resize: 'none',
