@@ -62,3 +62,57 @@ export function primeAudio(): void {
 export function isAudioPrimed(): boolean {
   return primed;
 }
+
+// ── Shared TTS playback ──────────────────────────────────────────────────────
+// Plays base64-encoded audio through the same primed <audio> element that
+// later turn replies use. Resolves when playback finishes (or fails).
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+
+export function playBase64Audio(base64: string, mime: string): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      const byteChars = atob(base64);
+      const bytes = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime || 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+      const audio = getSharedAudio();
+      audio.pause();
+      audio.currentTime = 0;
+      audio.src = url;
+      audio.volume = 1;
+      const cleanup = () => { try { URL.revokeObjectURL(url); } catch { /* noop */ } resolve(); };
+      audio.onended = cleanup;
+      audio.onerror = cleanup;
+      const p = audio.play();
+      if (p && typeof p.catch === 'function') p.catch(cleanup);
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/**
+ * Fetches TTS audio for the given text from the backend and plays it
+ * through the shared audio element. Resolves when playback finishes.
+ * Best-effort: silently resolves if the network or playback fails so the
+ * caller can continue the conversation.
+ */
+export async function playTtsText(text: string): Promise<void> {
+  try {
+    const r = await fetch(`${API_BASE}/api/v1/voice/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!r.ok) return;
+    const json = await r.json() as { data?: { audio_base64?: string; audio_mime?: string } };
+    const data = json?.data;
+    if (!data?.audio_base64) return;
+    await playBase64Audio(data.audio_base64, data.audio_mime || 'audio/mpeg');
+  } catch {
+    // TTS is a nice-to-have for the greeting — if the network hiccups or
+    // ElevenLabs is saturated, fall through without blocking the flow.
+  }
+}

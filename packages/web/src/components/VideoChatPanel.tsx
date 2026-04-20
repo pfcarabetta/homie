@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSharedAudio, primeAudio } from './audioUnlocker';
+import { getSharedAudio, primeAudio, playTtsText } from './audioUnlocker';
+import { pickGreeting } from './voiceGreetings';
 
 // ── Visual tokens ────────────────────────────────────────────────────────────
 const O = '#E8632B';
@@ -22,6 +23,8 @@ interface Props {
   active: boolean;
   onExit: () => void;
   category?: string | null;
+  /** Homeowner's first name (when known) — personalizes the greeting. */
+  firstName?: string | null;
   /**
    * Called after every successful turn. `category` is Homie's classifier
    * output (or null). Parent pushes both sides of the exchange into the
@@ -45,7 +48,7 @@ interface Props {
  * panel, so downstream plumbing (status card, diagnosis, Continue button)
  * works identically.
  */
-export default function VideoChatPanel({ active, onExit, category, onTurn, onReady }: Props) {
+export default function VideoChatPanel({ active, onExit, category, firstName, onTurn, onReady }: Props) {
   const [phase, setPhase] = useState<Phase>('permission');
   const [error, setError] = useState<string | null>(null);
   const [lastTranscript, setLastTranscript] = useState<string>('');
@@ -234,7 +237,18 @@ export default function VideoChatPanel({ active, onExit, category, onTurn, onRea
         try { await videoRef.current.play(); } catch { /* noop */ }
       }
       setPhase('idle');
-      if (handsFreeRef.current) setTimeout(() => startListening(), 150);
+      // Greet before we start listening so the homeowner hears Homie
+      // acknowledge them by name before they need to speak. Seeds the
+      // history so Claude gets the greeting as context on the first
+      // real user turn.
+      const greeting = pickGreeting(firstName);
+      historyRef.current = [{ role: 'assistant', content: greeting }];
+      setLastReply(greeting);
+      setPhase('speaking');
+      await playTtsText(greeting);
+      if (!active) return;
+      setPhase('idle');
+      if (handsFreeRef.current) setTimeout(() => startListening(), 250);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Camera / microphone permission denied';
       setError(msg);

@@ -1584,6 +1584,9 @@ export default function GetQuotes() {
   // Mobile: show the Service tier of categories behind an expander ("+ 8 more")
   // per design spec. Always visible on desktop via CSS.
   const [showAllCats, setShowAllCats] = useState(false);
+  // Homeowner's first name — fetched once at mount for authenticated users
+  // and used to personalise the voice/video-chat greeting.
+  const [firstName, setFirstName] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -1719,6 +1722,13 @@ export default function GetQuotes() {
         if (res.data) {
           homeContextRef.current = buildHomeContext(res.data);
         }
+      }).catch(() => { /* ignore */ });
+      // Also grab the first name so voice/video greetings can address the
+      // homeowner by name ("Hi Pete, how can your Homie help…"). Silent on
+      // failure — we fall back to the anonymous greeting bank.
+      accountService.getProfile().then(res => {
+        const fn = res.data?.first_name?.trim();
+        if (fn) setFirstName(fn);
       }).catch(() => { /* ignore */ });
     }
   }, []);
@@ -2347,6 +2357,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                         active={voiceOpen}
                         onExit={() => setVoiceOpen(false)}
                         category={data.category}
+                        firstName={firstName}
                         onTurn={handleVoiceTurn}
                         onReady={handleVoiceComplete}
                       />
@@ -2357,6 +2368,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                         active={videoChatOpen}
                         onExit={() => setVideoChatOpen(false)}
                         category={data.category}
+                        firstName={firstName}
                         onTurn={handleVoiceTurn}
                         onReady={handleVoiceComplete}
                       />

@@ -220,6 +220,42 @@ async function synthesizeWithElevenLabs(text: string): Promise<Buffer> {
   return Buffer.from(ab);
 }
 
+// ── POST /api/v1/voice/tts ───────────────────────────────────────────────────
+// Text-only → ElevenLabs → audio. Used by the voice/video panels to speak
+// a greeting before the conversation starts (and potentially for other
+// pure-speech use cases later). No Claude call — cheap & fast.
+router.post('/tts', async (req: Request, res: Response) => {
+  const body = req.body as { text?: unknown };
+  if (!body.text || typeof body.text !== 'string' || !body.text.trim()) {
+    const out: ApiResponse<null> = { data: null, error: 'text is required', meta: {} };
+    res.status(400).json(out);
+    return;
+  }
+  if (!process.env.ELEVENLABS_API_KEY) {
+    const out: ApiResponse<null> = { data: null, error: 'Voice TTS is not configured', meta: {} };
+    res.status(503).json(out);
+    return;
+  }
+  // Clamp so we can't be asked to synthesize a whole article on the free tier
+  const text = body.text.trim().slice(0, 500);
+  try {
+    const audioBuf = await synthesizeWithElevenLabs(text);
+    res.json({
+      data: { audio_base64: audioBuf.toString('base64'), audio_mime: 'audio/mpeg' },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /voice/tts]');
+    const out: ApiResponse<null> = {
+      data: null,
+      error: err instanceof Error ? err.message : 'TTS error',
+      meta: {},
+    };
+    res.status(500).json(out);
+  }
+});
+
 // ── POST /api/v1/voice/turn ──────────────────────────────────────────────────
 router.post('/turn', async (req: Request, res: Response) => {
   const body = req.body as VoiceTurnBody;

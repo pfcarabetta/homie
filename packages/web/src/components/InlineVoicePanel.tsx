@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSharedAudio, primeAudio } from './audioUnlocker';
+import { getSharedAudio, primeAudio, playTtsText } from './audioUnlocker';
+import { pickGreeting } from './voiceGreetings';
 
 // ── Visual tokens ────────────────────────────────────────────────────────────
 const O = '#E8632B';
@@ -26,6 +27,11 @@ interface Props {
   /** Optional category hint (the tile the user already chose). */
   category?: string | null;
   /**
+   * Homeowner's first name (when known) — used to personalize the
+   * greeting Homie speaks on panel open.
+   */
+  firstName?: string | null;
+  /**
    * Fires after every successful turn — parent pushes both into the chat.
    * `category` is Homie's current best category ID guess (from its
    * <category> tag) or null if it couldn't classify yet.
@@ -45,7 +51,7 @@ interface Props {
  * thinking → speaking → idle (loop) | error. <ready/> bubbles up via
  * onReady and the parent decides whether to auto-close and advance phase.
  */
-export default function InlineVoicePanel({ active, onExit, category, onTurn, onReady }: Props) {
+export default function InlineVoicePanel({ active, onExit, category, firstName, onTurn, onReady }: Props) {
   const [phase, setPhase] = useState<Phase>('permission');
   const [error, setError] = useState<string | null>(null);
   const [lastTranscript, setLastTranscript] = useState<string>('');
@@ -249,11 +255,22 @@ export default function InlineVoicePanel({ active, onExit, category, onTurn, onR
       streamRef.current = stream;
       mimeTypeRef.current = pickMime();
       setPhase('idle');
-      // Hands-free: immediately start listening once the mic is ready. A tiny
-      // delay lets React paint the "idle" state first so the user sees the
-      // transition rather than jumping straight to "listening".
+      // Speak the greeting FIRST so the homeowner hears Homie open the
+      // conversation before we start listening. Seeds historyRef so Claude
+      // sees the greeting as context for the user's first reply, and
+      // populates lastReply for the on-screen caption.
+      const greeting = pickGreeting(firstName);
+      historyRef.current = [{ role: 'assistant', content: greeting }];
+      setLastReply(greeting);
+      setPhase('speaking');
+      await playTtsText(greeting);
+      // If the user closed the panel during the greeting, bail.
+      if (!active) return;
+      setPhase('idle');
+      // Hands-free: start listening once the greeting finishes. Tiny beat
+      // so the mic doesn't catch the tail of Homie's own voice.
       if (handsFreeRef.current) {
-        setTimeout(() => startListening(), 150);
+        setTimeout(() => startListening(), 250);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Microphone permission denied';
