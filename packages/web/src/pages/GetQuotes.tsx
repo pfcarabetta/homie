@@ -2023,21 +2023,36 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
   }, []);
 
   // Voice-ready: <ready/> tag detected OR user hit "I'm done". Closes the
-  // inline panel, finalises the seeded data, and jumps to the 'extra' phase
-  // so the homeowner can optionally tack on a photo before the dispatch
-  // summary is generated.
-  const handleVoiceComplete = useCallback((payload: { transcript: string; history: { role: 'user' | 'assistant'; content: string }[] }) => {
+  // inline panel, finalises the seeded data, and jumps STRAIGHT to the
+  // dispatch-brief generation — no intermediate "Want to attach a photo?"
+  // prompt, since voice already captured enough context. The user sees a
+  // typing indicator, then the diagnosis, then the Continue button.
+  //
+  // Plain const (not useCallback) so the closure always references the
+  // current-render generateDiagnosis, which reads the just-committed
+  // data.category / data.a1 that handleVoiceTurn set during the voice
+  // conversation.
+  const handleVoiceComplete = (payload: { transcript: string; history: { role: 'user' | 'assistant'; content: string }[] }) => {
     const { transcript, history } = payload;
     const trimmed = transcript.trim();
     setVoiceOpen(false);
     if (!trimmed) return;
-    setData(d => ({ ...d, category: d.category ?? 'general', a1: trimmed, extra: trimmed }));
+    // Finalise the seeded data — handleVoiceTurn was updating category/a1
+    // per-turn; this ensures `extra` is set so the dispatch summary has
+    // the full voice transcript available.
+    setData(d => ({
+      ...d,
+      category: d.category ?? 'general',
+      a1: d.a1 || trimmed,
+      extra: trimmed,
+    }));
     aiConvoRef.current = history.map(h => ({ role: h.role, content: h.content }));
-    setMessages(m => [...m, { role: 'assistant', text: "Got it. Want to attach a photo, or shall we go find you a pro?" }]);
-    setPhase('extra');
+    // Skip the 'extra' phase entirely — go right into the AI dispatch
+    // summary. aiConvoRef already holds the full voice transcript so we
+    // pass an empty extraDetails string to avoid duplicating content.
+    generateDiagnosis('');
     scrollDown();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
 
   // Direct-path: user types a description on the initial screen without
   // picking a category tile. We bypass the tile → sub → q1 pipeline and go
