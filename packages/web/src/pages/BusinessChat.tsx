@@ -23,6 +23,21 @@ interface CatDef {
   q1: { text: string; options: string[] };
 }
 
+// Narrow structural type for the browser SpeechRecognition API (prefixed as
+// webkitSpeechRecognition in Safari). We only use start / stop / onresult
+// / onend so this is all we need — avoids pulling in DOM.Speech types that
+// aren't universal in TS libdom.
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> & { length: number } }) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((e: unknown) => void) | null;
+}
+
 interface CatGroup {
   icon: string; label: string; type: 'repair' | 'service';
   subs: Array<{ id: string; icon: string; label: string }>;
@@ -626,6 +641,12 @@ export default function BusinessChat() {
   // Category-picker UI: service tier collapsed behind "+ N more" pill
   const [showAllB2BCats, setShowAllB2BCats] = useState(false);
 
+  // Voice dictation via Web Speech API — cheaper + simpler than running a
+  // second conversational AI inside the already-AI-driven B2B chat. Fills
+  // the text input as the user speaks; tap the mic a second time to stop.
+  const [dictating, setDictating] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Cloudinary URLs of photos uploaded during this chat session */
@@ -1054,6 +1075,47 @@ export default function BusinessChat() {
   }
 
   // Handle extra details or free-form chat
+  // ── Voice dictation (Web Speech API) ───────────────────────────────────
+  // Tap the mic → starts continuous transcription, interim results fill
+  // inputVal live; tap again to stop. Silent on unsupported browsers
+  // (the button just won't mount).
+  const toggleDictation = () => {
+    if (dictating) {
+      try { recognitionRef.current?.stop(); } catch { /* noop */ }
+      recognitionRef.current = null;
+      setDictating(false);
+      return;
+    }
+    // Find SpeechRecognition ctor (webkit prefix on Safari)
+    const Ctor = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike })
+      .SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition;
+    if (!Ctor) return;
+    const rec = new Ctor();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = 'en-US';
+    const startBase = inputVal;
+    rec.onresult = (ev) => {
+      let transcript = '';
+      for (let i = 0; i < ev.results.length; i++) {
+        transcript += ev.results[i][0].transcript;
+      }
+      setInputVal(startBase ? `${startBase} ${transcript}`.trim() : transcript);
+    };
+    rec.onend = () => { setDictating(false); recognitionRef.current = null; };
+    rec.onerror = () => { setDictating(false); recognitionRef.current = null; };
+    try {
+      rec.start();
+      recognitionRef.current = rec;
+      setDictating(true);
+    } catch {
+      setDictating(false);
+    }
+  };
+  const dictationSupported = typeof window !== 'undefined' &&
+    !!((window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition ||
+       (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition);
+
   function handleUserInput(text: string) {
     setSuggestions([]);
     setShowFreeInput(false);
@@ -1673,6 +1735,7 @@ export default function BusinessChat() {
                       reader.readAsDataURL(file);
                     }} />
                     <button onClick={() => fileInputRef.current?.click()}
+                      title="Attach a photo"
                       style={{
                         width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(0,0,0,0.08)',
                         background: 'var(--bp-card)', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center',
@@ -1681,7 +1744,24 @@ export default function BusinessChat() {
                       onMouseEnter={e => e.currentTarget.style.borderColor = O}
                       onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'}
                     >📷</button>
-                    <input value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder={imgPreview ? "Describe what you see..." : "Type your answer..."}
+                    {dictationSupported && (
+                      <button onClick={toggleDictation}
+                        title={dictating ? 'Stop dictating' : 'Dictate your answer'}
+                        style={{
+                          width: 44, height: 44, borderRadius: '50%',
+                          border: dictating ? `2px solid ${O}` : '2px solid rgba(0,0,0,0.08)',
+                          background: dictating ? O : 'var(--bp-card)',
+                          color: dictating ? '#fff' : D,
+                          cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s',
+                          animation: dictating ? 'pulse 1.3s infinite' : 'none',
+                          boxShadow: dictating ? `0 0 0 5px ${O}22` : 'none',
+                        }}
+                        onMouseEnter={e => { if (!dictating) e.currentTarget.style.borderColor = O; }}
+                        onMouseLeave={e => { if (!dictating) e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'; }}
+                      >🎤</button>
+                    )}
+                    <input value={inputVal} onChange={e => setInputVal(e.target.value)} placeholder={imgPreview ? "Describe what you see..." : dictating ? "Listening… speak freely" : "Type your answer..."}
                       onKeyDown={e => { if (e.key === 'Enter' && (inputVal.trim() || imgPreview)) handleUserInput(inputVal.trim() || 'What do you see in this photo?'); }}
                       autoFocus
                       style={{
