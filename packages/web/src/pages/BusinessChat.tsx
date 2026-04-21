@@ -2468,9 +2468,16 @@ export default function BusinessChat() {
                 m.role === 'user' ? <UserMsg key={i} text={m.content} /> : <AssistantMsg key={i} text={m.content} />
               ))}
               {streaming && <StreamingMsg text={streamText} />}
-              {/* Mobile inline Property IQ — only renders when at least one
-                  inventory item correlates with the current chat. Hidden
-                  on ≥981px (the right-rail card already covers desktop). */}
+              {/* Inline "added to Property IQ" callouts — every item the AI
+                  identified (visually or from a brand the PM spoke) gets a
+                  small confirmation card right in the chat thread so the
+                  PM sees what just got captured. Always visible on both
+                  desktop and mobile. */}
+              <InlineDiscoveredEquipment discovered={discoveredEquipment} />
+              {/* Mobile inline Property IQ — surfaces correlated inventory
+                  items (existing scan rows that match what's being
+                  discussed) inline. Hidden on ≥981px since the right-rail
+                  card covers desktop. */}
               <MobileInlinePropertyIQ
                 items={propertyInventory}
                 chatText={chatCorrelationText}
@@ -3091,6 +3098,17 @@ export default function BusinessChat() {
             categoryLabel={category?.label ?? null}
             step={step}
           />
+          <B2BChecklistCard
+            propertySelected={!!selectedProperty}
+            categoryLabel={category?.label ?? null}
+            describedIssue={!!q1Answer || messages.some(m => m.role === 'user')}
+            equipmentCaptured={discoveredEquipment.length > 0 || propertyInventory.length > 0}
+            mediaAttached={uploadedPhotoUrlsRef.current.length > 0 || !!imgPreview}
+            voiceUsed={voiceOpen || videoChatOpen || messages.some(m => m.content.startsWith('🎤'))}
+            dispatchReady={step === 'summary' || step === 'outreach' || step === 'results'}
+            urgencyConfirmed={!!timing && step !== 'summary'}
+            step={step}
+          />
           <B2BPropertyIQCard
             propertyId={selectedProperty?.id ?? null}
             categoryLabel={category?.label ?? null}
@@ -3318,6 +3336,74 @@ function B2BHomieThinksCard({
           Start describing — I'll read along ↗
         </div>
       )}
+    </div>
+  );
+}
+
+/** Live diagnostic checklist that hangs underneath B2BHomieThinksCard.
+ *  Mirrors the /quote checklist pattern so PMs see the same "what's
+ *  ticked off so far / what's NEXT" progress signal they get on the
+ *  homeowner side. Each row has a green check when done, a soft hollow
+ *  circle when pending, and a NEXT pill on the first incomplete row. */
+function B2BChecklistCard({
+  propertySelected, categoryLabel, describedIssue, equipmentCaptured,
+  mediaAttached, voiceUsed, dispatchReady, urgencyConfirmed, step,
+}: {
+  propertySelected: boolean;
+  categoryLabel: string | null;
+  describedIssue: boolean;
+  equipmentCaptured: boolean;
+  mediaAttached: boolean;
+  voiceUsed: boolean;
+  dispatchReady: boolean;
+  urgencyConfirmed: boolean;
+  step: string;
+}) {
+  const items: Array<{ done: boolean; txt: string; opt?: boolean }> = [
+    { done: propertySelected, txt: propertySelected ? 'Property selected' : 'Pick a property' },
+    { done: !!categoryLabel, txt: categoryLabel ? `Category: ${categoryLabel}` : 'Matching a category' },
+    { done: describedIssue, txt: describedIssue ? 'Issue described' : 'Describe the issue' },
+    { done: equipmentCaptured, txt: equipmentCaptured ? 'Equipment captured' : 'Equipment on file', opt: true },
+    { done: mediaAttached || voiceUsed, txt: 'Photo / video / voice attached', opt: true },
+    { done: dispatchReady, txt: dispatchReady ? 'Dispatch brief ready' : 'Generate dispatch brief' },
+    { done: urgencyConfirmed || dispatchReady, txt: urgencyConfirmed || dispatchReady ? 'Urgency set' : 'Next: confirm urgency & dispatch' },
+  ];
+  const nextIdx = items.findIndex(x => !x.done);
+
+  return (
+    <div style={{
+      background: _CARD_R, borderRadius: 18, border: `1px solid ${_BORDER_R}`,
+      padding: 16, boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
+    }}>
+      <div style={{ fontSize: 11, color: _DIM_R, textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: 700, marginBottom: 10, fontFamily: "'DM Mono',monospace" }}>
+        Checklist
+      </div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {items.map((p, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '9px 11px', borderRadius: 10,
+            background: p.done ? `${_G_R}13` : 'transparent',
+            border: `1px solid ${p.done ? `${_G_R}33` : 'transparent'}`,
+            transition: 'all .2s',
+          }}>
+            <div style={{
+              width: 18, height: 18, borderRadius: '50%',
+              background: p.done ? _G_R : 'transparent',
+              border: p.done ? 'none' : `1.5px solid ${_BORDER_R}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 10, fontWeight: 700, flexShrink: 0,
+            }}>
+              {p.done ? '✓' : ''}
+            </div>
+            <div style={{ flex: 1, fontSize: 12.5, color: p.done ? _D_R : _DIM_R, fontWeight: p.done ? 600 : 500, fontFamily: "'DM Sans',sans-serif", minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {p.txt} {p.opt && <span style={{ fontSize: 10, color: _DIM_R, fontWeight: 500, marginLeft: 4 }}>(optional)</span>}
+            </div>
+            {i === nextIdx && step !== 'outreach' && step !== 'results' && (
+              <span style={{ fontSize: 9.5, color: _O_R, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, flexShrink: 0 }}>NEXT</span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -3577,6 +3663,63 @@ function B2BPropertyIQCard({
  *  equipment the AI discovered on the fly, so the PM sees what's been
  *  captured for the dispatch summary. Entire component hides itself on
  *  ≥981px via the .b2b-mobile-iq CSS class. */
+/** Always-visible "added to Property IQ" callout. Renders a compact
+ *  confirmation card right in the chat thread for every new item the AI
+ *  identified this session — visual recognition from a video frame, a
+ *  brand the PM just spoke, etc. Lets the PM see exactly what got
+ *  captured and routed to inventory without having to glance at the
+ *  right rail. Hides itself when nothing has been discovered yet. */
+function InlineDiscoveredEquipment({
+  discovered,
+}: {
+  discovered: Array<{ itemType: string; brand?: string; modelNumber?: string; estimatedAgeYears?: number; condition?: string }>;
+}) {
+  if (!discovered || discovered.length === 0) return null;
+  return (
+    <div style={{
+      marginLeft: 42, marginRight: 0, marginTop: 8, marginBottom: 12,
+      background: _CARD_R, borderRadius: 14, border: `1px solid ${_G_R}55`,
+      padding: 12, animation: 'fadeSlide 0.3s ease',
+      boxShadow: `0 8px 24px -16px ${_G_R}66`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <div style={{ width: 22, height: 22, borderRadius: 7, background: _G_R, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>+</div>
+        <span style={{ fontFamily: "'Fraunces',serif", fontSize: 12.5, fontWeight: 700, color: _D_R }}>
+          Added to Property IQ
+        </span>
+        <span style={{ marginLeft: 'auto', fontSize: 9.5, color: _DIM_R, fontFamily: "'DM Mono',monospace", letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700 }}>
+          {discovered.length} new
+        </span>
+      </div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {discovered.map((d, i) => (
+          <div key={`disc-inline-${i}`} style={{
+            padding: 10, borderRadius: 10,
+            background: `${_G_R}0e`, border: `1px dashed ${_G_R}55`,
+            display: 'flex', gap: 8, alignItems: 'flex-start',
+          }}>
+            <div style={{ width: 22, height: 22, borderRadius: 6, background: _G_R, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✓</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 12.5, fontWeight: 700, color: _D_R, lineHeight: 1.2 }}>
+                {[d.brand, d.modelNumber].filter(Boolean).join(' · ') || iqLabelFor(d.itemType)}
+              </div>
+              <div style={{ fontSize: 10, color: _DIM_R, marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ textTransform: 'capitalize' }}>{iqLabelFor(d.itemType)}</span>
+                {d.estimatedAgeYears !== undefined && (
+                  <><span style={{ opacity: .4 }}>·</span><span>{Math.round(d.estimatedAgeYears)}yr</span></>
+                )}
+                {d.condition && (
+                  <><span style={{ opacity: .4 }}>·</span><span>{d.condition}</span></>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MobileInlinePropertyIQ({
   items, chatText, discovered,
 }: {
