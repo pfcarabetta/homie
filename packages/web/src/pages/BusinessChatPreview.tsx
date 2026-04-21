@@ -22,6 +22,7 @@ const RED = '#DC2626';
 
 type ScenarioId = 'occupied' | 'vacant' | 'unknown';
 type MemoryState = 'hvac' | 'all' | 'empty';
+type ViewMode = 'desktop' | 'mobile';
 
 interface Scenario {
   id: ScenarioId;
@@ -129,7 +130,23 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
 export default function BusinessChatPreview() {
   const [scenario, setScenario] = useState<ScenarioId>('occupied');
   const [memoryState, setMemoryState] = useState<MemoryState>('hvac');
+  const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const s = SCENARIOS[scenario];
+
+  if (viewMode === 'mobile') {
+    return (
+      <div style={{ minHeight: '100vh', background: '#1a1510', fontFamily: "'DM Sans', sans-serif" }}>
+        <PreviewBanner
+          scenario={scenario} setScenario={setScenario}
+          memoryState={memoryState} setMemoryState={setMemoryState}
+          viewMode={viewMode} setViewMode={setViewMode}
+        />
+        <MobileFrame>
+          <MobileLayout scenario={s} memoryState={memoryState} />
+        </MobileFrame>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif" }}>
@@ -148,6 +165,8 @@ export default function BusinessChatPreview() {
         setScenario={setScenario}
         memoryState={memoryState}
         setMemoryState={setMemoryState}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
       />
 
       {/* Nav bar mirroring /quote */}
@@ -238,15 +257,20 @@ export default function BusinessChatPreview() {
 // ─── Preview banner ──────────────────────────────────────────────────────────
 
 function PreviewBanner({
-  scenario, setScenario, memoryState, setMemoryState,
+  scenario, setScenario, memoryState, setMemoryState, viewMode, setViewMode,
 }: {
   scenario: ScenarioId; setScenario: (s: ScenarioId) => void;
   memoryState: MemoryState; setMemoryState: (m: MemoryState) => void;
+  viewMode: ViewMode; setViewMode: (v: ViewMode) => void;
 }) {
   const memoryOpts: { id: MemoryState; label: string }[] = [
     { id: 'hvac', label: 'HVAC-filtered' },
     { id: 'all', label: 'All items' },
     { id: 'empty', label: 'Not scanned' },
+  ];
+  const viewOpts: { id: ViewMode; label: string }[] = [
+    { id: 'desktop', label: 'Desktop' },
+    { id: 'mobile', label: 'Mobile' },
   ];
   return (
     <div style={{
@@ -269,6 +293,12 @@ function PreviewBanner({
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, flexWrap: 'wrap' }}>
+        <TogglePillGroup
+          label="View"
+          value={viewMode}
+          options={viewOpts}
+          onChange={setViewMode}
+        />
         <TogglePillGroup
           label="Scenario"
           value={scenario}
@@ -1116,6 +1146,588 @@ function ProsNearbyBadge() {
     </div>
   );
 }
+
+// ─── MOBILE PREVIEW ─────────────────────────────────────────────────────────
+//
+// Renders the same conversation + context inside a phone-shaped frame so
+// reviewers can feel the narrow-viewport version. Single-column layout:
+// sticky property strip up top (occupancy + expandable calendar), chat +
+// DirectInput in the middle, then the right-panel cards stacked below.
+
+function MobileFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+      padding: '40px 16px 60px', minHeight: 'calc(100vh - 48px)',
+    }}>
+      {/* Phone shell — rounded rect with a subtle inner shadow */}
+      <div style={{
+        width: 402, height: 844,
+        background: '#000', borderRadius: 54,
+        padding: 12,
+        boxShadow: '0 30px 90px rgba(0,0,0,.55), 0 0 0 2px rgba(255,255,255,.05)',
+        position: 'relative',
+      }}>
+        {/* Dynamic-island-style notch */}
+        <div style={{
+          position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)',
+          width: 124, height: 36, background: '#000', borderRadius: 20, zIndex: 10,
+          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.04)',
+        }} />
+        {/* Screen */}
+        <div style={{
+          width: '100%', height: '100%',
+          background: W, borderRadius: 42, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileLayout({ scenario: s, memoryState }: { scenario: Scenario; memoryState: MemoryState }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: "'DM Sans', sans-serif" }}>
+      {/* Status bar fake */}
+      <div style={{
+        padding: '14px 26px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        fontSize: 13, fontWeight: 700, color: D, flexShrink: 0,
+      }}>
+        <span>9:41</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+          📶 🔋
+        </span>
+      </div>
+
+      {/* Nav */}
+      <MobileNav />
+
+      {/* Scrollable body */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        <MobilePropertyStrip scenario={s} />
+
+        <div style={{ padding: '12px 16px 24px' }}>
+          {/* Chat */}
+          <MobileChat scenario={s} memoryState={memoryState} />
+
+          {/* Category pills (compact, 3 per row) */}
+          <div style={{ marginTop: 16, marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+              <span style={{ fontSize: 9, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>Repair · common</span>
+              <span style={{ height: 1, flex: 1, background: BORDER }} />
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {REPAIR_PILLS.slice(0, 6).map(p => (
+                <button key={p.id} style={{
+                  background: p.active ? `${O}14` : '#fff',
+                  color: p.active ? O : D,
+                  border: `1px solid ${p.active ? O : BORDER}`,
+                  borderRadius: 100, padding: '7px 10px', fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                }}>
+                  <span style={{ fontSize: 13 }}>{p.icon}</span>
+                  {p.label}
+                  {p.active && <span style={{ fontSize: 8, fontFamily: "'DM Mono',monospace", letterSpacing: .8, color: O, fontWeight: 700, marginLeft: 3 }}>AI</span>}
+                </button>
+              ))}
+            </div>
+            <button style={{
+              marginTop: 8, width: '100%', background: 'transparent',
+              border: `1px dashed ${BORDER}`, borderRadius: 100,
+              padding: '8px 12px', fontSize: 11, fontWeight: 600, color: DIM,
+              cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+            }}>+ 10 more · cleaning, landscape, painting…</button>
+          </div>
+
+          {/* DirectInput (compact) */}
+          <MobileDirectInput />
+
+          {/* Continue stub */}
+          <button style={{
+            marginTop: 12, width: '100%',
+            background: `${O}0f`, color: DIM,
+            border: `1px dashed ${O}55`, borderRadius: 14,
+            padding: '14px', fontSize: 13, fontWeight: 700,
+            cursor: 'default', fontFamily: "'DM Sans',sans-serif",
+          }}>
+            Continue — confirm timing &amp; tier →
+          </button>
+
+          {/* Bottom context stack — replaces desktop right panel */}
+          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <MobileHomieThinksCard />
+            <MobilePropertyIQCard state={memoryState} />
+            <MobileProsNearby />
+            <MobileChecklist />
+            <MobileAssurance />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Mobile · Nav ────────────────────────────────────────────────────────────
+
+function MobileNav() {
+  return (
+    <div style={{
+      padding: '8px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      borderBottom: `1px solid ${BORDER}`, flexShrink: 0, background: '#fff',
+    }}>
+      <button style={{ background: 'transparent', border: 'none', fontSize: 22, color: DIM, cursor: 'pointer', padding: 0, width: 32 }}>‹</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <svg width={22} height={22} viewBox="0 0 48 48">
+          <rect width="48" height="48" rx="14" fill={O} />
+          <path d="M24 12L10 23H14V35H21V28H27V35H34V23H38L24 12Z" fill="#fff" />
+          <circle cx="24" cy="22" r="3" fill={O} />
+        </svg>
+        <span style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 700, color: D }}>homie</span>
+        <span style={{ fontSize: 11, color: DIM, fontWeight: 600 }}>· Business</span>
+      </div>
+      <div style={{ width: 32 }} />
+    </div>
+  );
+}
+
+// ─── Mobile · Sticky property strip ─────────────────────────────────────────
+
+function MobilePropertyStrip({ scenario: s }: { scenario: Scenario }) {
+  const [calOpen, setCalOpen] = useState(false);
+  const r = s.reservation;
+  const isOccupied = r?.status === 'checked_in';
+
+  return (
+    <div style={{
+      background: '#fff', borderBottom: `1px solid ${BORDER}`, padding: '12px 16px',
+      position: 'sticky', top: 0, zIndex: 5,
+    }}>
+      {/* Property + chevron */}
+      <button style={{
+        width: '100%', background: 'transparent', border: 'none', padding: 0,
+        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+        fontFamily: "'DM Sans',sans-serif", textAlign: 'left',
+      }}>
+        <span style={{ fontSize: 18, flexShrink: 0 }}>🏠</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: D, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {s.property.name}
+          </div>
+          <div style={{ fontSize: 10.5, color: DIM, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {s.property.address}
+          </div>
+        </div>
+        <span style={{ color: DIM, fontSize: 12 }}>▾</span>
+      </button>
+
+      {/* Status + occupancy pills */}
+      <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+        <StatusPill online />
+        {isOccupied && r && (
+          <OccupancyPill color={RED} dot label={`Occupied · until ${r.endDate}`} />
+        )}
+        {r?.status === 'upcoming' && (
+          <OccupancyPill color={G} label={`Vacant · next ${r.startDate}`} />
+        )}
+        {!r && (
+          <OccupancyPill color={DIM} label="PMS not connected" />
+        )}
+      </div>
+
+      {/* Dispatch calendar toggle */}
+      {s.calendar.length > 0 && (
+        <>
+          <button
+            onClick={() => setCalOpen(o => !o)}
+            style={{
+              marginTop: 10, width: '100%',
+              background: calOpen ? `${O}0a` : 'rgba(0,0,0,.02)',
+              border: `1px solid ${calOpen ? O + '33' : BORDER}`,
+              borderRadius: 10, padding: '7px 10px',
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 11.5, fontWeight: 700, color: D,
+              cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+              textAlign: 'left',
+            }}
+          >
+            <span style={{ fontSize: 13 }}>📅</span>
+            <span style={{ flex: 1 }}>
+              Best dispatch windows
+              <span style={{ color: DIM, fontWeight: 500, marginLeft: 5 }}>· {s.calendar.length} upcoming</span>
+            </span>
+            <span style={{
+              fontSize: 9, color: calOpen ? O : DIM, fontFamily: "'DM Mono',monospace",
+              transform: calOpen ? 'rotate(180deg)' : 'rotate(0)',
+              transition: 'transform .2s',
+            }}>▾</span>
+          </button>
+          {calOpen && (
+            <div style={{
+              marginTop: 8, padding: 10, borderRadius: 10,
+              background: '#fff', border: `1px solid ${BORDER}`,
+              boxShadow: '0 4px 14px -8px rgba(0,0,0,.08)',
+            }}>
+              <MiniCalendar reservations={s.calendar} />
+              <div style={{
+                marginTop: 8, padding: '6px 8px', borderRadius: 6,
+                background: `${G}0f`, border: `1px solid ${G}22`,
+                fontSize: 10.5, color: D, lineHeight: 1.4,
+              }}>
+                <strong style={{ color: G }}>Open days</strong> are safe windows.
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Mobile · Chat ───────────────────────────────────────────────────────────
+
+function MobileChat({ scenario: s, memoryState }: { scenario: Scenario; memoryState: MemoryState }) {
+  return (
+    <div style={{ marginTop: 4 }}>
+      <AssistantMsg text={`What's going on at ${s.property.name}?`} animate={false} />
+      <UserMsg text="Upstairs AC isn't cooling — blowing warm air all afternoon." />
+
+      {/* Special Property IQ inline bubble — appears ONLY when we have HVAC
+          context AND inventory data. Mobile-specific pattern that replaces
+          the right-panel card with an AI reference directly in chat. */}
+      {memoryState === 'hvac' && (
+        <PropertyIQInlineBubble />
+      )}
+      {memoryState === 'empty' && (
+        <AssistantMsg text={"Got it — sounds like an HVAC issue. What brand is the upstairs AC, if you know?"} animate={false} />
+      )}
+      {memoryState === 'all' && (
+        <AssistantMsg text={"Got it — HVAC. Upstairs unit? I have 2 HVAC systems on file for this property."} animate={false} />
+      )}
+
+      <UserMsg text="Yeah, the upstairs Trane." />
+      <AssistantMsg text={"Perfect. When did it start?"} animate={false} />
+    </div>
+  );
+}
+
+function PropertyIQInlineBubble() {
+  return (
+    <div style={{
+      display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12,
+    }}>
+      <div style={{
+        width: 30, height: 30, borderRadius: 10, background: O,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 14 }}>h</span>
+      </div>
+      <div style={{
+        background: '#fff', padding: '10px 12px', borderRadius: '14px 14px 14px 4px',
+        maxWidth: '85%',
+        border: `1px solid ${O}33`,
+        boxShadow: `0 2px 8px -2px ${O}22`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span style={{
+            fontSize: 9, fontFamily: "'DM Mono',monospace", letterSpacing: 1,
+            textTransform: 'uppercase', color: O, fontWeight: 800,
+            background: `${O}14`, padding: '2px 6px', borderRadius: 4,
+          }}>🧠 Property IQ</span>
+        </div>
+        <div style={{ fontSize: 13.5, color: D, lineHeight: 1.5, marginBottom: 8 }}>
+          I have this on file — is this the one?
+        </div>
+        {/* Pinned item — compact card inside bubble */}
+        <div style={{
+          padding: 10, borderRadius: 10,
+          background: `${O}0a`, border: `1px solid ${O}22`,
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 8, background: O,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, flexShrink: 0,
+          }}>❄️</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 9, color: DIM, textTransform: 'uppercase', letterSpacing: .8, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>
+              Upstairs
+            </div>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, color: D, lineHeight: 1.2 }}>
+              Trane XR16
+            </div>
+            <div style={{ fontSize: 10.5, color: DIM, marginTop: 1 }}>
+              2019 (6yr) · Serviced Jun 2024
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Mobile · DirectInput ────────────────────────────────────────────────────
+
+function MobileDirectInput() {
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span style={{ height: 1, flex: '0 0 14px', background: BORDER }} />
+        <span style={{ fontSize: 9, fontFamily: "'DM Mono',monospace", letterSpacing: 1.5, textTransform: 'uppercase', color: DIM, fontWeight: 700 }}>or just describe it</span>
+        <span style={{ height: 1, flex: 1, background: BORDER }} />
+      </div>
+      <div style={{
+        background: '#fff', borderRadius: 16,
+        border: `2px solid ${BORDER}`,
+        boxShadow: '0 8px 24px -14px rgba(0,0,0,.08)',
+        padding: '14px 14px 12px',
+      }}>
+        <div style={{
+          minHeight: 48,
+          fontFamily: "'Fraunces',serif", fontSize: 15, lineHeight: 1.3,
+          color: DIM, letterSpacing: '-.01em',
+        }}>
+          Describe it here, or chat with Homie by video or voice below.
+        </div>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 10, paddingTop: 10, borderTop: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
+          <MobileUploadBtn icon="camera" label="Photo" />
+          <MobileUploadBtn icon="video" label="Video" />
+          <MobileUploadBtn icon="mic" label="Voice" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileUploadBtn({ icon, label }: { icon: 'camera' | 'video' | 'mic'; label: string }) {
+  return (
+    <button style={{
+      background: W, border: `1px solid ${BORDER}`, color: D,
+      borderRadius: 100, padding: '7px 11px',
+      fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      fontFamily: "'DM Sans',sans-serif",
+    }}>
+      {icon === 'camera' && (
+        <svg width="12" height="10" viewBox="0 0 24 20" fill="none">
+          <path d="M3 5h4l2-2h6l2 2h4v12H3V5z" stroke={D} strokeWidth="1.8" />
+          <circle cx="12" cy="11" r="3.5" stroke={D} strokeWidth="1.8" />
+        </svg>
+      )}
+      {icon === 'video' && (
+        <svg width="12" height="10" viewBox="0 0 24 20" fill="none">
+          <rect x="2" y="4" width="14" height="12" rx="2" stroke={D} strokeWidth="1.8" />
+          <path d="M16 9l6-3v8l-6-3V9z" stroke={D} strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+      )}
+      {icon === 'mic' && (
+        <svg width="10" height="11" viewBox="0 0 18 20" fill="none">
+          <rect x="6" y="1" width="6" height="11" rx="3" stroke={D} strokeWidth="1.8" />
+          <path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke={D} strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )}
+      {label}
+    </button>
+  );
+}
+
+// ─── Mobile · Compact context cards (below chat) ────────────────────────────
+
+function MobileHomieThinksCard() {
+  return (
+    <div style={{
+      padding: 12, borderRadius: 14, background: '#fff',
+      border: `1px solid ${BORDER}`, boxShadow: '0 6px 20px -12px rgba(0,0,0,.08)',
+      display: 'flex', gap: 10, alignItems: 'center',
+    }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 9, background: `${O}22`, border: `1px solid ${O}33`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0,
+      }}>❄️</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 9, color: DIM, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>Homie thinks</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 13.5, fontWeight: 700, color: D, lineHeight: 1.25 }}>
+          Upstairs Trane XR16 not cooling
+        </div>
+        <div style={{ fontSize: 10.5, color: DIM, marginTop: 1 }}>
+          <span style={{ color: AMBER, fontWeight: 700 }}>Medium</span>
+          <span style={{ opacity: .4, margin: '0 5px' }}>·</span>
+          <span style={{ color: D, fontWeight: 700 }}>$180 – $320</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobilePropertyIQCard({ state }: { state: MemoryState }) {
+  if (state === 'empty') {
+    return (
+      <div style={{
+        padding: 12, borderRadius: 14, background: '#fff',
+        border: `1px dashed ${BORDER}`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <span style={{ fontSize: 16, opacity: .6 }}>🧠</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: D }}>Property IQ</span>
+          <span style={{ fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: .5, textTransform: 'uppercase' }}>Empty</span>
+        </div>
+        <div style={{ fontSize: 12, color: D, lineHeight: 1.5, marginBottom: 8 }}>
+          Run a scan so Homie remembers brands + service history for next time.
+        </div>
+        <button style={{
+          background: O, color: '#fff', border: 'none',
+          borderRadius: 100, padding: '6px 12px', fontSize: 11, fontWeight: 700,
+          cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+        }}>Run scan →</button>
+      </div>
+    );
+  }
+  const hvacItems = MOCK_INVENTORY.filter(i => i.category === 'hvac');
+  const items = state === 'hvac' ? hvacItems : MOCK_INVENTORY.slice(0, 5);
+  return (
+    <div style={{
+      padding: 12, borderRadius: 14, background: '#fff',
+      border: `1px solid ${BORDER}`, boxShadow: '0 6px 20px -12px rgba(0,0,0,.08)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 14 }}>🧠</span>
+        <span style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, color: D }}>
+          Property IQ{state === 'hvac' ? ' · HVAC' : ''}
+        </span>
+        <span style={{ fontSize: 9, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: .5, textTransform: 'uppercase', marginLeft: 'auto' }}>
+          {state === 'hvac' ? `${items.length} items` : `${MOCK_INVENTORY.length} total`}
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginLeft: -2, marginRight: -2 }}>
+        {items.map(item => (
+          <MobileIQChip key={item.id} item={item} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MobileIQChip({ item }: { item: InventoryItem }) {
+  const pinned = item.pinned;
+  return (
+    <div style={{
+      flex: '0 0 auto',
+      padding: '8px 10px', borderRadius: 10,
+      background: pinned ? `${O}0d` : 'rgba(0,0,0,.02)',
+      border: `1px solid ${pinned ? `${O}44` : BORDER}`,
+      minWidth: 160, maxWidth: 200,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ fontSize: 12 }}>
+          {item.category === 'hvac' && '❄️'}
+          {item.category === 'plumbing' && '🚰'}
+          {item.category === 'appliance' && '🍳'}
+          {item.category === 'electrical' && '⚡'}
+          {item.category === 'other' && '🔨'}
+        </span>
+        <span style={{ fontSize: 9, color: DIM, textTransform: 'uppercase', letterSpacing: .8, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>
+          {item.room}
+        </span>
+        {pinned && (
+          <span style={{
+            background: O, color: '#fff',
+            padding: '1px 5px', borderRadius: 100,
+            fontSize: 7.5, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase',
+            fontFamily: "'DM Mono',monospace",
+            marginLeft: 'auto',
+          }}>AI</span>
+        )}
+      </div>
+      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 12, fontWeight: 700, color: D, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {item.brand} {item.model}
+      </div>
+      <div style={{ fontSize: 9.5, color: DIM, marginTop: 2 }}>
+        {item.installedYear}
+        {item.overdue && <span style={{ color: AMBER, fontWeight: 700, marginLeft: 4 }}>⚠ Overdue</span>}
+      </div>
+    </div>
+  );
+}
+
+function MobileProsNearby() {
+  return (
+    <div style={{
+      padding: '8px 12px', borderRadius: 12,
+      background: `linear-gradient(90deg, ${O}14, ${O}06)`,
+      border: `1px solid ${O}22`,
+      display: 'flex', alignItems: 'center', gap: 8,
+    }}>
+      <div style={{ position: 'relative', width: 9, height: 9, flexShrink: 0 }}>
+        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: G }} />
+        <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: G, opacity: .25, animation: 'pulse 2s infinite' }} />
+      </div>
+      <div style={{ fontSize: 11.5, color: D, fontWeight: 600, flex: 1, minWidth: 0 }}>
+        <span style={{ color: O, fontWeight: 700 }}>11 HVAC pros</span>
+        <span style={{ color: DIM, fontWeight: 500 }}> near you</span>
+      </div>
+      <div style={{ fontSize: 8.5, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: .8, fontWeight: 700, textTransform: 'uppercase' }}>Live</div>
+    </div>
+  );
+}
+
+function MobileChecklist() {
+  const items = [
+    { done: true, txt: 'Property selected' },
+    { done: true, txt: 'Category inferred' },
+    { done: true, txt: 'Problem area located' },
+    { done: false, txt: 'Severity assessed', next: true },
+    { done: false, txt: 'Dispatch brief ready' },
+  ];
+  return (
+    <div style={{
+      padding: 12, borderRadius: 14, background: '#fff',
+      border: `1px solid ${BORDER}`,
+    }}>
+      <div style={{ fontSize: 10, color: DIM, textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 8, fontFamily: "'DM Mono',monospace" }}>Checklist</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {items.map((p, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 6,
+            background: p.done ? 'rgba(27,158,119,.07)' : 'transparent',
+          }}>
+            <div style={{
+              width: 14, height: 14, borderRadius: '50%',
+              background: p.done ? G : 'transparent',
+              border: p.done ? 'none' : `1.5px solid ${BORDER}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 8, fontWeight: 700, flexShrink: 0,
+            }}>{p.done && '✓'}</div>
+            <div style={{ flex: 1, fontSize: 11.5, color: p.done ? D : DIM, fontWeight: p.done ? 600 : 500 }}>
+              {p.txt}
+            </div>
+            {p.next && <span style={{ fontSize: 8.5, color: O, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700 }}>NEXT</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MobileAssurance() {
+  return (
+    <div style={{
+      padding: '10px 14px',
+      background: `linear-gradient(135deg, ${D} 0%, #3A3430 100%)`,
+      color: '#fff', borderRadius: 14, fontFamily: "'DM Sans',sans-serif",
+      display: 'flex', alignItems: 'center', gap: 10,
+    }}>
+      <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>⚡</div>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700 }}>Quotes in ~2 minutes</div>
+        <div style={{ fontSize: 10.5, opacity: .75, marginTop: 1 }}>No calling around. No forms.</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── End mobile preview ─────────────────────────────────────────────────────
 
 function AssuranceCard() {
   const style: CSSProperties = {
