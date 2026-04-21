@@ -32,6 +32,13 @@ interface Props {
    */
   firstName?: string | null;
   /**
+   * Optional business context — multi-line string with property,
+   * occupancy, and known equipment. Passed to the backend on every
+   * turn so Claude grounds its replies in the real property state.
+   * Only used by the Homie Business surface.
+   */
+  businessContext?: string | null;
+  /**
    * Fires after every successful turn — parent pushes both into the chat.
    * `category` is Homie's current best category ID guess (from its
    * <category> tag) or null if it couldn't classify yet.
@@ -51,7 +58,7 @@ interface Props {
  * thinking → speaking → idle (loop) | error. <ready/> bubbles up via
  * onReady and the parent decides whether to auto-close and advance phase.
  */
-export default function InlineVoicePanel({ active, onExit, category, firstName, onTurn, onReady }: Props) {
+export default function InlineVoicePanel({ active, onExit, category, firstName, businessContext, onTurn, onReady }: Props) {
   const [phase, setPhase] = useState<Phase>('permission');
   const [error, setError] = useState<string | null>(null);
   const [lastTranscript, setLastTranscript] = useState<string>('');
@@ -349,6 +356,7 @@ export default function InlineVoicePanel({ active, onExit, category, firstName, 
           audio_data_url: dataUrl,
           history: historyRef.current,
           category: category ?? null,
+          business_context: businessContext ?? null,
           is_first: isFirst,
         }),
       });

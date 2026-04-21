@@ -13,6 +13,9 @@ import { MiniCalendar, formatReservationMoment } from './business/constants';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
+import InlineVoicePanel from '@/components/InlineVoicePanel';
+import VideoChatPanel from '@/components/VideoChatPanel';
+import { primeAudio } from '@/components/audioUnlocker';
 
 const O = '#E8632B', G = '#1B9E77', D = 'var(--bp-text)', W = 'var(--bp-bg)';
 
@@ -656,6 +659,12 @@ export default function BusinessChat() {
   // Free-form "or just describe it" textarea shown on the category step.
   const [directText, setDirectText] = useState('');
 
+  // Voice + Video chat panels — identical to /quote, wired with business
+  // context so Claude grounds its replies in the real property state
+  // (address, occupancy, known inventory).
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [videoChatOpen, setVideoChatOpen] = useState(false);
+
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Cloudinary URLs of photos uploaded during this chat session */
@@ -1050,6 +1059,72 @@ export default function BusinessChat() {
     const cat = B2B_CATEGORIES.find(c => c.id === subId);
     if (cat) selectCategory(cat);
   }
+
+  // Build the business-context string that gets fed to the voice/video
+  // backend. Picks up whatever we already know: property + occupancy +
+  // a compact known-equipment summary from the inventory fetch. Kept
+  // under ~2k chars so the Claude system-prompt stays lean.
+  const buildBusinessContext = useCallback((): string | null => {
+    if (!selectedProperty) return null;
+    const lines: string[] = [];
+    lines.push(`Property: ${selectedProperty.name}${selectedProperty.zipCode ? ` · ${selectedProperty.zipCode}` : ''}`);
+    if (headerOccupancy?.occupied && headerOccupancy.reservation) {
+      const out = new Date(headerOccupancy.reservation.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+      lines.push(`Status: OCCUPIED by ${headerOccupancy.reservation.guestName || 'a guest'} until ${out}. Schedule around checkout.`);
+    } else if (headerOccupancy?.nextCheckIn) {
+      const start = new Date(headerOccupancy.nextCheckIn.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+      lines.push(`Status: vacant; next guest arrives ${start}. Safe window to dispatch.`);
+    } else if (headerOccupancy) {
+      lines.push('Status: vacant; no upcoming reservations on file.');
+    }
+    if (propertyInventory.length > 0) {
+      // Compact equipment list — brand/model/itemType, up to 20 rows so
+      // the prompt doesn't balloon on big scans.
+      const rows = propertyInventory.slice(0, 20).map(it => {
+        const who = [it.brand, it.modelNumber].filter(Boolean).join(' ');
+        const typeLabel = it.itemType.replace(/_/g, ' ');
+        const age = it.estimatedAgeYears ? `${Math.round(parseFloat(it.estimatedAgeYears))}yr` : '';
+        const cond = it.condition && it.condition !== 'good' ? `(${it.condition})` : '';
+        return `- ${typeLabel}${who ? `: ${who}` : ''}${age ? ` · ${age}` : ''} ${cond}`.trim();
+      });
+      lines.push(`Known equipment:\n${rows.join('\n')}`);
+    }
+    return lines.join('\n');
+  }, [selectedProperty, headerOccupancy, propertyInventory]);
+
+  // Voice-turn + voice-ready handlers (shared by InlineVoicePanel and
+  // VideoChatPanel). Mirrors the /quote pattern: each turn echoes both
+  // sides into the visible chat; on <ready/> we seed category + jump
+  // straight to the "extra" step so the PM lands on the existing flow.
+  const handleVoiceTurn = useCallback((userText: string, assistantText: string, _inferred: string | null) => {
+    const u = userText.trim();
+    const a = assistantText.trim();
+    if (!u) return;
+    setMessages(m => {
+      const next = [...m];
+      next.push({ role: 'user', content: `🎤 ${u}` });
+      if (a) next.push({ role: 'assistant', content: a });
+      return next;
+    });
+  }, []);
+
+  const handleVoiceReady = useCallback((payload: { transcript: string; history: { role: 'user' | 'assistant'; content: string }[] }) => {
+    const trimmed = payload.transcript.trim();
+    setVoiceOpen(false);
+    setVideoChatOpen(false);
+    if (!trimmed) return;
+    const fallback = B2B_CATEGORIES.find(c => c.id === 'general');
+    if (!fallback) return;
+    setCategory(fallback);
+    setActiveGroup(null);
+    setQ1Answer(trimmed);
+    // We've already echoed per-turn; land on the "anything_else" step so
+    // the PM can add a photo / extras then continue to timing + dispatch.
+    setTimeout(() => {
+      setMessages(m => [...m, { role: 'assistant', content: "Got it — anything else to add before we dispatch? Attach a photo if it helps." }]);
+      setStep('anything_else');
+    }, 400);
+  }, []);
 
   // Fast-path: PM types a free-form description on the category step and
   // bypasses the tile → sub → q1 pipeline. Defaults the category to
@@ -1642,7 +1717,34 @@ export default function BusinessChat() {
                     /quote DirectInput pattern. Skips category tiles + q1
                     and jumps straight into chat with Claude. Default
                     category is Handyman; the dispatch summary re-classifies
-                    from the full conversation context at the end. */}
+                    from the full conversation context at the end.
+                    Voice / Video Chat panels open in place when the PM
+                    taps those buttons. */}
+                {voiceOpen ? (
+                  <div style={{ marginTop: 18 }}>
+                    <InlineVoicePanel
+                      active={voiceOpen}
+                      onExit={() => setVoiceOpen(false)}
+                      category={null}
+                      firstName={homeowner?.first_name ?? null}
+                      businessContext={buildBusinessContext()}
+                      onTurn={handleVoiceTurn}
+                      onReady={handleVoiceReady}
+                    />
+                  </div>
+                ) : videoChatOpen ? (
+                  <div style={{ marginTop: 18 }}>
+                    <VideoChatPanel
+                      active={videoChatOpen}
+                      onExit={() => setVideoChatOpen(false)}
+                      category={null}
+                      firstName={homeowner?.first_name ?? null}
+                      businessContext={buildBusinessContext()}
+                      onTurn={handleVoiceTurn}
+                      onReady={handleVoiceReady}
+                    />
+                  </div>
+                ) : (
                 <div style={{ marginTop: 18 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                     <span style={{ height: 1, flex: '0 0 16px', background: 'var(--bp-border)' }} />
@@ -1668,7 +1770,7 @@ export default function BusinessChat() {
                       }}
                     />
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,.07)', gap: 10, flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                         <button onClick={() => fileInputRef.current?.click()}
                           title="Attach a photo"
                           style={{
@@ -1677,6 +1779,24 @@ export default function BusinessChat() {
                             cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
                             display: 'inline-flex', alignItems: 'center', gap: 6, color: D,
                           }}>📷 Photo</button>
+                        <button
+                          onClick={() => { primeAudio(); setVideoChatOpen(true); }}
+                          title="Live video chat with Homie — point the camera at the issue"
+                          style={{
+                            background: 'var(--bp-card)', border: '1px solid rgba(0,0,0,.08)',
+                            borderRadius: 100, padding: '8px 12px', fontSize: 12, fontWeight: 600,
+                            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                            display: 'inline-flex', alignItems: 'center', gap: 6, color: D,
+                          }}>🎥 Video Chat with Homie</button>
+                        <button
+                          onClick={() => { primeAudio(); setVoiceOpen(true); }}
+                          title="Voice chat with Homie"
+                          style={{
+                            background: 'var(--bp-card)', border: '1px solid rgba(0,0,0,.08)',
+                            borderRadius: 100, padding: '8px 12px', fontSize: 12, fontWeight: 600,
+                            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                            display: 'inline-flex', alignItems: 'center', gap: 6, color: D,
+                          }}>🎙️ Talk to Homie</button>
                         {dictationSupported && (
                           <button onClick={toggleDictation}
                             title={dictating ? 'Stop dictating' : 'Dictate the description'}
@@ -1716,6 +1836,7 @@ export default function BusinessChat() {
                     {directText.trim().length >= 10 ? 'Continue with this description →' : 'Type or dictate a few words, or pick a category above'}
                   </button>
                 </div>
+                )}
               </div>
             </div>
           )}

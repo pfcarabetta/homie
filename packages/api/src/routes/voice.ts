@@ -28,6 +28,12 @@ interface VoiceTurnBody {
   history?: unknown;
   /** Optional hint from the UI (category tile already chosen) */
   category?: unknown;
+  /**
+   * Optional multi-line context string from the Business surface:
+   * property, occupancy, known inventory. Prepended to the first-turn
+   * user message so Claude grounds its replies in the actual property.
+   */
+  business_context?: unknown;
   /** True on the first turn so we greet before asking */
   is_first?: unknown;
 }
@@ -144,6 +150,16 @@ After at most 3-4 turns (or sooner if the picture is clear), wrap up and end wit
 "Alright, I've got a good picture of what's going on. <category>appliance</category> <ready/>"
 
 Do NOT include <ready/> on earlier turns. Always include <category>ID</category>.`;
+
+// Appended to the system prompt when the caller is a property manager using
+// the Homie Business surface. Shifts the persona just enough that Homie
+// asks PM-appropriate questions (unit number, access, guest impact) rather
+// than owner-flavoured ones ("when did YOU first notice it?").
+const BUSINESS_SYSTEM_SUFFIX = `\n\nYOU'RE ON A CALL WITH A PROPERTY MANAGER — not the end-user homeowner. A CONTEXT block at the start of the first user turn carries the property address, current guest/occupancy, and any known equipment from prior scans. Use it to:
+- Reference appliances by the brand/model already on file ("the Trane XR16 upstairs") instead of asking for it
+- Factor in the guest situation — if the property is occupied, ask about access + timing, and suggest scheduling around the guest when appropriate
+- Keep the tone professional and efficient; PMs manage many jobs and appreciate speed over warmth
+- Never read the CONTEXT block aloud — treat it as background knowledge you already have`;
 
 // ElevenLabs voice preset — "Adam" is warm/American/conversational and fits the
 // friendly-Californian brief from the product spec. Override via env if needed.
@@ -317,6 +333,13 @@ router.post('/turn', async (req: Request, res: Response) => {
 
   const categoryHint = typeof body.category === 'string' ? body.category : null;
   const isFirst = body.is_first === true;
+  // Business-surface context: property, occupancy, known equipment. Fed
+  // into the first-turn user message so Claude has the real facts of the
+  // property before the conversation starts — it can reference the right
+  // appliance brand/model, know whether the unit is occupied, etc.
+  const businessContext = typeof body.business_context === 'string' && body.business_context.trim().length > 0
+    ? body.business_context.trim().slice(0, 2000)
+    : null;
 
   // Optional video frame (only sent by the video-chat panel). When present
   // we swap to the vision-aware system prompt so Claude can describe what
@@ -366,12 +389,21 @@ router.post('/turn', async (req: Request, res: Response) => {
 
     // Current user turn — prepend a tiny scaffold on the very first turn so
     // Homie greets warmly before diving in, and optionally carries the
-    // category hint the homeowner already picked (if any).
+    // category hint the caller already picked (if any).
     let userText = effectiveTranscript;
     if (isFirst && categoryHint) {
-      userText = `The homeowner already chose the "${categoryHint}" category. ${hasFrame ? 'They just opened the camera and said' : 'They said out loud'}: "${effectiveTranscript}"`;
+      userText = `The caller already chose the "${categoryHint}" category. ${hasFrame ? 'They just opened the camera and said' : 'They said out loud'}: "${effectiveTranscript}"`;
     } else if (isFirst) {
-      userText = `The homeowner ${hasFrame ? 'opened the video channel and is pointing the camera at the issue. They said' : 'opened the voice channel and said'}: "${effectiveTranscript}"`;
+      userText = `The caller ${hasFrame ? 'opened the video channel and is pointing the camera at the issue. They said' : 'opened the voice channel and said'}: "${effectiveTranscript}"`;
+    }
+
+    // Business surface: stitch the property / occupancy / inventory
+    // context ahead of the first turn so Claude's replies reference the
+    // real appliance brands / models + the current guest situation.
+    // Persists via `messages` history so Claude keeps access on later
+    // turns without us having to re-send it.
+    if (isFirst && businessContext) {
+      userText = `CONTEXT (from Homie Business — do NOT read this aloud, just use it to ground your replies):\n${businessContext}\n\n---\n\n${userText}`;
     }
 
     // Pack the turn as a content array — image block first (so Claude
@@ -384,7 +416,7 @@ router.post('/turn', async (req: Request, res: Response) => {
     const claudeRes = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 400,
-      system: hasFrame ? VIDEO_SYSTEM_PROMPT : VOICE_SYSTEM_PROMPT,
+      system: (hasFrame ? VIDEO_SYSTEM_PROMPT : VOICE_SYSTEM_PROMPT) + (businessContext ? BUSINESS_SYSTEM_SUFFIX : ''),
       messages,
     });
 

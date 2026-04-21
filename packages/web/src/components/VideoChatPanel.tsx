@@ -26,6 +26,13 @@ interface Props {
   /** Homeowner's first name (when known) — personalizes the greeting. */
   firstName?: string | null;
   /**
+   * Optional business context — multi-line string with property,
+   * occupancy, and known equipment. Passed to the backend on every
+   * turn so Claude grounds its replies in the real property state.
+   * Only used by the Homie Business surface.
+   */
+  businessContext?: string | null;
+  /**
    * Called after every successful turn. `category` is Homie's classifier
    * output (or null). Parent pushes both sides of the exchange into the
    * main chat scroll.
@@ -48,7 +55,7 @@ interface Props {
  * panel, so downstream plumbing (status card, diagnosis, Continue button)
  * works identically.
  */
-export default function VideoChatPanel({ active, onExit, category, firstName, onTurn, onReady }: Props) {
+export default function VideoChatPanel({ active, onExit, category, firstName, businessContext, onTurn, onReady }: Props) {
   const [phase, setPhase] = useState<Phase>('permission');
   const [error, setError] = useState<string | null>(null);
   const [lastTranscript, setLastTranscript] = useState<string>('');
@@ -360,6 +367,7 @@ export default function VideoChatPanel({ active, onExit, category, firstName, on
           frame_data_url: frameDataUrl,
           history: historyRef.current,
           category: category ?? null,
+          business_context: businessContext ?? null,
           is_first: isFirst,
         }),
       });
