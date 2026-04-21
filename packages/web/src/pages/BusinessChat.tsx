@@ -543,7 +543,7 @@ function StreamingMsg({ text }: { text: string }) {
 
 /* ── Main component ─────────────────────────────────────────────────────── */
 
-type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'anything_else' | 'budget' | 'timing' | 'generating' | 'summary' | 'outreach' | 'results';
+type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'anything_else' | 'timing' | 'generating' | 'summary' | 'outreach' | 'results';
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -579,7 +579,8 @@ export default function BusinessChat() {
   const [showFreeInput, setShowFreeInput] = useState(false);
   const [showQ1Input, setShowQ1Input] = useState(false);
   const [q1InputVal, setQ1InputVal] = useState('');
-  const [budget, setBudget] = useState('flexible');
+  // Budget collection was removed — we no longer submit homeowner budget to
+  // providers. The flow now jumps directly from "anything_else" to "timing".
   const [anythingElseText, setAnythingElseText] = useState('');
   const [anythingElseImage, setAnythingElseImage] = useState<string | null>(null);
   const anythingElseFileRef = useRef<HTMLInputElement>(null);
@@ -1042,7 +1043,7 @@ export default function BusinessChat() {
       });
     }
 
-    // If we've had enough exchanges, ask if there's anything else before budget
+    // If we've had enough exchanges, ask if there's anything else before timing
     if (exchangeCount >= 2) {
       setTimeout(() => {
         setMessages(prev => [...prev, { role: 'assistant', content: 'Got it. Is there anything else you\'d like to add before we dispatch? You can also upload a photo if it helps.' }]);
@@ -1055,14 +1056,6 @@ export default function BusinessChat() {
       setExchangeCount(exchangeCount + 1);
       setStep('extra');
     }, currentImage ? [currentImage] : undefined);
-  }
-
-  // Handle budget selection
-  function handleBudget(selected: string) {
-    setBudget(selected);
-    setMessages(prev => [...prev, { role: 'user', content: selected === 'flexible' ? 'No budget preference' : selected }]);
-    setMessages(prev => [...prev, { role: 'assistant', content: 'When do you need this done?' }]);
-    setStep('timing');
   }
 
   function handleTiming(selected: string) {
@@ -1405,7 +1398,6 @@ export default function BusinessChat() {
             setShowFreeInput(false);
             setShowQ1Input(false);
             setQ1InputVal('');
-            setBudget('flexible');
             setTiming('asap');
             setShowDatePicker(false);
             setSelectedDate('');
@@ -1691,8 +1683,8 @@ export default function BusinessChat() {
                     const content = anythingElseImage ? `\uD83D\uDCF7 ${anythingElseText.trim() || 'Photo attached'}` : anythingElseText.trim();
                     setMessages(prev => [...prev, { role: 'user', content }]);
                   }
-                  setMessages(prev => [...prev, { role: 'assistant', content: 'Great. Would you like to set a budget for this dispatch?' }]);
-                  setStep('budget');
+                  setMessages(prev => [...prev, { role: 'assistant', content: 'When do you need this done?' }]);
+                  setStep('timing');
                 }} style={{
                   flex: 1, padding: '12px 20px', borderRadius: 12, border: 'none', background: O, color: '#fff',
                   fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
@@ -1703,29 +1695,9 @@ export default function BusinessChat() {
             </div>
           )}
 
-          {/* Budget selection */}
-          {step === 'budget' && !streaming && (
-            <div style={{ marginLeft: 42, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
-              {['Under $100', '$100–$250', '$250–$500', '$500–$1,000', '$1,000+'].map(b => (
-                <button key={b} onClick={() => handleBudget(b)} style={{
-                  padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                  background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
-                >{b}</button>
-              ))}
-              <button onClick={() => handleBudget('flexible')} style={{
-                padding: '10px 14px', borderRadius: 12, cursor: 'pointer', border: '2px dashed rgba(0,0,0,0.12)',
-                background: 'var(--bp-card)', fontSize: 14, color: 'var(--bp-subtle)', fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
-                fontFamily: "'DM Sans', sans-serif",
-              }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = D; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#9B9490'; }}
-              >Skip</button>
-            </div>
-          )}
+          {/* Budget step removed — we no longer collect or send budget to
+              providers. The flow goes straight from "anything_else" to
+              "timing" after the user confirms. */}
 
           {/* Timing selection */}
           {step === 'timing' && !streaming && (
