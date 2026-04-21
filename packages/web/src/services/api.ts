@@ -378,7 +378,6 @@ export const jobService = {
     diagnosis: DiagnosisPayload;
     photos?: string[];
     timing: JobTiming;
-    budget: string;
     tier: JobTier;
     zipCode: string;
     workspaceId?: string;
@@ -391,7 +390,6 @@ export const jobService = {
         diagnosis: params.diagnosis,
         photo_urls: params.photos,
         timing: params.timing,
-        budget: params.budget,
         tier: params.tier,
         zip_code: params.zipCode,
         consent: true,

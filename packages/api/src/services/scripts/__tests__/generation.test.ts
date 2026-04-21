@@ -28,7 +28,6 @@ const BASE_PARAMS: GenerateScriptsParams = {
   severity: 'high',
   summary: 'Burst pipe under kitchen sink causing active water leak',
   recommendedActions: ['Shut off water main', 'Replace pipe section'],
-  budget: '$200–$500',
   zipCode: '90210',
   timing: 'asap',
 };
@@ -72,7 +71,7 @@ describe('generateScripts', () => {
 
     expect(mockCreate).toHaveBeenCalledTimes(1);
     const call = mockCreate.mock.calls[0][0];
-    expect(call.model).toBe('claude-opus-4-6');
+    expect(call.model).toBe('claude-sonnet-4-6');
     expect(call.tool_choice).toEqual({ type: 'tool', name: 'generate_scripts' });
     expect(call.tools).toHaveLength(1);
     expect(call.tools[0].name).toBe('generate_scripts');
@@ -90,23 +89,32 @@ describe('generateScripts', () => {
     expect(bundle.voice).toContain('Acme Plumbing');
     expect(bundle.web).toContain('Acme Plumbing');
 
-    // Category, zip, budget interpolated in all channels
+    // Category + zip interpolated in all channels (budget removed from the
+    // dispatch payload — the stripBudget post-pass drops any residual
+    // "Budget:" fragment from a stale cached template). Voice uses the
+    // SSML spoken-digits form so we check the spaced version there.
     expect(bundle.voice).toContain('plumbing');
-    expect(bundle.voice).toContain('90210');
-    expect(bundle.voice).toContain('$200–$500');
+    expect(bundle.voice).toContain('9 0 2 1 0');
+    expect(bundle.voice).not.toMatch(/\$\d+/);
+    expect(bundle.voice).not.toMatch(/budget/i);
 
     expect(bundle.sms).toContain('plumbing');
     expect(bundle.sms).toContain('90210');
-    expect(bundle.sms).toContain('$200–$500');
+    expect(bundle.sms).not.toMatch(/\$\d+/);
+    expect(bundle.sms).not.toMatch(/budget/i);
 
     expect(bundle.web).toContain('90210');
-    expect(bundle.web).toContain('$200–$500');
+    expect(bundle.web).not.toMatch(/\$\d+/);
+    expect(bundle.web).not.toMatch(/budget/i);
 
-    // Links contain provider and job IDs
-    expect(bundle.sms).toContain('prov-456');
-    expect(bundle.sms).toContain('job-123');
-    expect(bundle.web).toContain('prov-456');
-    expect(bundle.web).toContain('job-123');
+    // The generator leaves unknown placeholders like {{accept_link}} and
+    // {{job_link}} intact — those get resolved downstream by the outreach
+    // adapters (SMS / Email), not here. The bundle still carries the
+    // provider + job IDs out-of-band via bundle.provider_id / bundle.job_id.
+    expect(bundle.sms).toContain('{{accept_link}}');
+    expect(bundle.web).toContain('{{job_link}}');
+    expect(bundle.provider_id).toBe('prov-456');
+    expect(bundle.job_id).toBe('job-123');
   });
 
   it('includes generated_at timestamp', async () => {

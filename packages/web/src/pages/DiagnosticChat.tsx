@@ -820,7 +820,6 @@ export default function DiagnosticChat() {
       const res = await jobService.createJob({
         diagnosis: diagPayload,
         timing: state.timing,
-        budget,
         tier: state.tier,
         zipCode: state.zipCode,
         photos: uploadedPhotoUrlsRef.current.length > 0 ? uploadedPhotoUrlsRef.current : undefined,
@@ -1546,7 +1545,6 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
       const res = await jobService.createJob({
         diagnosis: diagPayload,
         timing: ({ 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' }[timing] ?? 'flexible') as 'asap' | 'this_week' | 'this_month' | 'flexible',
-        budget: budget === 'Under $100' ? 'under_100' : budget === '$100-250' ? '100_250' : budget === '$250-500' ? '250_500' : budget === '$500+' ? '500_plus' : 'flexible',
         tier: tier as 'standard' | 'priority' | 'emergency',
         zipCode: zip,
         photos: photoUrls && photoUrls.length > 0 ? photoUrls : undefined,

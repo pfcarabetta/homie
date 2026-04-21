@@ -117,8 +117,7 @@ async function sendOutreachToProvider(
 ): Promise<void> {
   logger.info(`[orchestration] Sending outreach to ${provider.name} (channels: ${provider.channels_available.join(',')}${skipQuote ? ', skip-quote' : ''})`);
 
-  // For skip-quote providers, omit budget from the outreach
-  const budgetText = skipQuote ? undefined : (job.budget ?? 'flexible');
+  // Budget is no longer collected from the homeowner or sent to providers.
 
   // Generate scripts for this provider (templates are cached per category:severity)
   let bundle;
@@ -153,16 +152,14 @@ async function sendOutreachToProvider(
         severity: diagnosis.severity,
         summary: diagnosis.summary,
         recommendedActions: diagnosis.recommendedActions,
-        budget: budgetText ?? 'flexible',
         zipCode: job.zipCode,
         timing: job.preferredTiming ?? 'flexible',
       });
     } catch (err) {
       logger.error({ err }, `[orchestration] Script generation failed for ${provider.name}`);
-      const budgetStr = skipQuote ? '' : ` Budget: ${job.budget ?? 'flexible'}.`;
       const zipSpoken = (job.zipCode ?? '').split('').join(' ');
-      const voiceFallback = `Hi ${provider.name}, this is Homie. We have a ${diagnosis.category.replace(/_/g, ' ')} job near ${zipSpoken}. ${diagnosis.summary}.${budgetStr} I'll give you a moment to respond.`;
-      const smsFallback = `Hi ${provider.name}! A homeowner near ${job.zipCode} needs ${diagnosis.category.replace(/_/g, ' ')} work. ${diagnosis.summary}.${budgetStr} Interested? Reply YES or NO`;
+      const voiceFallback = `Hi ${provider.name}, this is Homie. We have a ${diagnosis.category.replace(/_/g, ' ')} job near ${zipSpoken}. ${diagnosis.summary}. I'll give you a moment to respond.`;
+      const smsFallback = `Hi ${provider.name}! A homeowner near ${job.zipCode} needs ${diagnosis.category.replace(/_/g, ' ')} work. ${diagnosis.summary}. Interested? Reply YES or NO`;
       bundle = { job_id: job.id, provider_id: provider.id, voice: voiceFallback, sms: smsFallback, web: smsFallback, generated_at: new Date().toISOString() };
     }
   }

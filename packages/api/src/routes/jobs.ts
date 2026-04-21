@@ -94,11 +94,9 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(400).json(out);
     return;
   }
-  if (!body.budget) {
-    const out: ApiResponse<null> = { data: null, error: 'budget is required', meta: {} };
-    res.status(400).json(out);
-    return;
-  }
+  // Budget is no longer collected — left as null on the job record and
+  // omitted from provider-facing dispatch messages. The DB column stays
+  // for backwards-compatibility with historical jobs.
   if (!body.tier || !VALID_TIERS.includes(body.tier)) {
     const out: ApiResponse<null> = {
       data: null,
@@ -217,7 +215,7 @@ router.post('/', async (req: Request, res: Response) => {
         diagnosis: diagnosisData,
         photoUrls: body.photo_urls,
         preferredTiming: body.timing,
-        budget: body.budget,
+        budget: body.budget ?? null,
         tier: effectiveTier,
         status: 'open',
         zipCode: body.zip_code,

@@ -50,7 +50,8 @@ const GENERATE_SCRIPTS_TOOL: Anthropic.Tool = {
           'Greet the provider by name, briefly describe the job opportunity, and end by telling them they can respond right now on this call. ' +
           'Do NOT mention calling back a number or visiting a website — the system will automatically ask them to respond after the script plays. ' +
           'Keep it concise and conversational, like a real person calling. ' +
-          'Use {{provider_name}}, {{category}}, {{summary}}, {{budget}}, {{zip_code}}.',
+          'Do NOT mention or ask about the homeowner\'s budget — it is not collected. ' +
+          'Use {{provider_name}}, {{category}}, {{summary}}, {{zip_code}}.',
       },
       sms: {
         type: 'string',
@@ -58,13 +59,15 @@ const GENERATE_SCRIPTS_TOOL: Anthropic.Tool = {
           'SMS message (2-3 sentences, conversational and friendly). Start with "Hi {{provider_name}}! A homeowner near {{zip_code}} needs..." ' +
           'Briefly describe the job in plain language. End with something like "Would you be interested? Reply YES or NO." ' +
           'Tone: warm, professional, like a real person texting — not robotic or overly formal. ' +
-          'Do NOT include any URLs or links. Use {{provider_name}}, {{category}}, {{summary}}, {{zip_code}}, {{budget}}.',
+          'Do NOT include any URLs or links. Do NOT mention the homeowner\'s budget. ' +
+          'Use {{provider_name}}, {{category}}, {{summary}}, {{zip_code}}.',
       },
       web: {
         type: 'string',
         description:
           'Web/email message body (2–4 sentences). Professional tone. Summarize the job for the provider. ' +
-          'Do NOT include any URLs or links — they are added automatically. Use {{provider_name}}, {{category}}, {{summary}}, {{budget}}, {{zip_code}}.',
+          'Do NOT include any URLs or links — they are added automatically. Do NOT mention the homeowner\'s budget. ' +
+          'Use {{provider_name}}, {{category}}, {{summary}}, {{zip_code}}.',
       },
     },
     required: ['voice', 'sms', 'web'],
@@ -99,7 +102,7 @@ Recommended actions: ${recommendedActions.join('; ')}
 Create templates for all three channels using the generate_scripts tool.
 Use {{placeholder}} syntax for dynamic values — do NOT hard-code specific names, dollar amounts, or zip codes.
 
-Available placeholders: {{provider_name}}, {{category}}, {{severity}}, {{summary}}, {{budget}}, {{zip_code}}, {{timing}}
+Available placeholders: {{provider_name}}, {{category}}, {{severity}}, {{summary}}, {{zip_code}}, {{timing}}
 
 IMPORTANT rules:
 - The SMS template MUST include the timing requirement using {{timing}} — e.g. "Timing: {{timing}}" or "Needed: {{timing}}". This tells the provider when the homeowner needs the work done.
@@ -149,7 +152,6 @@ export async function generateScripts(params: GenerateScriptsParams): Promise<Sc
     severity,
     summary,
     recommendedActions,
-    budget,
     zipCode,
     timing,
   } = params;
@@ -172,7 +174,12 @@ export async function generateScripts(params: GenerateScriptsParams): Promise<Sc
     category: category.replace(/_/g, ' '),
     severity,
     summary,
-    budget,
+    // budget is no longer collected — interpolate empty string for any
+    // legacy cached template that still references {{budget}}. The
+    // post-interpolation cleanup below then strips residual "Budget:"
+    // fragments so stale templates don't produce "Budget:" with nothing
+    // after it.
+    budget: '',
     zip_code: zipCode,
     timing,
   };
@@ -182,12 +189,23 @@ export async function generateScripts(params: GenerateScriptsParams): Promise<Sc
     zip_code: zipSpoken,
   };
 
+  // Strip any residual "Budget ..." fragments that legacy cached templates
+  // may still contain after an empty {{budget}} interpolation. Matches
+  // optional leading whitespace + separator, the word "budget" in any
+  // casing, whatever clause follows (phrasing like "is", ":", "range:"),
+  // and the trailing sentence-terminator so stale "Budget is ." doesn't
+  // leave behind orphaned punctuation.
+  const stripBudget = (s: string) => s
+    .replace(/\s*(?:[·\-–—|]\s*)?[Bb]udget[^.!?]*(?:[.!?]|$)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
   return {
     job_id: jobId,
     provider_id: providerId,
-    voice: interpolate(template.voice, voiceVars),
-    sms: interpolate(template.sms, vars),
-    web: interpolate(template.web, vars),
+    voice: stripBudget(interpolate(template.voice, voiceVars)),
+    sms: stripBudget(interpolate(template.sms, vars)),
+    web: stripBudget(interpolate(template.web, vars)),
     generated_at: new Date().toISOString(),
   };
 }

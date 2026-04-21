@@ -1222,7 +1222,6 @@ export default function BusinessChat() {
       const res = await jobService.createJob({
         diagnosis,
         timing: 'asap',
-        budget: budget,
         tier: 'priority',
         zipCode,
         workspaceId: selectedWorkspace || undefined,

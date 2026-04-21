@@ -21,7 +21,6 @@ export interface GenerateScriptsParams {
   severity: 'low' | 'medium' | 'high' | 'emergency';
   summary: string;
   recommendedActions: string[];
-  budget: string;
   zipCode: string;
   timing: string;
 }

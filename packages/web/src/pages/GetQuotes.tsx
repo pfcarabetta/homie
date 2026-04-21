@@ -1015,7 +1015,8 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
   const [tier, setTier] = useState<string | null>(null);
   const [zip, setZip] = useState('');
   const [timing, setTiming] = useState<string | null>(null);
-  const [budget, setBudget] = useState<string | null>(null);
+  // Budget removed — we no longer collect or submit homeowner budget to
+  // providers. Keeping the variable name out of the rest of the modal.
   const [jobId, setJobId] = useState<string | null>(initialJobId ?? null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(initialEstimate);
   const [loading, setLoading] = useState(false);
@@ -1189,7 +1190,6 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
       const res = await jobService.createJob({
         diagnosis: diagPayload,
         timing: ({ 'ASAP': 'asap', 'This week': 'this_week', 'This month': 'this_month', 'Flexible': 'flexible' }[timing] ?? 'flexible') as 'asap' | 'this_week' | 'this_month' | 'flexible',
-        budget: budget === 'Under $100' ? 'under_100' : budget === '$100-250' ? '100_250' : budget === '$250-500' ? '250_500' : budget === '$500+' ? '500_plus' : 'flexible',
         tier: tier as 'standard' | 'priority' | 'emergency',
         zipCode: zip,
       });
@@ -1247,7 +1247,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
     status: outreachDone ? 'completed' : 'dispatching',
   };
   const logEntries: LogEntry[] = log.map(e => ({ msg: e.msg, type: e.type as LogEntry['type'] }));
-  const isPrefsValid = /^\d{5}$/.test(zip) && timing !== null && budget !== null;
+  const isPrefsValid = /^\d{5}$/.test(zip) && timing !== null;
 
   return (
     <div style={{
@@ -1401,21 +1401,6 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                           color: timing === t ? O : `${D}99`,
                           fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
                         }}>{t}</button>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Budget */}
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: D, display: 'block', marginBottom: 6 }}>Budget range</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                      {['Under $100', '$100-250', '$250-500', '$500+', 'Flexible'].map(b => (
-                        <button key={b} onClick={() => setBudget(b)} style={{
-                          padding: '10px 8px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                          border: budget === b ? `1.5px solid ${O}` : '1.5px solid rgba(0,0,0,0.08)',
-                          background: budget === b ? `${O}0A` : 'white',
-                          color: budget === b ? O : `${D}99`,
-                          fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s',
-                        }}>{b}</button>
                       ))}
                     </div>
                   </div>
