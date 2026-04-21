@@ -1,4 +1,6 @@
 import { useState, type CSSProperties } from 'react';
+import { MiniCalendar } from './business/constants';
+import type { Reservation } from '@/services/api';
 
 // ── Design tokens (mirrors /quote) ──────────────────────────────────────────
 const O = '#E8632B';
@@ -38,7 +40,51 @@ interface Scenario {
     /** Human-readable hint shown beneath the status block. */
     advice: string;
   };
+  /** Full 60-day upcoming reservation list (for the dispatch-window calendar). */
+  calendar: Reservation[];
 }
+
+// ── Sample reservation fixtures ──────────────────────────────────────────────
+// Dates are intentionally anchored to the current month so the MiniCalendar
+// always renders with visible bars regardless of when the preview is viewed.
+function isoOffset(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function mockReservation(
+  idx: number,
+  guestName: string,
+  daysFromNow: number,
+  nights: number,
+  source: 'airbnb' | 'vrbo' | 'manual' = 'airbnb',
+): Reservation {
+  return {
+    id: `res-${idx}`,
+    propertyId: 'prop-mock',
+    guestName,
+    guestEmail: null,
+    guestPhone: null,
+    checkIn: isoOffset(daysFromNow),
+    checkOut: isoOffset(daysFromNow + nights),
+    status: daysFromNow <= 0 && daysFromNow + nights >= 0 ? 'checked_in' : 'confirmed',
+    guests: 2 + (idx % 3),
+    source,
+  };
+}
+
+const OCCUPIED_CALENDAR: Reservation[] = [
+  mockReservation(0, 'Jane D.', -2, 6, 'airbnb'),   // current guest
+  mockReservation(1, 'M. Rivera', 6, 7, 'airbnb'),  // next guest
+  mockReservation(2, 'T. Nguyen', 18, 4, 'vrbo'),   // later
+];
+
+const VACANT_CALENDAR: Reservation[] = [
+  mockReservation(0, 'M. Rivera', 3, 7, 'airbnb'),
+  mockReservation(1, 'T. Nguyen', 16, 4, 'vrbo'),
+  mockReservation(2, 'A. Patel', 28, 5, 'airbnb'),
+];
 
 const SCENARIOS: Record<ScenarioId, Scenario> = {
   occupied: {
@@ -53,6 +99,7 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
       nights: 6,
       advice: 'Guest is on-property. Consider scheduling after Apr 24 checkout.',
     },
+    calendar: OCCUPIED_CALENDAR,
   },
   vacant: {
     id: 'vacant',
@@ -66,12 +113,14 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
       nights: 7,
       advice: 'Clear window today through Apr 24. Safe to dispatch now.',
     },
+    calendar: VACANT_CALENDAR,
   },
   unknown: {
     id: 'unknown',
     label: 'No PMS connection',
     property: { name: 'Mountain Cabin', address: '88 Juniper Way · Lake Arrowhead, CA 92352' },
     reservation: null,
+    calendar: [],
   },
 };
 
@@ -129,7 +178,7 @@ export default function BusinessChatPreview() {
           {/* LEFT — intake chat column */}
           <div style={{ minWidth: 0 }}>
             {/* Status pill + property microstate */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
               <StatusPill online />
               {s.reservation?.status === 'checked_in' && (
                 <OccupancyPill color={RED} dot label={`Occupied · ${s.reservation.guestName} until ${s.reservation.endDate}`} />
@@ -141,6 +190,11 @@ export default function BusinessChatPreview() {
                 <OccupancyPill color={DIM} label="PMS not connected · occupancy unknown" />
               )}
             </div>
+
+            {/* Expandable dispatch calendar — right under the occupancy pill.
+                Helps the PM spot an open window before even finishing the
+                chat. Hidden when PMS isn't connected (calendar array empty). */}
+            {s.calendar.length > 0 && <DispatchCalendarExpandable calendar={s.calendar} />}
 
             <div style={{ height: 14 }} />
 
@@ -170,8 +224,8 @@ export default function BusinessChatPreview() {
           {/* RIGHT — live split panel */}
           <div className="bcp-right-panel" style={{ position: 'sticky', top: 112, minWidth: 0 }}>
             <PropertyCard scenario={s} />
-            <PropertyMemoryCard state={memoryState} />
             <HomieListeningCard />
+            <PropertyIQCard state={memoryState} />
             <ProsNearbyBadge />
             <AssuranceCard />
           </div>
@@ -314,6 +368,63 @@ function OccupancyPill({ color, label, dot }: { color: string; label: string; do
         animation: dot ? 'pulse 1.8s infinite' : 'none',
       }} />
       {label}
+    </div>
+  );
+}
+
+// ─── Dispatch calendar (expandable, left column) ────────────────────────────
+//
+// Collapsed by default so it doesn't push the chat below the fold; expands
+// inline on click. Re-uses the MiniCalendar component the Business portal's
+// Properties tab already renders, so the visual language matches.
+
+function DispatchCalendarExpandable({ calendar }: { calendar: Reservation[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          background: open ? `${O}0a` : '#fff',
+          border: `1px solid ${open ? O + '33' : BORDER}`,
+          borderRadius: 12,
+          padding: '8px 12px',
+          display: 'flex', alignItems: 'center', gap: 10,
+          fontSize: 12.5, fontWeight: 700, color: D,
+          cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+          width: '100%', textAlign: 'left',
+          transition: 'all .15s',
+        }}
+      >
+        <span style={{ fontSize: 15 }}>📅</span>
+        <span style={{ flex: 1 }}>
+          Best dispatch windows
+          <span style={{ color: DIM, fontWeight: 500, marginLeft: 6 }}>· {calendar.length} upcoming</span>
+        </span>
+        <span style={{
+          fontSize: 10, color: open ? O : DIM, fontFamily: "'DM Mono',monospace",
+          letterSpacing: .6, textTransform: 'uppercase',
+          transform: open ? 'rotate(180deg)' : 'rotate(0)',
+          transition: 'transform .2s',
+        }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          marginTop: 8, padding: 14, borderRadius: 12,
+          background: '#fff', border: `1px solid ${BORDER}`,
+          animation: 'fadeSlide 0.2s ease',
+          boxShadow: '0 6px 20px -10px rgba(0,0,0,.08)',
+        }}>
+          <MiniCalendar reservations={calendar} />
+          <div style={{
+            marginTop: 10, padding: '8px 10px', borderRadius: 8,
+            background: `${G}0f`, border: `1px solid ${G}22`,
+            fontSize: 11, color: D, lineHeight: 1.5,
+          }}>
+            <strong style={{ color: G }}>Open days</strong> are safe dispatch windows — unless it's an urgent guest request.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -489,6 +600,7 @@ function PropertyCard({ scenario: s }: { scenario: Scenario }) {
   const isOccupied = r?.status === 'checked_in';
   const isUpcoming = r?.status === 'upcoming';
   const accent = isOccupied ? RED : isUpcoming ? G : DIM;
+  const [calOpen, setCalOpen] = useState(false);
 
   return (
     <div style={{
@@ -548,6 +660,43 @@ function PropertyCard({ scenario: s }: { scenario: Scenario }) {
             }}>
               {isOccupied ? '⚠ ' : '✓ '}{r.advice}
             </div>
+
+            {/* Expandable dispatch calendar — same MiniCalendar used on the
+                Business > Properties tab, embedded here so PMs can spot
+                open windows without leaving chat. */}
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px dashed ${accent}33` }}>
+              <button
+                onClick={() => setCalOpen(o => !o)}
+                style={{
+                  background: 'transparent', border: 'none', padding: 0,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  fontSize: 12, fontWeight: 700, color: D,
+                  cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                  width: '100%', textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: 14 }}>📅</span>
+                <span style={{ flex: 1 }}>Best dispatch windows · next 60 days</span>
+                <span style={{
+                  fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace",
+                  letterSpacing: .6, textTransform: 'uppercase',
+                  transform: calOpen ? 'rotate(180deg)' : 'rotate(0)',
+                  transition: 'transform .2s',
+                }}>▾</span>
+              </button>
+              {calOpen && (
+                <div style={{ marginTop: 12, animation: 'fadeSlide 0.2s ease' }}>
+                  <MiniCalendar reservations={s.calendar} />
+                  <div style={{
+                    marginTop: 10, padding: '8px 10px', borderRadius: 8,
+                    background: `${G}0f`, border: `1px solid ${G}22`,
+                    fontSize: 11, color: D, lineHeight: 1.5,
+                  }}>
+                    <strong style={{ color: G }}>Open days</strong> are safe dispatch windows — unless it's an urgent guest request.
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div style={{
@@ -576,7 +725,7 @@ function PropertyCard({ scenario: s }: { scenario: Scenario }) {
   );
 }
 
-// ─── RIGHT PANEL · Property Memory card ─────────────────────────────────────
+// ─── RIGHT PANEL · Property IQ card ─────────────────────────────────────────
 //
 // Pulls from what we already scan into property_inventory_items. Three
 // states modelled below: HVAC-filtered (category known, one item pinned
@@ -635,13 +784,13 @@ const MOCK_INVENTORY: InventoryItem[] = [
   },
 ];
 
-function PropertyMemoryCard({ state }: { state: MemoryState }) {
-  if (state === 'empty') return <MemoryEmptyState />;
-  if (state === 'hvac') return <MemoryFiltered category="hvac" items={MOCK_INVENTORY.filter(i => i.category === 'hvac')} />;
-  return <MemoryOverview items={MOCK_INVENTORY} />;
+function PropertyIQCard({ state }: { state: MemoryState }) {
+  if (state === 'empty') return <IQEmptyState />;
+  if (state === 'hvac') return <IQFiltered category="hvac" items={MOCK_INVENTORY.filter(i => i.category === 'hvac')} />;
+  return <IQOverview items={MOCK_INVENTORY} />;
 }
 
-function MemoryFiltered({ category, items }: { category: InventoryItem['category']; items: InventoryItem[] }) {
+function IQFiltered({ category, items }: { category: InventoryItem['category']; items: InventoryItem[] }) {
   return (
     <div style={{
       background: '#fff', borderRadius: 20, border: `1px solid ${BORDER}`,
@@ -659,7 +808,7 @@ function MemoryFiltered({ category, items }: { category: InventoryItem['category
         }}>🧠</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, color: D, lineHeight: 1.2 }}>
-            Property memory · {category.toUpperCase()}
+            Property IQ · {category.toUpperCase()}
           </div>
           <div style={{ fontSize: 11, color: DIM, marginTop: 2, fontFamily: "'DM Mono',monospace", letterSpacing: .6, textTransform: 'uppercase' }}>
             From last scan · 14d ago
@@ -758,7 +907,7 @@ function InventoryRow({ item }: { item: InventoryItem }) {
   );
 }
 
-function MemoryOverview({ items }: { items: InventoryItem[] }) {
+function IQOverview({ items }: { items: InventoryItem[] }) {
   const counts = items.reduce<Record<string, number>>((acc, it) => {
     acc[it.category] = (acc[it.category] || 0) + 1;
     return acc;
@@ -785,7 +934,7 @@ function MemoryOverview({ items }: { items: InventoryItem[] }) {
         }}>🧠</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, color: D, lineHeight: 1.2 }}>
-            Property memory
+            Property IQ
           </div>
           <div style={{ fontSize: 11, color: DIM, marginTop: 2, fontFamily: "'DM Mono',monospace", letterSpacing: .6, textTransform: 'uppercase' }}>
             {items.length} items on file · scanned 14d ago
@@ -821,7 +970,7 @@ function MemoryOverview({ items }: { items: InventoryItem[] }) {
   );
 }
 
-function MemoryEmptyState() {
+function IQEmptyState() {
   return (
     <div style={{
       background: '#fff', borderRadius: 20, border: `1px dashed ${BORDER}`,
@@ -837,7 +986,7 @@ function MemoryEmptyState() {
         }}>🧠</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, color: D, lineHeight: 1.2 }}>
-            Property memory
+            Property IQ
           </div>
           <div style={{ fontSize: 11, color: DIM, marginTop: 2, fontFamily: "'DM Mono',monospace", letterSpacing: .6, textTransform: 'uppercase' }}>
             Nothing on file yet
