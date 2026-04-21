@@ -1548,15 +1548,24 @@ export default function BusinessChat() {
     });
   }, []);
 
-  const handleVoiceReady = useCallback((payload: { transcript: string; history: { role: 'user' | 'assistant'; content: string }[] }) => {
+  /** Voice/video <ready/> now fires only when the PM has explicitly said
+   *  "dispatch now" during the call (see the DISPATCH-OR-CONTINUE fork
+   *  in BUSINESS_SYSTEM_SUFFIX). That means by the time this runs, the
+   *  PM has committed — we skip the "anything else" + "when do you need
+   *  this done?" chat steps entirely and jump straight to the summary
+   *  screen (AI diagnosis + cost estimate + dispatch button), generating
+   *  a committed final diagnosis from the voice transcript. Default
+   *  urgency to "Today" since the PM chose to dispatch immediately. */
+  // Not wrapped in useCallback — generateFinalDiagnosis is recreated on
+  // every render (reads live state via closure), so memoizing this
+  // handler would freeze it against the first render. The voice/video
+  // panels re-render cheaply when this prop identity changes, and the
+  // function only fires once per call anyway.
+  const handleVoiceReady = (payload: { transcript: string; history: { role: 'user' | 'assistant'; content: string }[] }) => {
     const trimmed = payload.transcript.trim();
     setVoiceOpen(false);
     setVideoChatOpen(false);
     if (!trimmed) return;
-    // Classify from the full voice/video transcript + every turn of
-    // assistant/user history so things like "my dishwasher is leaking"
-    // land on the Appliance category rather than Handyman. Fall back
-    // to Handyman only when nothing keyword-matches.
     const histText = payload.history.map(h => h.content).join(' \n ');
     const inferred = inferCategoryFromText(`${trimmed}\n${histText}`);
     const picked = (inferred && B2B_CATEGORIES.find(c => c.id === inferred))
@@ -1565,13 +1574,18 @@ export default function BusinessChat() {
     setCategory(picked);
     setActiveGroup(null);
     setQ1Answer(trimmed);
-    // We've already echoed per-turn; land on the "anything_else" step so
-    // the PM can add a photo / extras then continue to timing + dispatch.
+    // PM said "dispatch now" during the call — capture an implicit
+    // urgency so the dispatch payload has one. The PM can still override
+    // from the summary screen if needed.
+    setTiming('Today');
+    // Skip the chat — run the committed-output stream straight into the
+    // summary step. Pass the freshly picked category through since
+    // setCategory won't have committed yet when generateFinalDiagnosis
+    // reads it.
     setTimeout(() => {
-      setMessages(m => [...m, { role: 'assistant', content: "Got it — anything else to add before we dispatch? Attach a photo if it helps." }]);
-      setStep('anything_else');
-    }, 400);
-  }, []);
+      generateFinalDiagnosis(picked);
+    }, 200);
+  };
 
   // Fast-path: PM types a free-form description on the category step and
   // bypasses the tile → sub → q1 pipeline. Infers category from the
@@ -1723,17 +1737,14 @@ export default function BusinessChat() {
     }, currentImage ? [currentImage] : undefined);
   }
 
-  function handleTiming(selected: string) {
-    setTiming(selected);
-    setMessages(prev => [...prev, { role: 'user', content: selected }]);
-
-    // Generate the scope after timing is selected. The prompt is written
-    // to force a committed final output — no more questions, no hedging,
-    // no "I have a couple quick questions" fallback — because whatever
-    // Claude returns here is persisted verbatim into the dispatch summary
-    // the provider reads. If the AI doesn't have enough info, it should
-    // make its best diagnosis and flag the gap in the JSON, not ask.
-    const promptText = category?.group === 'service'
+  /** Runs the final-diagnosis stream + lands on 'summary'. Extracted from
+   *  handleTiming so both the text-chat timing path AND the voice/video
+   *  dispatch path (handleVoiceReady) can share the same committed-output
+   *  generation logic. Caller is expected to have already set any needed
+   *  messages/timing state before invoking this. */
+  function generateFinalDiagnosis(overrideCategory?: CatDef) {
+    const cat = overrideCategory ?? category;
+    const promptText = cat?.group === 'service'
       ? 'I am ready to dispatch. Generate the final scope summary NOW using whatever you already know. Do NOT ask any more clarifying questions — this is the final message before the job is sent to the provider. Output a committed scope description (plain text, 2–4 sentences) followed by the <diagnosis> JSON block. If any detail is missing, fill it with your best estimate and note "pending confirmation" in the scope — do not ask for it.'
       : 'I am ready to dispatch. Generate your final diagnosis NOW using whatever you already know. Do NOT ask any more clarifying questions — this is the final message before the job is sent to the pro. Output a committed diagnosis (plain text, 2–4 sentences) followed by the <diagnosis> JSON block. If any detail is missing, fill it with your best estimate and note "pending confirmation" in the diagnosis — do not ask for it.';
 
@@ -1744,7 +1755,7 @@ export default function BusinessChat() {
     let rawFinal = '';
     let insideXml = false;
     let xmlBuf = '';
-    const mode = category?.group === 'service' ? 'service' : 'repair';
+    const mode = cat?.group === 'service' ? 'service' : 'repair';
 
     abortRef.current = businessChatService.sendMessage(
       promptText,
@@ -1778,21 +1789,15 @@ export default function BusinessChat() {
           if (xmlBuf && !insideXml) visible += xmlBuf;
           setStreaming(false);
           setStreamText('');
-          // Absorb any <equipment> blocks the AI emitted as part of the
-          // final scope/diagnosis response into local state.
           ingestEquipmentFromRaw(rawFinal);
-          // Safety net: scrub any clarifying questions that leaked into
-          // the final summary before it's persisted as the dispatch text.
-          // See stripQuestionsFromSummary for the heuristics.
           setAiDiagnosis(stripQuestionsFromSummary(visible.trim()));
           setStep('summary');
 
           // Fetch cost estimate
           const zip = selectedProperty?.zipCode;
-          if (zip && category) {
+          if (zip && cat) {
             const details = selectedProperty?.details as PropertyDetails | null;
-            const catId = category.id;
-            // Extract brand info from property details based on category
+            const catId = cat.id;
             let brand: string | undefined;
             let systemAgeYears: number | undefined;
             if (details?.hvac && ['hvac', 'chimney', 'insulation'].includes(catId)) {
@@ -1824,7 +1829,7 @@ export default function BusinessChat() {
         onError: () => {
           setStreaming(false);
           setStreamText('');
-          setAiDiagnosis(`${category?.label}: ${q1Answer}`);
+          setAiDiagnosis(`${cat?.label}: ${q1Answer}`);
           setStep('summary');
         },
       },
@@ -1833,6 +1838,12 @@ export default function BusinessChat() {
         propertyContext: getPropertyContext(),
       },
     );
+  }
+
+  function handleTiming(selected: string) {
+    setTiming(selected);
+    setMessages(prev => [...prev, { role: 'user', content: selected }]);
+    generateFinalDiagnosis();
   }
 
   // Handle dispatch (no tier selection — B2B subscription covers it)
