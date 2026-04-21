@@ -58,6 +58,79 @@ function stripQuestionsFromSummary(text: string): string {
   return cleaned || text.trim();
 }
 
+/** Ordered keyword table for inferring a B2B category id from a free-
+ *  form transcript (voice/video chat, direct-input description, etc).
+ *  More specific categories come first so "dishwasher drain" lands on
+ *  appliance rather than plumbing. Every regex is case-insensitive and
+ *  anchored on word boundaries. Returns null when nothing matches so the
+ *  caller can fall back to the Handyman catch-all on its own terms. */
+const VOICE_CATEGORY_HINTS: Array<{ rx: RegExp; catId: string }> = [
+  // Appliances — specific brand-adjacent vocabulary wins first so an
+  // "appliance issue" doesn't get swept into plumbing via "drain".
+  { rx: /\b(dishwasher|dishwash)\b/i, catId: 'appliance' },
+  { rx: /\b(refrigerator|refrig|fridge|freezer|ice[\s-]?maker)\b/i, catId: 'appliance' },
+  { rx: /\b(washing[\s-]?machine|clothes[\s-]?washer)\b/i, catId: 'appliance' },
+  { rx: /\b(clothes[\s-]?dryer|laundry[\s-]?dryer|dryer)\b/i, catId: 'appliance' },
+  { rx: /\b(oven|range|stove|cooktop|burner)\b/i, catId: 'appliance' },
+  { rx: /\bmicrowave\b/i, catId: 'appliance' },
+  { rx: /\b(garbage[\s-]?disposal|disposal)\b/i, catId: 'appliance' },
+  { rx: /\bappliance\b/i, catId: 'appliance' },
+  // Water heater sits above generic plumbing so "no hot water" lands here.
+  { rx: /\b(water[\s-]?heater|tankless|hot[\s-]?water[\s-]?tank)\b/i, catId: 'water_heater' },
+  // HVAC before electrical so "ac" / "thermostat" don't get miscategorized.
+  { rx: /\b(hvac|a\/?c|ac[\s-]?unit|air[\s-]?cond|furnace|heat[\s-]?pump|thermostat|boiler|mini[\s-]?split)\b/i, catId: 'hvac' },
+  // Garage door before electrical so "opener" mentions land here.
+  { rx: /\b(garage[\s-]?door|garage[\s-]?opener|door[\s-]?opener)\b/i, catId: 'garage_door' },
+  // Roofing / gutter / siding — specific exterior categories.
+  { rx: /\b(roof|shingle|flashing|chimney[\s-]?cap)\b/i, catId: 'roofing' },
+  { rx: /\b(gutter|downspout)\b/i, catId: 'gutter' },
+  { rx: /\bsiding\b/i, catId: 'siding' },
+  { rx: /\bchimney\b/i, catId: 'chimney' },
+  // Plumbing family — septic/sewer backup is its own bucket, then
+  // generic plumbing covers leak/drain/pipe/toilet/faucet/shower.
+  { rx: /\b(septic|sewer[\s-]?backup|sewage)\b/i, catId: 'septic_sewer' },
+  { rx: /\b(toilet|faucet|sink|shower|bathtub|tub|drain|clog|pipe|plumb|leak)\b/i, catId: 'plumbing' },
+  // Electrical
+  { rx: /\b(outlet|receptacle|breaker|panel|wiring|gfci|circuit|electric(al)?|socket|fuse)\b/i, catId: 'electrical' },
+  // Install / specialty repairs
+  { rx: /\bgenerator\b/i, catId: 'generator_install' },
+  { rx: /\b(ev[\s-]?charger|level[\s-]?2[\s-]?charger)\b/i, catId: 'ev_charger_install' },
+  { rx: /\b(solar|photovoltaic|inverter)\b/i, catId: 'solar' },
+  { rx: /\binsulation\b/i, catId: 'insulation' },
+  { rx: /\b(sprinkler|irrigation)\b/i, catId: 'sprinkler_irrigation' },
+  { rx: /\b(window|sliding[\s-]?door|storm[\s-]?door|patio[\s-]?door)\b/i, catId: 'window_door_install' },
+  { rx: /\b(drywall|sheetrock)\b/i, catId: 'drywall' },
+  { rx: /\b(foundation|settling|basement[\s-]?water)\b/i, catId: 'foundation_waterproofing' },
+  { rx: /\b(concrete|driveway|sidewalk)\b/i, catId: 'concrete' },
+  { rx: /\b(brick|masonry|stone[\s-]?veneer|retaining[\s-]?wall)\b/i, catId: 'masonry' },
+  { rx: /\b(tv[\s-]?mount|projector[\s-]?mount|soundbar[\s-]?install)\b/i, catId: 'tv_mounting' },
+  { rx: /\b(alarm|camera|doorbell|security[\s-]?system|smoke[\s-]?detector|co[\s-]?detector|carbon[\s-]?monoxide)\b/i, catId: 'security_systems' },
+  // Service categories
+  { rx: /\b(turnover[\s-]?clean|deep[\s-]?clean|housekeeping)\b/i, catId: 'cleaning' },
+  { rx: /\b(carpet[\s-]?clean)\b/i, catId: 'carpet_cleaning' },
+  { rx: /\bpool\b/i, catId: 'pool' },
+  { rx: /\b(hot[\s-]?tub|spa|jacuzzi)\b/i, catId: 'hot_tub' },
+  { rx: /\brestock/i, catId: 'restocking' },
+  { rx: /\b(pest|termite|roach|rodent|mice|rats?|bed[\s-]?bug)\b/i, catId: 'pest_control' },
+  { rx: /\b(tree[\s-]?trim|tree[\s-]?removal|stump[\s-]?grind)\b/i, catId: 'tree_trimming' },
+  { rx: /\b(landscap|lawn[\s-]?mow|garden|hedge)\b/i, catId: 'landscaping' },
+  { rx: /\b(fenc|gate[\s-]?install|gate[\s-]?repair)\b/i, catId: 'fencing' },
+  { rx: /\b(deck|patio|pergola)\b/i, catId: 'deck_patio' },
+  { rx: /\bpaint(ing)?\b/i, catId: 'painting' },
+  { rx: /\b(flooring|hardwood[\s-]?floor|refinish)\b/i, catId: 'flooring' },
+  { rx: /\b(tile|regrout|backsplash)\b/i, catId: 'tile' },
+];
+
+/** Best-effort category inference for a free-form transcript. Returns
+ *  the first matching category id, or null if no keyword fires. */
+function inferCategoryFromText(text: string): string | null {
+  if (!text) return null;
+  for (const { rx, catId } of VOICE_CATEGORY_HINTS) {
+    if (rx.test(text)) return catId;
+  }
+  return null;
+}
+
 function mapUserTimingToDispatch(raw: string): DispatchUrgency {
   const t = (raw || '').trim().toLowerCase();
   if (!t || t === 'flexible') return { jobTiming: 'flexible', severity: 'low' };
@@ -1316,9 +1389,16 @@ export default function BusinessChat() {
     setVoiceOpen(false);
     setVideoChatOpen(false);
     if (!trimmed) return;
-    const fallback = B2B_CATEGORIES.find(c => c.id === 'general');
-    if (!fallback) return;
-    setCategory(fallback);
+    // Classify from the full voice/video transcript + every turn of
+    // assistant/user history so things like "my dishwasher is leaking"
+    // land on the Appliance category rather than Handyman. Fall back
+    // to Handyman only when nothing keyword-matches.
+    const histText = payload.history.map(h => h.content).join(' \n ');
+    const inferred = inferCategoryFromText(`${trimmed}\n${histText}`);
+    const picked = (inferred && B2B_CATEGORIES.find(c => c.id === inferred))
+      || B2B_CATEGORIES.find(c => c.id === 'general');
+    if (!picked) return;
+    setCategory(picked);
     setActiveGroup(null);
     setQ1Answer(trimmed);
     // We've already echoed per-turn; land on the "anything_else" step so
@@ -1330,16 +1410,18 @@ export default function BusinessChat() {
   }, []);
 
   // Fast-path: PM types a free-form description on the category step and
-  // bypasses the tile → sub → q1 pipeline. Defaults the category to
-  // Handyman (the AI re-classifies from full context during the summary
-  // step) and jumps straight into the chat so Claude can ask targeted
-  // follow-ups against whatever the PM said.
+  // bypasses the tile → sub → q1 pipeline. Infers category from the
+  // description (so "dishwasher leaking" → Appliance, not Handyman);
+  // falls back to Handyman only when nothing keyword-matches. Then jumps
+  // straight into the chat so Claude can ask targeted follow-ups.
   function handleDirectDescription(text: string) {
     const trimmed = text.trim();
     if (trimmed.length < 10) return;
-    const fallback = B2B_CATEGORIES.find(c => c.id === 'general');
-    if (!fallback) return;
-    setCategory(fallback);
+    const inferred = inferCategoryFromText(trimmed);
+    const picked = (inferred && B2B_CATEGORIES.find(c => c.id === inferred))
+      || B2B_CATEGORIES.find(c => c.id === 'general');
+    if (!picked) return;
+    setCategory(picked);
     setActiveGroup(null);
     setQ1Answer(trimmed);
     setMessages([{ role: 'user', content: trimmed }]);
