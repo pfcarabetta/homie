@@ -691,6 +691,11 @@ export default function BusinessChat() {
   /** Cloudinary URLs of photos uploaded during this chat session */
   const uploadedPhotoUrlsRef = useRef<string[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  /** Sentinel placed immediately after the messages list (and above the
+   *  suggestion chips + input). Auto-scrolling to this instead of the
+   *  very end of the chat column keeps the latest AI response pinned
+   *  near the viewport bottom rather than pushing it above the fold. */
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sessionIdRef = useRef(`b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
@@ -747,9 +752,14 @@ export default function BusinessChat() {
     });
   }, [selectedWorkspace]);
 
-  // Auto-scroll
+  // Auto-scroll: pin the tail of the messages list (not the very end of
+  // the chat column) to the viewport bottom so the latest AI reply stays
+  // visible after every submit instead of getting pushed above the fold
+  // by suggestion chips + input controls rendered below it.
   useEffect(() => {
-    if (messages.length > 0) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length === 0) return;
+    const target = messagesEndRef.current ?? chatEndRef.current;
+    target?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, streamText, step]);
 
   // Build property context string with relevant equipment details
@@ -1551,16 +1561,18 @@ export default function BusinessChat() {
         ) : null;
       })()}
 
-      {/* Header */}
-      <nav style={{
+      {/* Header — desktop lays out property + actions on one row; mobile
+          stacks property name on its own line so the occupancy pill, status
+          indicator, and New button don't collide with it. */}
+      <nav className="b2b-header-nav" style={{
         zIndex: 50, background: 'var(--bp-header)', backdropFilter: 'blur(10px)',
-        padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid var(--bp-border)', flexShrink: 0,
+        padding: '0 20px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: '1px solid var(--bp-border)', flexShrink: 0, gap: 10,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1, position: 'relative' }}>
+        <div className="b2b-header-left" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1, position: 'relative' }}>
           {selectedProperty && (
             <>
-              <span style={{ fontSize: 14, color: D, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1 }}>
+              <span className="b2b-prop-name" style={{ fontSize: 14, color: D, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1 }}>
                 {selectedProperty.name}
               </span>
               {/* Occupancy badge */}
@@ -1630,8 +1642,19 @@ export default function BusinessChat() {
             .b2b-occ-detail { display: none !important; }
             .b2b-cal-popover { left: -12px !important; right: -12px !important; width: auto !important; }
           }
+          /* Mobile: lift the property name onto its own row. Property
+             occupies row 1 full-width; the occupancy pill (inside
+             .b2b-header-left) wraps onto row 2 alongside the status
+             indicator + New button (.b2b-header-actions), so nothing
+             overlaps and the header grows vertically instead of spilling. */
+          @media (max-width: 640px) {
+            .b2b-header-nav { flex-wrap: wrap !important; padding: 10px 16px !important; gap: 6px 10px !important; min-height: 0 !important; align-items: center !important; }
+            .b2b-header-left { flex: 1 1 100% !important; flex-wrap: wrap !important; gap: 8px !important; }
+            .b2b-prop-name { flex: 1 1 100% !important; font-size: 15px !important; }
+            .b2b-header-actions { margin-left: auto !important; }
+          }
         `}</style>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div className="b2b-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {(() => {
             const hour = new Date().getHours();
             const isBusinessHours = hour >= 8 && hour < 18;
@@ -1905,6 +1928,10 @@ export default function BusinessChat() {
                 m.role === 'user' ? <UserMsg key={i} text={m.content} /> : <AssistantMsg key={i} text={m.content} />
               ))}
               {streaming && <StreamingMsg text={streamText} />}
+              {/* Scroll sentinel — see auto-scroll useEffect. Placed at the
+                  tail of the messages list so block:'end' parks the latest
+                  AI reply right at the viewport bottom. */}
+              <div ref={messagesEndRef} style={{ height: 1 }} />
             </>
           )}
 
