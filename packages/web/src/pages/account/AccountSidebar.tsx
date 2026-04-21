@@ -150,10 +150,23 @@ export default function AccountSidebar({
 
   return (
     <div style={{
-      width: w, minWidth: w, height: '100vh', background: 'var(--bp-card)',
+      width: w, minWidth: w,
+      // Use 100dvh (dynamic viewport height) instead of 100vh so the
+      // sidebar respects iOS Safari / Chrome Mobile's collapsing bottom
+      // chrome. 100vh measures the *full* viewport including the area
+      // behind the browser toolbar, which was clipping the bottom avatar
+      // button behind the URL bar on mobile. Falls back to 100vh for
+      // older browsers that don't know dvh yet.
+      height: '100vh',
+      minHeight: '100dvh',
+      maxHeight: '100dvh',
+      background: 'var(--bp-card)',
       borderRight: '1px solid var(--bp-border)', display: 'flex', flexDirection: 'column',
       transition: 'width 0.25s cubic-bezier(.4,0,.2,1), min-width 0.25s cubic-bezier(.4,0,.2,1)',
       position: 'sticky', top: 0, zIndex: 10, overflow: collapsed ? 'visible' : 'hidden', flexShrink: 0,
+      // Leave room for iOS home-indicator / Safari bottom toolbar so the
+      // avatar trigger button isn't covered.
+      paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
       {/* Logo */}
       <div style={{

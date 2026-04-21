@@ -189,10 +189,17 @@ export default function BusinessSidebar({
 
   return (
     <div style={{
-      width: w, minWidth: w, height: '100vh', background: 'var(--bp-card)',
+      width: w, minWidth: w,
+      // 100dvh instead of 100vh so iOS / Chrome Mobile bottom toolbars
+      // don't clip the avatar trigger at the bottom of the sidebar.
+      height: '100vh',
+      minHeight: '100dvh',
+      maxHeight: '100dvh',
+      background: 'var(--bp-card)',
       borderRight: '1px solid var(--bp-border)', display: 'flex', flexDirection: 'column',
       transition: 'width 0.25s cubic-bezier(.4,0,.2,1), min-width 0.25s cubic-bezier(.4,0,.2,1)',
       position: 'sticky', top: 0, zIndex: 10, overflow: collapsed ? 'visible' : 'hidden', flexShrink: 0,
+      paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
       {/* Logo */}
       <div style={{
