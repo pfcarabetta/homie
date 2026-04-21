@@ -1579,11 +1579,16 @@ export default function BusinessChat() {
     // from the summary screen if needed.
     setTiming('Today');
     // Skip the chat — run the committed-output stream straight into the
-    // summary step. Pass the freshly picked category through since
-    // setCategory won't have committed yet when generateFinalDiagnosis
-    // reads it.
+    // summary step. Pass the freshly picked category AND the voice
+    // panel's own history (payload.history) through since:
+    //   (a) setCategory won't have committed yet when
+    //       generateFinalDiagnosis reads `category`, and
+    //   (b) the chat `messages` state may be missing the latest turn
+    //       that handleVoiceTurn queued just before onReady fired —
+    //       React hasn't necessarily flushed that setMessages yet. The
+    //       voice panel's historyRef is the authoritative transcript.
     setTimeout(() => {
-      generateFinalDiagnosis(picked);
+      generateFinalDiagnosis(picked, payload.history);
     }, 200);
   };
 
@@ -1741,8 +1746,18 @@ export default function BusinessChat() {
    *  handleTiming so both the text-chat timing path AND the voice/video
    *  dispatch path (handleVoiceReady) can share the same committed-output
    *  generation logic. Caller is expected to have already set any needed
-   *  messages/timing state before invoking this. */
-  function generateFinalDiagnosis(overrideCategory?: CatDef) {
+   *  messages/timing state before invoking this.
+   *
+   *  `historyOverride` lets the voice path pass the voice panel's own
+   *  historyRef directly — necessary because React may not have flushed
+   *  the last setMessages(...) from handleVoiceTurn by the time the
+   *  voice panel fires onReady. Relying on the `messages` state closure
+   *  could send a truncated (sometimes empty) history to Claude, which
+   *  would trigger replies like "no issue has been described yet." */
+  function generateFinalDiagnosis(
+    overrideCategory?: CatDef,
+    historyOverride?: Array<{ role: 'user' | 'assistant'; content: string }>,
+  ) {
     const cat = overrideCategory ?? category;
     const promptText = cat?.group === 'service'
       ? 'I am ready to dispatch. Generate the final scope summary NOW using whatever you already know. Do NOT ask any more clarifying questions — this is the final message before the job is sent to the provider. Output a committed scope description (plain text, 2–4 sentences) followed by the <diagnosis> JSON block. If any detail is missing, fill it with your best estimate and note "pending confirmation" in the scope — do not ask for it.'
@@ -1834,7 +1849,9 @@ export default function BusinessChat() {
         },
       },
       {
-        history: messages.map(m => ({ role: m.role, content: m.content })),
+        history: historyOverride
+          ? historyOverride.map(m => ({ role: m.role, content: m.content }))
+          : messages.map(m => ({ role: m.role, content: m.content })),
         propertyContext: getPropertyContext(),
       },
     );
