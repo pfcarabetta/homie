@@ -681,6 +681,12 @@ export default function BusinessChat() {
   const [anythingElseText, setAnythingElseText] = useState('');
   const [anythingElseImage, setAnythingElseImage] = useState<string | null>(null);
   const anythingElseFileRef = useRef<HTMLInputElement>(null);
+  /** Snapshot captured when the chat forks into the "dispatch now vs.
+   *  continue diagnosing" decision. Holds the user's in-flight message
+   *  + image + the conversation history as it was _before_ their message
+   *  was posted, so "Continue diagnosing" can re-submit to streamAI with
+   *  clean history (no decision prompt in the trail Claude sees). */
+  const pendingDecisionRef = useRef<{ text: string; image: string | null; history: Message[] } | null>(null);
 
   const [timing, setTiming] = useState('asap');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -1440,10 +1446,26 @@ export default function BusinessChat() {
       });
     }
 
-    // If we've had enough exchanges, ask if there's anything else before timing
+    // If we've had enough exchanges, fork the flow. For REPAIR categories
+    // the PM gets a dispatch-or-continue choice (sometimes two exchanges
+    // is all Claude needs to triage, sometimes another round would sharpen
+    // the diagnosis — this lets the PM decide rather than forcing them
+    // into a "extras + photos" step). For SERVICE categories we keep the
+    // original "anything else to add?" prompt since service scoping rarely
+    // benefits from more back-and-forth.
     if (exchangeCount >= 2) {
+      const isRepair = category?.group !== 'service';
+      // Snapshot the user's in-flight message + prior history so
+      // Continue-diagnosing can re-submit cleanly without the decision
+      // prompt polluting what Claude sees.
+      pendingDecisionRef.current = isRepair
+        ? { text, image: currentImage, history: messages }
+        : null;
+      const promptMsg = isRepair
+        ? "Got it — would you like me to dispatch this now, or continue to help diagnose the issue?"
+        : 'Got it. Is there anything else you\'d like to add before we dispatch? You can also upload a photo if it helps.';
       setTimeout(() => {
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Got it. Is there anything else you\'d like to add before we dispatch? You can also upload a photo if it helps.' }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: promptMsg }]);
         setStep('anything_else');
       }, 300);
       return;
@@ -1910,6 +1932,7 @@ export default function BusinessChat() {
             setBookedName(null);
             setDiscoveredEquipment([]);
             discoveredPersistedKeysRef.current.clear();
+            pendingDecisionRef.current = null;
             sessionIdRef.current = `b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`;
           }} style={{
             background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
@@ -2327,8 +2350,85 @@ export default function BusinessChat() {
             </div>
           )}
 
-          {/* Anything else before dispatch */}
-          {step === 'anything_else' && !streaming && (
+          {/* Dispatch-or-continue fork — repair only. Renders two
+              buttons: the PM can either dispatch immediately (skip to
+              the timing step) or ask Claude to keep diagnosing (another
+              round of Q&A to sharpen the final diagnosis). The pending
+              user message captured in pendingDecisionRef gets re-submitted
+              to streamAI when Continue diagnosing is chosen, so nothing
+              they typed is lost. */}
+          {step === 'anything_else' && !streaming && category?.group !== 'service' && (
+            <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease', marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button
+                  onClick={() => {
+                    // Dispatch now — log the choice and go straight to
+                    // the urgency step. The existing diagnosis flow
+                    // generates the final scope once timing is picked.
+                    setMessages(prev => [
+                      ...prev,
+                      { role: 'user', content: 'Dispatch now' },
+                      { role: 'assistant', content: 'When do you need this done?' },
+                    ]);
+                    pendingDecisionRef.current = null;
+                    setStep('timing');
+                  }}
+                  style={{
+                    padding: '14px 18px', borderRadius: 12, border: 'none',
+                    background: O, color: '#fff',
+                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif",
+                    boxShadow: `0 10px 24px -10px ${O}8c`,
+                    transition: 'transform .1s',
+                  }}
+                  onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.98)'; }}
+                  onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                >Dispatch now →</button>
+                <button
+                  onClick={() => {
+                    const pending = pendingDecisionRef.current;
+                    // Drop the dispatch-or-continue prompt from visible
+                    // history so Claude doesn't see its own sidebar
+                    // question in the next turn's context.
+                    setMessages(prev => prev.slice(0, -1));
+                    pendingDecisionRef.current = null;
+                    setStep('chat');
+                    // Give the PM another two exchanges before we ask
+                    // again — the counter resumes from zero.
+                    setExchangeCount(0);
+                    if (pending) {
+                      setMessages(prev => [...prev, { role: 'user', content: 'Keep diagnosing' }]);
+                      streamAI(
+                        pending.text,
+                        pending.history,
+                        () => {
+                          setExchangeCount(c => c + 1);
+                          setStep('extra');
+                        },
+                        pending.image ? [pending.image] : undefined,
+                      );
+                    }
+                  }}
+                  style={{
+                    padding: '14px 18px', borderRadius: 12,
+                    border: '2px solid var(--bp-border)', background: 'var(--bp-card)',
+                    color: 'var(--bp-text)',
+                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif",
+                    transition: 'all .15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = O; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.color = 'var(--bp-text)'; }}
+                >Continue diagnosing</button>
+              </div>
+            </div>
+          )}
+
+          {/* Anything else before dispatch — service categories only
+              (repair path is handled by the dispatch-or-continue fork
+              above). */}
+          {step === 'anything_else' && !streaming && category?.group === 'service' && (
             <div style={{ marginLeft: 42, animation: 'fadeSlide 0.3s ease', marginBottom: 16 }}>
               <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '2px solid rgba(0,0,0,0.06)', padding: 16, marginBottom: 10 }}>
                 <textarea
