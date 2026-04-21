@@ -7,6 +7,7 @@ import {
   uploadDiagnosticImage,
   type Property, type PropertyDetails, type Workspace, type DiagnosticStreamCallbacks,
   type JobStatusResponse, type ProviderResponseItem, type CostEstimate, type Reservation,
+  type PropertyInventoryItem,
 } from '@/services/api';
 import { MiniCalendar, formatReservationMoment } from './business/constants';
 import AvatarDropdown from '@/components/AvatarDropdown';
@@ -616,6 +617,12 @@ export default function BusinessChat() {
   const [calendarReservations, setCalendarReservations] = useState<Reservation[]>([]);
   const [showCalendar, setShowCalendar] = useState(false);
 
+  // Property IQ — flat inventory list for the selected property. Fetched
+  // once per property switch; filtered by the inferred business category
+  // inside B2BPropertyIQCard so the right panel shows just the relevant
+  // equipment (brand / model / age / condition) while the PM is chatting.
+  const [propertyInventory, setPropertyInventory] = useState<PropertyInventoryItem[]>([]);
+
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Cloudinary URLs of photos uploaded during this chat session */
@@ -963,6 +970,24 @@ export default function BusinessChat() {
           }
         }
       }).catch(() => {});
+
+    // Fetch property inventory for the Property IQ card. Flattens rooms +
+    // unassigned items into a single list; filtering by category happens
+    // at render time. Missing scan / no items just produces an empty
+    // array which the card renders as an empty state.
+    setPropertyInventory([]);
+    businessService.getPropertyInventory(selectedWorkspace, selectedProperty.id)
+      .then(res => {
+        if (cancelled) return;
+        const rooms = res.data?.rooms ?? [];
+        const unassigned = res.data?.unassignedItems ?? [];
+        const flat: PropertyInventoryItem[] = [
+          ...rooms.flatMap(r => r.items),
+          ...unassigned,
+        ].filter(it => it.status !== 'pm_dismissed');
+        setPropertyInventory(flat);
+      }).catch(() => { /* best-effort — empty state falls through */ });
+
     return () => { cancelled = true; };
   }, [selectedProperty, selectedWorkspace]);
 
@@ -2014,6 +2039,8 @@ export default function BusinessChat() {
           />
           <B2BPropertyIQCard
             propertyId={selectedProperty?.id ?? null}
+            categoryLabel={category?.label ?? null}
+            items={propertyInventory}
           />
           <B2BProsNearbyBadge
             categoryLabel={category?.label ?? null}
@@ -2232,38 +2259,187 @@ function B2BHomieThinksCard({
   );
 }
 
-function B2BPropertyIQCard({ propertyId: _propertyId }: { propertyId: string | null }) {
-  // Placeholder until we wire the real propertyInventoryItems fetch. Shows
-  // an empty state today; commit 2 swaps this to pulled-from-scan data.
-  return (
-    <div style={{
-      background: '#fff', borderRadius: 18, border: `1px dashed ${_BORDER_R}`,
-      padding: 16,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <div style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(0,0,0,.04)', border: `1px solid ${_BORDER_R}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, opacity: .6 }}>🧠</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: _D_R }}>Property IQ</div>
-          <div style={{ fontSize: 10, color: _DIM_R, marginTop: 1, fontFamily: "'DM Mono',monospace", letterSpacing: .4, textTransform: 'uppercase' }}>Inventory coming soon</div>
+// Maps our B2B category labels to the inventory itemType substrings they
+// should match. Intentionally permissive — "HVAC" pulls any item whose
+// itemType mentions ac/hvac/furnace/etc, whether it came in as 'system'
+// or 'appliance' in the scan.
+const IQ_CATEGORY_MATCH: Record<string, (it: PropertyInventoryItem) => boolean> = {
+  plumbing:   it => /plumb|faucet|sink|toilet|shower|bath|drain|pipe/i.test(it.itemType),
+  water_heater: it => /water.?heater|tankless/i.test(it.itemType),
+  septic_sewer: it => /sewer|septic/i.test(it.itemType),
+  electrical: it => /electric|outlet|breaker|panel|light|wiring/i.test(it.itemType),
+  hvac:       it => /hvac|air.?cond|ac(_|\b)|furnace|heat.?pump|thermostat|boiler|mini.?split/i.test(it.itemType),
+  appliance:  it => it.category === 'appliance' || /fridge|refrig|washer|dryer|dishwash|oven|range|microwave|stove|disposal/i.test(it.itemType),
+  roofing:    it => /roof|gutter|siding|chimney/i.test(it.itemType),
+  garage_door: it => /garage/i.test(it.itemType),
+  pool:       it => /pool|spa|hot.?tub/i.test(it.itemType),
+  security_systems: it => /alarm|camera|doorbell|security/i.test(it.itemType),
+};
+
+function iqLabelFor(itemType: string): string {
+  return itemType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function iqCategoryKeyFromLabel(label: string | null): keyof typeof IQ_CATEGORY_MATCH | null {
+  if (!label) return null;
+  const l = label.toLowerCase();
+  if (l.includes('plumb')) return 'plumbing';
+  if (l.includes('water heater')) return 'water_heater';
+  if (l.includes('electric')) return 'electrical';
+  if (l.includes('hvac')) return 'hvac';
+  if (l.includes('appliance')) return 'appliance';
+  if (l.includes('roof')) return 'roofing';
+  if (l.includes('garage')) return 'garage_door';
+  if (l.includes('pool')) return 'pool';
+  if (l.includes('security')) return 'security_systems';
+  return null;
+}
+
+function B2BPropertyIQCard({
+  propertyId, categoryLabel, items,
+}: {
+  propertyId: string | null;
+  categoryLabel: string | null;
+  items: PropertyInventoryItem[];
+}) {
+  // Empty-state — no scan or zero items. Show the run-scan nudge.
+  if (!propertyId || items.length === 0) {
+    return (
+      <div style={{
+        background: '#fff', borderRadius: 18, border: `1px dashed ${_BORDER_R}`,
+        padding: 16,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(0,0,0,.04)', border: `1px solid ${_BORDER_R}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, opacity: .6 }}>🧠</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: _D_R }}>Property IQ</div>
+            <div style={{ fontSize: 10, color: _DIM_R, marginTop: 1, fontFamily: "'DM Mono',monospace", letterSpacing: .4, textTransform: 'uppercase' }}>No scan on file</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: _D_R, lineHeight: 1.5, marginBottom: 8 }}>
+          Run a property scan and Homie will remember brands + service history for next time.
         </div>
       </div>
-      <div style={{ fontSize: 12, color: _D_R, lineHeight: 1.5, marginBottom: 8 }}>
-        Run a property scan and Homie will remember brands + service history for next time.
+    );
+  }
+
+  // If we have a category, filter to matching items; otherwise show an
+  // overview (count by category group) with a hint that the card narrows
+  // as the AI locks a category.
+  const catKey = iqCategoryKeyFromLabel(categoryLabel);
+  const matcher = catKey ? IQ_CATEGORY_MATCH[catKey] : null;
+  const filtered = matcher ? items.filter(matcher) : items;
+  const hasCategory = !!catKey;
+
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 18, border: `1px solid ${_BORDER_R}`,
+      padding: 16, boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div style={{
+          width: 30, height: 30, borderRadius: 9,
+          background: `${_O_R}14`, border: `1px solid ${_O_R}33`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 15, flexShrink: 0,
+        }}>🧠</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: _D_R }}>
+            Property IQ{hasCategory && categoryLabel ? ` · ${categoryLabel}` : ''}
+          </div>
+          <div style={{ fontSize: 10, color: _DIM_R, marginTop: 1, fontFamily: "'DM Mono',monospace", letterSpacing: .4, textTransform: 'uppercase' }}>
+            {hasCategory ? `${filtered.length} matching item${filtered.length === 1 ? '' : 's'}` : `${items.length} on file`}
+          </div>
+        </div>
       </div>
-      <button style={{
-        background: _O_R, color: '#fff', border: 'none',
-        borderRadius: 100, padding: '6px 12px', fontSize: 11, fontWeight: 700,
-        cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-      }}>Run scan →</button>
+
+      {hasCategory && filtered.length === 0 && (
+        <div style={{ padding: 10, borderRadius: 10, background: 'rgba(0,0,0,.02)', fontSize: 12, color: _DIM_R, lineHeight: 1.5 }}>
+          No {categoryLabel?.toLowerCase()} equipment on file — Homie will record what you mention.
+        </div>
+      )}
+
+      {filtered.length > 0 && (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {filtered.slice(0, 4).map(item => <B2BIQRow key={item.id} item={item} />)}
+        </div>
+      )}
+
+      {!hasCategory && items.length > 0 && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${_BORDER_R}`, fontSize: 11, color: _DIM_R, lineHeight: 1.5 }}>
+          💡 Homie will narrow this list once a category is inferred from your chat.
+        </div>
+      )}
     </div>
   );
 }
 
+function B2BIQRow({ item }: { item: PropertyInventoryItem }) {
+  const ageYears = item.estimatedAgeYears ? parseFloat(item.estimatedAgeYears) : null;
+  const pinned = item.status === 'pm_confirmed';
+  return (
+    <div style={{
+      padding: 10, borderRadius: 10,
+      background: pinned ? `${_O_R}08` : 'rgba(0,0,0,.02)',
+      border: `1px solid ${pinned ? `${_O_R}33` : _BORDER_R}`,
+      display: 'flex', gap: 8, alignItems: 'flex-start',
+    }}>
+      <div style={{
+        width: 26, height: 26, borderRadius: 7,
+        background: pinned ? _O_R : '#fff',
+        border: pinned ? 'none' : `1px solid ${_BORDER_R}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 12, flexShrink: 0,
+      }}>
+        {item.category === 'appliance' && '🍳'}
+        {item.category === 'fixture' && '🚰'}
+        {item.category === 'system' && '❄️'}
+        {item.category === 'safety' && '🛡️'}
+        {item.category === 'amenity' && '✨'}
+        {item.category === 'infrastructure' && '🔨'}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 12.5, fontWeight: 700, color: _D_R, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {[item.brand, item.modelNumber].filter(Boolean).join(' · ') || iqLabelFor(item.itemType)}
+        </div>
+        <div style={{ fontSize: 10, color: _DIM_R, marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ textTransform: 'capitalize' }}>{iqLabelFor(item.itemType)}</span>
+          {ageYears !== null && (
+            <>
+              <span style={{ opacity: .4 }}>·</span>
+              <span>{Math.round(ageYears)}yr</span>
+            </>
+          )}
+          {item.condition && item.condition !== 'good' && (
+            <>
+              <span style={{ opacity: .4 }}>·</span>
+              <span style={{ color: item.condition === 'poor' ? _RED_R : _AMBER_R, fontWeight: 700 }}>
+                {item.condition}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Deterministic "pros available nearby" count keyed by category label.
+// Mirrors the /quote PROS_NEARBY_BY_GROUP map so both surfaces agree.
+// Swap in a real discovery-backed count when that endpoint lands.
+const B2B_PROS_NEARBY: Record<string, number> = {
+  Plumbing: 18, Electrical: 14, HVAC: 11, 'Appliance Repair': 9,
+  'Roofing & Exterior': 7, Roofing: 7,
+  'Handyman & Structural': 26, Handyman: 26,
+  'Garage Door': 13, Locksmith: 8, 'Locksmith & Security': 8,
+  Cleaning: 22, 'House Cleaning': 22, 'Outdoor & Landscaping': 15, Landscaping: 15,
+  'Pool & Spa': 10, 'Pest Control': 8, Painting: 17, 'Painting & Flooring': 17,
+  Remodeling: 12, 'Moving & Hauling': 14, Photography: 9,
+};
+
 function B2BProsNearbyBadge({ categoryLabel }: { categoryLabel: string | null }) {
-  // Static placeholder count — commit 2 swaps this for a real API-backed
-  // count keyed to category + zip.
-  const count = categoryLabel ? 14 : 0;
-  if (!count) return null;
+  if (!categoryLabel) return null;
+  const count = B2B_PROS_NEARBY[categoryLabel] ?? 12;
   return (
     <div style={{
       padding: '10px 14px', borderRadius: 12,
