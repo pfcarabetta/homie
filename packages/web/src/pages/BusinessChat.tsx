@@ -638,14 +638,23 @@ export default function BusinessChat() {
   // equipment (brand / model / age / condition) while the PM is chatting.
   const [propertyInventory, setPropertyInventory] = useState<PropertyInventoryItem[]>([]);
 
-  // Category-picker UI: service tier collapsed behind "+ N more" pill
-  const [showAllB2BCats, setShowAllB2BCats] = useState(false);
+  // Category-picker UI: service tier collapsed behind "+ N more" pill on
+  // mobile, expanded by default on desktop where vertical real estate is
+  // cheap. Checks on mount; stays put afterward (user can still toggle
+  // manually on either breakpoint).
+  const [showAllB2BCats, setShowAllB2BCats] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth >= 981;
+  });
 
   // Voice dictation via Web Speech API — cheaper + simpler than running a
   // second conversational AI inside the already-AI-driven B2B chat. Fills
   // the text input as the user speaks; tap the mic a second time to stop.
   const [dictating, setDictating] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
+  // Free-form "or just describe it" textarea shown on the category step.
+  const [directText, setDirectText] = useState('');
 
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1042,6 +1051,27 @@ export default function BusinessChat() {
     if (cat) selectCategory(cat);
   }
 
+  // Fast-path: PM types a free-form description on the category step and
+  // bypasses the tile → sub → q1 pipeline. Defaults the category to
+  // Handyman (the AI re-classifies from full context during the summary
+  // step) and jumps straight into the chat so Claude can ask targeted
+  // follow-ups against whatever the PM said.
+  function handleDirectDescription(text: string) {
+    const trimmed = text.trim();
+    if (trimmed.length < 10) return;
+    const fallback = B2B_CATEGORIES.find(c => c.id === 'general');
+    if (!fallback) return;
+    setCategory(fallback);
+    setActiveGroup(null);
+    setQ1Answer(trimmed);
+    setMessages([{ role: 'user', content: trimmed }]);
+    setStep('chat');
+    streamAI(`A property manager at ${selectedProperty?.name || 'the property'} reported: ${trimmed}`, [], () => {
+      setExchangeCount(1);
+      setStep('extra');
+    });
+  }
+
   function selectCategory(cat: CatDef) {
     setCategory(cat);
     setActiveGroup(null);
@@ -1094,13 +1124,18 @@ export default function BusinessChat() {
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = 'en-US';
-    const startBase = inputVal;
+    // Target the input that's actually on screen: DirectInput textarea on
+    // the category step, answer input elsewhere.
+    const targetingDirect = step === 'category';
+    const startBase = targetingDirect ? directText : inputVal;
     rec.onresult = (ev) => {
       let transcript = '';
       for (let i = 0; i < ev.results.length; i++) {
         transcript += ev.results[i][0].transcript;
       }
-      setInputVal(startBase ? `${startBase} ${transcript}`.trim() : transcript);
+      const next = startBase ? `${startBase} ${transcript}`.trim() : transcript;
+      if (targetingDirect) setDirectText(next);
+      else setInputVal(next);
     };
     rec.onend = () => { setDictating(false); recognitionRef.current = null; };
     rec.onerror = () => { setDictating(false); recognitionRef.current = null; };
@@ -1602,6 +1637,85 @@ export default function BusinessChat() {
                     + {B2B_CATEGORY_TREE.filter(g => g.type === 'service').length} more · cleaning, landscape, painting, moving…
                   </button>
                 )}
+
+                {/* Free-form "or just describe it" fast lane — matches the
+                    /quote DirectInput pattern. Skips category tiles + q1
+                    and jumps straight into chat with Claude. Default
+                    category is Handyman; the dispatch summary re-classifies
+                    from the full conversation context at the end. */}
+                <div style={{ marginTop: 18 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <span style={{ height: 1, flex: '0 0 16px', background: 'var(--bp-border)' }} />
+                    <span style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--bp-subtle)', fontWeight: 700 }}>or just describe it</span>
+                    <span style={{ height: 1, flex: 1, background: 'var(--bp-border)' }} />
+                  </div>
+                  <div style={{
+                    background: 'var(--bp-card)', borderRadius: 18,
+                    border: '2px solid rgba(0,0,0,0.07)',
+                    boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
+                    padding: '16px 18px 14px', transition: 'border-color .15s',
+                  }}>
+                    <textarea
+                      value={directText}
+                      onChange={e => setDirectText(e.target.value)}
+                      placeholder={dictating ? 'Listening… describe the issue freely' : `What's going on at ${selectedProperty?.name || 'the property'}? Describe it here, or use the mic.`}
+                      onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && directText.trim().length >= 10) { handleDirectDescription(directText); setDirectText(''); } }}
+                      style={{
+                        width: '100%', border: 'none', outline: 'none', resize: 'none',
+                        fontFamily: "'Fraunces',serif", fontSize: 17, lineHeight: 1.35,
+                        color: D, background: 'transparent',
+                        minHeight: 76, padding: 0, letterSpacing: '-.01em',
+                      }}
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,.07)', gap: 10, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <button onClick={() => fileInputRef.current?.click()}
+                          title="Attach a photo"
+                          style={{
+                            background: 'var(--bp-card)', border: '1px solid rgba(0,0,0,.08)',
+                            borderRadius: 100, padding: '8px 12px', fontSize: 12, fontWeight: 600,
+                            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                            display: 'inline-flex', alignItems: 'center', gap: 6, color: D,
+                          }}>📷 Photo</button>
+                        {dictationSupported && (
+                          <button onClick={toggleDictation}
+                            title={dictating ? 'Stop dictating' : 'Dictate the description'}
+                            style={{
+                              background: dictating ? O : 'var(--bp-card)',
+                              color: dictating ? '#fff' : D,
+                              border: `1px solid ${dictating ? O : 'rgba(0,0,0,.08)'}`,
+                              borderRadius: 100, padding: '8px 12px', fontSize: 12, fontWeight: 600,
+                              cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                              display: 'inline-flex', alignItems: 'center', gap: 6,
+                              animation: dictating ? 'pulse 1.3s infinite' : 'none',
+                            }}>🎤 {dictating ? 'Listening…' : 'Dictate'}</button>
+                        )}
+                      </div>
+                      {directText.length > 0 && (
+                        <span style={{ fontSize: 10.5, fontFamily: "'DM Mono',monospace", color: 'var(--bp-subtle)', letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700 }}>
+                          {directText.length} chars · {directText.trim().length >= 10 ? 'ready' : `${10 - directText.trim().length} more`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { handleDirectDescription(directText); setDirectText(''); }}
+                    disabled={directText.trim().length < 10}
+                    style={{
+                      marginTop: 12, width: '100%',
+                      background: directText.trim().length >= 10 ? O : 'rgba(0,0,0,.06)',
+                      color: directText.trim().length >= 10 ? '#fff' : '#9B9490',
+                      border: 'none', borderRadius: 14, padding: '14px 22px',
+                      fontSize: 14, fontWeight: 700,
+                      cursor: directText.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                      boxShadow: directText.trim().length >= 10 ? `0 10px 28px -10px ${O}80` : 'none',
+                      fontFamily: "'DM Sans', sans-serif",
+                      transition: 'all .15s',
+                    }}
+                  >
+                    {directText.trim().length >= 10 ? 'Continue with this description →' : 'Type or dictate a few words, or pick a category above'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
