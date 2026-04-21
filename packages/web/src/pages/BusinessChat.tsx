@@ -1542,9 +1542,19 @@ export default function BusinessChat() {
 
   // Voice-turn + voice-ready handlers (shared by InlineVoicePanel and
   // VideoChatPanel). Mirrors the /quote pattern: each turn echoes both
-  // sides into the visible chat; on <ready/> we seed category + jump
-  // straight to the "extra" step so the PM lands on the existing flow.
-  const handleVoiceTurn = useCallback((userText: string, assistantText: string, _inferred: string | null) => {
+  // sides into the visible chat; equipment Homie discovered visually
+  // (or from a brand the PM spoke) gets folded into the same
+  // discoveredEquipment state the typed-chat path uses, then persisted
+  // to Property IQ so future calls already know about it.
+  // Not wrapped in useCallback — ingestVoiceEquipment reads live state
+  // via closure, so memoizing this would freeze it against the first
+  // render's state.
+  const handleVoiceTurn = (
+    userText: string,
+    assistantText: string,
+    _inferred: string | null,
+    equipmentDiscovered?: Array<Record<string, unknown>>,
+  ) => {
     const u = userText.trim();
     const a = assistantText.trim();
     if (!u) return;
@@ -1554,7 +1564,17 @@ export default function BusinessChat() {
       if (a) next.push({ role: 'assistant', content: a });
       return next;
     });
-  }, []);
+    // Reuse the same <equipment> ingestion the typed-chat path uses.
+    // ingestEquipmentFromRaw scans for the wrapping tag, so re-wrap the
+    // structured payload into <equipment>{...}</equipment> blocks before
+    // handing it in.
+    if (equipmentDiscovered && equipmentDiscovered.length > 0) {
+      const wrapped = equipmentDiscovered
+        .map(item => `<equipment>${JSON.stringify(item)}</equipment>`)
+        .join('\n');
+      ingestEquipmentFromRaw(wrapped);
+    }
+  };
 
   /** Voice/video <ready/> now fires only when the PM has explicitly said
    *  "dispatch now" during the call (see the DISPATCH-OR-CONTINUE fork

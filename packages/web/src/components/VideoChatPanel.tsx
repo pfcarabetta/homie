@@ -35,9 +35,17 @@ interface Props {
   /**
    * Called after every successful turn. `category` is Homie's classifier
    * output (or null). Parent pushes both sides of the exchange into the
-   * main chat scroll.
+   * main chat scroll. `equipmentDiscovered` carries any <equipment>
+   * blocks Homie emitted this turn (visual ID of an appliance from the
+   * video frame, brand/model the PM spoke) so the parent can persist
+   * them to Property IQ.
    */
-  onTurn: (user: string, assistant: string, category: string | null) => void;
+  onTurn: (
+    user: string,
+    assistant: string,
+    category: string | null,
+    equipmentDiscovered?: Array<Record<string, unknown>>,
+  ) => void;
   /** Fires on <ready/> or when the user hits "I'm done". */
   onReady: (payload: { transcript: string; history: HistoryMessage[] }) => void;
 }
@@ -383,10 +391,11 @@ export default function VideoChatPanel({ active, onExit, category, firstName, bu
           audio_mime: string;
           is_ready: boolean;
           category: string | null;
+          equipment_discovered?: Array<Record<string, unknown>>;
         };
       };
 
-      const { transcript, reply, audio_base64, audio_mime, is_ready, category: inferredCategory } = json.data;
+      const { transcript, reply, audio_base64, audio_mime, is_ready, category: inferredCategory, equipment_discovered } = json.data;
 
       historyRef.current = [
         ...historyRef.current,
@@ -396,7 +405,7 @@ export default function VideoChatPanel({ active, onExit, category, firstName, bu
       setLastTranscript(transcript);
       setLastReply(reply);
       setTurnCount(n => n + 1);
-      onTurn(transcript, reply, inferredCategory);
+      onTurn(transcript, reply, inferredCategory, equipment_discovered);
 
       await playMp3(audio_base64, audio_mime);
 

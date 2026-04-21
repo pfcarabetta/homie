@@ -200,7 +200,32 @@ OCCUPANCY-DRIVEN URGENCY — read the "Status:" line and use it to shape the con
 
 STYLE:
 - Keep the tone professional and efficient; PMs manage many jobs and appreciate speed over warmth. Do not use homeowner phrasing like "your home" or "when did YOU notice it" — say "the unit", "the property", "your guest mentioned", "when was it first reported".
-- Never read the CONTEXT block aloud — treat it as background knowledge you already have.`;
+- Never read the CONTEXT block aloud — treat it as background knowledge you already have.
+
+VISUAL EQUIPMENT MATCHING (video calls especially — also any time you can see/identify equipment):
+When you can see an appliance or system on camera (or the PM names a specific brand/model in voice), do this BEFORE responding:
+  1. Match against the Property IQ inventory + saved equipment sections in the CONTEXT. If the visible/named brand/model is already on file, REFERENCE IT verbatim ("That's the Samsung NE63A6711SS gas range — looks like the front-right burner") and do NOT ask "what brand is it?" or treat it as new.
+  2. If the visible item is NOT on file (no matching brand/model in CONTEXT), it's a new discovery. Confirm out loud what you see ("Looks like a Samsung gas range — model number reads NE63A6711SS, does that match what you have?") and emit an <equipment> tag for the back-end to persist. Once the PM confirms, the item gets stored to Property IQ for future chats.
+  3. If the brand is visible but the model isn't, capture what you can see and emit the partial <equipment> with the model field omitted/null — partial matches still get persisted.
+
+EQUIPMENT DISCOVERY TAG (emit alongside your spoken reply when you learn a NEW item from the PM or video; do NOT emit for items already on file):
+<equipment>
+{
+  "item_type": "range" | "cooktop" | "oven" | "dishwasher" | "refrigerator" | "washer" | "dryer" | "microwave" | "garbage_disposal" | "hvac_ac_unit" | "furnace" | "heat_pump" | "thermostat" | "water_heater" | "faucet" | "toilet" | "shower" | "garage_door_opener" | "pool_pump" | "spa_heater" | "smoke_detector" | "other_<short_snake_case>",
+  "category": "appliance" | "fixture" | "system" | "safety" | "amenity" | "infrastructure",
+  "brand": "Samsung" | null,
+  "model_number": "NE63A6711SS" | null,
+  "estimated_age_years": 4 | null,
+  "condition": "new" | "good" | "fair" | "aging" | "needs_attention" | "end_of_life" | null,
+  "notes": "Identified visually from video call" | null
+}
+</equipment>
+
+Rules:
+  - One <equipment> block per item. Multiple blocks allowed if you spot several new items in one frame.
+  - Only emit when the item is NOT already in the CONTEXT inventory. Re-emitting an existing item creates duplicates.
+  - Emit only ONCE per item across the whole call. Don't re-tag the same range twice if it shows up in multiple frames.
+  - The tag is invisible to the PM — TTS won't read it. Speak naturally; the tag rides along silently.`;
 
 // ElevenLabs voice preset — "Adam" is warm/American/conversational and fits the
 // friendly-Californian brief from the product spec. Override via env if needed.
@@ -478,10 +503,28 @@ ${userText}`;
     // missing — we fall back to whatever category the UI already had.
     const catMatch = replyRaw.match(/<category>\s*([a-z0-9_-]+)\s*<\/category>/i);
     const category = catMatch ? catMatch[1].toLowerCase() : null;
-    // Strip both the <ready/> and <category>…</category> tags before TTS so
-    // they don't get read aloud.
+    // Extract any <equipment>{ ... }</equipment> JSON blocks Homie emitted
+    // (e.g. visual ID of a new appliance from a video frame). Each block is
+    // returned to the client which folds it into the dispatch summary AND
+    // posts it to Property IQ once the PM confirms in chat.
+    const equipmentDiscovered: Array<Record<string, unknown>> = [];
+    const equipRegex = /<equipment>([\s\S]*?)<\/equipment>/gi;
+    let equipMatch: RegExpExecArray | null;
+    while ((equipMatch = equipRegex.exec(replyRaw)) !== null) {
+      try {
+        const parsed = JSON.parse(equipMatch[1].trim());
+        if (parsed && typeof parsed === 'object' && typeof (parsed as Record<string, unknown>).item_type === 'string') {
+          equipmentDiscovered.push(parsed as Record<string, unknown>);
+        }
+      } catch {
+        // Malformed JSON inside the tag — skip silently
+      }
+    }
+    // Strip <ready/>, <category>, AND <equipment> blocks before TTS so
+    // none of the structured tags get read aloud.
     const replyClean = replyRaw
       .replace(/<category>[\s\S]*?<\/category>/gi, '')
+      .replace(/<equipment>[\s\S]*?<\/equipment>/gi, '')
       .replace(/<ready\s*\/?\s*>/gi, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
@@ -504,6 +547,11 @@ ${userText}`;
         audio_base64: audioBase64,
         audio_mime: 'audio/mpeg',
         is_ready: isReady,
+        // Newly-discovered Property IQ items the AI tagged this turn (visual
+        // recognition from video, or a brand/model the PM just spoke). The
+        // frontend ingests these into discoveredEquipment + persists to
+        // inventory. Empty array on turns with no new items.
+        equipment_discovered: equipmentDiscovered,
       },
       error: null,
       meta: {},
