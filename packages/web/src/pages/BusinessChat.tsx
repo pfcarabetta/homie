@@ -19,6 +19,33 @@ import { primeAudio } from '@/components/audioUnlocker';
 
 const O = '#E8632B', G = '#1B9E77', D = 'var(--bp-text)', W = 'var(--bp-bg)';
 
+/** Map the user's timing button answer (or a picked ISO date) to the
+ *  backend's JobTiming enum + a severity label. Keeps Claude's own
+ *  urgency assessment out of the dispatch — the PM's choice is the only
+ *  signal that drives how fast the provider is expected to respond. */
+type DispatchUrgency = {
+  jobTiming: 'asap' | 'this_week' | 'this_month' | 'flexible';
+  severity: 'low' | 'medium' | 'high' | 'emergency';
+};
+function mapUserTimingToDispatch(raw: string): DispatchUrgency {
+  const t = (raw || '').trim().toLowerCase();
+  if (!t || t === 'flexible') return { jobTiming: 'flexible', severity: 'low' };
+  if (t === 'today' || t === 'asap' || t === 'now') return { jobTiming: 'asap', severity: 'high' };
+  if (t === 'tomorrow') return { jobTiming: 'asap', severity: 'medium' };
+  if (t.includes('week')) return { jobTiming: 'this_week', severity: 'medium' };
+  if (t.includes('month')) return { jobTiming: 'this_month', severity: 'low' };
+  // Custom date picked via the date input — measure distance from today.
+  const parsed = Date.parse(raw) || Date.parse(`${raw} ${new Date().getFullYear()}`);
+  if (!Number.isNaN(parsed)) {
+    const days = Math.max(0, Math.floor((parsed - Date.now()) / 86_400_000));
+    if (days <= 1) return { jobTiming: 'asap', severity: 'high' };
+    if (days <= 7) return { jobTiming: 'this_week', severity: 'medium' };
+    if (days <= 30) return { jobTiming: 'this_month', severity: 'low' };
+    return { jobTiming: 'flexible', severity: 'low' };
+  }
+  return { jobTiming: 'flexible', severity: 'medium' };
+}
+
 /** DirectInput action button (Photo / Video Chat / Talk / Dictate) —
  *  kept identical to the `uploadBtnStyle` used on /quote so the business
  *  flow lands with the same fonts, sizes, and icon treatment. Backed by
@@ -1562,6 +1589,16 @@ export default function BusinessChat() {
         summaryText = `${summaryText}\n\nEquipment identified:\n${lines.join('\n')}`;
       }
 
+      // Pull the user's actual timing answer into the summary so the
+      // provider sees what the PM requested ("Today", a picked date,
+      // etc.) and derive JobTiming + severity from it — we never let
+      // Claude's self-assessed urgency override the PM's choice.
+      const userTiming = (timing || '').trim();
+      if (userTiming) {
+        summaryText = `${summaryText}\n\nTiming requested by PM: ${userTiming}`;
+      }
+      const { jobTiming, severity } = mapUserTimingToDispatch(userTiming);
+
       const noteToAppend = permissionNote ?? entryPermission;
       if (noteToAppend) {
         summaryText = `${summaryText}\n\n${noteToAppend}`;
@@ -1570,7 +1607,7 @@ export default function BusinessChat() {
       const diagnosis = {
         category: category?.id || 'general',
         subcategory: q1Answer || category?.id || 'general',
-        severity: 'medium' as const,
+        severity,
         summary: summaryText,
         recommendedActions: ['Dispatch professional'],
       };
@@ -1579,7 +1616,7 @@ export default function BusinessChat() {
 
       const res = await jobService.createJob({
         diagnosis,
-        timing: 'asap',
+        timing: jobTiming,
         tier: 'priority',
         zipCode,
         workspaceId: selectedWorkspace || undefined,
