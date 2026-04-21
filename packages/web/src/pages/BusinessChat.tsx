@@ -1361,15 +1361,61 @@ export default function BusinessChat() {
     if (sizeBits.length) lines.push(`Size/type: ${sizeBits.join(' · ')}`);
     if (p.beds && p.beds.length > 0) lines.push(`Beds: ${p.beds.map(b => `${b.count}× ${b.type}`).join(', ')}`);
 
-    // ── Occupancy ──────────────────────────────────────────────
+    // ── Occupancy + upcoming reservations ──────────────────────
+    // Homie uses these dates to calibrate urgency (a fix that blocks an
+    // occupied guest is a TODAY job; a cosmetic repair in a vacant unit
+    // with no reservations for two weeks is flexible). We spell out both
+    // the current state AND the next reservation on deck so Claude can
+    // weigh turnover windows without re-asking.
+    const daysBetween = (iso: string): number => {
+      const d = Date.parse(iso);
+      if (Number.isNaN(d)) return Number.POSITIVE_INFINITY;
+      return Math.round((d - Date.now()) / 86_400_000);
+    };
+    const fmtDay = (iso: string) => {
+      try {
+        return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+      } catch { return iso; }
+    };
+    const relative = (iso: string) => {
+      const n = daysBetween(iso);
+      if (n <= 0) return 'today';
+      if (n === 1) return 'tomorrow';
+      return `in ${n} day${n === 1 ? '' : 's'}`;
+    };
     if (headerOccupancy?.occupied && headerOccupancy.reservation) {
-      const out = new Date(headerOccupancy.reservation.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-      lines.push(`Status: OCCUPIED by ${headerOccupancy.reservation.guestName || 'a guest'} until ${out}. Schedule around checkout.`);
+      const out = fmtDay(headerOccupancy.reservation.checkOut);
+      const days = daysBetween(headerOccupancy.reservation.checkOut);
+      lines.push(`Status: OCCUPIED by ${headerOccupancy.reservation.guestName || 'a guest'}. Checkout ${out} (${relative(headerOccupancy.reservation.checkOut)}${days >= 0 ? '' : ' — overdue'}). A guest is on-property right now — factor their impact into urgency and access.`);
+      if (headerOccupancy.nextCheckIn) {
+        const inDate = fmtDay(headerOccupancy.nextCheckIn.checkIn);
+        lines.push(`Next guest (${headerOccupancy.nextCheckIn.guestName || 'TBD'}) arrives ${inDate} (${relative(headerOccupancy.nextCheckIn.checkIn)}). Tight turnover windows are dispatch-urgent.`);
+      }
     } else if (headerOccupancy?.nextCheckIn) {
-      const start = new Date(headerOccupancy.nextCheckIn.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-      lines.push(`Status: vacant; next guest arrives ${start}. Safe window to dispatch.`);
+      const start = fmtDay(headerOccupancy.nextCheckIn.checkIn);
+      const n = daysBetween(headerOccupancy.nextCheckIn.checkIn);
+      const urgency = n <= 1
+        ? 'IMMINENT — this fix must be done before the guest arrives'
+        : n <= 3
+          ? `tight — ${n} day${n === 1 ? '' : 's'} to dispatch and complete`
+          : `${n}-day window before next check-in — plenty of runway`;
+      lines.push(`Status: VACANT; next guest (${headerOccupancy.nextCheckIn.guestName || 'TBD'}) arrives ${start}. Window: ${urgency}.`);
     } else if (headerOccupancy) {
-      lines.push('Status: vacant; no upcoming reservations on file.');
+      lines.push('Status: VACANT; no upcoming reservations on file. Fully flexible dispatch window.');
+    }
+    // Surface the next 2-3 reservations beyond the immediate pair so the
+    // AI can spot back-to-back bookings ("tight turnover after this
+    // guest") without re-querying the calendar.
+    if (calendarReservations.length > 0) {
+      const now = Date.now();
+      const soon = calendarReservations
+        .filter(r => Date.parse(r.checkIn) >= now - 86_400_000)
+        .sort((a, b) => Date.parse(a.checkIn) - Date.parse(b.checkIn))
+        .slice(0, 4);
+      if (soon.length > 1) {
+        const rows = soon.map(r => `  · ${r.guestName || 'Guest'}: ${fmtDay(r.checkIn)} → ${fmtDay(r.checkOut)}`);
+        lines.push(`Upcoming reservations (next ${soon.length}):\n${rows.join('\n')}`);
+      }
     }
 
     // ── Saved property notes (access codes redacted) ──────────
@@ -1484,7 +1530,7 @@ export default function BusinessChat() {
     }
 
     return lines.join('\n');
-  }, [selectedProperty, headerOccupancy, propertyInventory]);
+  }, [selectedProperty, headerOccupancy, propertyInventory, calendarReservations]);
 
   // Voice-turn + voice-ready handlers (shared by InlineVoicePanel and
   // VideoChatPanel). Mirrors the /quote pattern: each turn echoes both
