@@ -3482,12 +3482,27 @@ const IQ_SYNONYMS: Array<{ match: RegExp; signals: RegExp }> = [
 
 /** Words that sit in item types but don't uniquely identify an item —
  *  e.g. "kitchen_faucet" shouldn't correlate to every chat that mentions
- *  "kitchen". Keep this list conservative; anything here is demoted from
- *  a medium/name match down to the weaker synonym tier. */
+ *  "kitchen". Each word here is filtered out of the itemType-word match
+ *  pass, so the item only matches via its DISTINCTIVE token (or via a
+ *  synonym row).
+ *
+ *  Three buckets:
+ *    1. Locations / rooms — kitchen, bathroom, garage, etc.
+ *    2. Generic descriptors — main, unit, system, fixture, new, old.
+ *    3. Compound prefix words that bleed across many appliances — "water"
+ *       sits in water_heater AND water_softener AND water_filter, so
+ *       chat mentioning "water heater" was also lighting up the softener
+ *       via the shared "water" token. Demoting these forces each item
+ *       to match on its own distinctive suffix instead. Same logic for
+ *       hot/gas/air/electric prefixes that combine with other words. */
 const IQ_GENERIC_TOKENS = new Set([
-  'main', 'unit', 'room', 'system', 'fixture', 'line', 'new', 'old',
+  // Generic descriptors
+  'main', 'unit', 'room', 'rooms', 'system', 'fixture', 'line', 'new', 'old', 'home', 'house',
+  // Rooms / locations
   'kitchen', 'bath', 'bathroom', 'bedroom', 'living', 'laundry', 'garage',
   'upstairs', 'downstairs', 'outdoor', 'indoor', 'front', 'back', 'side',
+  // Compound prefix words (shared across several appliance itemTypes)
+  'water', 'hot', 'cold', 'gas', 'air', 'electric', 'mini', 'heat', 'sub',
 ]);
 
 function escapeRegex(s: string): string {
