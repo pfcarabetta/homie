@@ -686,6 +686,27 @@ export default function BusinessChat() {
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [videoChatOpen, setVideoChatOpen] = useState(false);
 
+  /** Equipment details Claude extracts from the live chat via <equipment>
+   *  tags in its stream. Accumulates across turns; items are also folded
+   *  into the dispatch summary so the provider sees the brand/model the
+   *  PM mentioned (and persisted back to property inventory so the next
+   *  chat has the context baked in). */
+  type DiscoveredItem = {
+    itemType: string;
+    brand?: string;
+    modelNumber?: string;
+    estimatedAgeYears?: number;
+    condition?: string;
+    notes?: string;
+    category?: string;
+    /** Cache of property IDs this item has already been POSTed to so we
+     *  don't double-write during the same session if the AI re-mentions
+     *  the same item in a later turn. Key = propertyId+itemType+brand. */
+    _persistedKey?: string;
+  };
+  const [discoveredEquipment, setDiscoveredEquipment] = useState<DiscoveredItem[]>([]);
+  const discoveredPersistedKeysRef = useRef<Set<string>>(new Set());
+
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Cloudinary URLs of photos uploaded during this chat session */
@@ -761,6 +782,89 @@ export default function BusinessChat() {
     const target = messagesEndRef.current ?? chatEndRef.current;
     target?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, streamText, step]);
+
+  /** Flattened chat transcript used to correlate inventory items with
+   *  what's actually being discussed. Includes every message + the
+   *  in-flight streaming text + the current input value so the Property
+   *  IQ card reacts immediately as the PM types, without waiting for the
+   *  message to be committed. */
+  const chatCorrelationText = useCallback(() => {
+    const pieces: string[] = [];
+    for (const m of messages) pieces.push(m.content);
+    if (streamText) pieces.push(streamText);
+    if (inputVal) pieces.push(inputVal);
+    if (directText) pieces.push(directText);
+    if (q1Answer) pieces.push(q1Answer);
+    for (const d of discoveredEquipment) {
+      pieces.push(d.itemType);
+      if (d.brand) pieces.push(d.brand);
+      if (d.modelNumber) pieces.push(d.modelNumber);
+    }
+    return pieces.join(' \n ').toLowerCase();
+  }, [messages, streamText, inputVal, directText, q1Answer, discoveredEquipment])();
+
+  /** Scans a raw AI response for <equipment>…</equipment> JSON blocks and
+   *  folds them into `discoveredEquipment` state. Dedupes by item type +
+   *  brand so the same AC doesn't get recorded twice if Claude re-mentions
+   *  it. Kicks off a non-blocking POST to the inventory endpoint so the
+   *  discovery persists for future chats. */
+  function ingestEquipmentFromRaw(raw: string) {
+    if (!raw || !raw.includes('<equipment>')) return;
+    const re = /<equipment>([\s\S]*?)<\/equipment>/gi;
+    const fresh: DiscoveredItem[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(raw)) !== null) {
+      try {
+        const body = match[1].trim();
+        const parsed = JSON.parse(body) as {
+          item_type?: string; category?: string;
+          brand?: string | null; model_number?: string | null;
+          estimated_age_years?: number | null;
+          condition?: string | null; notes?: string | null;
+        };
+        if (!parsed.item_type) continue;
+        const dedupeKey = `${parsed.item_type}|${(parsed.brand || '').toLowerCase()}|${(parsed.model_number || '').toLowerCase()}`;
+        if (discoveredPersistedKeysRef.current.has(dedupeKey)) continue;
+        discoveredPersistedKeysRef.current.add(dedupeKey);
+        fresh.push({
+          itemType: parsed.item_type,
+          category: parsed.category ?? undefined,
+          brand: parsed.brand ?? undefined,
+          modelNumber: parsed.model_number ?? undefined,
+          estimatedAgeYears: typeof parsed.estimated_age_years === 'number' ? parsed.estimated_age_years : undefined,
+          condition: parsed.condition ?? undefined,
+          notes: parsed.notes ?? undefined,
+          _persistedKey: dedupeKey,
+        });
+      } catch (err) {
+        // JSON parse failure — tag was malformed; skip silently
+        console.warn('[BusinessChat] Failed to parse <equipment> JSON:', err);
+      }
+    }
+    if (fresh.length === 0) return;
+    setDiscoveredEquipment(prev => [...prev, ...fresh]);
+    // Persist to property inventory (best-effort, non-blocking). The
+    // addManualInventoryItem endpoint accepts our fields; AI-discovered
+    // items stay as the default 'ai_identified' status on the backend
+    // until the PM confirms them from the inventory UI.
+    if (selectedWorkspace && selectedProperty?.id) {
+      for (const item of fresh) {
+        businessService.addManualInventoryItem(
+          selectedWorkspace,
+          selectedProperty.id,
+          {
+            category: item.category || 'system',
+            item_type: item.itemType,
+            brand: item.brand,
+            model_number: item.modelNumber,
+            estimated_age_years: item.estimatedAgeYears,
+            condition: item.condition,
+            notes: item.notes ? `[Homie chat] ${item.notes}` : '[Homie chat]',
+          },
+        ).catch(err => console.warn('[BusinessChat] inventory persist failed:', err));
+      }
+    }
+  }
 
   // Build property context string with relevant equipment details
   function getPropertyContext(): string {
@@ -940,7 +1044,7 @@ export default function BusinessChat() {
         for (const ch of token) {
           if (insideTag) {
             tagBuf += ch;
-            if (/<\/(diagnosis|job_summary|suggestions)>/.test(tagBuf)) {
+            if (/<\/(diagnosis|job_summary|suggestions|equipment)>/.test(tagBuf)) {
               // Parse suggestions
               const sugMatch = tagBuf.match(/<suggestions>([\s\S]*?)<\/suggestions>/);
               if (sugMatch) {
@@ -957,7 +1061,7 @@ export default function BusinessChat() {
           if (tagBuf.length > 0) {
             tagBuf += ch;
             if (ch === '>') {
-              if (/^<(diagnosis|job_summary|suggestions)>/.test(tagBuf)) { insideTag = true; }
+              if (/^<(diagnosis|job_summary|suggestions|equipment)>/.test(tagBuf)) { insideTag = true; }
               else { full += tagBuf; setStreamText(full); tagBuf = ''; }
             }
             if (tagBuf.length > 15 && !tagBuf.includes('>')) { full += tagBuf; setStreamText(full); tagBuf = ''; }
@@ -974,6 +1078,10 @@ export default function BusinessChat() {
         setStreaming(false);
         setStreamText('');
         setMessages(prev => [...prev, { role: 'assistant', content: full.trim() }]);
+        // Extract any <equipment> blocks the AI emitted this turn; fold
+        // into both local state (for the dispatch summary + mobile IQ
+        // card) and the property inventory (so the next chat has them).
+        ingestEquipmentFromRaw(raw);
         onDone?.(full.trim(), raw);
       },
       onError: (err: Error) => {
@@ -1302,6 +1410,7 @@ export default function BusinessChat() {
     setStreaming(true);
     setStreamText('');
     let visible = '';
+    let rawFinal = '';
     let insideXml = false;
     let xmlBuf = '';
     const mode = category?.group === 'service' ? 'service' : 'repair';
@@ -1311,17 +1420,18 @@ export default function BusinessChat() {
       mode as 'repair' | 'service',
       {
         onToken: (token: string) => {
+          rawFinal += token;
           for (const ch of token) {
             if (insideXml) {
               xmlBuf += ch;
-              if (/<\/(diagnosis|job_summary|suggestions)>/.test(xmlBuf)) { insideXml = false; xmlBuf = ''; }
+              if (/<\/(diagnosis|job_summary|suggestions|equipment)>/.test(xmlBuf)) { insideXml = false; xmlBuf = ''; }
               continue;
             }
             if (ch === '<') { xmlBuf = '<'; continue; }
             if (xmlBuf.length > 0) {
               xmlBuf += ch;
               if (ch === '>') {
-                if (/^<(diagnosis|job_summary|suggestions)>/.test(xmlBuf)) { insideXml = true; }
+                if (/^<(diagnosis|job_summary|suggestions|equipment)>/.test(xmlBuf)) { insideXml = true; }
                 else { visible += xmlBuf; }
                 xmlBuf = '';
               }
@@ -1337,6 +1447,9 @@ export default function BusinessChat() {
           if (xmlBuf && !insideXml) visible += xmlBuf;
           setStreaming(false);
           setStreamText('');
+          // Absorb any <equipment> blocks the AI emitted as part of the
+          // final scope/diagnosis response into local state.
+          ingestEquipmentFromRaw(rawFinal);
           setAiDiagnosis(visible.trim());
           setStep('summary');
 
@@ -1428,6 +1541,27 @@ export default function BusinessChat() {
 
     try {
       let summaryText = aiDiagnosis || `${category?.label}: ${q1Answer}`;
+
+      // Fold any equipment details the AI extracted from chat into the
+      // dispatch summary so the provider sees exactly what they'll be
+      // servicing (brand, model, age, condition, notes).
+      if (discoveredEquipment.length > 0) {
+        const lines = discoveredEquipment.map(d => {
+          const parts: string[] = [];
+          const typeLabel = d.itemType.replace(/_/g, ' ');
+          parts.push(typeLabel);
+          if (d.brand) parts.push(d.brand);
+          if (d.modelNumber) parts.push(d.modelNumber);
+          const meta: string[] = [];
+          if (d.estimatedAgeYears !== undefined) meta.push(`${Math.round(d.estimatedAgeYears)}yr old`);
+          if (d.condition) meta.push(d.condition);
+          if (meta.length) parts.push(`(${meta.join(', ')})`);
+          if (d.notes) parts.push(`— ${d.notes}`);
+          return `• ${parts.join(' ')}`;
+        });
+        summaryText = `${summaryText}\n\nEquipment identified:\n${lines.join('\n')}`;
+      }
+
       const noteToAppend = permissionNote ?? entryPermission;
       if (noteToAppend) {
         summaryText = `${summaryText}\n\n${noteToAppend}`;
@@ -1538,6 +1672,9 @@ export default function BusinessChat() {
           .b2b-split > * { min-width: 0 !important; }
           .b2b-split > .b2b-chat-col { max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
           .b2b-right-panel { display: flex !important; }
+          /* Desktop gets the right-rail Property IQ card — the inline
+             mobile version is redundant here. */
+          .b2b-mobile-iq { display: none !important; }
         }
         @media (max-width: 980px) {
           .b2b-split { grid-template-columns: 1fr !important; gap: 12px !important; }
@@ -1695,6 +1832,8 @@ export default function BusinessChat() {
             setDispatching(false);
             setSelectedResponse(null);
             setBookedName(null);
+            setDiscoveredEquipment([]);
+            discoveredPersistedKeysRef.current.clear();
             sessionIdRef.current = `b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`;
           }} style={{
             background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
@@ -1928,6 +2067,14 @@ export default function BusinessChat() {
                 m.role === 'user' ? <UserMsg key={i} text={m.content} /> : <AssistantMsg key={i} text={m.content} />
               ))}
               {streaming && <StreamingMsg text={streamText} />}
+              {/* Mobile inline Property IQ — only renders when at least one
+                  inventory item correlates with the current chat. Hidden
+                  on ≥981px (the right-rail card already covers desktop). */}
+              <MobileInlinePropertyIQ
+                items={propertyInventory}
+                chatText={chatCorrelationText}
+                discovered={discoveredEquipment}
+              />
               {/* Scroll sentinel — see auto-scroll useEffect. Placed at the
                   tail of the messages list so block:'end' parks the latest
                   AI reply right at the viewport bottom. */}
@@ -2470,6 +2617,7 @@ export default function BusinessChat() {
             propertyId={selectedProperty?.id ?? null}
             categoryLabel={category?.label ?? null}
             items={propertyInventory}
+            chatText={chatCorrelationText}
           />
           <B2BProsNearbyBadge
             categoryLabel={category?.label ?? null}
@@ -2732,12 +2880,70 @@ function iqCategoryKeyFromLabel(label: string | null): keyof typeof IQ_CATEGORY_
   return null;
 }
 
+/** Synonym map for detecting when an inventory item is being discussed in
+ *  chat text. Keyed by the itemType keyword token. */
+const IQ_SYNONYMS: Array<{ match: RegExp; signals: RegExp }> = [
+  { match: /hvac|air.?cond|ac_unit|^ac$|furnace|heat.?pump|thermostat|boiler|mini.?split/i,
+    signals: /\b(hvac|a\/?c|air[\s-]?cond|ac[\s-]?unit|furnace|heat[\s-]?pump|thermostat|boiler|mini[\s-]?split|cooling|heating|compressor|condenser)\b/i },
+  { match: /water.?heater|tankless/i,
+    signals: /\b(water[\s-]?heater|hot[\s-]?water|tankless|water[\s-]?tank)\b/i },
+  { match: /fridge|refrig/i, signals: /\b(fridge|refrigerat|freezer|ice[\s-]?maker)\b/i },
+  { match: /washer/i, signals: /\b(washer|laundry|washing[\s-]?machine)\b/i },
+  { match: /dryer/i, signals: /\b(dryer|laundry|drying)\b/i },
+  { match: /dishwash/i, signals: /\bdishwash/i },
+  { match: /oven|range|stove/i, signals: /\b(oven|range|stove|cooktop|burner)\b/i },
+  { match: /microwave/i, signals: /\bmicrowave\b/i },
+  { match: /disposal/i, signals: /\b(garbage[\s-]?disposal|disposal)\b/i },
+  { match: /faucet|sink/i, signals: /\b(faucet|sink|tap|spigot)\b/i },
+  { match: /toilet/i, signals: /\b(toilet|commode|bowl)\b/i },
+  { match: /shower|bath/i, signals: /\b(shower|bath|tub|bathtub)\b/i },
+  { match: /drain|pipe|plumb/i, signals: /\b(drain|pipe|plumb|leak|clog|sewer)\b/i },
+  { match: /outlet|breaker|panel|wiring|electric/i, signals: /\b(outlet|receptacle|breaker|panel|wiring|electric|gfci|circuit|wire|wires|wired|socket)\b/i },
+  { match: /light/i, signals: /\b(light|bulb|fixture|lamp|sconce|chandelier)\b/i },
+  { match: /roof|gutter|siding|chimney/i, signals: /\b(roof|shingle|gutter|siding|chimney|flashing)\b/i },
+  { match: /garage/i, signals: /\b(garage|door[\s-]?opener|garage[\s-]?door)\b/i },
+  { match: /pool|spa|hot.?tub/i, signals: /\b(pool|spa|hot[\s-]?tub|jacuzzi|pump|filter)\b/i },
+  { match: /alarm|camera|doorbell|security/i, signals: /\b(alarm|camera|doorbell|security|smoke|carbon[\s-]?monoxide|co[\s-]?detector|sensor)\b/i },
+];
+
+/** Returns the list of keyword regexes that indicate this inventory item
+ *  is being discussed. Combines the itemType synonyms + any brand/model
+ *  string stored on the item. */
+function itemKeywords(item: PropertyInventoryItem): RegExp[] {
+  const keys: RegExp[] = [];
+  const words = (item.itemType || '').toLowerCase().split(/[_\s]/).filter(w => w.length >= 3);
+  for (const w of words) {
+    keys.push(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
+  }
+  if (item.brand && item.brand.trim().length >= 2) {
+    keys.push(new RegExp(`\\b${item.brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
+  }
+  if (item.modelNumber && item.modelNumber.trim().length >= 2) {
+    keys.push(new RegExp(item.modelNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+  }
+  for (const syn of IQ_SYNONYMS) {
+    if (syn.match.test(item.itemType)) keys.push(syn.signals);
+  }
+  return keys;
+}
+
+/** True when chat text mentions a signal that correlates to this item. */
+function itemCorrelatesWithChat(item: PropertyInventoryItem, chatText: string): boolean {
+  if (!chatText) return false;
+  const keys = itemKeywords(item);
+  return keys.some(rx => rx.test(chatText));
+}
+
 function B2BPropertyIQCard({
-  propertyId, categoryLabel, items,
+  propertyId, categoryLabel, items, chatText,
 }: {
   propertyId: string | null;
   categoryLabel: string | null;
   items: PropertyInventoryItem[];
+  /** Concatenated lowercased text of the current chat (user + assistant
+   *  messages + in-flight streaming text). Used to narrow which inventory
+   *  items are actually being discussed. Empty = no correlation yet. */
+  chatText: string;
 }) {
   // Empty-state — no scan or zero items. Show the run-scan nudge.
   if (!propertyId || items.length === 0) {
@@ -2760,13 +2966,40 @@ function B2BPropertyIQCard({
     );
   }
 
-  // If we have a category, filter to matching items; otherwise show an
-  // overview (count by category group) with a hint that the card narrows
-  // as the AI locks a category.
+  // Tier the filter: prefer chat-correlated items (anything the PM or AI
+  // actually mentioned), fall back to the category regex only while the
+  // conversation is still warming up. Category-only matches are hidden to
+  // keep the card focused on what's being discussed right now.
   const catKey = iqCategoryKeyFromLabel(categoryLabel);
-  const matcher = catKey ? IQ_CATEGORY_MATCH[catKey] : null;
-  const filtered = matcher ? items.filter(matcher) : items;
+  const correlated = chatText ? items.filter(it => itemCorrelatesWithChat(it, chatText)) : [];
+  const hasChatHits = correlated.length > 0;
+  const fallback = catKey ? items.filter(IQ_CATEGORY_MATCH[catKey]) : [];
+  const filtered = hasChatHits ? correlated : fallback;
   const hasCategory = !!catKey;
+
+  // If we have a scan but nothing is being discussed yet (chat empty OR no
+  // keywords fire AND no category is inferred), collapse to a compact
+  // "ready" state rather than spamming the whole inventory — matches the
+  // user's ask that only correlated items appear.
+  if (!hasChatHits && !hasCategory) {
+    return (
+      <div style={{
+        background: _CARD_R, borderRadius: 18, border: `1px dashed ${_BORDER_R}`,
+        padding: 16,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 9, background: `${_O_R}14`, border: `1px solid ${_O_R}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🧠</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: _D_R }}>Property IQ</div>
+            <div style={{ fontSize: 10, color: _DIM_R, marginTop: 1, fontFamily: "'DM Mono',monospace", letterSpacing: .4, textTransform: 'uppercase' }}>{items.length} on file · ready</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: _DIM_R, lineHeight: 1.5 }}>
+          Mention a system or appliance — Homie will surface the matching equipment here.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -2782,31 +3015,82 @@ function B2BPropertyIQCard({
         }}>🧠</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: _D_R }}>
-            Property IQ{hasCategory && categoryLabel ? ` · ${categoryLabel}` : ''}
+            Property IQ{hasChatHits ? ' · in chat' : hasCategory && categoryLabel ? ` · ${categoryLabel}` : ''}
           </div>
           <div style={{ fontSize: 10, color: _DIM_R, marginTop: 1, fontFamily: "'DM Mono',monospace", letterSpacing: .4, textTransform: 'uppercase' }}>
-            {hasCategory ? `${filtered.length} matching item${filtered.length === 1 ? '' : 's'}` : `${items.length} on file`}
+            {filtered.length} {hasChatHits ? 'mentioned' : 'matching'} item{filtered.length === 1 ? '' : 's'}
           </div>
         </div>
       </div>
 
-      {hasCategory && filtered.length === 0 && (
+      {filtered.length === 0 ? (
         <div style={{ padding: 10, borderRadius: 10, background: 'var(--bp-hover)', fontSize: 12, color: _DIM_R, lineHeight: 1.5 }}>
-          No {categoryLabel?.toLowerCase()} equipment on file — Homie will record what you mention.
+          No {categoryLabel?.toLowerCase() ?? 'matching'} equipment on file — Homie will record what you mention.
         </div>
-      )}
-
-      {filtered.length > 0 && (
+      ) : (
         <div style={{ display: 'grid', gap: 6 }}>
           {filtered.slice(0, 4).map(item => <B2BIQRow key={item.id} item={item} />)}
         </div>
       )}
+    </div>
+  );
+}
 
-      {!hasCategory && items.length > 0 && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${_BORDER_R}`, fontSize: 11, color: _DIM_R, lineHeight: 1.5 }}>
-          💡 Homie will narrow this list once a category is inferred from your chat.
-        </div>
-      )}
+/** Compact inline Property IQ card for mobile — surfaces inventory items
+ *  that correlate with the current chat directly inside the chat column
+ *  (the desktop right-rail version is hidden under 981px). Also shows any
+ *  equipment the AI discovered on the fly, so the PM sees what's been
+ *  captured for the dispatch summary. Entire component hides itself on
+ *  ≥981px via the .b2b-mobile-iq CSS class. */
+function MobileInlinePropertyIQ({
+  items, chatText, discovered,
+}: {
+  items: PropertyInventoryItem[];
+  chatText: string;
+  discovered: Array<{ itemType: string; brand?: string; modelNumber?: string; estimatedAgeYears?: number; condition?: string }>;
+}) {
+  const correlated = chatText ? items.filter(it => itemCorrelatesWithChat(it, chatText)) : [];
+  if (correlated.length === 0 && discovered.length === 0) return null;
+
+  return (
+    <div className="b2b-mobile-iq" style={{
+      marginLeft: 42, marginRight: 0, marginTop: 8, marginBottom: 8,
+      background: _CARD_R, borderRadius: 14, border: `1px solid ${_BORDER_R}`,
+      padding: 12, animation: 'fadeSlide 0.3s ease',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <div style={{ width: 22, height: 22, borderRadius: 7, background: `${_O_R}14`, border: `1px solid ${_O_R}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>🧠</div>
+        <span style={{ fontFamily: "'Fraunces',serif", fontSize: 12.5, fontWeight: 700, color: _D_R }}>
+          Property IQ · {correlated.length + discovered.length} {correlated.length + discovered.length === 1 ? 'item' : 'items'} in play
+        </span>
+      </div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {correlated.slice(0, 3).map(item => <B2BIQRow key={item.id} item={item} />)}
+        {discovered.slice(0, 3).map((d, i) => (
+          <div key={`disc-${i}`} style={{
+            padding: 10, borderRadius: 10,
+            background: `${_G_R}0e`, border: `1px dashed ${_G_R}66`,
+            display: 'flex', gap: 8, alignItems: 'flex-start',
+          }}>
+            <div style={{ width: 22, height: 22, borderRadius: 6, background: _G_R, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+              +
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 12.5, fontWeight: 700, color: _D_R, lineHeight: 1.2 }}>
+                {[d.brand, d.modelNumber].filter(Boolean).join(' · ') || iqLabelFor(d.itemType)}
+              </div>
+              <div style={{ fontSize: 10, color: _DIM_R, marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ textTransform: 'capitalize' }}>{iqLabelFor(d.itemType)}</span>
+                {d.estimatedAgeYears !== undefined && (
+                  <><span style={{ opacity: .4 }}>·</span><span>{Math.round(d.estimatedAgeYears)}yr</span></>
+                )}
+                <span style={{ opacity: .4 }}>·</span>
+                <span style={{ color: _G_R, fontWeight: 700 }}>new from chat</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
