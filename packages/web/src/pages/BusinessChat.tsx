@@ -921,14 +921,22 @@ export default function BusinessChat() {
   }, [messages, streamText, step]);
 
   /** Flattened chat transcript used to correlate inventory items with
-   *  what's actually being discussed. Includes every message + the
-   *  in-flight streaming text + the current input value so the Property
-   *  IQ card reacts immediately as the PM types, without waiting for the
-   *  message to be committed. */
+   *  what's actually being discussed. Only PM-sourced text contributes —
+   *  user messages, the in-flight input/dictation, q1 answer, and any
+   *  equipment the AI extracted via <equipment> tags (those are
+   *  PM-mentioned too, per the system prompt).
+   *
+   *  Assistant text is DELIBERATELY excluded: when the AI asks "can you
+   *  turn on the overhead light so I can see the burner?" the word
+   *  "light" would otherwise correlate to every light fixture in the
+   *  scan — even though lights have nothing to do with the range
+   *  diagnostic. Only the PM's own words should add items to the card.
+   *  The AI-in-flight streamText is also excluded for the same reason. */
   const chatCorrelationText = useCallback(() => {
     const pieces: string[] = [];
-    for (const m of messages) pieces.push(m.content);
-    if (streamText) pieces.push(streamText);
+    for (const m of messages) {
+      if (m.role === 'user') pieces.push(m.content);
+    }
     if (inputVal) pieces.push(inputVal);
     if (directText) pieces.push(directText);
     if (q1Answer) pieces.push(q1Answer);
@@ -938,7 +946,7 @@ export default function BusinessChat() {
       if (d.modelNumber) pieces.push(d.modelNumber);
     }
     return pieces.join(' \n ').toLowerCase();
-  }, [messages, streamText, inputVal, directText, q1Answer, discoveredEquipment])();
+  }, [messages, inputVal, directText, q1Answer, discoveredEquipment])();
 
   /** Scans a raw AI response for <equipment>…</equipment> JSON blocks and
    *  folds them into `discoveredEquipment` state. Dedupes by item type +
