@@ -27,6 +27,37 @@ type DispatchUrgency = {
   jobTiming: 'asap' | 'this_week' | 'this_month' | 'flexible';
   severity: 'low' | 'medium' | 'high' | 'emergency';
 };
+/** Final-summary hygiene — strips clarifying questions that occasionally
+ *  leak into the dispatch summary when Claude hedges on the final turn
+ *  ("I have a couple quick questions to make sure I send the right pro.
+ *  How long has this been going on?"). Splits on sentence boundaries and
+ *  drops any sentence ending with a question mark, plus common hedge
+ *  preambles that don't end in `?` on their own. Preserves everything
+ *  else verbatim so diagnostic detail isn't lost. */
+function stripQuestionsFromSummary(text: string): string {
+  if (!text) return text;
+  const HEDGE_PATTERNS = [
+    /^i have (?:a )?(?:couple|few|quick|some)?\s*(?:quick )?questions\b/i,
+    /^let me ask\b/i,
+    /^could you (?:tell|share|let|clarify|confirm)\b/i,
+    /^can you (?:tell|share|let|clarify|confirm)\b/i,
+    /^to make sure i send the right pro\b/i,
+    /^one more question\b/i,
+    /^just to clarify\b/i,
+  ];
+  // Sentence splitter — keeps terminators attached so we can filter by them.
+  const sentences = text.match(/[^.!?\n]+[.!?]+[\s\n]?|[^.!?\n]+[\s\n]?/g) ?? [text];
+  const kept = sentences.filter(raw => {
+    const s = raw.trim();
+    if (!s) return false;
+    if (s.endsWith('?')) return false;
+    for (const rx of HEDGE_PATTERNS) if (rx.test(s)) return false;
+    return true;
+  });
+  const cleaned = kept.join('').replace(/\s{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return cleaned || text.trim();
+}
+
 function mapUserTimingToDispatch(raw: string): DispatchUrgency {
   const t = (raw || '').trim().toLowerCase();
   if (!t || t === 'flexible') return { jobTiming: 'flexible', severity: 'low' };
@@ -1428,10 +1459,15 @@ export default function BusinessChat() {
     setTiming(selected);
     setMessages(prev => [...prev, { role: 'user', content: selected }]);
 
-    // Generate the scope after timing is selected (same logic as original handleBudget)
+    // Generate the scope after timing is selected. The prompt is written
+    // to force a committed final output — no more questions, no hedging,
+    // no "I have a couple quick questions" fallback — because whatever
+    // Claude returns here is persisted verbatim into the dispatch summary
+    // the provider reads. If the AI doesn't have enough info, it should
+    // make its best diagnosis and flag the gap in the JSON, not ask.
     const promptText = category?.group === 'service'
-      ? 'Please generate a final scope summary so I can dispatch a provider.'
-      : 'Please generate your diagnosis so I can dispatch a pro.';
+      ? 'I am ready to dispatch. Generate the final scope summary NOW using whatever you already know. Do NOT ask any more clarifying questions — this is the final message before the job is sent to the provider. Output a committed scope description (plain text, 2–4 sentences) followed by the <diagnosis> JSON block. If any detail is missing, fill it with your best estimate and note "pending confirmation" in the scope — do not ask for it.'
+      : 'I am ready to dispatch. Generate your final diagnosis NOW using whatever you already know. Do NOT ask any more clarifying questions — this is the final message before the job is sent to the pro. Output a committed diagnosis (plain text, 2–4 sentences) followed by the <diagnosis> JSON block. If any detail is missing, fill it with your best estimate and note "pending confirmation" in the diagnosis — do not ask for it.';
 
     setStep('generating');
     setStreaming(true);
@@ -1477,7 +1513,10 @@ export default function BusinessChat() {
           // Absorb any <equipment> blocks the AI emitted as part of the
           // final scope/diagnosis response into local state.
           ingestEquipmentFromRaw(rawFinal);
-          setAiDiagnosis(visible.trim());
+          // Safety net: scrub any clarifying questions that leaked into
+          // the final summary before it's persisted as the dispatch text.
+          // See stripQuestionsFromSummary for the heuristics.
+          setAiDiagnosis(stripQuestionsFromSummary(visible.trim()));
           setStep('summary');
 
           // Fetch cost estimate
