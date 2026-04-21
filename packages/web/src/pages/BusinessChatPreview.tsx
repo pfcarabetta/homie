@@ -1256,13 +1256,13 @@ function MobileLayout({ scenario: s, memoryState }: { scenario: Scenario; memory
             Continue — confirm timing &amp; tier →
           </button>
 
-          {/* Bottom context stack — replaces desktop right panel */}
-          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Compact "Homie thinks" card — the single bottom signal kept on
+              mobile. Property IQ, pros-nearby, checklist, and assurance are
+              intentionally dropped on mobile to keep the scroll clean;
+              Property IQ is already surfaced inline in the chat as an AI
+              bubble when relevant, which covers its job here. */}
+          <div style={{ marginTop: 20 }}>
             <MobileHomieThinksCard />
-            <MobilePropertyIQCard state={memoryState} />
-            <MobileProsNearby />
-            <MobileChecklist />
-            <MobileAssurance />
           </div>
         </div>
       </div>
@@ -1561,171 +1561,11 @@ function MobileHomieThinksCard() {
   );
 }
 
-function MobilePropertyIQCard({ state }: { state: MemoryState }) {
-  if (state === 'empty') {
-    return (
-      <div style={{
-        padding: 12, borderRadius: 14, background: '#fff',
-        border: `1px dashed ${BORDER}`,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <span style={{ fontSize: 16, opacity: .6 }}>🧠</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: D }}>Property IQ</span>
-          <span style={{ fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: .5, textTransform: 'uppercase' }}>Empty</span>
-        </div>
-        <div style={{ fontSize: 12, color: D, lineHeight: 1.5, marginBottom: 8 }}>
-          Run a scan so Homie remembers brands + service history for next time.
-        </div>
-        <button style={{
-          background: O, color: '#fff', border: 'none',
-          borderRadius: 100, padding: '6px 12px', fontSize: 11, fontWeight: 700,
-          cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-        }}>Run scan →</button>
-      </div>
-    );
-  }
-  const hvacItems = MOCK_INVENTORY.filter(i => i.category === 'hvac');
-  const items = state === 'hvac' ? hvacItems : MOCK_INVENTORY.slice(0, 5);
-  return (
-    <div style={{
-      padding: 12, borderRadius: 14, background: '#fff',
-      border: `1px solid ${BORDER}`, boxShadow: '0 6px 20px -12px rgba(0,0,0,.08)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 14 }}>🧠</span>
-        <span style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, color: D }}>
-          Property IQ{state === 'hvac' ? ' · HVAC' : ''}
-        </span>
-        <span style={{ fontSize: 9, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: .5, textTransform: 'uppercase', marginLeft: 'auto' }}>
-          {state === 'hvac' ? `${items.length} items` : `${MOCK_INVENTORY.length} total`}
-        </span>
-      </div>
-      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginLeft: -2, marginRight: -2 }}>
-        {items.map(item => (
-          <MobileIQChip key={item.id} item={item} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MobileIQChip({ item }: { item: InventoryItem }) {
-  const pinned = item.pinned;
-  return (
-    <div style={{
-      flex: '0 0 auto',
-      padding: '8px 10px', borderRadius: 10,
-      background: pinned ? `${O}0d` : 'rgba(0,0,0,.02)',
-      border: `1px solid ${pinned ? `${O}44` : BORDER}`,
-      minWidth: 160, maxWidth: 200,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ fontSize: 12 }}>
-          {item.category === 'hvac' && '❄️'}
-          {item.category === 'plumbing' && '🚰'}
-          {item.category === 'appliance' && '🍳'}
-          {item.category === 'electrical' && '⚡'}
-          {item.category === 'other' && '🔨'}
-        </span>
-        <span style={{ fontSize: 9, color: DIM, textTransform: 'uppercase', letterSpacing: .8, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>
-          {item.room}
-        </span>
-        {pinned && (
-          <span style={{
-            background: O, color: '#fff',
-            padding: '1px 5px', borderRadius: 100,
-            fontSize: 7.5, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase',
-            fontFamily: "'DM Mono',monospace",
-            marginLeft: 'auto',
-          }}>AI</span>
-        )}
-      </div>
-      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 12, fontWeight: 700, color: D, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {item.brand} {item.model}
-      </div>
-      <div style={{ fontSize: 9.5, color: DIM, marginTop: 2 }}>
-        {item.installedYear}
-        {item.overdue && <span style={{ color: AMBER, fontWeight: 700, marginLeft: 4 }}>⚠ Overdue</span>}
-      </div>
-    </div>
-  );
-}
-
-function MobileProsNearby() {
-  return (
-    <div style={{
-      padding: '8px 12px', borderRadius: 12,
-      background: `linear-gradient(90deg, ${O}14, ${O}06)`,
-      border: `1px solid ${O}22`,
-      display: 'flex', alignItems: 'center', gap: 8,
-    }}>
-      <div style={{ position: 'relative', width: 9, height: 9, flexShrink: 0 }}>
-        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: G }} />
-        <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: G, opacity: .25, animation: 'pulse 2s infinite' }} />
-      </div>
-      <div style={{ fontSize: 11.5, color: D, fontWeight: 600, flex: 1, minWidth: 0 }}>
-        <span style={{ color: O, fontWeight: 700 }}>11 HVAC pros</span>
-        <span style={{ color: DIM, fontWeight: 500 }}> near you</span>
-      </div>
-      <div style={{ fontSize: 8.5, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: .8, fontWeight: 700, textTransform: 'uppercase' }}>Live</div>
-    </div>
-  );
-}
-
-function MobileChecklist() {
-  const items = [
-    { done: true, txt: 'Property selected' },
-    { done: true, txt: 'Category inferred' },
-    { done: true, txt: 'Problem area located' },
-    { done: false, txt: 'Severity assessed', next: true },
-    { done: false, txt: 'Dispatch brief ready' },
-  ];
-  return (
-    <div style={{
-      padding: 12, borderRadius: 14, background: '#fff',
-      border: `1px solid ${BORDER}`,
-    }}>
-      <div style={{ fontSize: 10, color: DIM, textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 8, fontFamily: "'DM Mono',monospace" }}>Checklist</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {items.map((p, i) => (
-          <div key={i} style={{
-            display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 6,
-            background: p.done ? 'rgba(27,158,119,.07)' : 'transparent',
-          }}>
-            <div style={{
-              width: 14, height: 14, borderRadius: '50%',
-              background: p.done ? G : 'transparent',
-              border: p.done ? 'none' : `1.5px solid ${BORDER}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 8, fontWeight: 700, flexShrink: 0,
-            }}>{p.done && '✓'}</div>
-            <div style={{ flex: 1, fontSize: 11.5, color: p.done ? D : DIM, fontWeight: p.done ? 600 : 500 }}>
-              {p.txt}
-            </div>
-            {p.next && <span style={{ fontSize: 8.5, color: O, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700 }}>NEXT</span>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MobileAssurance() {
-  return (
-    <div style={{
-      padding: '10px 14px',
-      background: `linear-gradient(135deg, ${D} 0%, #3A3430 100%)`,
-      color: '#fff', borderRadius: 14, fontFamily: "'DM Sans',sans-serif",
-      display: 'flex', alignItems: 'center', gap: 10,
-    }}>
-      <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>⚡</div>
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 700 }}>Quotes in ~2 minutes</div>
-        <div style={{ fontSize: 10.5, opacity: .75, marginTop: 1 }}>No calling around. No forms.</div>
-      </div>
-    </div>
-  );
-}
+// Mobile context stack below Homie Thinks was removed per design feedback
+// (too crowded on a phone viewport). If we want to bring any of these back
+// behind a tap/sheet, MobilePropertyIQCard / MobileProsNearby /
+// MobileChecklist / MobileAssurance lived here previously — check git
+// history for the 3975671 commit.
 
 // ─── End mobile preview ─────────────────────────────────────────────────────
 
