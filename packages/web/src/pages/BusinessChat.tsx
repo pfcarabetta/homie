@@ -1489,14 +1489,19 @@ export default function BusinessChat() {
         @media (max-width: 640px) {
           .b2b-chat-status span { font-size: 0 !important; }
         }
-        /* New Q2-style split: chat on the left, context cards on the right.
-           Collapses to single column under 980px; on mobile the right
-           panel is hidden because the header already carries the
-           occupancy + calendar popover. */
+        /* Split layout — mirrors /quote's gq-split so the chat column and
+           right-rail panel land at the same proportions across surfaces
+           (1.15fr 1fr at 1280px max, collapses to single column < 981px). */
         @media (min-width: 981px) {
-          .b2b-split { display: grid !important; grid-template-columns: minmax(0, 1fr) 340px !important; gap: 24px !important; align-items: start !important; max-width: 1280px !important; padding-left: 24px !important; padding-right: 24px !important; }
+          .b2b-split { display: grid !important; grid-template-columns: 1.15fr 1fr !important; gap: 28px !important; align-items: flex-start !important; max-width: 1280px !important; padding-left: 24px !important; padding-right: 24px !important; }
+          .b2b-split > * { min-width: 0 !important; }
           .b2b-split > .b2b-chat-col { max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
           .b2b-right-panel { display: flex !important; }
+        }
+        @media (max-width: 980px) {
+          .b2b-split { grid-template-columns: 1fr !important; gap: 12px !important; }
+          .b2b-split > * { min-width: 0 !important; max-width: 100% !important; }
+          .b2b-chat-col { min-width: 0 !important; max-width: 100% !important; }
         }
       `}</style>
 
