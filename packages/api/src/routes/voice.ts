@@ -155,9 +155,13 @@ Do NOT include <ready/> on earlier turns. Always include <category>ID</category>
 // the Homie Business surface. Shifts the persona just enough that Homie
 // asks PM-appropriate questions (unit number, access, guest impact) rather
 // than owner-flavoured ones ("when did YOU first notice it?").
-const BUSINESS_SYSTEM_SUFFIX = `\n\nYOU'RE ON A CALL WITH A PROPERTY MANAGER — not the end-user homeowner. A CONTEXT block at the start of the first user turn carries the property address, current guest/occupancy, and any known equipment from prior scans. Use it to:
-- Reference appliances by the brand/model already on file ("the Trane XR16 upstairs") instead of asking for it
-- Factor in the guest situation — if the property is occupied, ask about access + timing, and suggest scheduling around the guest when appropriate
+const BUSINESS_SYSTEM_SUFFIX = `\n\nYOU'RE ON A CALL WITH A PROPERTY MANAGER — not the end-user homeowner. A CONTEXT block at the start of the first user turn carries the property address, size, current guest/occupancy, saved property notes, every saved equipment detail (HVAC / water heater / plumbing fixtures / appliances / electrical / pool-spa / exterior), and the full Property IQ scan inventory (every known appliance + system with brand, model, age, condition).
+
+BEFORE asking ANY clarifying question, scan the CONTEXT top to bottom. If the answer is already there, USE IT and don't ask. Specifically:
+- If the PM mentions an appliance or system, check both the "Property IQ inventory" list and the saved sections ("Appliances:", "HVAC:", "Water heater:", "Plumbing:", "Electrical:", "Pool/Spa:", "Exterior:") for a matching entry. Reference the brand/model/age on file verbatim ("the Samsung DW80N3030US dishwasher", "the 8-year-old Trane XR16 AC") instead of asking "what brand is it?" or "how old is it?"
+- If the PM says "the dishwasher is leaking" and the inventory lists a Samsung dishwasher, speak about the Samsung dishwasher — do NOT ask which one or what brand
+- Only ask for equipment details that are NOT in the CONTEXT. If an item appears in neither the saved sections nor the inventory, then ask
+- Factor the guest situation — if occupied, ask about access + timing; suggest scheduling around the guest
 - Keep the tone professional and efficient; PMs manage many jobs and appreciate speed over warmth
 - Never read the CONTEXT block aloud — treat it as background knowledge you already have`;
 
@@ -337,8 +341,12 @@ router.post('/turn', async (req: Request, res: Response) => {
   // into the first-turn user message so Claude has the real facts of the
   // property before the conversation starts — it can reference the right
   // appliance brand/model, know whether the unit is occupied, etc.
+  // Ceiling raised from 2k → 12k so the whole Property IQ inventory +
+  // saved property details can ride along. A big scan can easily be
+  // 3-5k of text; clipping at 2k was dropping the inventory rows and
+  // forcing Homie to re-ask brand/model questions it should already know.
   const businessContext = typeof body.business_context === 'string' && body.business_context.trim().length > 0
-    ? body.business_context.trim().slice(0, 2000)
+    ? body.business_context.trim().slice(0, 12000)
     : null;
 
   // Optional video frame (only sent by the video-chat panel). When present

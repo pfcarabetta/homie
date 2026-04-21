@@ -1340,10 +1340,28 @@ export default function BusinessChat() {
   // backend. Picks up whatever we already know: property + occupancy +
   // a compact known-equipment summary from the inventory fetch. Kept
   // under ~2k chars so the Claude system-prompt stays lean.
+  /** Builds the CONTEXT block sent to the voice/video backend. Mirrors
+   *  what the typed-chat flow gets via getPropertyContext() PLUS the
+   *  full Property IQ inventory, so voice Homie doesn't re-ask for
+   *  brand/model/age details that are already on file (e.g. "what
+   *  brand is the dishwasher?" when the scan knows it's a Samsung). */
   const buildBusinessContext = useCallback((): string | null => {
     if (!selectedProperty) return null;
     const lines: string[] = [];
-    lines.push(`Property: ${selectedProperty.name}${selectedProperty.zipCode ? ` · ${selectedProperty.zipCode}` : ''}`);
+    const p = selectedProperty;
+
+    // ── Property identity + size ───────────────────────────────
+    lines.push(`Property: ${p.name}${p.zipCode ? ` · ${p.zipCode}` : ''}`);
+    if (p.address) lines.push(`Address: ${p.address}${p.city ? `, ${p.city}` : ''}${p.state ? `, ${p.state}` : ''} ${p.zipCode || ''}`.trim());
+    const sizeBits: string[] = [];
+    if (p.propertyType) sizeBits.push(p.propertyType);
+    if (p.bedrooms != null && p.bedrooms > 0) sizeBits.push(`${p.bedrooms}bd`);
+    if (p.bathrooms != null && +p.bathrooms > 0) sizeBits.push(`${p.bathrooms}ba`);
+    if (p.sqft != null && p.sqft > 0) sizeBits.push(`${p.sqft.toLocaleString()} sqft`);
+    if (sizeBits.length) lines.push(`Size/type: ${sizeBits.join(' · ')}`);
+    if (p.beds && p.beds.length > 0) lines.push(`Beds: ${p.beds.map(b => `${b.count}× ${b.type}`).join(', ')}`);
+
+    // ── Occupancy ──────────────────────────────────────────────
     if (headerOccupancy?.occupied && headerOccupancy.reservation) {
       const out = new Date(headerOccupancy.reservation.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
       lines.push(`Status: OCCUPIED by ${headerOccupancy.reservation.guestName || 'a guest'} until ${out}. Schedule around checkout.`);
@@ -1353,18 +1371,118 @@ export default function BusinessChat() {
     } else if (headerOccupancy) {
       lines.push('Status: vacant; no upcoming reservations on file.');
     }
+
+    // ── Saved property notes (access codes redacted) ──────────
+    if (p.notes) {
+      const safeNotes = p.notes
+        .replace(/\b(door|gate|lock|access|entry|wifi|password|code|pin)\s*(code|number|#|:)?\s*[:\-]?\s*\S+/gi, '[redacted]')
+        .trim();
+      if (safeNotes) lines.push(`Notes: ${safeNotes}`);
+    }
+
+    // ── Saved property details (equipment brands + ages) ──────
+    // This is the same data the typed chat injects via
+    // getPropertyContext, but without any category filter — voice
+    // hasn't inferred a category yet so we hand the model every
+    // equipment section that's populated.
+    const d = p.details as PropertyDetails | null;
+    if (d) {
+      if (d.hvac) {
+        const h = d.hvac;
+        const bits = [
+          h.acType && `${h.acType} AC`,
+          h.acBrand && `(${h.acBrand}${h.acModel ? ` ${h.acModel}` : ''})`,
+          h.acAge && `${h.acAge} old`,
+          h.heatingType && `Heating: ${h.heatingType}`,
+          h.heatingBrand && `(${h.heatingBrand}${h.heatingModel ? ` ${h.heatingModel}` : ''})`,
+          h.thermostatBrand && `Thermostat: ${h.thermostatBrand}${h.thermostatModel ? ` ${h.thermostatModel}` : ''}`,
+          h.filterSize && `Filter: ${h.filterSize}`,
+        ].filter(Boolean);
+        if (bits.length) lines.push(`HVAC: ${bits.join(', ')}`);
+      }
+      if (d.waterHeater) {
+        const wh = d.waterHeater;
+        const bits = [wh.type, wh.brand, wh.model, wh.fuel, wh.capacity, wh.age && `${wh.age} old`, wh.location && `in ${wh.location}`].filter(Boolean);
+        if (bits.length) lines.push(`Water heater: ${bits.join(' · ')}`);
+      }
+      if (d.plumbing) {
+        const pl = d.plumbing;
+        const bits = [
+          pl.kitchenFaucetBrand && `Kitchen faucet: ${pl.kitchenFaucetBrand}`,
+          pl.bathroomFaucetBrand && `Bath faucet: ${pl.bathroomFaucetBrand}`,
+          pl.toiletBrand && `Toilet: ${pl.toiletBrand}`,
+          pl.waterSoftener && `Water softener: ${pl.waterSoftener}`,
+          pl.septicOrSewer && `${pl.septicOrSewer}`,
+          pl.mainShutoffLocation && `Main shutoff: ${pl.mainShutoffLocation}`,
+        ].filter(Boolean);
+        if (bits.length) lines.push(`Plumbing: ${bits.join(', ')}`);
+      }
+      if (d.appliances) {
+        const appParts: string[] = [];
+        for (const [name, info] of Object.entries(d.appliances)) {
+          if (!info) continue;
+          const ap = info as Record<string, string>;
+          const desc = [ap.brand, ap.model, ap.fuel].filter(Boolean).join(' ');
+          if (desc) appParts.push(`${name.charAt(0).toUpperCase() + name.slice(1)}: ${desc}`);
+        }
+        if (appParts.length) lines.push(`Appliances: ${appParts.join(', ')}`);
+      }
+      if (d.electrical) {
+        const el = d.electrical;
+        const bits = [
+          el.breakerBoxLocation && `Breaker: ${el.breakerBoxLocation}`,
+          el.panelAmperage && `Panel: ${el.panelAmperage}`,
+          el.hasGenerator && el.generatorType && `Generator: ${el.generatorType}`,
+          el.hasSolar && el.solarSystem && `Solar: ${el.solarSystem}`,
+          el.hasEvCharger && el.evChargerBrand && `EV charger: ${el.evChargerBrand}`,
+        ].filter(Boolean);
+        if (bits.length) lines.push(`Electrical: ${bits.join(', ')}`);
+      }
+      if (d.poolSpa) {
+        const ps = d.poolSpa;
+        const bits = [
+          ps.poolType && `Pool: ${ps.poolType}`,
+          ps.poolHeaterBrand && `Heater: ${ps.poolHeaterBrand}`,
+          ps.poolPumpBrand && `Pump: ${ps.poolPumpBrand}`,
+          ps.hotTubBrand && `Hot tub: ${ps.hotTubBrand}${ps.hotTubModel ? ` ${ps.hotTubModel}` : ''}`,
+        ].filter(Boolean);
+        if (bits.length) lines.push(`Pool/Spa: ${bits.join(', ')}`);
+      }
+      if (d.exterior) {
+        const ex = d.exterior;
+        const bits = [
+          ex.roofType && `Roof: ${ex.roofType}${ex.roofAge ? ` (${ex.roofAge} old)` : ''}`,
+          ex.sidingMaterial && `Siding: ${ex.sidingMaterial}`,
+          ex.fenceMaterial && `Fence: ${ex.fenceMaterial}`,
+          ex.garageDoorBrand && `Garage door: ${ex.garageDoorBrand}`,
+          ex.irrigationBrand && `Irrigation: ${ex.irrigationBrand}`,
+        ].filter(Boolean);
+        if (bits.length) lines.push(`Exterior: ${bits.join(', ')}`);
+      }
+      if (d.access?.alarmBrand) lines.push(`Security: Alarm ${d.access.alarmBrand}`);
+      if (d.general) {
+        const gBits = [
+          d.general.yearBuilt && `Built ${d.general.yearBuilt}`,
+          d.general.hasHoa && `HOA${d.general.hoaContact ? `: ${d.general.hoaContact}` : ''}`,
+        ].filter(Boolean);
+        if (gBits.length) lines.push(gBits.join(', '));
+      }
+    }
+
+    // ── Property IQ scan inventory — the big one. Every item with
+    // brand/model/age, up to 40 rows so large scans aren't clipped. ──
     if (propertyInventory.length > 0) {
-      // Compact equipment list — brand/model/itemType, up to 20 rows so
-      // the prompt doesn't balloon on big scans.
-      const rows = propertyInventory.slice(0, 20).map(it => {
+      const rows = propertyInventory.slice(0, 40).map(it => {
         const who = [it.brand, it.modelNumber].filter(Boolean).join(' ');
         const typeLabel = it.itemType.replace(/_/g, ' ');
         const age = it.estimatedAgeYears ? `${Math.round(parseFloat(it.estimatedAgeYears))}yr` : '';
         const cond = it.condition && it.condition !== 'good' ? `(${it.condition})` : '';
-        return `- ${typeLabel}${who ? `: ${who}` : ''}${age ? ` · ${age}` : ''} ${cond}`.trim();
+        const notes = it.notes ? ` — ${it.notes}` : '';
+        return `- ${typeLabel}${who ? `: ${who}` : ''}${age ? ` · ${age}` : ''}${cond ? ` ${cond}` : ''}${notes}`.trim();
       });
-      lines.push(`Known equipment:\n${rows.join('\n')}`);
+      lines.push(`Property IQ inventory (${propertyInventory.length} item${propertyInventory.length === 1 ? '' : 's'} on file):\n${rows.join('\n')}`);
     }
+
     return lines.join('\n');
   }, [selectedProperty, headerOccupancy, propertyInventory]);
 
