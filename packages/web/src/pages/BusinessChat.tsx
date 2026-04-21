@@ -623,6 +623,9 @@ export default function BusinessChat() {
   // equipment (brand / model / age / condition) while the PM is chatting.
   const [propertyInventory, setPropertyInventory] = useState<PropertyInventoryItem[]>([]);
 
+  // Category-picker UI: service tier collapsed behind "+ N more" pill
+  const [showAllB2BCats, setShowAllB2BCats] = useState(false);
+
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Cloudinary URLs of photos uploaded during this chat session */
@@ -1471,45 +1474,72 @@ export default function BusinessChat() {
             />
           )}
 
-          {/* Step: Category selection */}
+          {/* Step: Category selection — pill cloud (matches /quote). */}
           {step === 'category' && (
             <div>
               <AssistantMsg text={`How can Homie help at ${selectedProperty?.name}?`} animate />
 
               <div style={{ marginLeft: 42, marginBottom: 12, animation: 'fadeSlide 0.3s ease' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', letterSpacing: '0.05em', marginBottom: 6 }}>REPAIR</div>
-                <div className="b2b-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                  <span style={{ fontSize: 9.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: 'var(--bp-subtle)', fontWeight: 700 }}>Repair · most common</span>
+                  <span style={{ height: 1, flex: 1, background: 'var(--bp-border)' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
                   {B2B_CATEGORY_TREE.filter(g => g.type === 'repair').map(g => (
                     <button key={g.label} onClick={() => handleGroupSelect(g)} style={{
-                      padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                      background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
-                      fontFamily: "'DM Sans', sans-serif",
+                      background: 'var(--bp-card)', color: D,
+                      border: '1px solid var(--bp-border)', borderRadius: 100,
+                      padding: '8px 12px', fontSize: 13, fontWeight: 600,
+                      cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      transition: 'all .15s',
                     }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.05)'; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
                     >
-                      <div style={{ fontSize: 22, marginBottom: 4 }}>{g.icon}</div>
-                      <div>{g.label}</div>
+                      <span style={{ fontSize: 14 }}>{g.icon}</span>
+                      {g.label}
                     </button>
                   ))}
                 </div>
 
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', letterSpacing: '0.05em', marginBottom: 6 }}>SERVICE</div>
-                <div className="b2b-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                  {B2B_CATEGORY_TREE.filter(g => g.type === 'service').map(g => (
-                    <button key={g.label} onClick={() => handleGroupSelect(g)} style={{
-                      padding: '14px', borderRadius: 12, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.07)',
-                      background: 'var(--bp-card)', fontSize: 14, color: D, fontWeight: 500, textAlign: 'center', transition: 'all 0.15s',
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.03)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
-                    >
-                      <div style={{ fontSize: 22, marginBottom: 4 }}>{g.icon}</div>
-                      <div>{g.label}</div>
-                    </button>
-                  ))}
-                </div>
+                {/* Service tier — expandable, matches /quote pattern */}
+                {showAllB2BCats ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                      <span style={{ fontSize: 9.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: 'var(--bp-subtle)', fontWeight: 700 }}>Services · scheduled work</span>
+                      <span style={{ height: 1, flex: 1, background: 'var(--bp-border)' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {B2B_CATEGORY_TREE.filter(g => g.type === 'service').map(g => (
+                        <button key={g.label} onClick={() => handleGroupSelect(g)} style={{
+                          background: 'var(--bp-card)', color: D,
+                          border: '1px solid var(--bp-border)', borderRadius: 100,
+                          padding: '8px 12px', fontSize: 13, fontWeight: 600,
+                          cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          transition: 'all .15s',
+                        }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.background = 'rgba(232,99,43,0.05)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bp-border)'; e.currentTarget.style.background = 'var(--bp-card)'; }}
+                        >
+                          <span style={{ fontSize: 14 }}>{g.icon}</span>
+                          {g.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => setShowAllB2BCats(true)} style={{
+                    width: '100%', background: 'transparent',
+                    border: '1px dashed var(--bp-border)', borderRadius: 100,
+                    padding: '10px 14px', fontSize: 12, fontWeight: 600,
+                    color: 'var(--bp-subtle)', cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}>
+                    + {B2B_CATEGORY_TREE.filter(g => g.type === 'service').length} more · cleaning, landscape, painting, moving…
+                  </button>
+                )}
               </div>
             </div>
           )}
