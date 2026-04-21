@@ -227,9 +227,10 @@ Rules:
   - Emit only ONCE per item across the whole call. Don't re-tag the same range twice if it shows up in multiple frames.
   - The tag is invisible to the PM — TTS won't read it. Speak naturally; the tag rides along silently.`;
 
-// ElevenLabs voice preset — "Adam" is warm/American/conversational and fits the
-// friendly-Californian brief from the product spec. Override via env if needed.
-const DEFAULT_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'; // Adam
+// ElevenLabs voice + synth helper now live in services/tts.ts so outreach
+// phone calls (Twilio <Play> verb) share the exact same Adam voice as the
+// in-app voice/video chat. Re-exported below for backwards compatibility.
+import { synthesizeWithElevenLabs as sharedSynthesize } from '../services/tts';
 
 function parseDataUrl(input: string): { mime: string; buffer: Buffer } | null {
   // Data URL shape: data:<mime>[;param=value]*;base64,<payload>
@@ -286,38 +287,10 @@ async function transcribeWithWhisper(buffer: Buffer, mime: string): Promise<stri
   return (json.text ?? '').trim();
 }
 
+// Local thin wrapper kept so existing call sites in this file don't need
+// renaming. All voice surfaces now go through services/tts.ts.
 async function synthesizeWithElevenLabs(text: string): Promise<Buffer> {
-  const key = process.env.ELEVENLABS_API_KEY;
-  if (!key) throw new Error('ELEVENLABS_API_KEY is not configured');
-
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID;
-  const r = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
-    {
-      method: 'POST',
-      headers: {
-        'xi-api-key': key,
-        'Content-Type': 'application/json',
-        Accept: 'audio/mpeg',
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_turbo_v2_5',
-        voice_settings: {
-          stability: 0.45,
-          similarity_boost: 0.75,
-          style: 0.35,
-          use_speaker_boost: true,
-        },
-      }),
-    },
-  );
-  if (!r.ok) {
-    const txt = await r.text().catch(() => '');
-    throw new Error(`ElevenLabs HTTP ${r.status}: ${txt.slice(0, 300)}`);
-  }
-  const ab = await r.arrayBuffer();
-  return Buffer.from(ab);
+  return sharedSynthesize(text);
 }
 
 // ── POST /api/v1/voice/tts ───────────────────────────────────────────────────

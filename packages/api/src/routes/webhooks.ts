@@ -11,6 +11,7 @@ import { bookings } from '../db/schema/bookings';
 import { bookingMessages } from '../db/schema/booking-messages';
 import { buildWebhookToken } from '../services/outreach/web';
 import { processProviderSpeech, getConversation, loadConversationFromDb } from '../services/outreach/voice-conversation';
+import { synthesizeAndUploadAudio, getCachedAudioUrl } from '../services/tts';
 import { processSmsReply } from '../services/outreach/sms-conversation';
 import { recordProviderResponse } from '../services/providers/scores';
 import { capturePayment } from '../services/stripe';
@@ -235,11 +236,20 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
 
   const { SpeechResult } = req.body as { SpeechResult?: string };
 
+  // ElevenLabs (Adam — same voice as the in-app Chat with Homie) for every
+  // mid-call line. Static prompts are cached after the first synth so we
+  // pay one ElevenLabs call per process for each canned line; the AI's
+  // dynamic response is synthesized fresh each turn. Falls back to
+  // Polly.Joanna if ElevenLabs is unavailable so calls still complete.
   if (!SpeechResult) {
-    twiml.say({ voice: 'Polly.Joanna' }, "I didn't catch that. Could you repeat that?");
+    const repeatUrl = await getCachedAudioUrl('outreach.repeat', "I didn't catch that. Could you repeat that?");
+    if (repeatUrl) twiml.play(repeatUrl);
+    else twiml.say({ voice: 'Polly.Joanna' }, "I didn't catch that. Could you repeat that?");
     const gatherUrl = `${process.env.API_BASE_URL}/api/v1/webhooks/twilio/voice/conversation?attemptId=${encodeURIComponent(attemptId)}`;
     twiml.gather({ input: ['speech'], speechTimeout: 'auto', speechModel: 'phone_call', action: gatherUrl, method: 'POST', timeout: 8 });
-    twiml.say({ voice: 'Polly.Joanna' }, "I'm still here if you'd like to respond. Goodbye.");
+    const stillHereUrl = await getCachedAudioUrl('outreach.stillHere', "I'm still here if you'd like to respond. Goodbye.");
+    if (stillHereUrl) twiml.play(stillHereUrl);
+    else twiml.say({ voice: 'Polly.Joanna' }, "I'm still here if you'd like to respond. Goodbye.");
     res.type('text/xml').send(twiml.toString());
     return;
   }
@@ -271,13 +281,20 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
 
     const { response, state } = await processProviderSpeech(attemptId, SpeechResult, jobContext);
 
-    twiml.say({ voice: 'Polly.Joanna' }, response);
+    // Dynamic AI reply — fresh ElevenLabs synth + Cloudinary upload each
+    // turn. Cheap (turbo model, ~150-300ms) and the resulting URL only
+    // needs to live for the few seconds Twilio takes to fetch it.
+    const responseUrl = await synthesizeAndUploadAudio(response);
+    if (responseUrl) twiml.play(responseUrl);
+    else twiml.say({ voice: 'Polly.Joanna' }, response);
 
     if (state.phase !== 'done') {
       // Continue conversation — gather more speech
       const gatherUrl = `${process.env.API_BASE_URL}/api/v1/webhooks/twilio/voice/conversation?attemptId=${encodeURIComponent(attemptId)}`;
       twiml.gather({ input: ['speech'], speechTimeout: 'auto', speechModel: 'phone_call', action: gatherUrl, method: 'POST', timeout: 10 });
-      twiml.say({ voice: 'Polly.Joanna' }, "Are you still there? I'll let you go. Goodbye.");
+      const stillThereUrl = await getCachedAudioUrl('outreach.stillThere', "Are you still there? I'll let you go. Goodbye.");
+      if (stillThereUrl) twiml.play(stillThereUrl);
+      else twiml.say({ voice: 'Polly.Joanna' }, "Are you still there? I'll let you go. Goodbye.");
     } else {
       // Conversation complete — update the outreach attempt
       const [attempt] = await db
@@ -345,7 +362,9 @@ router.post('/twilio/voice/conversation', async (req: Request, res: Response) =>
     }
   } catch (err) {
     logger.error({ err, attemptId }, '[voice-conversation] Error processing speech');
-    twiml.say({ voice: 'Polly.Joanna' }, "I'm sorry, I'm having technical difficulties. We'll try reaching you again. Goodbye.");
+    const techErrorUrl = await getCachedAudioUrl('outreach.techError', "I'm sorry, I'm having technical difficulties. We'll try reaching you again. Goodbye.");
+    if (techErrorUrl) twiml.play(techErrorUrl);
+    else twiml.say({ voice: 'Polly.Joanna' }, "I'm sorry, I'm having technical difficulties. We'll try reaching you again. Goodbye.");
     twiml.hangup();
   }
 
