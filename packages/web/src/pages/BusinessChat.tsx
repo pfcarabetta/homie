@@ -1269,6 +1269,15 @@ export default function BusinessChat() {
         @media (max-width: 640px) {
           .b2b-chat-status span { font-size: 0 !important; }
         }
+        /* New Q2-style split: chat on the left, context cards on the right.
+           Collapses to single column under 980px; on mobile the right
+           panel is hidden because the header already carries the
+           occupancy + calendar popover. */
+        @media (min-width: 981px) {
+          .b2b-split { display: grid !important; grid-template-columns: minmax(0, 1fr) 340px !important; gap: 24px !important; align-items: start !important; max-width: 1280px !important; padding-left: 24px !important; padding-right: 24px !important; }
+          .b2b-split > .b2b-chat-col { max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
+          .b2b-right-panel { display: flex !important; }
+        }
       `}</style>
 
       {/* After hours notice — sits above the header */}
@@ -1416,9 +1425,14 @@ export default function BusinessChat() {
         </div>
       </nav>
 
-      {/* Chat area */}
+      {/* Chat area — shelled into a Q2 split on ≥981px. The chat column
+          on the left carries all existing step renders; the right panel
+          surfaces context cards (Homie thinks, Property IQ, pros nearby,
+          assurance). On narrow screens the split collapses and the right
+          panel hides (the header already carries occupancy + calendar). */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-      <div style={{ maxWidth: 700, margin: '0 auto', padding: '16px 16px 120px' }}>
+      <div className="b2b-split" style={{ margin: '0 auto', padding: '16px 16px 120px' }}>
+      <div className="b2b-chat-col" style={{ maxWidth: 700, margin: '0 auto', minWidth: 0 }}>
 
           {/* Step: Property selection */}
           {step === 'property' && (
@@ -1984,6 +1998,305 @@ export default function BusinessChat() {
 
           <div ref={chatEndRef} />
         </div>
+        {/* RIGHT PANEL — context cards (≥981px only; hidden via CSS on
+            narrower breakpoints where the header already carries the
+            same occupancy + calendar cues). */}
+        <aside className="b2b-right-panel" style={{ display: 'none', flexDirection: 'column', gap: 12, position: 'sticky', top: 16, alignSelf: 'start', minWidth: 0 }}>
+          <B2BPropertyContextCard
+            property={selectedProperty}
+            occupancy={headerOccupancy}
+            reservations={calendarReservations}
+          />
+          <B2BHomieThinksCard
+            property={selectedProperty}
+            categoryLabel={category?.label ?? null}
+            step={step}
+          />
+          <B2BPropertyIQCard
+            propertyId={selectedProperty?.id ?? null}
+          />
+          <B2BProsNearbyBadge
+            categoryLabel={category?.label ?? null}
+          />
+          <B2BAssuranceCard />
+        </aside>
+      </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Right-panel context components ─────────────────────────────────────────
+// Used on ≥981px screens. Each card accepts primitive props so they don't
+// know anything about the BusinessChat state machine; wiring is done at the
+// <aside> call-site above.
+
+const _DIM_R = '#6B6560';
+const _O_R = '#E8632B';
+const _G_R = '#1B9E77';
+const _BORDER_R = 'rgba(0,0,0,.08)';
+const _AMBER_R = '#EF9F27';
+const _RED_R = '#DC2626';
+const _D_R = '#2D2926';
+const _W_R = '#F9F5F2';
+
+type HeaderOccupancy = {
+  occupied: boolean;
+  reservation: { guestName: string | null; checkIn: string; checkOut: string } | null;
+  nextCheckIn?: { guestName: string | null; checkIn: string } | null;
+} | null;
+
+function fmtShortDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  } catch { return iso; }
+}
+
+function B2BPropertyContextCard({
+  property, occupancy, reservations,
+}: {
+  property: { name: string; zipCode?: string | null } | null;
+  occupancy: HeaderOccupancy;
+  reservations: Reservation[];
+}) {
+  const [calOpen, setCalOpen] = useState(false);
+  if (!property) return null;
+  const isOccupied = !!occupancy?.occupied;
+  const hasNext = !!occupancy?.nextCheckIn;
+  const accent = isOccupied ? _RED_R : hasNext ? _G_R : _DIM_R;
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 18, border: `1px solid ${_BORDER_R}`,
+      padding: 18, boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 10,
+          background: `${_O_R}14`, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', fontSize: 18, flexShrink: 0,
+        }}>🏠</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: _D_R, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {property.name}
+          </div>
+          {property.zipCode && (
+            <div style={{ fontSize: 11, color: _DIM_R, marginTop: 2, fontFamily: "'DM Mono',monospace", letterSpacing: .4 }}>
+              {property.zipCode}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Reservation block */}
+      <div style={{ fontSize: 10, color: _DIM_R, textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, fontFamily: "'DM Mono',monospace", marginBottom: 8 }}>
+        Reservation
+      </div>
+      {occupancy ? (
+        <div style={{
+          padding: 12, borderRadius: 12,
+          background: `linear-gradient(90deg, ${accent}12, ${accent}04)`,
+          border: `1px solid ${accent}24`,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <div style={{ position: 'relative', width: 8, height: 8, flexShrink: 0 }}>
+              <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: accent }} />
+              {isOccupied && (
+                <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: accent, opacity: .25, animation: 'pulse 1.8s infinite' }} />
+              )}
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: 1, textTransform: 'uppercase', fontFamily: "'DM Mono',monospace" }}>
+              {isOccupied ? 'Occupied' : hasNext ? 'Vacant · next check-in soon' : 'Vacant'}
+            </span>
+          </div>
+          {occupancy.reservation && isOccupied && (
+            <>
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: _D_R, lineHeight: 1.3 }}>
+                {occupancy.reservation.guestName || 'Guest'}
+              </div>
+              <div style={{ fontSize: 12, color: _DIM_R, marginTop: 2 }}>
+                {fmtShortDate(occupancy.reservation.checkIn)} → {fmtShortDate(occupancy.reservation.checkOut)}
+              </div>
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${accent}33`, fontSize: 11.5, color: _D_R, lineHeight: 1.5 }}>
+                ⚠ Guest is on-property — consider scheduling after checkout.
+              </div>
+            </>
+          )}
+          {!isOccupied && hasNext && occupancy.nextCheckIn && (
+            <>
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: _D_R, lineHeight: 1.3 }}>
+                Next: {occupancy.nextCheckIn.guestName || 'Guest'}
+              </div>
+              <div style={{ fontSize: 12, color: _DIM_R, marginTop: 2 }}>
+                Check-in {fmtShortDate(occupancy.nextCheckIn.checkIn)}
+              </div>
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${accent}33`, fontSize: 11.5, color: _D_R, lineHeight: 1.5 }}>
+                ✓ Safe window to dispatch now.
+              </div>
+            </>
+          )}
+          {!isOccupied && !hasNext && (
+            <div style={{ fontSize: 12, color: _DIM_R, marginTop: 2 }}>
+              No upcoming reservations.
+            </div>
+          )}
+
+          {/* Expandable MiniCalendar */}
+          {reservations.length > 0 && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${accent}33` }}>
+              <button onClick={() => setCalOpen(o => !o)} style={{
+                width: '100%', background: 'transparent', border: 'none', padding: 0,
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                fontSize: 11.5, fontWeight: 700, color: _D_R, textAlign: 'left',
+                fontFamily: "'DM Sans',sans-serif",
+              }}>
+                <span>📅</span>
+                <span style={{ flex: 1 }}>Best dispatch windows · next 60 days</span>
+                <span style={{ fontSize: 9, color: _DIM_R, transform: calOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>▾</span>
+              </button>
+              {calOpen && (
+                <div style={{ marginTop: 10 }}>
+                  <MiniCalendar reservations={reservations} />
+                  <div style={{ marginTop: 8, padding: '6px 8px', borderRadius: 6, background: `${_G_R}0f`, border: `1px solid ${_G_R}22`, fontSize: 10.5, color: _D_R, lineHeight: 1.5 }}>
+                    <strong style={{ color: _G_R }}>Open days</strong> are safe windows — unless it's an urgent guest request.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{
+          padding: 12, borderRadius: 12,
+          background: 'rgba(0,0,0,.02)', border: `1px dashed ${_BORDER_R}`,
+          fontSize: 12, color: _DIM_R, lineHeight: 1.5,
+        }}>
+          Connect your PMS to see live occupancy.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function B2BHomieThinksCard({
+  property, categoryLabel, step,
+}: {
+  property: { name: string } | null;
+  categoryLabel: string | null;
+  step: string;
+}) {
+  const ready = !!categoryLabel;
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 18, border: `1px solid ${_BORDER_R}`,
+      padding: 18, boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: _O_R, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+          <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+            <path d="M12 2l2 7 7 2-7 2-2 7-2-7-7-2 7-2 2-7z" fill="#fff" />
+          </svg>
+          <span style={{ position: 'absolute', top: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: _G_R, border: '2px solid #fff', animation: 'pulse 1.8s infinite' }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 700, fontSize: 16, color: _D_R }}>homie is listening</div>
+          <div style={{ fontSize: 11, color: _DIM_R, fontFamily: "'DM Mono',monospace", letterSpacing: .4, textTransform: 'uppercase' }}>updates as you chat</div>
+        </div>
+      </div>
+      {ready ? (
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: 12, borderRadius: 12, background: _W_R,
+        }}>
+          <div>
+            <div style={{ fontSize: 9, color: _DIM_R, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Property</div>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, color: _D_R, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{property?.name || '—'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: _DIM_R, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Category</div>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, color: _D_R, marginTop: 2 }}>{categoryLabel}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: _DIM_R, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Step</div>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, color: _AMBER_R, marginTop: 2 }}>{step === 'summary' ? 'Ready' : step === 'outreach' ? 'Dispatching' : 'In progress'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: _DIM_R, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Priority</div>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, color: _D_R, marginTop: 2 }}>Standard</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ padding: '20px 14px', borderRadius: 12, background: _W_R, textAlign: 'center', color: _DIM_R, fontSize: 12.5, border: `1px dashed ${_BORDER_R}` }}>
+          Start describing — I'll read along ↗
+        </div>
+      )}
+    </div>
+  );
+}
+
+function B2BPropertyIQCard({ propertyId: _propertyId }: { propertyId: string | null }) {
+  // Placeholder until we wire the real propertyInventoryItems fetch. Shows
+  // an empty state today; commit 2 swaps this to pulled-from-scan data.
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 18, border: `1px dashed ${_BORDER_R}`,
+      padding: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <div style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(0,0,0,.04)', border: `1px solid ${_BORDER_R}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, opacity: .6 }}>🧠</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: _D_R }}>Property IQ</div>
+          <div style={{ fontSize: 10, color: _DIM_R, marginTop: 1, fontFamily: "'DM Mono',monospace", letterSpacing: .4, textTransform: 'uppercase' }}>Inventory coming soon</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: _D_R, lineHeight: 1.5, marginBottom: 8 }}>
+        Run a property scan and Homie will remember brands + service history for next time.
+      </div>
+      <button style={{
+        background: _O_R, color: '#fff', border: 'none',
+        borderRadius: 100, padding: '6px 12px', fontSize: 11, fontWeight: 700,
+        cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+      }}>Run scan →</button>
+    </div>
+  );
+}
+
+function B2BProsNearbyBadge({ categoryLabel }: { categoryLabel: string | null }) {
+  // Static placeholder count — commit 2 swaps this for a real API-backed
+  // count keyed to category + zip.
+  const count = categoryLabel ? 14 : 0;
+  if (!count) return null;
+  return (
+    <div style={{
+      padding: '10px 14px', borderRadius: 12,
+      background: `linear-gradient(90deg, ${_O_R}14, ${_O_R}06)`,
+      border: `1px solid ${_O_R}22`,
+      display: 'flex', alignItems: 'center', gap: 10,
+    }}>
+      <div style={{ position: 'relative', width: 9, height: 9, flexShrink: 0 }}>
+        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: _G_R }} />
+        <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: _G_R, opacity: .25, animation: 'pulse 2s infinite' }} />
+      </div>
+      <div style={{ fontSize: 12, color: _D_R, fontWeight: 600, flex: 1, minWidth: 0 }}>
+        <span style={{ color: _O_R, fontWeight: 700 }}>{count} {categoryLabel?.toLowerCase()} pros</span>
+        <span style={{ color: _DIM_R, fontWeight: 500 }}> near you</span>
+      </div>
+      <div style={{ fontSize: 9.5, color: _DIM_R, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase' }}>Live</div>
+    </div>
+  );
+}
+
+function B2BAssuranceCard() {
+  return (
+    <div style={{
+      padding: '14px 16px',
+      background: `linear-gradient(135deg, ${_D_R} 0%, #3A3430 100%)`,
+      color: '#fff', borderRadius: 14, fontFamily: "'DM Sans',sans-serif",
+      display: 'flex', alignItems: 'center', gap: 12,
+      boxShadow: `0 10px 30px -12px ${_D_R}66`,
+    }}>
+      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>⚡</div>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>Quotes in ~2 minutes</div>
+        <div style={{ fontSize: 11.5, opacity: .75, marginTop: 1 }}>No calling around. No endless forms.</div>
       </div>
     </div>
   );
