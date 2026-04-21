@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -18,6 +18,25 @@ import VideoChatPanel from '@/components/VideoChatPanel';
 import { primeAudio } from '@/components/audioUnlocker';
 
 const O = '#E8632B', G = '#1B9E77', D = 'var(--bp-text)', W = 'var(--bp-bg)';
+
+/** DirectInput action button (Photo / Video Chat / Talk / Dictate) —
+ *  kept identical to the `uploadBtnStyle` used on /quote so the business
+ *  flow lands with the same fonts, sizes, and icon treatment. */
+const quoteUploadBtnStyle: React.CSSProperties = {
+  background: '#fff',
+  border: '1px solid rgba(0,0,0,.08)',
+  color: '#2D2926',
+  borderRadius: 100,
+  padding: '10px 14px',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 8,
+  fontFamily: "'DM Sans',sans-serif",
+  transition: 'all .15s',
+};
 
 /* ── Categories ─────────────────────────────────────────────────────────── */
 
@@ -658,6 +677,7 @@ export default function BusinessChat() {
 
   // Free-form "or just describe it" textarea shown on the category step.
   const [directText, setDirectText] = useState('');
+  const [directFocus, setDirectFocus] = useState(false);
 
   // Voice + Video chat panels — identical to /quote, wired with business
   // context so Claude grounds its replies in the real property state
@@ -1745,74 +1765,74 @@ export default function BusinessChat() {
                     />
                   </div>
                 ) : (
-                <div style={{ marginTop: 18 }}>
+                <div className="gq-direct" style={{ marginTop: 18 }}>
+                  {/* "or just describe it" divider — matches /quote DirectInput */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    <span style={{ height: 1, flex: '0 0 16px', background: 'var(--bp-border)' }} />
-                    <span style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--bp-subtle)', fontWeight: 700 }}>or just describe it</span>
-                    <span style={{ height: 1, flex: 1, background: 'var(--bp-border)' }} />
+                    <span style={{ height: 1, flex: '0 0 16px', background: 'rgba(0,0,0,.08)' }} />
+                    <span style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.5, textTransform: 'uppercase', color: '#6B6560', fontWeight: 700 }}>or just describe it</span>
+                    <span style={{ height: 1, flex: 1, background: 'rgba(0,0,0,.08)' }} />
                   </div>
                   <div style={{
-                    background: 'var(--bp-card)', borderRadius: 18,
-                    border: '2px solid rgba(0,0,0,0.07)',
-                    boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
-                    padding: '16px 18px 14px', transition: 'border-color .15s',
+                    background: '#fff', borderRadius: 20,
+                    border: directFocus ? `2px solid ${O}` : '2px solid rgba(0,0,0,.08)',
+                    boxShadow: directFocus ? `0 20px 60px -24px ${O}44` : '0 12px 40px -20px rgba(0,0,0,.08)',
+                    padding: '20px 22px 16px', transition: 'all .2s',
                   }}>
                     <textarea
                       value={directText}
                       onChange={e => setDirectText(e.target.value)}
-                      placeholder={dictating ? 'Listening… describe the issue freely' : `What's going on at ${selectedProperty?.name || 'the property'}? Describe it here, or use the mic.`}
+                      onFocus={() => setDirectFocus(true)}
+                      onBlur={() => setDirectFocus(false)}
+                      placeholder={dictating ? 'Listening… describe the issue freely' : `What's going on at ${selectedProperty?.name || 'the property'}? Describe it here, or chat with Homie by video or voice below.`}
                       onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && directText.trim().length >= 10) { handleDirectDescription(directText); setDirectText(''); } }}
                       style={{
                         width: '100%', border: 'none', outline: 'none', resize: 'none',
-                        fontFamily: "'Fraunces',serif", fontSize: 17, lineHeight: 1.35,
-                        color: D, background: 'transparent',
-                        minHeight: 76, padding: 0, letterSpacing: '-.01em',
+                        fontFamily: "'Fraunces',serif", fontSize: 22, lineHeight: 1.3,
+                        color: '#2D2926', background: 'transparent',
+                        minHeight: 96, padding: 0, letterSpacing: '-.01em',
                       }}
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,.07)', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,.08)', gap: 10, flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <button onClick={() => fileInputRef.current?.click()}
-                          title="Attach a photo"
-                          style={{
-                            background: 'var(--bp-card)', border: '1px solid rgba(0,0,0,.08)',
-                            borderRadius: 100, padding: '8px 12px', fontSize: 12, fontWeight: 600,
-                            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-                            display: 'inline-flex', alignItems: 'center', gap: 6, color: D,
-                          }}>📷 Photo</button>
+                        <button onClick={() => fileInputRef.current?.click()} style={quoteUploadBtnStyle} title="Add photo">
+                          <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><path d="M3 5h4l2-2h6l2 2h4v12H3V5z" stroke="#2D2926" strokeWidth="1.8" /><circle cx="12" cy="11" r="3.5" stroke="#2D2926" strokeWidth="1.8" /></svg>
+                          Photo
+                        </button>
                         <button
                           onClick={() => { primeAudio(); setVideoChatOpen(true); }}
-                          title="Live video chat with Homie — point the camera at the issue"
-                          style={{
-                            background: 'var(--bp-card)', border: '1px solid rgba(0,0,0,.08)',
-                            borderRadius: 100, padding: '8px 12px', fontSize: 12, fontWeight: 600,
-                            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-                            display: 'inline-flex', alignItems: 'center', gap: 6, color: D,
-                          }}>🎥 Video Chat with Homie</button>
+                          style={quoteUploadBtnStyle}
+                          title="Live video chat with Homie — point your camera at the issue and let Homie see it"
+                        >
+                          <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><rect x="2" y="4" width="14" height="12" rx="2" stroke="#2D2926" strokeWidth="1.8" /><path d="M16 9l6-3v8l-6-3V9z" stroke="#2D2926" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+                          Video Chat with Homie
+                        </button>
                         <button
                           onClick={() => { primeAudio(); setVoiceOpen(true); }}
-                          title="Voice chat with Homie"
-                          style={{
-                            background: 'var(--bp-card)', border: '1px solid rgba(0,0,0,.08)',
-                            borderRadius: 100, padding: '8px 12px', fontSize: 12, fontWeight: 600,
-                            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-                            display: 'inline-flex', alignItems: 'center', gap: 6, color: D,
-                          }}>🎙️ Talk to Homie</button>
+                          style={quoteUploadBtnStyle}
+                          title="Talk with Homie"
+                        >
+                          <svg width="13" height="14" viewBox="0 0 18 20" fill="none"><rect x="6" y="1" width="6" height="11" rx="3" stroke="#2D2926" strokeWidth="1.8" /><path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke="#2D2926" strokeWidth="1.8" strokeLinecap="round" /></svg>
+                          Talk to Homie
+                        </button>
                         {dictationSupported && (
-                          <button onClick={toggleDictation}
+                          <button
+                            onClick={toggleDictation}
                             title={dictating ? 'Stop dictating' : 'Dictate the description'}
                             style={{
-                              background: dictating ? O : 'var(--bp-card)',
-                              color: dictating ? '#fff' : D,
+                              ...quoteUploadBtnStyle,
+                              background: dictating ? O : '#fff',
+                              color: dictating ? '#fff' : '#2D2926',
                               border: `1px solid ${dictating ? O : 'rgba(0,0,0,.08)'}`,
-                              borderRadius: 100, padding: '8px 12px', fontSize: 12, fontWeight: 600,
-                              cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-                              display: 'inline-flex', alignItems: 'center', gap: 6,
                               animation: dictating ? 'pulse 1.3s infinite' : 'none',
-                            }}>🎤 {dictating ? 'Listening…' : 'Dictate'}</button>
+                            }}
+                          >
+                            <svg width="13" height="14" viewBox="0 0 18 20" fill="none"><rect x="6" y="1" width="6" height="11" rx="3" stroke={dictating ? '#fff' : '#2D2926'} strokeWidth="1.8" /><path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke={dictating ? '#fff' : '#2D2926'} strokeWidth="1.8" strokeLinecap="round" /></svg>
+                            {dictating ? 'Listening…' : 'Dictate'}
+                          </button>
                         )}
                       </div>
                       {directText.length > 0 && (
-                        <span style={{ fontSize: 10.5, fontFamily: "'DM Mono',monospace", color: 'var(--bp-subtle)', letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700 }}>
+                        <span style={{ fontSize: 11, fontFamily: "'DM Mono',monospace", color: '#6B6560', letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700 }}>
                           {directText.length} chars · {directText.trim().length >= 10 ? 'ready' : `${10 - directText.trim().length} more`}
                         </span>
                       )}
@@ -1822,18 +1842,19 @@ export default function BusinessChat() {
                     onClick={() => { handleDirectDescription(directText); setDirectText(''); }}
                     disabled={directText.trim().length < 10}
                     style={{
-                      marginTop: 12, width: '100%',
+                      marginTop: 14, width: '100%',
                       background: directText.trim().length >= 10 ? O : 'rgba(0,0,0,.06)',
                       color: directText.trim().length >= 10 ? '#fff' : '#9B9490',
-                      border: 'none', borderRadius: 14, padding: '14px 22px',
-                      fontSize: 14, fontWeight: 700,
+                      border: 'none', borderRadius: 16, padding: '16px 24px',
+                      fontSize: 15, fontWeight: 700,
                       cursor: directText.trim().length >= 10 ? 'pointer' : 'not-allowed',
-                      boxShadow: directText.trim().length >= 10 ? `0 10px 28px -10px ${O}80` : 'none',
+                      boxShadow: directText.trim().length >= 10 ? `0 12px 32px -10px ${O}8c` : 'none',
                       fontFamily: "'DM Sans', sans-serif",
-                      transition: 'all .15s',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                      transition: 'all .2s',
                     }}
                   >
-                    {directText.trim().length >= 10 ? 'Continue with this description →' : 'Type or dictate a few words, or pick a category above'}
+                    {directText.trim().length >= 10 ? <>Continue with this description →</> : 'Type or dictate a few words, or pick a category above'}
                   </button>
                 </div>
                 )}
