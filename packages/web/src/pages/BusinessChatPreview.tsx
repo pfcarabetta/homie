@@ -19,6 +19,7 @@ const RED = '#DC2626';
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ScenarioId = 'occupied' | 'vacant' | 'unknown';
+type MemoryState = 'hvac' | 'all' | 'empty';
 
 interface Scenario {
   id: ScenarioId;
@@ -78,6 +79,7 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
 
 export default function BusinessChatPreview() {
   const [scenario, setScenario] = useState<ScenarioId>('occupied');
+  const [memoryState, setMemoryState] = useState<MemoryState>('hvac');
   const s = SCENARIOS[scenario];
 
   return (
@@ -92,7 +94,12 @@ export default function BusinessChatPreview() {
       `}</style>
 
       {/* Preview banner — makes it obvious this is a design mock */}
-      <PreviewBanner scenario={scenario} setScenario={setScenario} />
+      <PreviewBanner
+        scenario={scenario}
+        setScenario={setScenario}
+        memoryState={memoryState}
+        setMemoryState={setMemoryState}
+      />
 
       {/* Nav bar mirroring /quote */}
       <nav style={{
@@ -163,6 +170,7 @@ export default function BusinessChatPreview() {
           {/* RIGHT — live split panel */}
           <div className="bcp-right-panel" style={{ position: 'sticky', top: 112, minWidth: 0 }}>
             <PropertyCard scenario={s} />
+            <PropertyMemoryCard state={memoryState} />
             <HomieListeningCard />
             <ProsNearbyBadge />
             <AssuranceCard />
@@ -175,16 +183,26 @@ export default function BusinessChatPreview() {
 
 // ─── Preview banner ──────────────────────────────────────────────────────────
 
-function PreviewBanner({ scenario, setScenario }: { scenario: ScenarioId; setScenario: (s: ScenarioId) => void }) {
+function PreviewBanner({
+  scenario, setScenario, memoryState, setMemoryState,
+}: {
+  scenario: ScenarioId; setScenario: (s: ScenarioId) => void;
+  memoryState: MemoryState; setMemoryState: (m: MemoryState) => void;
+}) {
+  const memoryOpts: { id: MemoryState; label: string }[] = [
+    { id: 'hvac', label: 'HVAC-filtered' },
+    { id: 'all', label: 'All items' },
+    { id: 'empty', label: 'Not scanned' },
+  ];
   return (
     <div style={{
       position: 'sticky', top: 0, zIndex: 50,
       background: `linear-gradient(90deg, ${O}, #d45422)`,
-      color: '#fff', padding: '8px 20px',
+      color: '#fff', padding: '6px 20px',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      fontSize: 13, fontWeight: 600, height: 40,
+      fontSize: 13, fontWeight: 600, minHeight: 40,
       fontFamily: "'DM Sans', sans-serif",
-      gap: 16,
+      gap: 16, flexWrap: 'wrap',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
         <span style={{
@@ -193,21 +211,47 @@ function PreviewBanner({ scenario, setScenario }: { scenario: ScenarioId; setSce
           fontFamily: "'DM Mono',monospace",
         }}>Preview</span>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          Business Chat redesign · the real flow is still at <code style={{ background: 'rgba(255,255,255,.18)', padding: '2px 6px', borderRadius: 4 }}>/business/chat</code>
+          Business Chat redesign
         </span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <span style={{ fontSize: 11, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Scenario</span>
-        {(Object.values(SCENARIOS) as Scenario[]).map(sc => (
-          <button key={sc.id} onClick={() => setScenario(sc.id)} style={{
-            background: sc.id === scenario ? '#fff' : 'rgba(255,255,255,.16)',
-            color: sc.id === scenario ? O : '#fff',
-            border: 'none', borderRadius: 100,
-            padding: '4px 11px', fontSize: 12, fontWeight: 700,
-            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-          }}>{sc.label}</button>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, flexWrap: 'wrap' }}>
+        <TogglePillGroup
+          label="Scenario"
+          value={scenario}
+          options={(Object.values(SCENARIOS) as Scenario[]).map(sc => ({ id: sc.id, label: sc.label }))}
+          onChange={setScenario}
+        />
+        <TogglePillGroup
+          label="Memory"
+          value={memoryState}
+          options={memoryOpts}
+          onChange={setMemoryState}
+        />
       </div>
+    </div>
+  );
+}
+
+function TogglePillGroup<T extends string>({
+  label, value, options, onChange,
+}: {
+  label: string;
+  value: T;
+  options: { id: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ fontSize: 11, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>{label}</span>
+      {options.map(opt => (
+        <button key={opt.id} onClick={() => onChange(opt.id)} style={{
+          background: opt.id === value ? '#fff' : 'rgba(255,255,255,.16)',
+          color: opt.id === value ? O : '#fff',
+          border: 'none', borderRadius: 100,
+          padding: '4px 11px', fontSize: 12, fontWeight: 700,
+          cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+        }}>{opt.label}</button>
+      ))}
     </div>
   );
 }
@@ -527,6 +571,295 @@ function PropertyCard({ scenario: s }: { scenario: Scenario }) {
             }}>Connect PMS →</button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── RIGHT PANEL · Property Memory card ─────────────────────────────────────
+//
+// Pulls from what we already scan into property_inventory_items. Three
+// states modelled below: HVAC-filtered (category known, one item pinned
+// by the AI), All items (pre-category, summary grid of everything), and
+// Empty (no scan on file yet → nudge to run one).
+
+interface InventoryItem {
+  id: string;
+  category: 'hvac' | 'plumbing' | 'appliance' | 'electrical' | 'other';
+  room: string;
+  name: string;
+  brand: string;
+  model: string;
+  installedYear: number;
+  lastServiced?: string;
+  overdue?: boolean;
+  pinned?: boolean;
+  condition?: 'good' | 'fair' | 'poor';
+}
+
+const MOCK_INVENTORY: InventoryItem[] = [
+  {
+    id: 'hvac-1', category: 'hvac', room: 'Upstairs', name: 'Central AC',
+    brand: 'Trane', model: 'XR16', installedYear: 2019,
+    lastServiced: 'Jun 2024', condition: 'good', pinned: true,
+  },
+  {
+    id: 'hvac-2', category: 'hvac', room: 'Downstairs', name: 'Central AC',
+    brand: 'Trane', model: 'XR14', installedYear: 2015,
+    condition: 'fair', overdue: true,
+  },
+  {
+    id: 'hvac-3', category: 'hvac', room: 'Basement', name: 'Furnace',
+    brand: 'Carrier', model: '59TP6B', installedYear: 2018,
+    condition: 'good',
+  },
+  {
+    id: 'wh-1', category: 'plumbing', room: 'Garage', name: 'Water heater',
+    brand: 'Rheem', model: '50-gal tank', installedYear: 2021, condition: 'good',
+  },
+  {
+    id: 'wh-2', category: 'plumbing', room: 'Master bath', name: 'Fixtures',
+    brand: 'Moen', model: 'Brantford', installedYear: 2020, condition: 'good',
+  },
+  {
+    id: 'ap-1', category: 'appliance', room: 'Kitchen', name: 'Fridge',
+    brand: 'Samsung', model: 'RF28R7551SR', installedYear: 2020, condition: 'good',
+  },
+  {
+    id: 'ap-2', category: 'appliance', room: 'Kitchen', name: 'Dishwasher',
+    brand: 'Bosch', model: 'SHPM78Z55N', installedYear: 2020, condition: 'good',
+  },
+  {
+    id: 'ap-3', category: 'appliance', room: 'Kitchen', name: 'Range',
+    brand: 'GE', model: 'JGS760SPSS', installedYear: 2020, condition: 'good',
+  },
+];
+
+function PropertyMemoryCard({ state }: { state: MemoryState }) {
+  if (state === 'empty') return <MemoryEmptyState />;
+  if (state === 'hvac') return <MemoryFiltered category="hvac" items={MOCK_INVENTORY.filter(i => i.category === 'hvac')} />;
+  return <MemoryOverview items={MOCK_INVENTORY} />;
+}
+
+function MemoryFiltered({ category, items }: { category: InventoryItem['category']; items: InventoryItem[] }) {
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 20, border: `1px solid ${BORDER}`,
+      padding: 20, marginBottom: 14,
+      boxShadow: '0 20px 60px -24px rgba(0,0,0,.08)',
+      animation: 'fadeSlide 0.3s ease',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 10,
+          background: `${O}14`, border: `1px solid ${O}33`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16, flexShrink: 0,
+        }}>🧠</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, color: D, lineHeight: 1.2 }}>
+            Property memory · {category.toUpperCase()}
+          </div>
+          <div style={{ fontSize: 11, color: DIM, marginTop: 2, fontFamily: "'DM Mono',monospace", letterSpacing: .6, textTransform: 'uppercase' }}>
+            From last scan · 14d ago
+          </div>
+        </div>
+      </div>
+
+      {/* Items */}
+      <div style={{ display: 'grid', gap: 8 }}>
+        {items.map(item => <InventoryRow key={item.id} item={item} />)}
+      </div>
+
+      {/* Footer hint */}
+      <div style={{
+        marginTop: 12, paddingTop: 12, borderTop: `1px dashed ${BORDER}`,
+        fontSize: 11.5, color: DIM, lineHeight: 1.5,
+      }}>
+        💡 Homie auto-references this in the dispatch brief — no need to type brand or model again.
+      </div>
+    </div>
+  );
+}
+
+function InventoryRow({ item }: { item: InventoryItem }) {
+  const accent = item.pinned ? O : BORDER;
+  const age = new Date().getFullYear() - item.installedYear;
+  return (
+    <div style={{
+      padding: 12, borderRadius: 12,
+      background: item.pinned ? `${O}08` : 'rgba(0,0,0,.02)',
+      border: `1px solid ${item.pinned ? `${O}33` : BORDER}`,
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      position: 'relative',
+    }}>
+      <div style={{
+        width: 30, height: 30, borderRadius: 8,
+        background: item.pinned ? O : '#fff',
+        border: item.pinned ? 'none' : `1px solid ${BORDER}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 14, flexShrink: 0,
+      }}>
+        {item.category === 'hvac' && '❄️'}
+        {item.category === 'plumbing' && '🚰'}
+        {item.category === 'appliance' && '🍳'}
+        {item.category === 'electrical' && '⚡'}
+        {item.category === 'other' && '🔨'}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+          <span style={{ fontSize: 10, color: DIM, textTransform: 'uppercase', letterSpacing: .8, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>
+            {item.room}
+          </span>
+          <span style={{ color: accent, opacity: .4 }}>·</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: D }}>{item.name}</span>
+          {item.pinned && (
+            <span style={{
+              background: O, color: '#fff',
+              padding: '1px 7px', borderRadius: 100,
+              fontSize: 9, fontWeight: 800, letterSpacing: .6, textTransform: 'uppercase',
+              fontFamily: "'DM Mono',monospace",
+              marginLeft: 'auto',
+            }}>Pinned by AI</span>
+          )}
+        </div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 600, color: D, lineHeight: 1.25 }}>
+          {item.brand} · {item.model}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, fontSize: 11.5, color: DIM, flexWrap: 'wrap' }}>
+          <span>{item.installedYear} ({age}yr)</span>
+          {item.lastServiced && (
+            <>
+              <span style={{ opacity: .4 }}>·</span>
+              <span>Serviced {item.lastServiced}</span>
+            </>
+          )}
+          {item.condition && (
+            <>
+              <span style={{ opacity: .4 }}>·</span>
+              <span style={{ color: item.condition === 'good' ? G : item.condition === 'fair' ? AMBER : RED, fontWeight: 700, textTransform: 'capitalize' }}>
+                {item.condition}
+              </span>
+            </>
+          )}
+          {item.overdue && (
+            <span style={{
+              background: `${AMBER}14`, color: AMBER,
+              padding: '2px 7px', borderRadius: 100,
+              fontSize: 10, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase',
+              fontFamily: "'DM Mono',monospace",
+              marginLeft: 2,
+            }}>⚠ Overdue</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MemoryOverview({ items }: { items: InventoryItem[] }) {
+  const counts = items.reduce<Record<string, number>>((acc, it) => {
+    acc[it.category] = (acc[it.category] || 0) + 1;
+    return acc;
+  }, {});
+  const groups: { id: InventoryItem['category']; icon: string; label: string }[] = [
+    { id: 'hvac', icon: '❄️', label: 'HVAC' },
+    { id: 'plumbing', icon: '🚰', label: 'Plumbing' },
+    { id: 'appliance', icon: '🍳', label: 'Appliances' },
+    { id: 'electrical', icon: '⚡', label: 'Electrical' },
+  ];
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 20, border: `1px solid ${BORDER}`,
+      padding: 20, marginBottom: 14,
+      boxShadow: '0 20px 60px -24px rgba(0,0,0,.08)',
+      animation: 'fadeSlide 0.3s ease',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 10,
+          background: `${O}14`, border: `1px solid ${O}33`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16, flexShrink: 0,
+        }}>🧠</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, color: D, lineHeight: 1.2 }}>
+            Property memory
+          </div>
+          <div style={{ fontSize: 11, color: DIM, marginTop: 2, fontFamily: "'DM Mono',monospace", letterSpacing: .6, textTransform: 'uppercase' }}>
+            {items.length} items on file · scanned 14d ago
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+        {groups.map(g => (
+          <div key={g.id} style={{
+            padding: '12px 14px', borderRadius: 12,
+            background: 'rgba(0,0,0,.02)', border: `1px solid ${BORDER}`,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{ fontSize: 18 }}>{g.icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: D }}>{g.label}</div>
+              <div style={{ fontSize: 11, color: DIM, fontFamily: "'DM Mono',monospace" }}>
+                {counts[g.id] || 0} {counts[g.id] === 1 ? 'item' : 'items'}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{
+        marginTop: 12, paddingTop: 12, borderTop: `1px dashed ${BORDER}`,
+        fontSize: 11.5, color: DIM, lineHeight: 1.5,
+      }}>
+        💡 Homie narrows this list the moment a category is inferred from chat.
+      </div>
+    </div>
+  );
+}
+
+function MemoryEmptyState() {
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 20, border: `1px dashed ${BORDER}`,
+      padding: 20, marginBottom: 14,
+      animation: 'fadeSlide 0.3s ease',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 10,
+          background: 'rgba(0,0,0,.04)', border: `1px solid ${BORDER}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16, flexShrink: 0, opacity: .6,
+        }}>🧠</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, color: D, lineHeight: 1.2 }}>
+            Property memory
+          </div>
+          <div style={{ fontSize: 11, color: DIM, marginTop: 2, fontFamily: "'DM Mono',monospace", letterSpacing: .6, textTransform: 'uppercase' }}>
+            Nothing on file yet
+          </div>
+        </div>
+      </div>
+      <div style={{ fontSize: 13, color: D, lineHeight: 1.5, marginBottom: 10 }}>
+        Run a quick scan of the property so Homie can remember brands, models, and service history for next time.
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button style={{
+          background: O, color: '#fff', border: 'none',
+          borderRadius: 100, padding: '8px 14px',
+          fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          fontFamily: "'DM Sans',sans-serif",
+        }}>Run property scan →</button>
+        <button style={{
+          background: 'transparent', color: D, border: `1px solid ${BORDER}`,
+          borderRadius: 100, padding: '8px 14px',
+          fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          fontFamily: "'DM Sans',sans-serif",
+        }}>Skip — record as we go</button>
       </div>
     </div>
   );
