@@ -21,11 +21,12 @@ const O = '#E8632B', G = '#1B9E77', D = 'var(--bp-text)', W = 'var(--bp-bg)';
 
 /** DirectInput action button (Photo / Video Chat / Talk / Dictate) —
  *  kept identical to the `uploadBtnStyle` used on /quote so the business
- *  flow lands with the same fonts, sizes, and icon treatment. */
+ *  flow lands with the same fonts, sizes, and icon treatment. Backed by
+ *  --bp-* vars so it adapts to dark mode. */
 const quoteUploadBtnStyle: React.CSSProperties = {
-  background: '#fff',
-  border: '1px solid rgba(0,0,0,.08)',
-  color: '#2D2926',
+  background: 'var(--bp-card)',
+  border: '1px solid var(--bp-border)',
+  color: 'var(--bp-text)',
   borderRadius: 100,
   padding: '10px 14px',
   fontSize: 13,
@@ -1473,8 +1474,38 @@ export default function BusinessChat() {
 
 
   return (
-    <div style={{ height: '100%', background: 'var(--bp-card)', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="b2b-root" style={{ height: '100%', background: 'var(--bp-card)', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <style>{`
+        /* --bp-* theme tokens — defaults to light, flips to dark on system
+           preference. Uses :where() so any parent .bp-portal wrapper (when
+           rendered inside BusinessPortal) still wins at specificity 0,1,0. */
+        :where(.b2b-root) {
+          --bp-bg: #F9F5F2;
+          --bp-card: #ffffff;
+          --bp-input: #ffffff;
+          --bp-text: #2D2926;
+          --bp-muted: #6B6560;
+          --bp-subtle: #9B9490;
+          --bp-border: #E0DAD4;
+          --bp-hover: #FAFAF8;
+          --bp-header: #ffffff;
+          --bp-warm: #F9F5F2;
+          color: var(--bp-text);
+        }
+        @media (prefers-color-scheme: dark) {
+          :where(.b2b-root) {
+            --bp-bg: #1A1A1A;
+            --bp-card: #242424;
+            --bp-input: #2E2E2E;
+            --bp-text: #E8E4E0;
+            --bp-muted: #9B9490;
+            --bp-subtle: #6B6560;
+            --bp-border: #3A3A3A;
+            --bp-hover: #2E2E2E;
+            --bp-header: #1E1E1E;
+            --bp-warm: #2E2E2E;
+          }
+        }
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin { to { transform:rotate(360deg); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
@@ -1773,13 +1804,13 @@ export default function BusinessChat() {
                 <div className="gq-direct" style={{ marginTop: 18 }}>
                   {/* "or just describe it" divider — matches /quote DirectInput */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    <span style={{ height: 1, flex: '0 0 16px', background: 'rgba(0,0,0,.08)' }} />
-                    <span style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.5, textTransform: 'uppercase', color: '#6B6560', fontWeight: 700 }}>or just describe it</span>
-                    <span style={{ height: 1, flex: 1, background: 'rgba(0,0,0,.08)' }} />
+                    <span style={{ height: 1, flex: '0 0 16px', background: 'var(--bp-border)' }} />
+                    <span style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--bp-subtle)', fontWeight: 700 }}>or just describe it</span>
+                    <span style={{ height: 1, flex: 1, background: 'var(--bp-border)' }} />
                   </div>
                   <div style={{
-                    background: '#fff', borderRadius: 20,
-                    border: directFocus ? `2px solid ${O}` : '2px solid rgba(0,0,0,.08)',
+                    background: 'var(--bp-card)', borderRadius: 20,
+                    border: directFocus ? `2px solid ${O}` : '2px solid var(--bp-border)',
                     boxShadow: directFocus ? `0 20px 60px -24px ${O}44` : '0 12px 40px -20px rgba(0,0,0,.08)',
                     padding: '20px 22px 16px', transition: 'all .2s',
                   }}>
@@ -1793,14 +1824,14 @@ export default function BusinessChat() {
                       style={{
                         width: '100%', border: 'none', outline: 'none', resize: 'none',
                         fontFamily: "'Fraunces',serif", fontSize: 22, lineHeight: 1.3,
-                        color: '#2D2926', background: 'transparent',
+                        color: 'var(--bp-text)', background: 'transparent',
                         minHeight: 96, padding: 0, letterSpacing: '-.01em',
                       }}
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,.08)', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--bp-border)', gap: 10, flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                         <button onClick={() => fileInputRef.current?.click()} style={quoteUploadBtnStyle} title="Add photo">
-                          <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><path d="M3 5h4l2-2h6l2 2h4v12H3V5z" stroke="#2D2926" strokeWidth="1.8" /><circle cx="12" cy="11" r="3.5" stroke="#2D2926" strokeWidth="1.8" /></svg>
+                          <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><path d="M3 5h4l2-2h6l2 2h4v12H3V5z" stroke="currentColor" strokeWidth="1.8" /><circle cx="12" cy="11" r="3.5" stroke="currentColor" strokeWidth="1.8" /></svg>
                           Photo
                         </button>
                         <button
@@ -1808,7 +1839,7 @@ export default function BusinessChat() {
                           style={quoteUploadBtnStyle}
                           title="Live video chat with Homie — point your camera at the issue and let Homie see it"
                         >
-                          <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><rect x="2" y="4" width="14" height="12" rx="2" stroke="#2D2926" strokeWidth="1.8" /><path d="M16 9l6-3v8l-6-3V9z" stroke="#2D2926" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+                          <svg width="15" height="13" viewBox="0 0 24 20" fill="none"><rect x="2" y="4" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M16 9l6-3v8l-6-3V9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
                           Video Chat with Homie
                         </button>
                         <button
@@ -1816,7 +1847,7 @@ export default function BusinessChat() {
                           style={quoteUploadBtnStyle}
                           title="Talk with Homie"
                         >
-                          <svg width="13" height="14" viewBox="0 0 18 20" fill="none"><rect x="6" y="1" width="6" height="11" rx="3" stroke="#2D2926" strokeWidth="1.8" /><path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke="#2D2926" strokeWidth="1.8" strokeLinecap="round" /></svg>
+                          <svg width="13" height="14" viewBox="0 0 18 20" fill="none"><rect x="6" y="1" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8" /><path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
                           Talk to Homie
                         </button>
                         {dictationSupported && (
@@ -1825,19 +1856,19 @@ export default function BusinessChat() {
                             title={dictating ? 'Stop dictating' : 'Dictate the description'}
                             style={{
                               ...quoteUploadBtnStyle,
-                              background: dictating ? O : '#fff',
-                              color: dictating ? '#fff' : '#2D2926',
-                              border: `1px solid ${dictating ? O : 'rgba(0,0,0,.08)'}`,
+                              background: dictating ? O : 'var(--bp-card)',
+                              color: dictating ? '#fff' : 'var(--bp-text)',
+                              border: `1px solid ${dictating ? O : 'var(--bp-border)'}`,
                               animation: dictating ? 'pulse 1.3s infinite' : 'none',
                             }}
                           >
-                            <svg width="13" height="14" viewBox="0 0 18 20" fill="none"><rect x="6" y="1" width="6" height="11" rx="3" stroke={dictating ? '#fff' : '#2D2926'} strokeWidth="1.8" /><path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke={dictating ? '#fff' : '#2D2926'} strokeWidth="1.8" strokeLinecap="round" /></svg>
+                            <svg width="13" height="14" viewBox="0 0 18 20" fill="none"><rect x="6" y="1" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8" /><path d="M3 10c0 3.3 2.7 6 6 6s6-2.7 6-6M9 16v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
                             {dictating ? 'Listening…' : 'Dictate'}
                           </button>
                         )}
                       </div>
                       {directText.length > 0 && (
-                        <span style={{ fontSize: 11, fontFamily: "'DM Mono',monospace", color: '#6B6560', letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700 }}>
+                        <span style={{ fontSize: 11, fontFamily: "'DM Mono',monospace", color: 'var(--bp-subtle)', letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700 }}>
                           {directText.length} chars · {directText.trim().length >= 10 ? 'ready' : `${10 - directText.trim().length} more`}
                         </span>
                       )}
@@ -2429,14 +2460,22 @@ export default function BusinessChat() {
 // know anything about the BusinessChat state machine; wiring is done at the
 // <aside> call-site above.
 
-const _DIM_R = '#6B6560';
+// These theme-bound tokens resolve via the portal's --bp-* CSS variables
+// so the right-rail components adapt to light/dark the same way the rest
+// of the BusinessChat shell does (the CSS variables are defined on the
+// surrounding .bp-portal wrapper and flip on data-theme="dark").
+// Accent hex values (orange/green/amber/red) stay static — they read
+// acceptably on both backgrounds.
+const _DIM_R = 'var(--bp-subtle)';
 const _O_R = '#E8632B';
 const _G_R = '#1B9E77';
-const _BORDER_R = 'rgba(0,0,0,.08)';
+const _BORDER_R = 'var(--bp-border)';
 const _AMBER_R = '#EF9F27';
 const _RED_R = '#DC2626';
-const _D_R = '#2D2926';
-const _W_R = '#F9F5F2';
+const _D_R = 'var(--bp-text)';
+const _W_R = 'var(--bp-bg)';
+/** Card background token — resolves to #fff in light mode, #242424 in dark. */
+const _CARD_R = 'var(--bp-card)';
 
 type HeaderOccupancy = {
   occupied: boolean;
@@ -2464,7 +2503,7 @@ function B2BPropertyContextCard({
   const accent = isOccupied ? _RED_R : hasNext ? _G_R : _DIM_R;
   return (
     <div style={{
-      background: '#fff', borderRadius: 18, border: `1px solid ${_BORDER_R}`,
+      background: _CARD_R, borderRadius: 18, border: `1px solid ${_BORDER_R}`,
       padding: 18, boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
@@ -2565,7 +2604,7 @@ function B2BPropertyContextCard({
       ) : (
         <div style={{
           padding: 12, borderRadius: 12,
-          background: 'rgba(0,0,0,.02)', border: `1px dashed ${_BORDER_R}`,
+          background: 'var(--bp-hover)', border: `1px dashed ${_BORDER_R}`,
           fontSize: 12, color: _DIM_R, lineHeight: 1.5,
         }}>
           Connect your PMS to see live occupancy.
@@ -2585,7 +2624,7 @@ function B2BHomieThinksCard({
   const ready = !!categoryLabel;
   return (
     <div style={{
-      background: '#fff', borderRadius: 18, border: `1px solid ${_BORDER_R}`,
+      background: _CARD_R, borderRadius: 18, border: `1px solid ${_BORDER_R}`,
       padding: 18, boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -2677,11 +2716,11 @@ function B2BPropertyIQCard({
   if (!propertyId || items.length === 0) {
     return (
       <div style={{
-        background: '#fff', borderRadius: 18, border: `1px dashed ${_BORDER_R}`,
+        background: _CARD_R, borderRadius: 18, border: `1px dashed ${_BORDER_R}`,
         padding: 16,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <div style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(0,0,0,.04)', border: `1px solid ${_BORDER_R}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, opacity: .6 }}>🧠</div>
+          <div style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--bp-hover)', border: `1px solid ${_BORDER_R}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, opacity: .6 }}>🧠</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: _D_R }}>Property IQ</div>
             <div style={{ fontSize: 10, color: _DIM_R, marginTop: 1, fontFamily: "'DM Mono',monospace", letterSpacing: .4, textTransform: 'uppercase' }}>No scan on file</div>
@@ -2704,7 +2743,7 @@ function B2BPropertyIQCard({
 
   return (
     <div style={{
-      background: '#fff', borderRadius: 18, border: `1px solid ${_BORDER_R}`,
+      background: _CARD_R, borderRadius: 18, border: `1px solid ${_BORDER_R}`,
       padding: 16, boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -2725,7 +2764,7 @@ function B2BPropertyIQCard({
       </div>
 
       {hasCategory && filtered.length === 0 && (
-        <div style={{ padding: 10, borderRadius: 10, background: 'rgba(0,0,0,.02)', fontSize: 12, color: _DIM_R, lineHeight: 1.5 }}>
+        <div style={{ padding: 10, borderRadius: 10, background: 'var(--bp-hover)', fontSize: 12, color: _DIM_R, lineHeight: 1.5 }}>
           No {categoryLabel?.toLowerCase()} equipment on file — Homie will record what you mention.
         </div>
       )}
@@ -2751,13 +2790,13 @@ function B2BIQRow({ item }: { item: PropertyInventoryItem }) {
   return (
     <div style={{
       padding: 10, borderRadius: 10,
-      background: pinned ? `${_O_R}08` : 'rgba(0,0,0,.02)',
+      background: pinned ? `${_O_R}08` : 'var(--bp-hover)',
       border: `1px solid ${pinned ? `${_O_R}33` : _BORDER_R}`,
       display: 'flex', gap: 8, alignItems: 'flex-start',
     }}>
       <div style={{
         width: 26, height: 26, borderRadius: 7,
-        background: pinned ? _O_R : '#fff',
+        background: pinned ? _O_R : _CARD_R,
         border: pinned ? 'none' : `1px solid ${_BORDER_R}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 12, flexShrink: 0,
@@ -2832,13 +2871,17 @@ function B2BProsNearbyBadge({ categoryLabel }: { categoryLabel: string | null })
 }
 
 function B2BAssuranceCard() {
+  // Intentionally pinned to the light-mode dark gradient — this CTA is
+  // meant to read as an accent surface on both themes (_D_R resolves via
+  // CSS var and can't carry an alpha suffix in the boxShadow, so we use
+  // literal hex here).
   return (
     <div style={{
       padding: '14px 16px',
-      background: `linear-gradient(135deg, ${_D_R} 0%, #3A3430 100%)`,
+      background: 'linear-gradient(135deg, #2D2926 0%, #3A3430 100%)',
       color: '#fff', borderRadius: 14, fontFamily: "'DM Sans',sans-serif",
       display: 'flex', alignItems: 'center', gap: 12,
-      boxShadow: `0 10px 30px -12px ${_D_R}66`,
+      boxShadow: '0 10px 30px -12px rgba(45,41,38,.4)',
     }}>
       <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>⚡</div>
       <div>
