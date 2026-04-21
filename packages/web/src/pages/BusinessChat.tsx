@@ -2956,58 +2956,117 @@ function iqCategoryKeyFromLabel(label: string | null): keyof typeof IQ_CATEGORY_
   return null;
 }
 
-/** Synonym map for detecting when an inventory item is being discussed in
- *  chat text. Keyed by the itemType keyword token. */
-const IQ_SYNONYMS: Array<{ match: RegExp; signals: RegExp }> = [
+/** Synonym map for detecting when an inventory item is being discussed.
+ *  - `match`   : regex tested against the item's itemType — picks which
+ *                items this row applies to.
+ *  - `signals` : regex tested against the chat text — if it fires on
+ *                an applicable item, that's a correlation.
+ *  - `tier`    : how specific this row is. `medium` signals pinpoint a
+ *                particular appliance ("refrigerator", "dishwasher");
+ *                `weak` signals are broad category keywords ("drain",
+ *                "leak", "pipe") that apply to many items at once. When
+ *                the card has at least one medium (or strong) match, it
+ *                suppresses weak-only matches so follow-up questions
+ *                don't widen the view. */
+const IQ_SYNONYMS: Array<{ match: RegExp; signals: RegExp; tier: 'medium' | 'weak' }> = [
   { match: /hvac|air.?cond|ac_unit|^ac$|furnace|heat.?pump|thermostat|boiler|mini.?split/i,
-    signals: /\b(hvac|a\/?c|air[\s-]?cond|ac[\s-]?unit|furnace|heat[\s-]?pump|thermostat|boiler|mini[\s-]?split|cooling|heating|compressor|condenser)\b/i },
+    signals: /\b(hvac|a\/?c|air[\s-]?cond|ac[\s-]?unit|furnace|heat[\s-]?pump|thermostat|boiler|mini[\s-]?split)\b/i, tier: 'medium' },
+  { match: /hvac|air.?cond|ac_unit|^ac$|furnace|heat.?pump/i,
+    signals: /\b(cooling|heating|compressor|condenser)\b/i, tier: 'weak' },
   { match: /water.?heater|tankless/i,
-    signals: /\b(water[\s-]?heater|hot[\s-]?water|tankless|water[\s-]?tank)\b/i },
-  { match: /fridge|refrig/i, signals: /\b(fridge|refrigerat|freezer|ice[\s-]?maker)\b/i },
-  { match: /washer/i, signals: /\b(washer|laundry|washing[\s-]?machine)\b/i },
-  { match: /dryer/i, signals: /\b(dryer|laundry|drying)\b/i },
-  { match: /dishwash/i, signals: /\bdishwash/i },
-  { match: /oven|range|stove/i, signals: /\b(oven|range|stove|cooktop|burner)\b/i },
-  { match: /microwave/i, signals: /\bmicrowave\b/i },
-  { match: /disposal/i, signals: /\b(garbage[\s-]?disposal|disposal)\b/i },
-  { match: /faucet|sink/i, signals: /\b(faucet|sink|tap|spigot)\b/i },
-  { match: /toilet/i, signals: /\b(toilet|commode|bowl)\b/i },
-  { match: /shower|bath/i, signals: /\b(shower|bath|tub|bathtub)\b/i },
-  { match: /drain|pipe|plumb/i, signals: /\b(drain|pipe|plumb|leak|clog|sewer)\b/i },
-  { match: /outlet|breaker|panel|wiring|electric/i, signals: /\b(outlet|receptacle|breaker|panel|wiring|electric|gfci|circuit|wire|wires|wired|socket)\b/i },
-  { match: /light/i, signals: /\b(light|bulb|fixture|lamp|sconce|chandelier)\b/i },
-  { match: /roof|gutter|siding|chimney/i, signals: /\b(roof|shingle|gutter|siding|chimney|flashing)\b/i },
-  { match: /garage/i, signals: /\b(garage|door[\s-]?opener|garage[\s-]?door)\b/i },
-  { match: /pool|spa|hot.?tub/i, signals: /\b(pool|spa|hot[\s-]?tub|jacuzzi|pump|filter)\b/i },
-  { match: /alarm|camera|doorbell|security/i, signals: /\b(alarm|camera|doorbell|security|smoke|carbon[\s-]?monoxide|co[\s-]?detector|sensor)\b/i },
+    signals: /\b(water[\s-]?heater|hot[\s-]?water|tankless|water[\s-]?tank)\b/i, tier: 'medium' },
+  { match: /fridge|refrig/i, signals: /\b(fridge|refrigerat|freezer|ice[\s-]?maker)\b/i, tier: 'medium' },
+  { match: /washer/i, signals: /\b(washing[\s-]?machine|clothes[\s-]?washer)\b/i, tier: 'medium' },
+  { match: /washer/i, signals: /\b(washer|laundry)\b/i, tier: 'weak' },
+  { match: /dryer/i, signals: /\b(clothes[\s-]?dryer|laundry[\s-]?dryer|dryer)\b/i, tier: 'medium' },
+  { match: /dishwash/i, signals: /\b(dishwasher|dishwash)\b/i, tier: 'medium' },
+  { match: /oven|range|stove/i, signals: /\b(oven|range|stove|cooktop)\b/i, tier: 'medium' },
+  { match: /microwave/i, signals: /\bmicrowave\b/i, tier: 'medium' },
+  { match: /disposal/i, signals: /\b(garbage[\s-]?disposal|disposal)\b/i, tier: 'medium' },
+  { match: /faucet|sink/i, signals: /\b(faucet|tap|spigot)\b/i, tier: 'medium' },
+  { match: /faucet|sink/i, signals: /\bsink\b/i, tier: 'weak' },
+  { match: /toilet/i, signals: /\b(toilet|commode)\b/i, tier: 'medium' },
+  { match: /shower|bath/i, signals: /\b(shower|bathtub|tub)\b/i, tier: 'medium' },
+  { match: /drain|pipe|plumb/i, signals: /\b(drain|pipe|plumb|leak|clog|sewer)\b/i, tier: 'weak' },
+  { match: /outlet|breaker|panel|wiring|electric/i, signals: /\b(outlet|receptacle|breaker|panel|wiring|gfci|circuit)\b/i, tier: 'medium' },
+  { match: /outlet|breaker|panel|wiring|electric/i, signals: /\b(electric|wire|wires|wired|socket)\b/i, tier: 'weak' },
+  { match: /light/i, signals: /\b(lamp|sconce|chandelier)\b/i, tier: 'medium' },
+  { match: /light/i, signals: /\b(light|bulb|fixture)\b/i, tier: 'weak' },
+  { match: /roof|gutter|siding|chimney/i, signals: /\b(roof|shingle|gutter|siding|chimney|flashing)\b/i, tier: 'medium' },
+  { match: /garage/i, signals: /\b(garage[\s-]?door|door[\s-]?opener)\b/i, tier: 'medium' },
+  { match: /pool|spa|hot.?tub/i, signals: /\b(pool|spa|hot[\s-]?tub|jacuzzi)\b/i, tier: 'medium' },
+  { match: /pool|spa|hot.?tub/i, signals: /\b(pump|filter)\b/i, tier: 'weak' },
+  { match: /alarm|camera|doorbell|security/i, signals: /\b(alarm|camera|doorbell|smoke|carbon[\s-]?monoxide|co[\s-]?detector)\b/i, tier: 'medium' },
+  { match: /alarm|camera|doorbell|security/i, signals: /\b(security|sensor)\b/i, tier: 'weak' },
 ];
 
-/** Returns the list of keyword regexes that indicate this inventory item
- *  is being discussed. Combines the itemType synonyms + any brand/model
- *  string stored on the item. */
-function itemKeywords(item: PropertyInventoryItem): RegExp[] {
-  const keys: RegExp[] = [];
-  const words = (item.itemType || '').toLowerCase().split(/[_\s]/).filter(w => w.length >= 3);
-  for (const w of words) {
-    keys.push(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
-  }
-  if (item.brand && item.brand.trim().length >= 2) {
-    keys.push(new RegExp(`\\b${item.brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
-  }
-  if (item.modelNumber && item.modelNumber.trim().length >= 2) {
-    keys.push(new RegExp(item.modelNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
-  }
-  for (const syn of IQ_SYNONYMS) {
-    if (syn.match.test(item.itemType)) keys.push(syn.signals);
-  }
-  return keys;
+/** Words that sit in item types but don't uniquely identify an item —
+ *  e.g. "kitchen_faucet" shouldn't correlate to every chat that mentions
+ *  "kitchen". Keep this list conservative; anything here is demoted from
+ *  a medium/name match down to the weaker synonym tier. */
+const IQ_GENERIC_TOKENS = new Set([
+  'main', 'unit', 'room', 'system', 'fixture', 'line', 'new', 'old',
+  'kitchen', 'bath', 'bathroom', 'bedroom', 'living', 'laundry', 'garage',
+  'upstairs', 'downstairs', 'outdoor', 'indoor', 'front', 'back', 'side',
+]);
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** True when chat text mentions a signal that correlates to this item. */
+/** Tiered correlation — tells how specifically an inventory item is
+ *  being discussed in the chat:
+ *    - 'strong'  : brand or model number appears verbatim.
+ *    - 'medium'  : a distinctive itemType word appears (e.g. "dishwasher")
+ *                  or a synonym signal that pinpoints a specific
+ *                  appliance family.
+ *    - 'weak'    : only a broad synonym fires (e.g. "drain"/"leak") —
+ *                  the chat touches the category, not this item.
+ *    - null      : no signal.
+ *  The cards hoist whichever tier is strongest: if any item has a
+ *  medium-or-better match, weak-only matches are suppressed so a
+ *  follow-up question like "does it drain properly?" doesn't widen the
+ *  card out to every plumbing fixture in the inventory. */
+type CorrelationStrength = 'strong' | 'medium' | 'weak' | null;
+
+function correlateItemToChat(item: PropertyInventoryItem, chatText: string): CorrelationStrength {
+  if (!chatText) return null;
+
+  // Tier 1 — brand / model hit. Highest specificity.
+  if (item.brand && item.brand.trim().length >= 2) {
+    if (new RegExp(`\\b${escapeRegex(item.brand)}\\b`, 'i').test(chatText)) return 'strong';
+  }
+  if (item.modelNumber && item.modelNumber.trim().length >= 2) {
+    if (new RegExp(escapeRegex(item.modelNumber), 'i').test(chatText)) return 'strong';
+  }
+
+  // Tier 2 — distinctive itemType word. Drop generic tokens
+  // ("kitchen", "main", …) that don't uniquely identify a single item.
+  const itemType = (item.itemType || '').toLowerCase();
+  const words = itemType.split(/[_\s]/).filter(w => w.length >= 4 && !IQ_GENERIC_TOKENS.has(w));
+  for (const w of words) {
+    if (new RegExp(`\\b${escapeRegex(w)}\\b`, 'i').test(chatText)) return 'medium';
+  }
+
+  // Tier 2 continued — medium synonym rows (specific appliance names).
+  // Tier 3 — weak synonym rows (broad category signals). Track the
+  // strongest hit we see so a single item can be upgraded from weak to
+  // medium if it's covered by both.
+  let weakHit = false;
+  for (const syn of IQ_SYNONYMS) {
+    if (!syn.match.test(itemType)) continue;
+    if (!syn.signals.test(chatText)) continue;
+    if (syn.tier === 'medium') return 'medium';
+    weakHit = true;
+  }
+  return weakHit ? 'weak' : null;
+}
+
+/** Kept for backwards-compat with MobileInlinePropertyIQ. Returns true
+ *  for any non-null correlation — callers that care about specificity
+ *  should use correlateItemToChat directly. */
 function itemCorrelatesWithChat(item: PropertyInventoryItem, chatText: string): boolean {
-  if (!chatText) return false;
-  const keys = itemKeywords(item);
-  return keys.some(rx => rx.test(chatText));
+  return correlateItemToChat(item, chatText) !== null;
 }
 
 function B2BPropertyIQCard({
@@ -3042,12 +3101,25 @@ function B2BPropertyIQCard({
     );
   }
 
-  // Tier the filter: prefer chat-correlated items (anything the PM or AI
-  // actually mentioned), fall back to the category regex only while the
-  // conversation is still warming up. Category-only matches are hidden to
-  // keep the card focused on what's being discussed right now.
+  // Tiered filter — prefer items directly discussed by brand/model
+  // (strong) or by name/synonym (medium). Weak-only matches (broad
+  // synonyms like "drain" / "leak") are suppressed whenever a
+  // stronger match exists, so asking a follow-up question about
+  // draining the dishwasher doesn't widen the card to every plumbing
+  // item. Category regex is the final fallback while the chat warms up.
   const catKey = iqCategoryKeyFromLabel(categoryLabel);
-  const correlated = chatText ? items.filter(it => itemCorrelatesWithChat(it, chatText)) : [];
+  const scored = chatText
+    ? items
+        .map(it => ({ it, strength: correlateItemToChat(it, chatText) }))
+        .filter((x): x is { it: PropertyInventoryItem; strength: 'strong' | 'medium' | 'weak' } => x.strength !== null)
+    : [];
+  const hasStrong = scored.some(x => x.strength === 'strong');
+  const hasMedium = scored.some(x => x.strength === 'medium');
+  const correlated = hasStrong
+    ? scored.filter(x => x.strength === 'strong').map(x => x.it)
+    : hasMedium
+      ? scored.filter(x => x.strength === 'medium').map(x => x.it)
+      : scored.map(x => x.it);
   const hasChatHits = correlated.length > 0;
   const fallback = catKey ? items.filter(IQ_CATEGORY_MATCH[catKey]) : [];
   const filtered = hasChatHits ? correlated : fallback;
@@ -3125,7 +3197,21 @@ function MobileInlinePropertyIQ({
   chatText: string;
   discovered: Array<{ itemType: string; brand?: string; modelNumber?: string; estimatedAgeYears?: number; condition?: string }>;
 }) {
-  const correlated = chatText ? items.filter(it => itemCorrelatesWithChat(it, chatText)) : [];
+  // Same tiered filter as the desktop card — only hoist weak matches
+  // when there are no stronger ones in play, so a broad follow-up
+  // keyword ("drain") doesn't flood the list.
+  const scored = chatText
+    ? items
+        .map(it => ({ it, strength: correlateItemToChat(it, chatText) }))
+        .filter((x): x is { it: PropertyInventoryItem; strength: 'strong' | 'medium' | 'weak' } => x.strength !== null)
+    : [];
+  const hasStrong = scored.some(x => x.strength === 'strong');
+  const hasMedium = scored.some(x => x.strength === 'medium');
+  const correlated = hasStrong
+    ? scored.filter(x => x.strength === 'strong').map(x => x.it)
+    : hasMedium
+      ? scored.filter(x => x.strength === 'medium').map(x => x.it)
+      : scored.map(x => x.it);
   if (correlated.length === 0 && discovered.length === 0) return null;
 
   return (
