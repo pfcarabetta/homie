@@ -761,7 +761,12 @@ export default function BusinessChat() {
    *  clean history (no decision prompt in the trail Claude sees). */
   const pendingDecisionRef = useRef<{ text: string; image: string | null; history: Message[] } | null>(null);
 
-  const [timing, setTiming] = useState('asap');
+  // Empty until the PM actually picks a timing (button click in handleTiming
+  // or implicit "Today" from a voice-dispatch ready handoff). Was 'asap' as
+  // a default which made the checklist's "Urgency set" tick green from the
+  // moment the PM picked a property — backwards. mapUserTimingToDispatch
+  // safely treats '' as "flexible / low".
+  const [timing, setTiming] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
 
@@ -2223,7 +2228,7 @@ export default function BusinessChat() {
             setShowFreeInput(false);
             setShowQ1Input(false);
             setQ1InputVal('');
-            setTiming('asap');
+            setTiming('');
             setShowDatePicker(false);
             setSelectedDate('');
             setJobId(null);
@@ -3102,11 +3107,18 @@ export default function BusinessChat() {
             propertySelected={!!selectedProperty}
             categoryLabel={category?.label ?? null}
             describedIssue={!!q1Answer || messages.some(m => m.role === 'user')}
-            equipmentCaptured={discoveredEquipment.length > 0 || propertyInventory.length > 0}
+            // Only count equipment the AI captured DURING this chat session
+            // — not the entire scan inventory (which is always populated
+            // for properties with a prior scan and would auto-tick the box
+            // on every new chat).
+            equipmentCaptured={discoveredEquipment.length > 0}
             mediaAttached={uploadedPhotoUrlsRef.current.length > 0 || !!imgPreview}
             voiceUsed={voiceOpen || videoChatOpen || messages.some(m => m.content.startsWith('🎤'))}
             dispatchReady={step === 'summary' || step === 'outreach' || step === 'results'}
-            urgencyConfirmed={!!timing && step !== 'summary'}
+            // True only after the PM explicitly picks a timing button (or
+            // a voice dispatch sets it implicitly). The default '' value
+            // for `timing` keeps this false at session start.
+            urgencyConfirmed={!!timing}
             step={step}
           />
           <B2BPropertyIQCard
