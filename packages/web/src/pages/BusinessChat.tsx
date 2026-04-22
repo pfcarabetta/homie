@@ -1663,11 +1663,25 @@ export default function BusinessChat() {
     });
     // Capture Homie's own <category> classification from this turn — the
     // voice backend extracts it from Claude's reply and passes it here.
-    // Save the latest non-null hit so handleVoiceReady can use the
-    // authoritative classification instead of retro-fitting one from a
-    // keyword scan of the transcript.
+    // Save the latest non-null hit so handleVoiceReady has the
+    // authoritative classification, AND commit it to `category` state
+    // immediately so the right-rail "homie is listening" card + the
+    // checklist (Category row) light up on turn 1 instead of waiting
+    // for the PM to say "dispatch now".
     if (inferredCategory) {
       latestVoiceCategoryRef.current = inferredCategory;
+      const mapped = mapVoiceCategoryToB2B(inferredCategory);
+      if (mapped) {
+        const picked = B2B_CATEGORIES.find(c => c.id === mapped);
+        if (picked) {
+          // Only overwrite the category if it's currently empty or if
+          // Claude's latest guess is different — avoids churn when every
+          // turn re-emits the same ID, and lets a mid-call correction
+          // (e.g. "actually it's the sink, not the dishwasher") take
+          // effect immediately.
+          setCategory(prev => (!prev || prev.id !== picked.id) ? picked : prev);
+        }
+      }
     }
     // Reuse the same <equipment> ingestion the typed-chat path uses.
     // ingestEquipmentFromRaw scans for the wrapping tag, so re-wrap the
@@ -2270,7 +2284,12 @@ export default function BusinessChat() {
            right-rail panel land at the same proportions across surfaces
            (1.15fr 1fr at 1280px max, collapses to single column < 981px). */
         @media (min-width: 981px) {
-          .b2b-split { display: grid !important; grid-template-columns: 1.15fr 1fr !important; gap: 28px !important; align-items: flex-start !important; max-width: 1280px !important; padding-left: 24px !important; padding-right: 24px !important; }
+          /* minmax(0, Nfr) instead of plain Nfr — without the explicit 0
+             minimum, each grid column implicitly has min-width: auto,
+             which lets content (e.g. the voice/video panel's inner
+             transcript or a long model number) push the column wider
+             than its fr allotment and spill into the neighbouring card. */
+          .b2b-split { display: grid !important; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) !important; gap: 28px !important; align-items: flex-start !important; max-width: 1280px !important; padding-left: 24px !important; padding-right: 24px !important; }
           .b2b-split > * { min-width: 0 !important; }
           .b2b-split > .b2b-chat-col { max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
           .b2b-right-panel { display: flex !important; }
