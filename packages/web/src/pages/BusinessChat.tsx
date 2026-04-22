@@ -1540,9 +1540,43 @@ export default function BusinessChat() {
 
   // Handle property selection
   function selectProperty(p: Property) {
+    // Switching properties = fully fresh session. Previously this only
+    // cleared `messages` and left the rest of the conversation state
+    // pointing at the OLD property — so a chat at Property A could
+    // surface its dishwasher discovery / AI diagnosis / category in the
+    // next chat at Property B. Wipe everything that's tied to the
+    // previous chat now, mirroring the "+ New" reset.
     setSelectedProperty(p);
     setStep('category');
     setMessages([]);
+    setCategory(null);
+    setActiveGroup(null);
+    setQ1Answer('');
+    setInputVal('');
+    setDirectText('');
+    setSuggestions([]);
+    setAiDiagnosis('');
+    setStreamText('');
+    setStreaming(false);
+    setExchangeCount(0);
+    setTiming('');
+    setJobId(null);
+    setOutreachStatus(null);
+    setResponses([]);
+    setSelectedResponse(null);
+    setBookedName(null);
+    setDispatching(false);
+    setOccupancyCheck(null);
+    setEntryPermission(null);
+    setDiscoveredEquipment([]);
+    setSilentGeneration(false);
+    setVoiceOpen(false);
+    setVideoChatOpen(false);
+    discoveredPersistedKeysRef.current.clear();
+    pendingDecisionRef.current = null;
+    latestVoiceCategoryRef.current = null;
+    uploadedPhotoUrlsRef.current = [];
+    sessionIdRef.current = `b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
   // Handle category selection
@@ -2781,7 +2815,14 @@ export default function BusinessChat() {
                     taps those buttons. */}
                 {voiceOpen ? (
                   <div style={{ marginTop: 18 }}>
+                    {/* key on selectedProperty.id forces a full
+                        unmount/remount when the PM picks a different
+                        property mid-session. Otherwise the panel's
+                        internal historyRef survives across properties
+                        and Claude could see prior-property turns when
+                        the new chat starts. */}
                     <InlineVoicePanel
+                      key={`voice-${selectedProperty?.id ?? 'none'}`}
                       active={voiceOpen}
                       onExit={() => setVoiceOpen(false)}
                       category={null}
@@ -2794,6 +2835,7 @@ export default function BusinessChat() {
                 ) : videoChatOpen ? (
                   <div style={{ marginTop: 18 }}>
                     <VideoChatPanel
+                      key={`video-${selectedProperty?.id ?? 'none'}`}
                       active={videoChatOpen}
                       onExit={() => setVideoChatOpen(false)}
                       category={null}
