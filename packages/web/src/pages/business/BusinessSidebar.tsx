@@ -32,7 +32,7 @@ function getNavItems(plan: string, role: string): NavItem[] {
 
   return [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', tab: 'dashboard' },
-    { id: 'properties', label: 'Properties', icon: 'properties', tab: 'properties' },
+    { id: 'properties', label: 'Property IQ', icon: 'properties', tab: 'properties' },
     {
       id: 'dispatch-group', label: 'Dispatch', icon: 'dispatch', children: [
         { id: 'dispatch-new', label: 'New Dispatch', icon: 'plus', action: 'new-dispatch' },

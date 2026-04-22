@@ -962,7 +962,7 @@ export default function PropertiesTab({ workspaceId, role, plan, onSelectPropert
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Properties</h3>
+          <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>Property IQ</h3>
           <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 4 }}>
             {activeCount} of {propertyLimit === 9999 ? 'unlimited' : propertyLimit} properties · {plan.charAt(0).toUpperCase() + plan.slice(1)} plan
           </div>
