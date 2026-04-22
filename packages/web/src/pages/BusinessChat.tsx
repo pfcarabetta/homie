@@ -567,10 +567,14 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
 }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = summary.length > 300;
-  // ALL active preferred vendors for the workspace+property, regardless
-  // of category. The AudienceSelector's checklist pre-checks the ones
-  // whose categories include this dispatch's category and leaves
-  // others unchecked (the PM can opt them in if they want).
+  // ALL active preferred vendors for the workspace, deduped by
+  // providerId. listVendors returns one row per preferred_vendors
+  // table entry, so a vendor that's preferred both workspace-wide
+  // AND on specific properties shows up multiple times in the raw
+  // response — N properties × workspace-wide = N+1 duplicate rows.
+  // We collapse by providerId and prefer the property-scoped entry
+  // for the current property (it carries property-specific
+  // categories/notes/availability), falling back to workspace-wide.
   const [preferred, setPreferred] = useState<PreferredVendor[] | null>(null);
   useEffect(() => {
     if (!workspaceId) { setPreferred(null); return; }
@@ -578,19 +582,35 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
     businessService.listVendors(workspaceId)
       .then(res => {
         if (cancelled || !res.data) return;
-        const all = res.data.filter(v => v.active);
-        setPreferred(all);
+        const active = res.data.filter(v => v.active);
+        // Dedupe by providerId. Pick the row that's most relevant to
+        // the current property: property-specific entry > workspace-
+        // wide (propertyId null) > any other property's entry.
+        const byProvider = new Map<string, PreferredVendor>();
+        for (const row of active) {
+          const existing = byProvider.get(row.providerId);
+          if (!existing) { byProvider.set(row.providerId, row); continue; }
+          const rowMatchesProp = row.propertyId === property.id;
+          const exMatchesProp = existing.propertyId === property.id;
+          if (rowMatchesProp && !exMatchesProp) { byProvider.set(row.providerId, row); continue; }
+          if (exMatchesProp) continue;
+          // Neither is property-scoped to current — prefer workspace-wide
+          if (row.propertyId === null && existing.propertyId !== null) {
+            byProvider.set(row.providerId, row);
+          }
+        }
+        setPreferred(Array.from(byProvider.values()));
       })
       .catch(() => { if (!cancelled) setPreferred([]); });
     return () => { cancelled = true; };
-  }, [workspaceId]);
+  }, [workspaceId, property.id]);
   const marketplaceCount = B2B_PROS_NEARBY[category.label] ?? 12;
   const selectedAudience: Audience = audience ?? 'preferred_plus_marketplace';
   const showAudience = !!workspaceId && preferred !== null && preferred.length > 0;
   // Seed the parent's selectedPreferredIds with the category-matching
-  // vendors once the preferred list arrives. This keeps the source of
-  // truth in the parent (so executeDispatch can read it) while still
-  // letting this card own the default logic.
+  // vendors once the preferred list arrives. Identifiers are
+  // PROVIDER ids, not preferred_vendors row ids — that's what the
+  // backend's preferred_provider_ids override expects.
   useEffect(() => {
     if (!preferred || preferred.length === 0) return;
     if (selectedPreferredIds !== undefined) return; // parent already seeded
@@ -598,14 +618,14 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
     const defaults = new Set<string>(
       preferred
         .filter(v => !v.categories || v.categories.length === 0 || v.categories.some(c => c.toLowerCase() === category.id.toLowerCase()))
-        .map(v => v.id),
+        .map(v => v.providerId),
     );
     onSelectedPreferredChange(defaults);
   }, [preferred, category.id, selectedPreferredIds, onSelectedPreferredChange]);
   const effectiveSelectedIds = selectedPreferredIds ?? new Set<string>(
     (preferred ?? [])
       .filter(v => !v.categories || v.categories.length === 0 || v.categories.some(c => c.toLowerCase() === category.id.toLowerCase()))
-      .map(v => v.id),
+      .map(v => v.providerId),
   );
 
   return (
@@ -715,12 +735,15 @@ function AudienceSelector({
   const checklistBody = (
     <div style={{ display: 'grid', gap: 4 }}>
       {preferred.map(v => {
-        const checked = selectedIds.has(v.id);
+        // Identify by providerId (the actual underlying provider) so
+        // checkboxes match what the dispatch payload sends and the
+        // backend's inArray(providerId, override) filter resolves.
+        const checked = selectedIds.has(v.providerId);
         const isCategoryMatch = matchesCategory(v);
         return (
           <label
-            key={v.id}
-            onClick={(e) => { e.stopPropagation(); toggleVendor(v.id); }}
+            key={v.providerId}
+            onClick={(e) => { e.stopPropagation(); toggleVendor(v.providerId); }}
             style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '8px 10px', borderRadius: 8,
