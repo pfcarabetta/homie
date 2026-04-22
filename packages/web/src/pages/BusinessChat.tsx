@@ -1304,6 +1304,26 @@ export default function BusinessChat() {
       }
     }
 
+    // Property IQ scan inventory — separate source from
+    // property.details.appliances. Without this block the typed-chat
+    // path (and generateFinalDiagnosis) only saw the sparse saved-form
+    // appliances and missed the Samsung/Trane/Rheem model numbers that
+    // live exclusively in the Property IQ table. Dedupe before
+    // formatting so duplicate rows don't confuse Claude. Cap at 40
+    // items to stay within the prompt budget.
+    if (propertyInventory.length > 0) {
+      const deduped = dedupePropertyInventory(propertyInventory).slice(0, 40);
+      const rows = deduped.map(it => {
+        const who = [it.brand, it.modelNumber].filter(Boolean).join(' ');
+        const typeLabel = it.itemType.replace(/_/g, ' ');
+        const age = it.estimatedAgeYears ? `${Math.round(parseFloat(it.estimatedAgeYears))}yr` : '';
+        const cond = it.condition && it.condition !== 'good' ? `(${it.condition})` : '';
+        const notes = it.notes ? ` — ${it.notes}` : '';
+        return `- ${typeLabel}${who ? `: ${who}` : ''}${age ? ` · ${age}` : ''}${cond ? ` ${cond}` : ''}${notes}`.trim();
+      });
+      parts.push(`Property IQ inventory (${deduped.length} item${deduped.length === 1 ? '' : 's'} on file — use these brand/model/age details verbatim in your scope):\n${rows.join('\n')}`);
+    }
+
     return parts.join('\n');
   }
 
