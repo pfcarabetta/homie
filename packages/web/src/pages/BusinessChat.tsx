@@ -131,6 +131,50 @@ function inferCategoryFromText(text: string): string | null {
   return null;
 }
 
+/** Maps the voice/video backend's category IDs (from VOICE_SYSTEM_PROMPT
+ *  taxonomy) to our B2B_CATEGORIES IDs. Most overlap by name; this handles
+ *  the mismatches (voice "house_cleaning" → B2B "cleaning", voice IDs
+ *  without a B2B equivalent → "general" fallback). Returns null when the
+ *  voice ID is unknown so the caller can fall back to text inference. */
+const VOICE_TO_B2B_CATEGORY: Record<string, string> = {
+  plumbing: 'plumbing',
+  water_heater: 'water_heater',
+  septic_sewer: 'septic_sewer',
+  electrical: 'electrical',
+  hvac: 'hvac',
+  appliance: 'appliance',
+  roofing: 'roofing',
+  gutter: 'gutter',
+  chimney: 'chimney',
+  general: 'general',
+  garage_door: 'garage_door',
+  security_systems: 'security_systems',
+  // Service-tier translations
+  house_cleaning: 'cleaning',
+  window_cleaning: 'cleaning',
+  pressure_washing: 'cleaning',
+  landscaping: 'landscaping',
+  tree_trimming: 'tree_trimming',
+  deck_patio: 'deck_patio',
+  fencing: 'fencing',
+  pool: 'pool',
+  pest_control: 'pest_control',
+  painting: 'painting',
+  flooring: 'flooring',
+  kitchen_remodel: 'kitchen_remodel',
+  bathroom_remodel: 'bathroom_remodel',
+  // Voice-only IDs with no direct B2B equivalent — land on Handyman
+  locksmith: 'general',
+  moving: 'general',
+  junk_removal: 'general',
+  other: 'general',
+};
+
+function mapVoiceCategoryToB2B(voiceCategoryId: string | null): string | null {
+  if (!voiceCategoryId) return null;
+  return VOICE_TO_B2B_CATEGORY[voiceCategoryId.toLowerCase()] ?? null;
+}
+
 function mapUserTimingToDispatch(raw: string): DispatchUrgency {
   const t = (raw || '').trim().toLowerCase();
   if (!t || t === 'flexible') return { jobTiming: 'flexible', severity: 'low' };
@@ -890,6 +934,12 @@ export default function BusinessChat() {
   };
   const [discoveredEquipment, setDiscoveredEquipment] = useState<DiscoveredItem[]>([]);
   const discoveredPersistedKeysRef = useRef<Set<string>>(new Set());
+  /** Latest `<category>` tag Homie emitted during a voice/video turn —
+   *  updated on every handleVoiceTurn so handleVoiceReady can prefer
+   *  Claude's own classification over keyword-inference at dispatch
+   *  handoff. Cleared on every reset / "+ New" to avoid leaking a stale
+   *  category into the next call. */
+  const latestVoiceCategoryRef = useRef<string | null>(null);
 
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1599,7 +1649,7 @@ export default function BusinessChat() {
   const handleVoiceTurn = (
     userText: string,
     assistantText: string,
-    _inferred: string | null,
+    inferredCategory: string | null,
     equipmentDiscovered?: Array<Record<string, unknown>>,
   ) => {
     const u = userText.trim();
@@ -1611,6 +1661,14 @@ export default function BusinessChat() {
       if (a) next.push({ role: 'assistant', content: a });
       return next;
     });
+    // Capture Homie's own <category> classification from this turn — the
+    // voice backend extracts it from Claude's reply and passes it here.
+    // Save the latest non-null hit so handleVoiceReady can use the
+    // authoritative classification instead of retro-fitting one from a
+    // keyword scan of the transcript.
+    if (inferredCategory) {
+      latestVoiceCategoryRef.current = inferredCategory;
+    }
     // Reuse the same <equipment> ingestion the typed-chat path uses.
     // ingestEquipmentFromRaw scans for the wrapping tag, so re-wrap the
     // structured payload into <equipment>{...}</equipment> blocks before
@@ -1641,9 +1699,17 @@ export default function BusinessChat() {
     setVoiceOpen(false);
     setVideoChatOpen(false);
     if (!trimmed) return;
+    // Category resolution — three fallback tiers in order of confidence:
+    //   1. Claude's own <category> classification from the last voice
+    //      turn (latestVoiceCategoryRef). Most accurate because Claude
+    //      has full conversational + visual context.
+    //   2. Keyword inference over the full transcript + history.
+    //   3. Handyman (general) fallback so dispatch still has a category.
+    const claudeCat = mapVoiceCategoryToB2B(latestVoiceCategoryRef.current);
     const histText = payload.history.map(h => h.content).join(' \n ');
-    const inferred = inferCategoryFromText(`${trimmed}\n${histText}`);
-    const picked = (inferred && B2B_CATEGORIES.find(c => c.id === inferred))
+    const keywordCat = inferCategoryFromText(`${trimmed}\n${histText}`);
+    const resolvedCatId = claudeCat || keywordCat || 'general';
+    const picked = B2B_CATEGORIES.find(c => c.id === resolvedCatId)
       || B2B_CATEGORIES.find(c => c.id === 'general');
     if (!picked) return;
     setCategory(picked);
@@ -2393,6 +2459,7 @@ export default function BusinessChat() {
             setDiscoveredEquipment([]);
             discoveredPersistedKeysRef.current.clear();
             pendingDecisionRef.current = null;
+            latestVoiceCategoryRef.current = null;
             sessionIdRef.current = `b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`;
           }} style={{
             background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
@@ -3263,7 +3330,12 @@ export default function BusinessChat() {
             // on every new chat).
             equipmentCaptured={discoveredEquipment.length > 0}
             mediaAttached={uploadedPhotoUrlsRef.current.length > 0 || !!imgPreview}
-            voiceUsed={voiceOpen || videoChatOpen || messages.some(m => m.content.startsWith('🎤'))}
+            // Panel being merely OPEN doesn't count — the box was
+            // ticking the instant the PM tapped Talk to Homie, before
+            // they'd said anything. Only count actual voice turns that
+            // made it into the chat thread (marked by the 🎤 prefix on
+            // user messages in handleVoiceTurn).
+            voiceUsed={messages.some(m => m.role === 'user' && m.content.startsWith('🎤'))}
             dispatchReady={step === 'summary' || step === 'outreach' || step === 'results'}
             // True only after the PM explicitly picks a timing button (or
             // a voice dispatch sets it implicitly). The default '' value
