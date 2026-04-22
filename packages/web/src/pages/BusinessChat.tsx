@@ -717,8 +717,50 @@ type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
+/** Resolve the effective business-chat theme. Priority:
+ *    1. Explicit `bp_theme` localStorage entry set via the business portal's
+ *       appearance toggle ("light" / "dark" / "auto").
+ *    2. When no preference or "auto", fall back to the OS
+ *       prefers-color-scheme media query — so a PM visiting /business/chat
+ *       standalone with macOS dark mode on gets dark automatically.
+ *  Re-computes on both a storage event (portal toggle in another tab) and
+ *  a media-query change (OS-level flip). Consumed by BusinessChat to set
+ *  data-theme on .b2b-root, which fans out the --bp-* CSS vars. */
+function useBusinessChatTheme(): 'light' | 'dark' {
+  const readSaved = () => {
+    try { return (localStorage.getItem('bp_theme') || '') as '' | 'light' | 'dark' | 'auto'; }
+    catch { return ''; }
+  };
+  const readOs = () => {
+    if (typeof window === 'undefined' || !window.matchMedia) return 'light' as const;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' as const : 'light' as const;
+  };
+  const resolve = (saved: '' | 'light' | 'dark' | 'auto', os: 'light' | 'dark'): 'light' | 'dark' => {
+    if (saved === 'dark') return 'dark';
+    if (saved === 'light') return 'light';
+    return os; // 'auto' or unset — follow OS
+  };
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => resolve(readSaved(), readOs()));
+  useEffect(() => {
+    const recompute = () => setTheme(resolve(readSaved(), readOs()));
+    window.addEventListener('storage', recompute);
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    mq?.addEventListener('change', recompute);
+    // Also poll once in case another tab wrote to localStorage without
+    // firing a storage event (same tab won't).
+    const interval = setInterval(recompute, 2000);
+    return () => {
+      window.removeEventListener('storage', recompute);
+      mq?.removeEventListener('change', recompute);
+      clearInterval(interval);
+    };
+  }, []);
+  return theme;
+}
+
 export default function BusinessChat() {
   useDocumentTitle('Business Dispatch');
+  const b2bTheme = useBusinessChatTheme();
   const { homeowner } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -2023,11 +2065,23 @@ export default function BusinessChat() {
 
 
   return (
-    <div className="b2b-root" style={{ height: '100%', background: 'var(--bp-card)', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="b2b-root" data-theme={b2bTheme} style={{ height: '100%', background: 'var(--bp-card)', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <style>{`
-        /* --bp-* theme tokens — defaults to light, flips to dark on system
-           preference. Uses :where() so any parent .bp-portal wrapper (when
-           rendered inside BusinessPortal) still wins at specificity 0,1,0. */
+        /* --bp-* theme tokens for the business chat surface.
+           Three layers (from lowest to highest priority):
+             1. :where(.b2b-root) light defaults — specificity 0 so any
+                parent .bp-portal wrapper's vars still cascade through
+                unchanged on routes rendered inside the portal.
+             2. @media prefers-color-scheme dark — still :where(), still 0
+                specificity. Covers standalone /business/chat visits on a
+                dark-mode OS when no explicit preference is set.
+             3. .b2b-root[data-theme="dark"] — specificity 0,2,0. Wins
+                over the :where defaults and the portal's .bp-portal base
+                rule, so once useBusinessChatTheme resolves to "dark" the
+                whole chat flips regardless of whether the portal wrapper
+                is present or set to light. The hook watches localStorage
+                AND prefers-color-scheme so the resolved theme stays in
+                sync with the portal toggle and the OS. */
         :where(.b2b-root) {
           --bp-bg: #F9F5F2;
           --bp-card: #ffffff;
@@ -2054,6 +2108,42 @@ export default function BusinessChat() {
             --bp-header: #1E1E1E;
             --bp-warm: #2E2E2E;
           }
+        }
+        .b2b-root[data-theme="dark"] {
+          --bp-bg: #1A1A1A;
+          --bp-card: #242424;
+          --bp-input: #2E2E2E;
+          --bp-text: #E8E4E0;
+          --bp-muted: #9B9490;
+          --bp-subtle: #6B6560;
+          --bp-border: #3A3A3A;
+          --bp-hover: #2E2E2E;
+          --bp-header: #1E1E1E;
+          --bp-warm: #2E2E2E;
+        }
+        .b2b-root[data-theme="light"] {
+          --bp-bg: #F9F5F2;
+          --bp-card: #ffffff;
+          --bp-input: #ffffff;
+          --bp-text: #2D2926;
+          --bp-muted: #6B6560;
+          --bp-subtle: #9B9490;
+          --bp-border: #E0DAD4;
+          --bp-hover: #FAFAF8;
+          --bp-header: #ffffff;
+          --bp-warm: #F9F5F2;
+        }
+        /* Dark-mode border hardening. Many inline styles use the subtle
+           black rgba borders for card edges — invisible in dark mode
+           because the background is already near-black. Promote them to
+           a translucent white so the card edges still read. */
+        .b2b-root[data-theme="dark"] [style*="rgba(0,0,0,0.06)"],
+        .b2b-root[data-theme="dark"] [style*="rgba(0,0,0,0.07)"],
+        .b2b-root[data-theme="dark"] [style*="rgba(0,0,0,0.08)"],
+        .b2b-root[data-theme="dark"] [style*="rgba(0,0,0,.06)"],
+        .b2b-root[data-theme="dark"] [style*="rgba(0,0,0,.07)"],
+        .b2b-root[data-theme="dark"] [style*="rgba(0,0,0,.08)"] {
+          border-color: rgba(255,255,255,.12) !important;
         }
         @keyframes fadeSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin { to { transform:rotate(360deg); } }
@@ -2184,16 +2274,38 @@ export default function BusinessChat() {
             .b2b-occ-detail { display: none !important; }
             .b2b-cal-popover { left: -12px !important; right: -12px !important; width: auto !important; }
           }
-          /* Mobile: lift the property name onto its own row. Property
-             occupies row 1 full-width; the occupancy pill (inside
-             .b2b-header-left) wraps onto row 2 alongside the status
-             indicator + New button (.b2b-header-actions), so nothing
-             overlaps and the header grows vertically instead of spilling. */
+          /* Mobile header grid — two rows:
+               Row 1: property name (left)   |  + New button (right)
+               Row 2: occupancy pill (left)  |  Online/After hours (right)
+             display: contents flattens the wrapper divs so their children
+             become direct grid children addressable by cell. The nav
+             becomes position: relative so the absolutely-positioned
+             calendar popover still has a local anchor after the wrappers
+             collapse away. */
           @media (max-width: 640px) {
-            .b2b-header-nav { flex-wrap: wrap !important; padding: 10px 16px !important; gap: 6px 10px !important; min-height: 0 !important; align-items: center !important; }
-            .b2b-header-left { flex: 1 1 100% !important; flex-wrap: wrap !important; gap: 8px !important; }
-            .b2b-prop-name { flex: 1 1 100% !important; font-size: 15px !important; }
-            .b2b-header-actions { margin-left: auto !important; }
+            .b2b-header-nav {
+              display: grid !important;
+              grid-template-columns: 1fr auto !important;
+              grid-auto-rows: auto !important;
+              column-gap: 10px !important;
+              row-gap: 6px !important;
+              padding: 10px 16px !important;
+              min-height: 0 !important;
+              position: relative !important;
+              align-items: center !important;
+            }
+            .b2b-header-left, .b2b-header-actions { display: contents !important; }
+            .b2b-prop-name {
+              grid-column: 1 !important; grid-row: 1 !important;
+              font-size: 15px !important;
+              overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important;
+              min-width: 0 !important;
+            }
+            .b2b-header-actions > button { grid-column: 2 !important; grid-row: 1 !important; }
+            .b2b-header-left > button { grid-column: 1 !important; grid-row: 2 !important; justify-self: start !important; }
+            .b2b-header-actions > .b2b-chat-status { grid-column: 2 !important; grid-row: 2 !important; justify-self: end !important; }
+            /* Calendar popover should still span the viewport when open. */
+            .b2b-cal-popover { grid-column: 1 / -1 !important; }
           }
         `}</style>
         <div className="b2b-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
