@@ -755,6 +755,65 @@ function StreamingMsg({ text }: { text: string }) {
   );
 }
 
+/** Post-voice/video bridge — replaces the chat transcript with a
+ *  centred, animated Homie logo while the dispatch scope generates.
+ *  Rendered inline in the chat column from silentGeneration +
+ *  step='generating'. Once step flips to 'summary' the DiagnosisSummaryCard
+ *  takes its place (same visual slot), giving the PM a clean "Homie is
+ *  thinking → here's the scope" beat instead of a wall of transcript. */
+function HomieGeneratingCard() {
+  return (
+    <div style={{
+      marginLeft: 42, marginTop: 40, marginBottom: 40,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 20, animation: 'fadeIn 0.4s ease',
+    }}>
+      {/* Animated Homie avatar — pulsing halo + gentle float */}
+      <div style={{
+        position: 'relative',
+        width: 84, height: 84,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {/* Outer spinning ring */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          borderRadius: '50%',
+          border: `3px solid ${O}22`,
+          borderTopColor: O,
+          borderRightColor: `${O}88`,
+          animation: 'spin 1.4s linear infinite',
+        }} />
+        {/* Inner Homie "h" avatar */}
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%', background: O,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: `0 12px 32px -8px ${O}66`,
+          animation: 'homiePulse 1.8s ease-in-out infinite',
+        }}>
+          <span style={{
+            color: '#fff', fontFamily: "'Fraunces', serif",
+            fontWeight: 700, fontSize: 26, lineHeight: 1,
+          }}>h</span>
+        </div>
+      </div>
+      <div style={{ textAlign: 'center', maxWidth: 320 }}>
+        <div style={{
+          fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700,
+          color: 'var(--bp-text)', marginBottom: 4,
+        }}>
+          Homie is writing your dispatch scope
+        </div>
+        <div style={{
+          fontFamily: "'DM Sans', sans-serif", fontSize: 13,
+          color: 'var(--bp-subtle)', lineHeight: 1.5,
+        }}>
+          Pulling the property details and equipment into a brief for the pro. This takes a few seconds.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main component ─────────────────────────────────────────────────────── */
 
 type Step = 'property' | 'category' | 'subcategory' | 'q1' | 'chat' | 'extra' | 'anything_else' | 'timing' | 'generating' | 'summary' | 'outreach' | 'results';
@@ -2402,6 +2461,10 @@ export default function BusinessChat() {
         @keyframes spin { to { transform:rotate(360deg); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        @keyframes homiePulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 12px 32px -8px rgba(232,99,43,.4); }
+          50% { transform: scale(1.06); box-shadow: 0 16px 40px -8px rgba(232,99,43,.6); }
+        }
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
         @media (max-width: 480px) {
@@ -2608,6 +2671,7 @@ export default function BusinessChat() {
             setSelectedResponse(null);
             setBookedName(null);
             setDiscoveredEquipment([]);
+            setSilentGeneration(false);
             discoveredPersistedKeysRef.current.clear();
             pendingDecisionRef.current = null;
             latestVoiceCategoryRef.current = null;
@@ -2837,8 +2901,21 @@ export default function BusinessChat() {
             </div>
           )}
 
-          {/* Chat messages */}
-          {step !== 'property' && step !== 'category' && (
+          {/* Voice/video dispatch handoff — once the call ends with
+              <ready/>, hide the transcript bubbles entirely and show
+              the spinning Homie animation until the diagnosis card
+              takes its place. Cleaner than leaving a long voice
+              transcript sitting above the dispatch summary. */}
+          {silentGeneration && step === 'generating' && (
+            <HomieGeneratingCard />
+          )}
+
+          {/* Chat messages — hidden when the voice path is finalizing
+              (silentGeneration) so the PM sees just the Homie spinner
+              and then the diagnosis card, not the full transcript
+              they already spoke through. Text-chat path still shows
+              bubbles normally. */}
+          {step !== 'property' && step !== 'category' && !silentGeneration && (
             <>
               {messages.map((m, i) => (
                 m.role === 'user' ? <UserMsg key={i} text={m.content} /> : <AssistantMsg key={i} text={m.content} />
