@@ -1708,7 +1708,11 @@ export default function BusinessChat() {
   // handler would freeze it against the first render. The voice/video
   // panels re-render cheaply when this prop identity changes, and the
   // function only fires once per call anyway.
-  const handleVoiceReady = (payload: { transcript: string; history: { role: 'user' | 'assistant'; content: string }[] }) => {
+  const handleVoiceReady = (payload: {
+    transcript: string;
+    history: { role: 'user' | 'assistant'; content: string }[];
+    urgency?: 'today' | 'tomorrow' | 'this_week' | 'flexible' | null;
+  }) => {
     const trimmed = payload.transcript.trim();
     setVoiceOpen(false);
     setVideoChatOpen(false);
@@ -1729,10 +1733,19 @@ export default function BusinessChat() {
     setCategory(picked);
     setActiveGroup(null);
     setQ1Answer(trimmed);
-    // PM said "dispatch now" during the call — capture an implicit
-    // urgency so the dispatch payload has one. The PM can still override
-    // from the summary screen if needed.
-    setTiming('Today');
+    // Use the urgency Homie extracted from the PM's answer to the
+    // reservation-aware timing question. Maps the voice tag to the
+    // same labels handleTiming takes from the text-chat button grid,
+    // so mapUserTimingToDispatch produces a consistent JobTiming +
+    // severity regardless of which path the PM used. Falls back to
+    // "Today" if Homie forgot to pair <ready/> with an <urgency> tag.
+    const voiceTimingLabel: Record<'today' | 'tomorrow' | 'this_week' | 'flexible', string> = {
+      today: 'Today',
+      tomorrow: 'Tomorrow',
+      this_week: 'This week',
+      flexible: 'Flexible',
+    };
+    setTiming(payload.urgency ? voiceTimingLabel[payload.urgency] : 'Today');
     // Skip the chat — run the committed-output stream straight into the
     // summary step. Pass the freshly picked category AND the voice
     // panel's own history (payload.history) through since:

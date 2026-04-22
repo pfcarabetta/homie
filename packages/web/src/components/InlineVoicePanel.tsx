@@ -52,8 +52,15 @@ interface Props {
     category: string | null,
     equipmentDiscovered?: Array<Record<string, unknown>>,
   ) => void;
-  /** Fires when <ready/> is detected or user taps "I'm done". */
-  onReady: (payload: { transcript: string; history: HistoryMessage[] }) => void;
+  /** Fires when <ready/> is detected or user taps "I'm done". `urgency`
+   *  is the dispatch timing Homie extracted from the PM's answer
+   *  (today / tomorrow / this_week / flexible) — null on a manual
+   *  "I'm done" tap since the PM never answered a timing question. */
+  onReady: (payload: {
+    transcript: string;
+    history: HistoryMessage[];
+    urgency?: 'today' | 'tomorrow' | 'this_week' | 'flexible' | null;
+  }) => void;
 }
 
 /**
@@ -380,11 +387,12 @@ export default function InlineVoicePanel({ active, onExit, category, firstName, 
           audio_mime: string;
           is_ready: boolean;
           category: string | null;
+          urgency?: 'today' | 'tomorrow' | 'this_week' | 'flexible' | null;
           equipment_discovered?: Array<Record<string, unknown>>;
         };
       };
 
-      const { transcript, reply, audio_base64, audio_mime, is_ready, category: inferredCategory, equipment_discovered } = json.data;
+      const { transcript, reply, audio_base64, audio_mime, is_ready, category: inferredCategory, urgency, equipment_discovered } = json.data;
 
       historyRef.current = [
         ...historyRef.current,
@@ -403,10 +411,14 @@ export default function InlineVoicePanel({ active, onExit, category, firstName, 
       await playMp3(audio_base64, audio_mime);
 
       if (is_ready) {
-        // Hand off to parent — parent decides to close panel / advance phase
+        // Hand off to parent — parent decides to close panel / advance
+        // phase. Urgency is present whenever Homie paired <ready/> with
+        // an <urgency> tag (always should, per the prompt — but we
+        // tolerate null in case of malformed responses).
         onReady({
           transcript: buildTranscript(historyRef.current),
           history: [...historyRef.current],
+          urgency: urgency ?? null,
         });
       } else {
         setPhase('idle');

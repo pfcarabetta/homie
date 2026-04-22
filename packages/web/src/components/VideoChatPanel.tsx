@@ -47,7 +47,11 @@ interface Props {
     equipmentDiscovered?: Array<Record<string, unknown>>,
   ) => void;
   /** Fires on <ready/> or when the user hits "I'm done". */
-  onReady: (payload: { transcript: string; history: HistoryMessage[] }) => void;
+  onReady: (payload: {
+    transcript: string;
+    history: HistoryMessage[];
+    urgency?: 'today' | 'tomorrow' | 'this_week' | 'flexible' | null;
+  }) => void;
 }
 
 /**
@@ -391,11 +395,12 @@ export default function VideoChatPanel({ active, onExit, category, firstName, bu
           audio_mime: string;
           is_ready: boolean;
           category: string | null;
+          urgency?: 'today' | 'tomorrow' | 'this_week' | 'flexible' | null;
           equipment_discovered?: Array<Record<string, unknown>>;
         };
       };
 
-      const { transcript, reply, audio_base64, audio_mime, is_ready, category: inferredCategory, equipment_discovered } = json.data;
+      const { transcript, reply, audio_base64, audio_mime, is_ready, category: inferredCategory, urgency, equipment_discovered } = json.data;
 
       historyRef.current = [
         ...historyRef.current,
@@ -413,6 +418,7 @@ export default function VideoChatPanel({ active, onExit, category, firstName, bu
         onReady({
           transcript: buildTranscript(historyRef.current),
           history: [...historyRef.current],
+          urgency: urgency ?? null,
         });
       } else {
         setPhase('idle');

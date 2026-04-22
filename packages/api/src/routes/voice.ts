@@ -171,16 +171,30 @@ ALWAYS respond to what the caller actually said, in a conversational spoken-Engl
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 YOU'RE ON A CALL WITH A PROPERTY MANAGER of short-term rentals / managed properties — NOT the end-user homeowner. This property is part of a portfolio the PM operates (guests check in and out; the PM coordinates maintenance and turnover). Speak to them like a dispatcher/ops partner, not a homeowner.
 
-DISPATCH-OR-CONTINUE FORK (IMPORTANT — this REPLACES the default "emit <ready/> after 3 follow-ups" behavior):
-Once you've gathered enough detail to form a reasonable diagnosis (typically 2–3 exchanges), do NOT auto-emit <ready/>. Instead, ask the PM this exact question (or a very close paraphrase):
-  "Got it — would you like me to dispatch a pro now, or should we keep diagnosing?"
+DISPATCH-OR-CONTINUE + TIMING FORK (IMPORTANT — this REPLACES the default "emit <ready/> after 3 follow-ups" behavior):
+Once you've gathered enough detail to form a reasonable diagnosis (typically 2–3 exchanges), do NOT auto-emit <ready/>. Instead, ask a combined dispatch-and-timing question that references the CURRENT reservation situation so the PM can answer both at once.
 
-Then wait for their answer and branch:
-  • If they confirm dispatch ("dispatch now", "send someone", "yes dispatch", "go ahead", "book it", "dispatch please", any affirmative to dispatching) — reply with a short one-line confirmation (e.g. "Okay, dispatching now.") and END your reply with <ready/> on its own. The call ends and the PM is taken straight to the diagnosis + dispatch screen.
-  • If they ask to keep diagnosing ("keep going", "more questions", "continue", "not yet", "let's narrow it down", "what else should I check") — continue asking focused follow-ups. Do NOT emit <ready/>. After another round or two, ask the dispatch-or-continue question again.
+Build the timing question from the "Status:" line in the CONTEXT:
+  • OCCUPIED (guest on-property): "Got it — would you like me to dispatch a pro now, or should we keep diagnosing? And given the guest is on-property until <checkout date>, do you want someone out today while they're there, or should we schedule for after checkout?"
+  • VACANT with IMMINENT check-in (≤1 day): "Got it — would you like me to dispatch a pro now, or should we keep diagnosing? The next guest arrives <date> so we'd need someone out today to beat the turnover — sound right?"
+  • VACANT with TIGHT turnover (≤3 days): "Got it — would you like me to dispatch a pro now, or should we keep diagnosing? With the next guest arriving <date>, we've got a narrow window — need someone today or tomorrow, or push to later this week?"
+  • VACANT with LONGER runway (4+ days): "Got it — would you like me to dispatch a pro now, or should we keep diagnosing? The unit's vacant for the next <N> days before <next-guest date>, so there's flexibility — need someone today, this week, or totally flexible?"
+  • VACANT with NO reservations: "Got it — would you like me to dispatch a pro now, or should we keep diagnosing? The unit's fully open — need someone today, this week, or are you flexible?"
+
+Then wait for the answer and branch:
+  • If they confirm dispatch with any timing ("dispatch now and send them today", "yes dispatch, tomorrow works", "book it, flexible"):
+      - Reply with a short one-line confirmation ("Okay, dispatching for today." / "Got it, booking for after checkout.").
+      - Emit the PM's timing choice as a hidden tag: <urgency>today</urgency> OR <urgency>tomorrow</urgency> OR <urgency>this_week</urgency> OR <urgency>flexible</urgency>.
+        · Map: "now / today / ASAP / immediately / as soon as possible" → today
+        · "tomorrow / in the morning / first thing" → tomorrow
+        · "this week / by Friday / a few days / after checkout (if checkout is ≤3 days out)" → this_week
+        · "whenever / flexible / no rush / later / after the guest leaves (if checkout is >3 days out) / next week / within two weeks" → flexible
+        · If the PM didn't specify timing, default to <urgency>today</urgency>.
+      - Then END your reply with <ready/> on its own. The call ends and the PM is taken straight to the diagnosis + dispatch screen.
+  • If they ask to keep diagnosing — continue asking focused follow-ups. Do NOT emit <ready/> or <urgency>. After another round or two, ask the combined dispatch-and-timing question again.
   • If the answer is ambiguous, default to asking the question again with a simple rephrase — do NOT emit <ready/> on an ambiguous answer.
 
-Only emit <ready/> once the PM has explicitly chosen to dispatch. Every other turn must skip it.
+Only emit <ready/> once the PM has explicitly chosen to dispatch. Every <ready/> MUST be paired with exactly one <urgency> tag so the dispatch payload has accurate timing.
 
 A CONTEXT block at the start of the first user turn carries: property address + size, occupancy status, current guest + checkout date, next guest + check-in date, the next few upcoming reservations, saved property notes, every saved equipment section (HVAC / water heater / plumbing fixtures / appliances / electrical / pool-spa / exterior), and the full Property IQ scan inventory (every known appliance + system with brand, model, age, condition).
 
@@ -486,6 +500,17 @@ router.post('/turn', async (req: Request, res: Response) => {
     // missing — we fall back to whatever category the UI already had.
     const catMatch = replyRaw.match(/<category>\s*([a-z0-9_-]+)\s*<\/category>/i);
     const category = catMatch ? catMatch[1].toLowerCase() : null;
+    // Extract urgency hint paired with <ready/>. Claude emits
+    // <urgency>today|tomorrow|this_week|flexible</urgency> when the PM
+    // confirms dispatch with a timing answer, using the CONTEXT's
+    // reservation situation to shape the question. Frontend uses this
+    // as the initial `timing` on the dispatch payload so the provider
+    // gets the actual urgency the PM picked, not a hardcoded default.
+    const urgencyMatch = replyRaw.match(/<urgency>\s*([a-z_]+)\s*<\/urgency>/i);
+    const rawUrgency = urgencyMatch ? urgencyMatch[1].toLowerCase() : null;
+    const urgency = (rawUrgency && ['today', 'tomorrow', 'this_week', 'flexible'].includes(rawUrgency))
+      ? rawUrgency as 'today' | 'tomorrow' | 'this_week' | 'flexible'
+      : null;
     // Extract any <equipment>{ ... }</equipment> JSON blocks Homie emitted
     // (e.g. visual ID of a new appliance from a video frame). Each block is
     // returned to the client which folds it into the dispatch summary AND
@@ -508,6 +533,7 @@ router.post('/turn', async (req: Request, res: Response) => {
     const replyClean = replyRaw
       .replace(/<category>[\s\S]*?<\/category>/gi, '')
       .replace(/<equipment>[\s\S]*?<\/equipment>/gi, '')
+      .replace(/<urgency>[\s\S]*?<\/urgency>/gi, '')
       .replace(/<ready\s*\/?\s*>/gi, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
@@ -530,6 +556,12 @@ router.post('/turn', async (req: Request, res: Response) => {
         audio_base64: audioBase64,
         audio_mime: 'audio/mpeg',
         is_ready: isReady,
+        // PM's chosen dispatch urgency when <ready/> fires — today,
+        // tomorrow, this_week, or flexible. Null on turns without a
+        // ready signal. Frontend maps this to the dispatch payload's
+        // timing/severity so the provider gets the real urgency the
+        // PM picked (reservation-aware), not a hardcoded "Today".
+        urgency,
         // Newly-discovered Property IQ items the AI tagged this turn (visual
         // recognition from video, or a brand/model the PM just spoke). The
         // frontend ingests these into discoveredEquipment + persists to
