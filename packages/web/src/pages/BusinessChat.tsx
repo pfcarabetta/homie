@@ -3555,11 +3555,18 @@ export default function BusinessChat() {
             step={step}
             propertySelected={!!selectedProperty}
             describedIssue={!!q1Answer || messages.some(m => m.role === 'user')}
-            // Only count equipment the AI captured DURING this chat session
-            // — not the entire scan inventory (which is always populated
-            // for properties with a prior scan and would auto-tick the box
-            // on every new chat).
-            equipmentCaptured={discoveredEquipment.length > 0}
+            // Ticks when the chat is actively using equipment data —
+            // either a brand-new item the AI discovered (added to
+            // discoveredEquipment) OR an existing Property IQ row that
+            // correlates with what's being discussed. We still don't
+            // auto-tick just because a scan exists on the property;
+            // correlation requires the chat to explicitly name the
+            // appliance (strong/medium match).
+            equipmentCaptured={
+              discoveredEquipment.length > 0
+              || (!!chatCorrelationText
+                  && propertyInventory.some(it => correlateItemToChat(it, chatCorrelationText) !== null))
+            }
             mediaAttached={uploadedPhotoUrlsRef.current.length > 0 || !!imgPreview}
             // Panel being merely OPEN doesn't count — the box was
             // ticking the instant the PM tapped Talk to Homie, before
