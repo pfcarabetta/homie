@@ -520,6 +520,12 @@ export default function InlineVoicePanel({ active, onExit, category, firstName, 
         padding: 18,
         boxShadow: `0 16px 40px -20px ${O}55`,
         animation: 'fadeSlide 0.25s ease',
+        // Stay boxed inside the grid cell regardless of transcript
+        // content. Without min-width:0 the panel could grow past its
+        // column and spill into the right-rail cards.
+        minWidth: 0,
+        maxWidth: '100%',
+        boxSizing: 'border-box',
       }}
     >
       {/* Top row — exit link + hands-free toggle + status */}
@@ -608,8 +614,10 @@ export default function InlineVoicePanel({ active, onExit, category, firstName, 
               style={{
                 marginTop: 4, fontSize: 12, color: DIM,
                 fontFamily: "'DM Sans',sans-serif", lineHeight: 1.4,
-                overflow: 'hidden', textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
+                // Wrap long transcripts onto multiple lines instead of
+                // letting them force the card wider than its grid cell.
+                overflowWrap: 'anywhere', wordBreak: 'break-word',
+                minWidth: 0,
               }}
             >
               {phase === 'error' ? error : `“${lastTranscript}”`}
@@ -621,7 +629,7 @@ export default function InlineVoicePanel({ active, onExit, category, firstName, 
       {/* Footer row — done shortcut + examples hint */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BORDER}`, gap: 10, flexWrap: 'wrap' }}>
         {lastReply ? (
-          <div style={{ fontSize: 11, color: DIM, fontFamily: "'DM Sans',sans-serif", flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 11, color: DIM, fontFamily: "'DM Sans',sans-serif", flex: '1 1 100%', minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.45 }}>
             <span style={{ color: O, fontWeight: 700 }}>Homie:</span> {lastReply}
           </div>
         ) : (

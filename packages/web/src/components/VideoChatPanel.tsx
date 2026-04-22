@@ -502,7 +502,12 @@ export default function VideoChatPanel({ active, onExit, category, firstName, bu
         padding: 16,
         boxShadow: `0 16px 40px -20px ${O}55`,
         animation: 'fadeSlide 0.25s ease',
+        // Box the panel inside its grid cell even when transcript /
+        // reply text is long. min-width:0 + box-sizing lets the card
+        // shrink below content intrinsic size; child text then wraps.
+        minWidth: 0,
         maxWidth: '100%',
+        boxSizing: 'border-box',
       }}
     >
       {/* Top bar */}
@@ -618,7 +623,7 @@ export default function VideoChatPanel({ active, onExit, category, firstName, bu
             {hintText(phase, handsFree)}
           </div>
           {(lastTranscript || phase === 'error') && (
-            <div style={{ marginTop: 3, fontSize: 12, color: DIM, fontFamily: "'DM Sans',sans-serif", lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ marginTop: 3, fontSize: 12, color: DIM, fontFamily: "'DM Sans',sans-serif", lineHeight: 1.4, overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 }}>
               {phase === 'error' ? error : `"${lastTranscript}"`}
             </div>
           )}
@@ -628,7 +633,7 @@ export default function VideoChatPanel({ active, onExit, category, firstName, bu
       {/* Footer with reply + done */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${BORDER}`, gap: 10, flexWrap: 'wrap' }}>
         {lastReply ? (
-          <div style={{ fontSize: 11, color: DIM, fontFamily: "'DM Sans',sans-serif", flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 11, color: DIM, fontFamily: "'DM Sans',sans-serif", flex: '1 1 100%', minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.45 }}>
             <span style={{ color: O, fontWeight: 700 }}>Homie:</span> {lastReply}
           </div>
         ) : (

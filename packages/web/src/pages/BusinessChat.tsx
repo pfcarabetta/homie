@@ -2152,7 +2152,9 @@ export default function BusinessChat() {
       // Pull any inventory items the chat actually discussed (strong or
       // medium correlation only — matches the same filter the Property
       // IQ card uses so "water heater leak" won't drag the softener in).
-      for (const it of propertyInventory) {
+      // Dedupe first so duplicate inventory rows don't double-print
+      // brand/model in the dispatch summary.
+      for (const it of dedupePropertyInventory(propertyInventory)) {
         const strength = correlateItemToChat(it, chatCorrelationText);
         if (strength !== 'strong' && strength !== 'medium') continue;
         addRow({
@@ -3915,8 +3917,51 @@ function itemCorrelatesWithChat(item: PropertyInventoryItem, chatText: string): 
   return correlateItemToChat(item, chatText) !== null;
 }
 
+/** Collapse duplicate inventory rows by item_type + brand + model. Older
+ *  chats (before ingestEquipmentFromRaw grew its three-tier skip logic)
+ *  could POST a second copy of an appliance Homie already knew about,
+ *  leaving the scan with two Samsung dishwashers etc. This keeps the
+ *  best-conditioned + PM-confirmed entry and drops the shadow copies so
+ *  the IQ card doesn't render dupes. Also runs for the mobile variant. */
+function dedupePropertyInventory(items: PropertyInventoryItem[]): PropertyInventoryItem[] {
+  const conditionRank: Record<string, number> = {
+    new: 0, good: 1, fair: 2, aging: 3, needs_attention: 4, end_of_life: 5,
+  };
+  const statusRank: Record<string, number> = {
+    pm_confirmed: 0, pm_corrected: 1, ai_identified: 2, pm_dismissed: 99,
+  };
+  const keyFor = (it: PropertyInventoryItem) =>
+    `${(it.itemType || '').toLowerCase()}|${(it.brand || '').toLowerCase()}|${(it.modelNumber || '').toLowerCase()}`;
+
+  const best = new Map<string, PropertyInventoryItem>();
+  for (const it of items) {
+    const k = keyFor(it);
+    const existing = best.get(k);
+    if (!existing) { best.set(k, it); continue; }
+    // Prefer the one with better status (pm_confirmed > ai_identified).
+    const curStatusR = statusRank[it.status ?? ''] ?? 10;
+    const exStatusR = statusRank[existing.status ?? ''] ?? 10;
+    if (curStatusR !== exStatusR) {
+      if (curStatusR < exStatusR) best.set(k, it);
+      continue;
+    }
+    // Tie on status — prefer better condition (good > aging > etc).
+    const curCondR = conditionRank[it.condition ?? ''] ?? 99;
+    const exCondR = conditionRank[existing.condition ?? ''] ?? 99;
+    if (curCondR !== exCondR) {
+      if (curCondR < exCondR) best.set(k, it);
+      continue;
+    }
+    // Final tiebreak — whichever was updated most recently.
+    const curTime = it.updatedAt ? new Date(it.updatedAt).getTime() : 0;
+    const exTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+    if (curTime > exTime) best.set(k, it);
+  }
+  return Array.from(best.values());
+}
+
 function B2BPropertyIQCard({
-  propertyId, categoryLabel, items, chatText,
+  propertyId, categoryLabel, items: rawItems, chatText,
 }: {
   propertyId: string | null;
   categoryLabel: string | null;
@@ -3926,6 +3971,7 @@ function B2BPropertyIQCard({
    *  items are actually being discussed. Empty = no correlation yet. */
   chatText: string;
 }) {
+  const items = dedupePropertyInventory(rawItems);
   // Empty-state — no scan or zero items. Show the run-scan nudge.
   if (!propertyId || items.length === 0) {
     return (
@@ -4092,12 +4138,13 @@ function InlineDiscoveredEquipment({
 }
 
 function MobileInlinePropertyIQ({
-  items, chatText, discovered,
+  items: rawItems, chatText, discovered,
 }: {
   items: PropertyInventoryItem[];
   chatText: string;
   discovered: Array<{ itemType: string; brand?: string; modelNumber?: string; estimatedAgeYears?: number; condition?: string }>;
 }) {
+  const items = dedupePropertyInventory(rawItems);
   // Only items explicitly called out by name/synonym/brand. Matches the
   // desktop card — no broad category keywords, so a follow-up question
   // can't pull unrelated items into the list.

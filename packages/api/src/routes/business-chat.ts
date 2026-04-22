@@ -135,12 +135,16 @@ Tag format (JSON, one item per block; emit in the SAME response):
 }
 </equipment>
 
-DISPATCH SUMMARY — ALWAYS INCLUDE EQUIPMENT DETAILS:
-When you generate your final diagnosis / scope (plain-text paragraph before the <diagnosis> JSON), ALWAYS reference the specific equipment by brand + model + age when it's on file in the context. The provider reads this text and needs to know what they're servicing. Acceptable phrasings:
-  • "Samsung NE63A6711SS gas range (4yr old) — front-right burner ignition failing."
-  • "Rheem tankless water heater (2019, gas) in the garage — no hot water on second-floor bathroom."
-  • "LG LRMVS3006S refrigerator — ice maker not producing."
-If the equipment isn't in the context, name what the PM described ("dishwasher, brand unknown"). NEVER omit a brand/model/age that IS on file.`;
+DISPATCH SUMMARY — ALWAYS INCLUDE BRAND + MODEL + AGE:
+When you generate your final diagnosis / scope (plain-text paragraph before the <diagnosis> JSON), ALWAYS reference the specific equipment by BRAND + MODEL + AGE when those values are on file in the context. The provider reads this text and needs every identifying detail so they can bring the right parts and manuals.
+
+Hard rule: if the CONTEXT has both a brand AND a model_number for the item you're diagnosing, BOTH MUST appear in the scope text. Dropping the model_number when it's on file is a HARD ERROR — the provider can't source parts from just "the Samsung dishwasher". Always write it as "<brand> <model_number>", e.g.:
+  ✓ "Samsung DW80N3030US dishwasher (3yr old) — standing water in the tub after cycle."
+  ✓ "Trane XR16 AC unit (8yr old) — not cooling below 78°."
+  ✗ "Samsung dishwasher — standing water…"  ← WRONG, missing model
+  ✗ "dishwasher, 3 years old…"              ← WRONG, missing brand + model
+
+If only the brand is on file (no model), write the brand ("Samsung dishwasher, model not on file — ..."). If only the type is known, write what the PM described. NEVER omit any detail that IS on file.`;
 
 const SERVICE_SYSTEM_PROMPT = `You are Homie, an AI assistant for property managers scheduling non-repair services across their portfolio — things like cleaning, restocking, hot tub maintenance, landscaping, and similar tasks. You're efficient and focused on confirming scope so the PM can dispatch quickly.
 
@@ -249,8 +253,10 @@ Emit ONLY when the PM mentions an item that is genuinely NEW to the inventory, O
 
 Never re-emit an item you already tagged earlier in this chat.
 
-DISPATCH SUMMARY — ALWAYS INCLUDE EQUIPMENT DETAILS:
-When you generate your final scope summary (plain-text paragraph before the <diagnosis> JSON), ALWAYS reference the specific equipment by brand + model + age when it's on file in the context. The provider reads this text and needs to know what they'll be servicing. If the item isn't in the context, name what the PM described. NEVER omit a brand/model/age that IS on file.`;
+DISPATCH SUMMARY — ALWAYS INCLUDE BRAND + MODEL + AGE:
+When you generate your final scope summary (plain-text paragraph before the <diagnosis> JSON), ALWAYS reference the specific equipment by BRAND + MODEL + AGE when those values are on file in the context.
+
+Hard rule: if the CONTEXT has both a brand AND a model_number for the item, BOTH MUST appear in the scope text. Dropping the model_number when it's on file is a HARD ERROR. Write it as "<brand> <model_number>", e.g. "Pentair WhisperFlo pool pump (4yr old)" or "Rheem XE50M12ST45U1 water heater". NEVER omit a detail that IS on file.`;
 
 // ── POST /api/v1/business-chat/chat ─────────────────────────────────────────
 
