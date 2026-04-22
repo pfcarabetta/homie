@@ -63,6 +63,36 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
+/** "Today" / "Yesterday" / "Wednesday, March 12" labels used to group
+ *  consecutive cards by the day they were created. Mirrors the same
+ *  helper PropertyDetailView's per-property Jobs tab uses on the
+ *  business side, kept identical so the two surfaces feel the same. */
+function getDateLabel(dateStr: string): string {
+  const dateObj = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  if (dateObj.toDateString() === today.toDateString()) return 'Today';
+  if (dateObj.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return dateObj.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: dateObj.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
+  });
+}
+
+/** Inline JSX helper — renders a small uppercase date header above a
+ *  card whenever the next group's date label differs from the previous
+ *  one. Caller tracks `lastDateLabel` between iterations of its map. */
+function renderDateSeparator(label: string) {
+  return (
+    <div style={{
+      fontSize: 12, fontWeight: 700, color: '#9B9490',
+      padding: '14px 0 6px', letterSpacing: '0.03em',
+    }}>{label}</div>
+  );
+}
+
 /* -- Profile Tab -- */
 function ProfileTab() {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
@@ -334,17 +364,26 @@ function QuotesTab() {
     <>
       <style dangerouslySetInnerHTML={{ __html: QUOTE_CARD_STYLES }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {jobs.map(j => {
-          const sc = QUOTE_STATUS_CONFIG[j.status] ?? QUOTE_STATUS_CONFIG.expired;
-          const pm = PAYMENT_LABELS[j.payment_status] ?? PAYMENT_LABELS.unpaid;
-          const isExpanded = expandedId === j.id;
-          const jobResponses = responses[j.id] ?? [];
-          const isActive = ['open', 'dispatching', 'collecting'].includes(j.status);
-          const catLabel = j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Quote';
-          const responseCount = jobResponses.length;
-          const ringSize = 44;
+        {(() => {
+          // Track the last-rendered date label so we only emit a new
+          // separator when the day actually changes. The IIFE keeps the
+          // mutable `lastDateLabel` scoped to this map and out of the
+          // surrounding component closure.
+          let lastDateLabel = '';
+          return jobs.map(j => {
+            const sc = QUOTE_STATUS_CONFIG[j.status] ?? QUOTE_STATUS_CONFIG.expired;
+            const pm = PAYMENT_LABELS[j.payment_status] ?? PAYMENT_LABELS.unpaid;
+            const isExpanded = expandedId === j.id;
+            const jobResponses = responses[j.id] ?? [];
+            const isActive = ['open', 'dispatching', 'collecting'].includes(j.status);
+            const catLabel = j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Quote';
+            const responseCount = jobResponses.length;
+            const ringSize = 44;
+            const dateLabel = getDateLabel(j.created_at);
+            const showHeader = dateLabel !== lastDateLabel;
+            lastDateLabel = dateLabel;
 
-          return (
+            const card = (
             <div key={j.id} onClick={() => toggleExpand(j.id)} style={{
               background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
               border: isExpanded ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
@@ -507,8 +546,15 @@ function QuotesTab() {
                 </div>
               )}
             </div>
-          );
-        })}
+            );
+            return (
+              <div key={`group-${j.id}`}>
+                {showHeader && renderDateSeparator(dateLabel)}
+                {card}
+              </div>
+            );
+          });
+        })()}
       </div>
     </>
   );
@@ -802,16 +848,29 @@ function BookingsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {bookings.map(b => (
-        <BookingCard
-          key={b.id}
-          booking={b}
-          expanded={expandedId === b.id}
-          onToggle={() => setExpandedId(prev => prev === b.id ? null : b.id)}
-          onMarkedRead={refetch}
-          onChanged={refetch}
-        />
-      ))}
+      {(() => {
+        // Track the last-rendered date label so we only emit a header
+        // when the day actually changes — same pattern My Quotes uses
+        // and the business per-property Jobs tab uses.
+        let lastDateLabel = '';
+        return bookings.map(b => {
+          const dateLabel = getDateLabel(b.confirmed_at);
+          const showHeader = dateLabel !== lastDateLabel;
+          lastDateLabel = dateLabel;
+          return (
+            <div key={`group-${b.id}`}>
+              {showHeader && renderDateSeparator(dateLabel)}
+              <BookingCard
+                booking={b}
+                expanded={expandedId === b.id}
+                onToggle={() => setExpandedId(prev => prev === b.id ? null : b.id)}
+                onMarkedRead={refetch}
+                onChanged={refetch}
+              />
+            </div>
+          );
+        });
+      })()}
     </div>
   );
 }
