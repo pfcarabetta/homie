@@ -105,7 +105,7 @@ export default function AvatarDropdown() {
           }}
             onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
             onMouseLeave={e => e.currentTarget.style.background = 'none'}
-          >My Home</button>
+          >My Home IQ</button>
           <button onClick={() => { setOpen(false); navigate('/account?tab=quotes'); }} style={{
             width: '100%', padding: '12px 16px', background: 'none', border: 'none',
             fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',

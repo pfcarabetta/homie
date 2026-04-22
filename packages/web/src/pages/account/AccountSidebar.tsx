@@ -37,7 +37,7 @@ function getNavItems(hasInspect: boolean, hasWorkspace: boolean): NavItem[] {
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', tab: 'dashboard' },
     { id: 'quotes', label: 'My Quotes', icon: 'quotes', tab: 'quotes' },
     { id: 'bookings', label: 'My Bookings', icon: 'bookings', tab: 'bookings' },
-    { id: 'home', label: 'My Home', icon: 'home', tab: 'home' },
+    { id: 'home', label: 'My Home IQ', icon: 'home', tab: 'home' },
     { id: 'div1', label: '', icon: '', divider: true },
     { id: 'diagnostic', label: 'Free Diagnostic', icon: 'diagnostic', href: '/chat' },
   ];
