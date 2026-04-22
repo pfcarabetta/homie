@@ -1140,6 +1140,13 @@ export default function BusinessChat() {
             estimated_age_years: item.estimatedAgeYears,
             condition: item.condition,
             notes: item.notes ? `[Homie chat] ${item.notes}` : '[Homie chat]',
+            // Mark chat-originated rows as AI discoveries rather than
+            // promoting them to pm_confirmed. Keeps the dedupe tiebreak
+            // honest and prevents a transient per-incident condition
+            // (e.g. "needs_attention" from a diagnostic chat) from
+            // overriding the original scan's assessment.
+            identification_method: 'ai_chat',
+            status: 'ai_identified',
           },
         ).catch(err => console.warn('[BusinessChat] inventory persist failed:', err));
       }
@@ -3958,18 +3965,25 @@ function dedupePropertyInventory(items: PropertyInventoryItem[]): PropertyInvent
     const k = keyFor(it);
     const existing = best.get(k);
     if (!existing) { best.set(k, it); continue; }
-    // Prefer the one with better status (pm_confirmed > ai_identified).
-    const curStatusR = statusRank[it.status ?? ''] ?? 10;
-    const exStatusR = statusRank[existing.status ?? ''] ?? 10;
-    if (curStatusR !== exStatusR) {
-      if (curStatusR < exStatusR) best.set(k, it);
-      continue;
-    }
-    // Tie on status — prefer better condition (good > aging > etc).
+    // Condition first — a scan row with 'good' is the canonical assessment
+    // of the appliance's physical state, and a chat-originated duplicate
+    // with 'needs_attention' is almost always a transient per-incident
+    // flag (the PM described a problem in a diagnostic chat, and Homie
+    // tagged the item accordingly). Ranking condition above status means
+    // the 'good' scan row wins even if an old bad row was auto-promoted
+    // to pm_confirmed before the backend learned about ai_chat.
     const curCondR = conditionRank[it.condition ?? ''] ?? 99;
     const exCondR = conditionRank[existing.condition ?? ''] ?? 99;
     if (curCondR !== exCondR) {
       if (curCondR < exCondR) best.set(k, it);
+      continue;
+    }
+    // Same condition — prefer the higher-trust status
+    // (pm_confirmed > ai_identified).
+    const curStatusR = statusRank[it.status ?? ''] ?? 10;
+    const exStatusR = statusRank[existing.status ?? ''] ?? 10;
+    if (curStatusR !== exStatusR) {
+      if (curStatusR < exStatusR) best.set(k, it);
       continue;
     }
     // Final tiebreak — whichever was updated most recently.

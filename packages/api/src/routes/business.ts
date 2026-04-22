@@ -5140,6 +5140,12 @@ router.delete('/:workspaceId/inventory/:itemId', requireWorkspace, requireWorksp
 });
 
 // POST /:workspaceId/properties/:propertyId/inventory/manual — add an item manually
+// (or via AI chat discovery). The PM-manual UI path leaves identification_method
+// and status blank and gets the historical behavior (pm_manual / pm_confirmed).
+// AI chat flows should pass identification_method='ai_chat' and status='ai_identified'
+// so the discovery stays unconfirmed until the PM explicitly confirms it in the
+// inventory UI — prevents a chat-originated row from out-ranking the original
+// scan's assessment when the frontend dedupes for display.
 router.post('/:workspaceId/properties/:propertyId/inventory/manual', requireWorkspace, requireWorkspaceRole('admin', 'coordinator'), async (req: Request, res: Response) => {
   const { propertyId } = req.params;
   const body = req.body as {
@@ -5151,6 +5157,8 @@ router.post('/:workspaceId/properties/:propertyId/inventory/manual', requireWork
     estimated_age_years?: number;
     condition?: string;
     notes?: string;
+    identification_method?: string;
+    status?: string;
   };
   if (!body.category || !body.item_type) {
     res.status(400).json({ data: null, error: 'category and item_type are required', meta: {} });
@@ -5161,6 +5169,18 @@ router.post('/:workspaceId/properties/:propertyId/inventory/manual', requireWork
       .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, req.workspaceId))).limit(1);
     if (!prop) { res.status(404).json({ data: null, error: 'Property not found', meta: {} }); return; }
 
+    const ALLOWED_METHODS = new Set(['pm_manual', 'ai_chat', 'label_ocr', 'visual_classification']);
+    const ALLOWED_STATUSES = new Set(['pm_confirmed', 'ai_identified', 'pm_corrected', 'pm_dismissed']);
+    const identificationMethod = body.identification_method && ALLOWED_METHODS.has(body.identification_method)
+      ? body.identification_method
+      : 'pm_manual';
+    const status = body.status && ALLOWED_STATUSES.has(body.status)
+      ? body.status
+      : (identificationMethod === 'ai_chat' ? 'ai_identified' : 'pm_confirmed');
+    // AI-chat discoveries get a lower confidence score and are left
+    // unconfirmed; manual PM entries stay at 1.00 / pm_confirmed.
+    const confidenceScore = identificationMethod === 'ai_chat' ? '0.70' : '1.00';
+    const confirmed = status === 'pm_confirmed';
     const [inserted] = await db.insert(propertyInventoryItems).values({
       propertyId,
       roomId: body.room_id ?? null,
@@ -5171,11 +5191,11 @@ router.post('/:workspaceId/properties/:propertyId/inventory/manual', requireWork
       estimatedAgeYears: body.estimated_age_years !== undefined ? body.estimated_age_years.toString() : null,
       condition: body.condition ?? null,
       notes: body.notes ?? null,
-      identificationMethod: 'pm_manual',
-      confidenceScore: '1.00',
-      status: 'pm_confirmed',
-      confirmedBy: req.homeownerId ?? null,
-      confirmedAt: new Date(),
+      identificationMethod,
+      confidenceScore,
+      status,
+      confirmedBy: confirmed ? (req.homeownerId ?? null) : null,
+      confirmedAt: confirmed ? new Date() : null,
     }).returning();
 
     res.status(201).json({ data: inserted, error: null, meta: {} });

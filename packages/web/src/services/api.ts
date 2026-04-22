@@ -1111,7 +1111,7 @@ export const businessService = {
     fetchAPI<{ deleted: boolean }>(`/api/v1/business/${workspaceId}/inventory/${itemId}`, {
       method: 'DELETE',
     }),
-  addManualInventoryItem: (workspaceId: string, propertyId: string, body: { room_id?: string; category: string; item_type: string; brand?: string; model_number?: string; estimated_age_years?: number; condition?: string; notes?: string }) =>
+  addManualInventoryItem: (workspaceId: string, propertyId: string, body: { room_id?: string; category: string; item_type: string; brand?: string; model_number?: string; estimated_age_years?: number; condition?: string; notes?: string; identification_method?: 'pm_manual' | 'ai_chat' | 'label_ocr' | 'visual_classification'; status?: 'pm_confirmed' | 'ai_identified' | 'pm_corrected' | 'pm_dismissed' }) =>
     fetchAPI<PropertyInventoryItem>(`/api/v1/business/${workspaceId}/properties/${propertyId}/inventory/manual`, {
       method: 'POST', body: JSON.stringify(body),
     }),
