@@ -797,6 +797,22 @@ export async function expandJobOutreach(jobId: string): Promise<{ expanded: numb
     logger.warn(`[expansion] job ${jobId} not found`);
     return null;
   }
+  // Test mode short-circuit. The initial dispatchJob trims eligible
+  // providers to 1 in test mode; without the same gate here, the
+  // expansion worker fires every 30 minutes and contacts 10 MORE
+  // providers per wave. Their phones get rewritten to TEST_PHONE in
+  // sendOutreachToProvider so the messages still land at the test
+  // number — but the dispatch list shows N+10 outreach_attempts,
+  // which is the "1 Google + 10 Yelp" pattern PMs see in test mode.
+  // Skip expansion entirely when TEST_MODE is on.
+  if (TEST_MODE) {
+    logger.info(`[expansion] TEST MODE: skipping expansion wave for job ${jobId} — initial dispatch already exercised the test phone path`);
+    // Bump the expansion counter so the worker stops re-trying this job.
+    await db.update(jobs)
+      .set({ outreachExpansions: MAX_EXPANSIONS, lastOutreachAt: new Date() })
+      .where(eq(jobs.id, jobId));
+    return { expanded: 0, wave: (job.outreachExpansions ?? 0) + 1 };
+  }
   if (!job.workspaceId) {
     logger.info(`[expansion] job ${jobId} is not a B2B job, skipping`);
     return null;
