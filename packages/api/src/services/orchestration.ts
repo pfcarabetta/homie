@@ -314,7 +314,18 @@ async function incrementOutreachCounts(providerIds: string[]): Promise<void> {
  * Discovers eligible providers, fans out outreach across channels, and
  * moves the job from 'dispatching' → 'collecting'.
  */
-export async function dispatchJob(jobId: string): Promise<void> {
+export async function dispatchJob(jobId: string, opts?: {
+  /** B2B-only "audience" toggle the PM picks on the dispatch summary
+   *  card. 'preferred_only' suppresses marketplace discovery entirely
+   *  (the dispatch reaches just the workspace's preferred providers
+   *  for this category — useful when the PM wants to keep the job
+   *  in-network). 'preferred_plus_marketplace' (default) keeps the
+   *  existing cascade: preferred providers first, then marketplace
+   *  fills any remaining slots. Categories already flagged
+   *  internal-only via isInternalOnlyCategory ignore this and stay
+   *  preferred-only regardless. */
+  audience?: 'preferred_only' | 'preferred_plus_marketplace';
+}): Promise<void> {
   // Load job
   const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
   if (!job) {
@@ -445,16 +456,20 @@ export async function dispatchJob(jobId: string): Promise<void> {
 
   // Categories that should only use preferred vendors — no marketplace discovery
   const isInternalOnly = isInternalOnlyCategory(diagnosis.category);
+  // PM-driven audience override (B2B summary card toggle). When the PM
+  // explicitly picked "preferred only", treat marketplace discovery as
+  // disabled even when the category would normally allow it.
+  const preferredOnly = opts?.audience === 'preferred_only' || isInternalOnly;
 
-  if (isInternalOnly && eligible.length === 0) {
-    logger.warn(`[orchestration] dispatchJob: internal-only category '${diagnosis.category}' has no preferred vendors for job ${jobId}`);
+  if (preferredOnly && eligible.length === 0) {
+    logger.warn(`[orchestration] dispatchJob: preferred-only path (audience=${opts?.audience ?? 'category-internal'}) has no preferred vendors for job ${jobId}`);
     await db.update(jobs).set({ status: 'expired' }).where(eq(jobs.id, jobId));
     return;
   }
 
   // Fill remaining slots from marketplace discovery
   const remainingSlots = limit - eligible.length;
-  if (remainingSlots > 0 && !isInternalOnly) {
+  if (remainingSlots > 0 && !preferredOnly) {
     let discoveredProviders: DiscoveredProvider[];
     try {
       logger.info(`[orchestration] dispatchJob: discovering ${remainingSlots} marketplace providers for job ${jobId} (${diagnosis.category}, ${job.zipCode})`);

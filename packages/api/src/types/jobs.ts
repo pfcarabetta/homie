@@ -5,6 +5,13 @@ export type JobTiming = 'asap' | 'this_week' | 'this_month' | 'flexible';
 export type JobStatus = 'open' | 'created' | 'dispatching' | 'collecting' | 'completed' | 'expired' | 'refunded';
 export type OutreachChannel = 'voice' | 'sms' | 'web';
 
+/** B2B audience toggle on the dispatch summary card. PMs choose between
+ *  keeping a job in-network ('preferred_only') or letting marketplace
+ *  discovery fill remaining slots when no preferred provider responds
+ *  ('preferred_plus_marketplace', the default). Consumer dispatches and
+ *  jobs without workspace_id ignore this. */
+export type JobAudience = 'preferred_only' | 'preferred_plus_marketplace';
+
 export interface CreateJobBody {
   diagnosis: DiagnosisPayload;
   photo_urls?: string[];
@@ -16,6 +23,7 @@ export interface CreateJobBody {
   workspace_id?: string;
   property_id?: string;
   notify_guest?: boolean;
+  audience?: JobAudience;
 }
 
 export interface CreateJobResponse {

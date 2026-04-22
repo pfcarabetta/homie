@@ -7,7 +7,7 @@ import {
   uploadDiagnosticImage,
   type Property, type PropertyDetails, type Workspace, type DiagnosticStreamCallbacks,
   type JobStatusResponse, type ProviderResponseItem, type CostEstimate, type Reservation,
-  type PropertyInventoryItem,
+  type PropertyInventoryItem, type PreferredVendor,
 } from '@/services/api';
 import { MiniCalendar, formatReservationMoment } from './business/constants';
 import AvatarDropdown from '@/components/AvatarDropdown';
@@ -543,12 +543,49 @@ function TrackingShareCard({ jobId, propertyName, trackingUrl, setTrackingUrl }:
   );
 }
 
-function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching, estimate }: {
+type Audience = 'preferred_only' | 'preferred_plus_marketplace';
+
+/** localStorage key — last audience choice per category, so a PM who
+ *  always sends plumbing in-network doesn't re-pick every dispatch. */
+function audienceStorageKey(workspaceId: string, categoryId: string) {
+  return `b2b_audience:${workspaceId}:${categoryId}`;
+}
+
+function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching, estimate, workspaceId, audience, onAudienceChange }: {
   category: CatDef; property: Property; summary: string; isService: boolean;
   onDispatch: () => void; dispatching: boolean; estimate?: CostEstimate;
+  /** B2B dispatch — when set, the audience selector renders. */
+  workspaceId?: string;
+  audience?: Audience;
+  onAudienceChange?: (a: Audience) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = summary.length > 300;
+  // Preferred providers fetched on mount, filtered by category. Empty
+  // list = "no preferred yet for this category" → we skip the radio
+  // entirely and dispatch defaults to marketplace.
+  const [preferred, setPreferred] = useState<PreferredVendor[] | null>(null);
+  useEffect(() => {
+    if (!workspaceId) { setPreferred(null); return; }
+    let cancelled = false;
+    businessService.listVendors(workspaceId)
+      .then(res => {
+        if (cancelled || !res.data) return;
+        // Match: vendor.categories includes the chat category id, OR
+        // vendor.categories is null/empty (vendor handles every category).
+        const matched = res.data.filter(v => {
+          if (!v.active) return false;
+          if (!v.categories || v.categories.length === 0) return true;
+          return v.categories.some(c => c.toLowerCase() === category.id.toLowerCase());
+        });
+        setPreferred(matched);
+      })
+      .catch(() => { if (!cancelled) setPreferred([]); });
+    return () => { cancelled = true; };
+  }, [workspaceId, category.id]);
+  const marketplaceCount = B2B_PROS_NEARBY[category.label] ?? 12;
+  const selectedAudience: Audience = audience ?? 'preferred_plus_marketplace';
+  const showAudience = !!workspaceId && preferred !== null && preferred.length > 0;
 
   return (
     <div style={{ marginLeft: 42, marginBottom: 16, background: 'var(--bp-card)', border: `2px solid ${G}22`, borderRadius: 16, overflow: 'hidden' }}>
@@ -588,14 +625,120 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
         <p style={{ fontSize: 12, color: 'var(--bp-subtle)', lineHeight: 1.5, marginBottom: 16 }}>
           This {isService ? 'scope' : 'diagnosis'} will be shared with providers so they can respond quickly — no need to explain twice.
         </p>
+        {/* Audience selector — only shows when at least one preferred
+            vendor exists for this category. PMs without preferred
+            vendors get the existing single-button dispatch (defaults
+            to marketplace on the backend). */}
+        {showAudience && preferred && (
+          <AudienceSelector
+            preferred={preferred}
+            marketplaceCount={marketplaceCount}
+            categoryLabel={category.label}
+            zipCode={property.zipCode ?? null}
+            value={selectedAudience}
+            onChange={onAudienceChange ?? (() => {})}
+          />
+        )}
         <button onClick={onDispatch} disabled={dispatching} style={{
           padding: '14px 28px', borderRadius: 10, border: 'none', background: O, color: '#fff',
           fontSize: 15, fontWeight: 700, cursor: dispatching ? 'default' : 'pointer', width: '100%',
           opacity: dispatching ? 0.7 : 1,
         }}>
-          {dispatching ? 'Dispatching...' : `Dispatch ${category.label} Pro`}
+          {dispatching
+            ? 'Dispatching...'
+            : showAudience && selectedAudience === 'preferred_only'
+              ? `Dispatch to ${preferred?.length ?? 0} preferred ${preferred?.length === 1 ? 'pro' : 'pros'} →`
+              : showAudience
+                ? `Dispatch to preferred + marketplace →`
+                : `Dispatch ${category.label} Pro`}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Two-option audience radio shown above the Dispatch button on the
+ *  business diagnosis summary. Lists actual preferred provider names
+ *  under each option so the PM can see who'll be contacted before
+ *  they commit. Marketplace count comes from the same B2B_PROS_NEARBY
+ *  map the right-rail badge uses, so both surfaces agree. */
+function AudienceSelector({
+  preferred, marketplaceCount, categoryLabel, zipCode, value, onChange,
+}: {
+  preferred: PreferredVendor[];
+  marketplaceCount: number;
+  categoryLabel: string;
+  zipCode: string | null;
+  value: Audience;
+  onChange: (a: Audience) => void;
+}) {
+  const preferredCount = preferred.length;
+  const renderRow = (a: Audience, title: string, sub: string, body: React.ReactNode) => {
+    const selected = value === a;
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(a)}
+        style={{
+          width: '100%', textAlign: 'left', display: 'block',
+          padding: '12px 14px', borderRadius: 12,
+          border: selected ? `2px solid ${O}` : `2px solid var(--bp-border)`,
+          background: selected ? `${O}08` : 'var(--bp-card)',
+          cursor: 'pointer', marginBottom: 8,
+          fontFamily: "'DM Sans', sans-serif", color: 'var(--bp-text)',
+          transition: 'all .15s',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div style={{
+            width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+            border: selected ? `5px solid ${O}` : '2px solid var(--bp-border)',
+            background: 'var(--bp-card)',
+            transition: 'all .15s',
+          }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bp-text)' }}>{title}</div>
+            <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 1 }}>{sub}</div>
+          </div>
+        </div>
+        <div style={{ paddingLeft: 26, marginTop: 6 }}>{body}</div>
+      </button>
+    );
+  };
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11, color: 'var(--bp-subtle)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 8, fontFamily: "'DM Mono',monospace" }}>
+        Send this dispatch to
+      </div>
+      {renderRow(
+        'preferred_only',
+        `Preferred providers only (${preferredCount})`,
+        'Stays in-network — only your preferred vendors are contacted.',
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 12 }}>
+          {preferred.slice(0, 6).map(v => (
+            <span key={v.id} style={{
+              background: 'var(--bp-hover)', border: '1px solid var(--bp-border)',
+              padding: '3px 9px', borderRadius: 100, color: 'var(--bp-text)',
+            }}>
+              {v.providerName}{v.providerRating ? ` · ★${v.providerRating}` : ''}
+            </span>
+          ))}
+          {preferred.length > 6 && (
+            <span style={{ fontSize: 11, color: 'var(--bp-subtle)', alignSelf: 'center' }}>
+              +{preferred.length - 6} more
+            </span>
+          )}
+        </div>,
+      )}
+      {renderRow(
+        'preferred_plus_marketplace',
+        `Preferred + marketplace (${preferredCount} + ~${marketplaceCount} nearby)`,
+        `Same ${preferredCount} preferred${preferredCount === 1 ? '' : ''} above, plus up to ${marketplaceCount} vetted ${categoryLabel.toLowerCase()} pros${zipCode ? ` in ${zipCode}` : ''} if no preferred responds first.`,
+        <div style={{ fontSize: 12, color: 'var(--bp-muted)', lineHeight: 1.5 }}>
+          Recommended — preferred get first crack; marketplace is the safety net.
+        </div>,
+      )}
     </div>
   );
 }
@@ -912,6 +1055,31 @@ export default function BusinessChat() {
   // moment the PM picked a property — backwards. mapUserTimingToDispatch
   // safely treats '' as "flexible / low".
   const [timing, setTiming] = useState('');
+  /** PM's audience choice on the dispatch summary card. Defaults to
+   *  'preferred_plus_marketplace' (preferred get first crack, marketplace
+   *  is the fallback) — that's the safer default. Persists per
+   *  workspace+category in localStorage so a PM who always sends
+   *  plumbing in-network doesn't re-pick every dispatch. */
+  const [audience, setAudience] = useState<'preferred_only' | 'preferred_plus_marketplace'>('preferred_plus_marketplace');
+  // Re-hydrate the persisted choice whenever the workspace or category
+  // flips (different category = potentially different preferred policy).
+  useEffect(() => {
+    if (!selectedWorkspace || !category) return;
+    try {
+      const stored = localStorage.getItem(audienceStorageKey(selectedWorkspace, category.id));
+      if (stored === 'preferred_only' || stored === 'preferred_plus_marketplace') {
+        setAudience(stored);
+      } else {
+        setAudience('preferred_plus_marketplace');
+      }
+    } catch { /* ignore */ }
+  }, [selectedWorkspace, category]);
+  const handleAudienceChange = useCallback((next: 'preferred_only' | 'preferred_plus_marketplace') => {
+    setAudience(next);
+    if (selectedWorkspace && category) {
+      try { localStorage.setItem(audienceStorageKey(selectedWorkspace, category.id), next); } catch { /* ignore */ }
+    }
+  }, [selectedWorkspace, category]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
 
@@ -2346,6 +2514,10 @@ export default function BusinessChat() {
         propertyId: selectedProperty?.id || undefined,
         notifyGuest: notifyGuest || undefined,
         photos: uploadedPhotoUrlsRef.current.length > 0 ? uploadedPhotoUrlsRef.current : undefined,
+        // Audience the PM picked on the dispatch summary card. The
+        // backend uses this to skip marketplace discovery when set
+        // to 'preferred_only'.
+        audience: selectedWorkspace ? audience : undefined,
       });
 
       if (res.data) {
@@ -3383,6 +3555,9 @@ export default function BusinessChat() {
               onDispatch={handleDispatch}
               dispatching={dispatching}
               estimate={costEstimate ?? undefined}
+              workspaceId={selectedWorkspace || undefined}
+              audience={audience}
+              onAudienceChange={handleAudienceChange}
             />
           )}
 

@@ -232,9 +232,16 @@ router.post('/', async (req: Request, res: Response) => {
     // B2B jobs (workspace_id set) dispatch immediately — no payment required
     // Consumer jobs wait for Stripe payment authorization
     if (body.workspace_id) {
-      logger.info(`[jobs] B2B job ${job.id} created — launching outreach immediately`);
+      // Audience toggle from the dispatch summary card. PMs choose
+      // "preferred only" to keep the job in-network, or
+      // "preferred + marketplace" (default) to fall through to
+      // discovery if no preferred provider responds.
+      const audience = body.audience === 'preferred_only'
+        ? 'preferred_only' as const
+        : 'preferred_plus_marketplace' as const;
+      logger.info(`[jobs] B2B job ${job.id} created — launching outreach immediately (audience=${audience})`);
       await db.update(jobs).set({ status: 'dispatching', paymentStatus: 'paid' }).where(eq(jobs.id, job.id));
-      void dispatchJob(job.id);
+      void dispatchJob(job.id, { audience });
     } else {
       logger.info(`[jobs] Job ${job.id} created, awaiting payment`);
     }

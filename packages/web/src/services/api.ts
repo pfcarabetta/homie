@@ -383,6 +383,11 @@ export const jobService = {
     workspaceId?: string;
     propertyId?: string;
     notifyGuest?: boolean;
+    /** B2B audience toggle — 'preferred_only' to keep the dispatch
+     *  in-network, 'preferred_plus_marketplace' (default) to fall
+     *  through to discovery if no preferred provider responds.
+     *  Ignored for jobs without workspaceId. */
+    audience?: 'preferred_only' | 'preferred_plus_marketplace';
   }): Promise<ApiResponse<CreateJobResponse>> {
     return fetchAPI<CreateJobResponse>('/api/v1/jobs', {
       method: 'POST',
@@ -396,6 +401,7 @@ export const jobService = {
         ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
         ...(params.propertyId ? { property_id: params.propertyId } : {}),
         ...(params.notifyGuest ? { notify_guest: true } : {}),
+        ...(params.audience ? { audience: params.audience } : {}),
       }),
     });
   },

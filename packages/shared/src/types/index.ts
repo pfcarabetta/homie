@@ -45,6 +45,8 @@ export interface JobSummary {
 
 export type JobTier = 'standard' | 'priority' | 'emergency';
 export type JobTiming = 'asap' | 'this_week' | 'this_month' | 'flexible';
+/** B2B audience toggle — see packages/api/src/types/jobs.ts */
+export type JobAudience = 'preferred_only' | 'preferred_plus_marketplace';
 export type JobStatus = 'created' | 'dispatching' | 'collecting' | 'completed' | 'expired' | 'refunded';
 
 export interface ChannelStats {
