@@ -108,6 +108,42 @@ function SectionHeader({ title, isOpen, onToggle, badge }: { title: string; isOp
   );
 }
 
+/* ── Section — collapsible accordion used by Profile + Equipment panels
+ *  Declared at MODULE level so every render of the parent panel sees
+ *  the same component TYPE. Declaring this inline inside a parent
+ *  function gave React a new function reference per render, which it
+ *  treated as a different component and unmounted the entire subtree
+ *  on every keystroke — inputs could only accept one character before
+ *  losing focus. ─────────────────────────────────────────────────── */
+function Section({
+  id, title, children, openSections, onToggle, alwaysOpen,
+}: {
+  id: string;
+  title: string;
+  children: React.ReactNode;
+  openSections: Set<string>;
+  onToggle: (id: string) => void;
+  /** When true, renders without the accordion chrome (desktop profile
+   *  panel wants every section visible at once). */
+  alwaysOpen?: boolean;
+}) {
+  if (alwaysOpen) {
+    return (
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 15, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 12 }}>{title}</div>
+        {children}
+      </div>
+    );
+  }
+  const isOpen = openSections.has(id);
+  return (
+    <div style={{ marginBottom: 8, border: '1px solid var(--bp-border)', borderRadius: 10, overflow: 'hidden' }}>
+      <SectionHeader title={title} isOpen={isOpen} onToggle={() => onToggle(id)} />
+      {isOpen && <div style={{ padding: '14px', background: 'var(--bp-card)' }}>{children}</div>}
+    </div>
+  );
+}
+
 /* ── ScannedBadge ─────────────────────────────────────────────────────────── */
 
 function ScannedBadge({ onClick }: { onClick?: () => void }) {
@@ -250,24 +286,8 @@ export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated,
     setDeleting(false);
   }
 
-  // Section wrapper — accordion on mobile, always-open on desktop
-  function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
-    const isOpen = isMobile ? openSections.has(id) : true;
-    if (!isMobile) {
-      return (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 15, fontWeight: 600, color: 'var(--bp-text)', marginBottom: 12 }}>{title}</div>
-          {children}
-        </div>
-      );
-    }
-    return (
-      <div style={{ marginBottom: 8, border: '1px solid var(--bp-border)', borderRadius: 10, overflow: 'hidden' }}>
-        <SectionHeader title={title} isOpen={isOpen} onToggle={() => toggleSection(id)} />
-        {isOpen && <div style={{ padding: '12px 14px', background: 'var(--bp-card)' }}>{children}</div>}
-      </div>
-    );
-  }
+  // Uses module-level Section component. `alwaysOpen` on desktop so
+  // every section is visible at once; mobile uses the accordion.
 
   return (
     <div>
@@ -277,7 +297,7 @@ export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated,
       </div>
 
       {/* Basic info */}
-      <Section id="basic" title="Basic info">
+      <Section id="basic" title="Basic info" openSections={openSections} onToggle={toggleSection} alwaysOpen={!isMobile}>
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>Property name</label>
           <input value={name} onChange={e => setName(e.target.value)} onBlur={commit} style={inputStyle} />
@@ -297,7 +317,7 @@ export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated,
       </Section>
 
       {/* Address */}
-      <Section id="address" title="Address">
+      <Section id="address" title="Address" openSections={openSections} onToggle={toggleSection} alwaysOpen={!isMobile}>
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>Street address</label>
           <input value={address} onChange={e => setAddress(e.target.value)} onBlur={commit} style={inputStyle} />
@@ -319,7 +339,7 @@ export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated,
       </Section>
 
       {/* Layout */}
-      <Section id="layout" title="Layout">
+      <Section id="layout" title="Layout" openSections={openSections} onToggle={toggleSection} alwaysOpen={!isMobile}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
           <div>
             <label style={labelStyle}>Bedrooms</label>
@@ -356,7 +376,7 @@ export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated,
       </Section>
 
       {/* Access & Security */}
-      <Section id="access" title="Access & security">
+      <Section id="access" title="Access & security" openSections={openSections} onToggle={toggleSection} alwaysOpen={!isMobile}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <TextField label="Lockbox code" value={details.access?.lockboxCode || ''} onChange={v => updateAccess('lockboxCode', v)} onBlur={commit} />
           <TextField label="Gate code" value={details.access?.gateCode || ''} onChange={v => updateAccess('gateCode', v)} onBlur={commit} />
@@ -368,7 +388,7 @@ export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated,
       </Section>
 
       {/* Notes */}
-      <Section id="notes" title="Notes">
+      <Section id="notes" title="Notes" openSections={openSections} onToggle={toggleSection} alwaysOpen={!isMobile}>
         <textarea value={notes} onChange={e => setNotes(e.target.value)} onBlur={commit} rows={4}
           placeholder="Any general notes about this property…"
           style={{ ...inputStyle, resize: 'vertical' }} />
@@ -474,16 +494,11 @@ export function PropertyEquipmentPanel({ workspaceId, property, plan, onProperty
 
   const isScanned = (path: string) => scanPaths.has(path);
 
-  // Section wrapper — accordion on mobile, collapsible on desktop too (matches existing UI)
-  function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
-    const isOpen = openSections.has(id);
-    return (
-      <div style={{ marginBottom: 8, border: '1px solid var(--bp-border)', borderRadius: 10, overflow: 'hidden' }}>
-        <SectionHeader title={title} isOpen={isOpen} onToggle={() => toggleSection(id)} />
-        {isOpen && <div style={{ padding: '14px', background: 'var(--bp-card)' }}>{children}</div>}
-      </div>
-    );
-  }
+  // Using the module-level EquipmentSection component (defined below).
+  // Must NOT re-declare as a local function — doing so gives every
+  // render a fresh function TYPE, which makes React unmount and remount
+  // the entire subtree on every keystroke, destroying the input DOM
+  // node and killing the caret. One-letter-then-stops territory.
 
   return (
     <div>
@@ -507,7 +522,7 @@ export function PropertyEquipmentPanel({ workspaceId, property, plan, onProperty
       </div>
 
       {/* HVAC */}
-      <Section id="hvac" title="HVAC & Climate">
+      <Section id="hvac" title="HVAC & Climate" openSections={openSections} onToggle={toggleSection}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <TextField label="AC type" value={details.hvac?.acType || ''} onChange={v => update('hvac', 'acType', v)} onBlur={commit} placeholder="Central, Mini-split, Window…" scanned={isScanned('hvac.acType')} onBadgeClick={onJumpToInventory} />
           <TextField label="AC brand" value={details.hvac?.acBrand || ''} onChange={v => update('hvac', 'acBrand', v)} onBlur={commit} placeholder="Carrier, Trane…" scanned={isScanned('hvac.acBrand')} onBadgeClick={onJumpToInventory} />
@@ -523,7 +538,7 @@ export function PropertyEquipmentPanel({ workspaceId, property, plan, onProperty
       </Section>
 
       {/* Water heater */}
-      <Section id="waterHeater" title="Water heater">
+      <Section id="waterHeater" title="Water heater" openSections={openSections} onToggle={toggleSection}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <TextField label="Type" value={details.waterHeater?.type || ''} onChange={v => update('waterHeater', 'type', v)} onBlur={commit} placeholder="Tankless, Tank, Hybrid…" />
           <TextField label="Brand" value={details.waterHeater?.brand || ''} onChange={v => update('waterHeater', 'brand', v)} onBlur={commit} placeholder="Rinnai, Rheem…" scanned={isScanned('waterHeater.brand')} onBadgeClick={onJumpToInventory} />
@@ -536,7 +551,7 @@ export function PropertyEquipmentPanel({ workspaceId, property, plan, onProperty
       </Section>
 
       {/* Appliances */}
-      <Section id="appliances" title="Appliances">
+      <Section id="appliances" title="Appliances" openSections={openSections} onToggle={toggleSection}>
         {[
           { key: 'refrigerator', label: 'Refrigerator', fields: ['brand', 'model'] },
           { key: 'washer', label: 'Washer', fields: ['brand', 'model'] },
@@ -564,7 +579,7 @@ export function PropertyEquipmentPanel({ workspaceId, property, plan, onProperty
       </Section>
 
       {/* Plumbing */}
-      <Section id="plumbing" title="Plumbing">
+      <Section id="plumbing" title="Plumbing" openSections={openSections} onToggle={toggleSection}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <TextField label="Kitchen faucet brand" value={details.plumbing?.kitchenFaucetBrand || ''} onChange={v => update('plumbing', 'kitchenFaucetBrand', v)} onBlur={commit} scanned={isScanned('plumbing.kitchenFaucetBrand')} onBadgeClick={onJumpToInventory} />
           <TextField label="Bathroom faucet brand" value={details.plumbing?.bathroomFaucetBrand || ''} onChange={v => update('plumbing', 'bathroomFaucetBrand', v)} onBlur={commit} scanned={isScanned('plumbing.bathroomFaucetBrand')} onBadgeClick={onJumpToInventory} />
@@ -576,7 +591,7 @@ export function PropertyEquipmentPanel({ workspaceId, property, plan, onProperty
       </Section>
 
       {/* Electrical */}
-      <Section id="electrical" title="Electrical">
+      <Section id="electrical" title="Electrical" openSections={openSections} onToggle={toggleSection}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <TextField label="Breaker box location" value={details.electrical?.breakerBoxLocation || ''} onChange={v => update('electrical', 'breakerBoxLocation', v)} onBlur={commit} scanned={isScanned('electrical.breakerBoxLocation')} onBadgeClick={onJumpToInventory} />
           <TextField label="Panel amperage" value={details.electrical?.panelAmperage || ''} onChange={v => update('electrical', 'panelAmperage', v)} onBlur={commit} placeholder="100A, 200A…" scanned={isScanned('electrical.panelAmperage')} onBadgeClick={onJumpToInventory} />
@@ -587,7 +602,7 @@ export function PropertyEquipmentPanel({ workspaceId, property, plan, onProperty
       </Section>
 
       {/* Pool & Spa */}
-      <Section id="poolSpa" title="Pool & Spa">
+      <Section id="poolSpa" title="Pool & Spa" openSections={openSections} onToggle={toggleSection}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <TextField label="Pool type" value={details.poolSpa?.poolType || ''} onChange={v => update('poolSpa', 'poolType', v)} onBlur={commit} placeholder="In-ground, Above-ground…" scanned={isScanned('poolSpa.poolType')} onBadgeClick={onJumpToInventory} />
           <TextField label="Pool heater brand" value={details.poolSpa?.poolHeaterBrand || ''} onChange={v => update('poolSpa', 'poolHeaterBrand', v)} onBlur={commit} scanned={isScanned('poolSpa.poolHeaterBrand')} onBadgeClick={onJumpToInventory} />
@@ -598,7 +613,7 @@ export function PropertyEquipmentPanel({ workspaceId, property, plan, onProperty
       </Section>
 
       {/* Exterior */}
-      <Section id="exterior" title="Exterior">
+      <Section id="exterior" title="Exterior" openSections={openSections} onToggle={toggleSection}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <TextField label="Roof type" value={details.exterior?.roofType || ''} onChange={v => update('exterior', 'roofType', v)} onBlur={commit} placeholder="Shingle, Tile, Metal…" />
           <TextField label="Roof age" value={details.exterior?.roofAge || ''} onChange={v => update('exterior', 'roofAge', v)} onBlur={commit} placeholder="10 years" />
@@ -610,7 +625,7 @@ export function PropertyEquipmentPanel({ workspaceId, property, plan, onProperty
       </Section>
 
       {/* General */}
-      <Section id="general" title="General">
+      <Section id="general" title="General" openSections={openSections} onToggle={toggleSection}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginBottom: 12 }}>
           <TextField label="Year built" value={details.general?.yearBuilt || ''} onChange={v => update('general', 'yearBuilt', v)} onBlur={commit} placeholder="2005" />
           <div>
