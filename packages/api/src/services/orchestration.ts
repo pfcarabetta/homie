@@ -325,6 +325,16 @@ export async function dispatchJob(jobId: string, opts?: {
    *  internal-only via isInternalOnlyCategory ignore this and stay
    *  preferred-only regardless. */
   audience?: 'preferred_only' | 'preferred_plus_marketplace';
+  /** Explicit override list of preferred provider IDs to contact for
+   *  this dispatch. Set by the PM via the AudienceSelector checklist —
+   *  lets them include preferred vendors that don't normally serve
+   *  this category, OR exclude category-matched vendors they don't
+   *  want for this job. When provided, this list REPLACES the
+   *  category-match auto-filter (still scoped to the workspace's
+   *  active preferred vendors + property scope + availability
+   *  schedule). When omitted, the original category-match behavior
+   *  applies. */
+  preferredProviderIds?: string[];
 }): Promise<void> {
   // Load job
   const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
@@ -356,6 +366,15 @@ export async function dispatchJob(jobId: string, opts?: {
   if (job.workspaceId) {
     try {
       const jobCategory = diagnosis.category.toLowerCase();
+      // PM-provided override list takes precedence over the category
+      // auto-filter. When the AudienceSelector checklist sends an
+      // explicit set of provider IDs, we trust the PM's choice — pull
+      // those vendors regardless of whether their categories list
+      // includes this dispatch's category. When no override is sent,
+      // fall back to the category-match SQL filter.
+      const explicitOverride = opts?.preferredProviderIds && opts.preferredProviderIds.length > 0
+        ? opts.preferredProviderIds
+        : null;
       const pvRows = await db
         .select({ providerId: preferredVendors.providerId, categories: preferredVendors.categories, availabilitySchedule: preferredVendors.availabilitySchedule, skipQuote: preferredVendors.skipQuote })
         .from(preferredVendors)
@@ -366,10 +385,17 @@ export async function dispatchJob(jobId: string, opts?: {
           job.propertyId
             ? sql`(${preferredVendors.propertyId} = ${job.propertyId} OR ${preferredVendors.propertyId} IS NULL)`
             : sql`${preferredVendors.propertyId} IS NULL`,
-          // Match category: vendor categories contain the job category, or vendor has no categories (matches all)
-          sql`(${preferredVendors.categories} IS NULL OR ${jobCategory} = ANY(${preferredVendors.categories}))`,
+          // Either filter to PM's explicit override list, OR auto-match
+          // by category (vendor.categories contains job.category, or
+          // vendor.categories is null = vendor handles every category).
+          explicitOverride
+            ? inArray(preferredVendors.providerId, explicitOverride)
+            : sql`(${preferredVendors.categories} IS NULL OR ${jobCategory} = ANY(${preferredVendors.categories}))`,
         ))
         .orderBy(asc(preferredVendors.priority));
+      if (explicitOverride) {
+        logger.info(`[orchestration] dispatchJob: PM-selected override list (${explicitOverride.length} ids) → ${pvRows.length} matched preferred vendors for job ${jobId}`);
+      }
 
       // Filter out vendors who are not available right now
       const now = new Date();

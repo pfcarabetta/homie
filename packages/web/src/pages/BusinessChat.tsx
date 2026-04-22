@@ -551,19 +551,26 @@ function audienceStorageKey(workspaceId: string, categoryId: string) {
   return `b2b_audience:${workspaceId}:${categoryId}`;
 }
 
-function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching, estimate, workspaceId, audience, onAudienceChange }: {
+function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching, estimate, workspaceId, audience, onAudienceChange, selectedPreferredIds, onSelectedPreferredChange }: {
   category: CatDef; property: Property; summary: string; isService: boolean;
   onDispatch: () => void; dispatching: boolean; estimate?: CostEstimate;
   /** B2B dispatch — when set, the audience selector renders. */
   workspaceId?: string;
   audience?: Audience;
   onAudienceChange?: (a: Audience) => void;
+  /** Set of preferred-vendor providerIds to include in this dispatch.
+   *  Pre-populated from category-matching vendors when the list loads;
+   *  PM can toggle on additional vendors that don't normally serve
+   *  this category, or toggle off matched ones they don't want. */
+  selectedPreferredIds?: Set<string>;
+  onSelectedPreferredChange?: (next: Set<string>) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = summary.length > 300;
-  // Preferred providers fetched on mount, filtered by category. Empty
-  // list = "no preferred yet for this category" → we skip the radio
-  // entirely and dispatch defaults to marketplace.
+  // ALL active preferred vendors for the workspace+property, regardless
+  // of category. The AudienceSelector's checklist pre-checks the ones
+  // whose categories include this dispatch's category and leaves
+  // others unchecked (the PM can opt them in if they want).
   const [preferred, setPreferred] = useState<PreferredVendor[] | null>(null);
   useEffect(() => {
     if (!workspaceId) { setPreferred(null); return; }
@@ -571,21 +578,35 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
     businessService.listVendors(workspaceId)
       .then(res => {
         if (cancelled || !res.data) return;
-        // Match: vendor.categories includes the chat category id, OR
-        // vendor.categories is null/empty (vendor handles every category).
-        const matched = res.data.filter(v => {
-          if (!v.active) return false;
-          if (!v.categories || v.categories.length === 0) return true;
-          return v.categories.some(c => c.toLowerCase() === category.id.toLowerCase());
-        });
-        setPreferred(matched);
+        const all = res.data.filter(v => v.active);
+        setPreferred(all);
       })
       .catch(() => { if (!cancelled) setPreferred([]); });
     return () => { cancelled = true; };
-  }, [workspaceId, category.id]);
+  }, [workspaceId]);
   const marketplaceCount = B2B_PROS_NEARBY[category.label] ?? 12;
   const selectedAudience: Audience = audience ?? 'preferred_plus_marketplace';
   const showAudience = !!workspaceId && preferred !== null && preferred.length > 0;
+  // Seed the parent's selectedPreferredIds with the category-matching
+  // vendors once the preferred list arrives. This keeps the source of
+  // truth in the parent (so executeDispatch can read it) while still
+  // letting this card own the default logic.
+  useEffect(() => {
+    if (!preferred || preferred.length === 0) return;
+    if (selectedPreferredIds !== undefined) return; // parent already seeded
+    if (!onSelectedPreferredChange) return;
+    const defaults = new Set<string>(
+      preferred
+        .filter(v => !v.categories || v.categories.length === 0 || v.categories.some(c => c.toLowerCase() === category.id.toLowerCase()))
+        .map(v => v.id),
+    );
+    onSelectedPreferredChange(defaults);
+  }, [preferred, category.id, selectedPreferredIds, onSelectedPreferredChange]);
+  const effectiveSelectedIds = selectedPreferredIds ?? new Set<string>(
+    (preferred ?? [])
+      .filter(v => !v.categories || v.categories.length === 0 || v.categories.some(c => c.toLowerCase() === category.id.toLowerCase()))
+      .map(v => v.id),
+  );
 
   return (
     <div style={{ marginLeft: 42, marginBottom: 16, background: 'var(--bp-card)', border: `2px solid ${G}22`, borderRadius: 16, overflow: 'hidden' }}>
@@ -633,10 +654,13 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
           <AudienceSelector
             preferred={preferred}
             marketplaceCount={marketplaceCount}
+            categoryId={category.id}
             categoryLabel={category.label}
             zipCode={property.zipCode ?? null}
             value={selectedAudience}
             onChange={onAudienceChange ?? (() => {})}
+            selectedIds={effectiveSelectedIds}
+            onSelectedChange={onSelectedPreferredChange ?? (() => {})}
           />
         )}
         <button onClick={onDispatch} disabled={dispatching} style={{
@@ -644,13 +668,15 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
           fontSize: 15, fontWeight: 700, cursor: dispatching ? 'default' : 'pointer', width: '100%',
           opacity: dispatching ? 0.7 : 1,
         }}>
-          {dispatching
-            ? 'Dispatching...'
-            : showAudience && selectedAudience === 'preferred_only'
-              ? `Dispatch to ${preferred?.length ?? 0} preferred ${preferred?.length === 1 ? 'pro' : 'pros'} →`
-              : showAudience
-                ? `Dispatch to preferred + marketplace →`
-                : `Dispatch ${category.label} Pro`}
+          {(() => {
+            if (dispatching) return 'Dispatching...';
+            if (!showAudience) return `Dispatch ${category.label} Pro`;
+            const n = effectiveSelectedIds.size;
+            const word = n === 1 ? 'pro' : 'pros';
+            return selectedAudience === 'preferred_only'
+              ? `Dispatch to ${n} preferred ${word} →`
+              : `Dispatch to ${n} preferred + marketplace →`;
+          })()}
         </button>
       </div>
     </div>
@@ -663,16 +689,71 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
  *  they commit. Marketplace count comes from the same B2B_PROS_NEARBY
  *  map the right-rail badge uses, so both surfaces agree. */
 function AudienceSelector({
-  preferred, marketplaceCount, categoryLabel, zipCode, value, onChange,
+  preferred, marketplaceCount, categoryId, categoryLabel, zipCode, value, onChange, selectedIds, onSelectedChange,
 }: {
   preferred: PreferredVendor[];
   marketplaceCount: number;
+  categoryId: string;
   categoryLabel: string;
   zipCode: string | null;
   value: Audience;
   onChange: (a: Audience) => void;
+  /** ProviderIds the PM has selected for this dispatch (checkmarks). */
+  selectedIds: Set<string>;
+  onSelectedChange: (next: Set<string>) => void;
 }) {
-  const preferredCount = preferred.length;
+  const selectedCount = selectedIds.size;
+  const matchesCategory = (v: PreferredVendor): boolean => {
+    if (!v.categories || v.categories.length === 0) return true;
+    return v.categories.some(c => c.toLowerCase() === categoryId.toLowerCase());
+  };
+  const toggleVendor = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onSelectedChange(next);
+  };
+  const checklistBody = (
+    <div style={{ display: 'grid', gap: 4 }}>
+      {preferred.map(v => {
+        const checked = selectedIds.has(v.id);
+        const isCategoryMatch = matchesCategory(v);
+        return (
+          <label
+            key={v.id}
+            onClick={(e) => { e.stopPropagation(); toggleVendor(v.id); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 10px', borderRadius: 8,
+              background: checked ? `${O}10` : 'var(--bp-hover)',
+              border: `1px solid ${checked ? `${O}55` : 'var(--bp-border)'}`,
+              cursor: 'pointer', transition: 'all .15s',
+            }}
+          >
+            <div style={{
+              width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+              border: checked ? `2px solid ${O}` : '2px solid var(--bp-border)',
+              background: checked ? O : 'var(--bp-card)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1,
+            }}>{checked ? '✓' : ''}</div>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--bp-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ fontWeight: 600 }}>{v.providerName}</span>
+              {v.providerRating && <span style={{ color: 'var(--bp-subtle)', marginLeft: 6, fontSize: 11 }}>★{v.providerRating}</span>}
+              {!isCategoryMatch && (
+                <span style={{
+                  marginLeft: 8, fontSize: 9.5, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: 0.6,
+                  color: 'var(--bp-subtle)', background: 'var(--bp-card)',
+                  border: '1px solid var(--bp-border)', borderRadius: 100,
+                  padding: '2px 6px',
+                }}>off-category</span>
+              )}
+            </div>
+          </label>
+        );
+      })}
+    </div>
+  );
   const renderRow = (a: Audience, title: string, sub: string, body: React.ReactNode) => {
     const selected = value === a;
     return (
@@ -701,7 +782,7 @@ function AudienceSelector({
             <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 1 }}>{sub}</div>
           </div>
         </div>
-        <div style={{ paddingLeft: 26, marginTop: 6 }}>{body}</div>
+        <div style={{ paddingLeft: 26, marginTop: 8 }}>{body}</div>
       </button>
     );
   };
@@ -713,30 +794,16 @@ function AudienceSelector({
       </div>
       {renderRow(
         'preferred_only',
-        `Preferred providers only (${preferredCount})`,
-        'Stays in-network — only your preferred vendors are contacted.',
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 12 }}>
-          {preferred.slice(0, 6).map(v => (
-            <span key={v.id} style={{
-              background: 'var(--bp-hover)', border: '1px solid var(--bp-border)',
-              padding: '3px 9px', borderRadius: 100, color: 'var(--bp-text)',
-            }}>
-              {v.providerName}{v.providerRating ? ` · ★${v.providerRating}` : ''}
-            </span>
-          ))}
-          {preferred.length > 6 && (
-            <span style={{ fontSize: 11, color: 'var(--bp-subtle)', alignSelf: 'center' }}>
-              +{preferred.length - 6} more
-            </span>
-          )}
-        </div>,
+        `Preferred providers only (${selectedCount} of ${preferred.length})`,
+        'Stays in-network. Toggle any vendor below — auto-checked = matches this category.',
+        checklistBody,
       )}
       {renderRow(
         'preferred_plus_marketplace',
-        `Preferred + marketplace (${preferredCount} + ~${marketplaceCount} nearby)`,
-        `Same ${preferredCount} preferred${preferredCount === 1 ? '' : ''} above, plus up to ${marketplaceCount} vetted ${categoryLabel.toLowerCase()} pros${zipCode ? ` in ${zipCode}` : ''} if no preferred responds first.`,
+        `Preferred + marketplace (${selectedCount} + ~${marketplaceCount} nearby)`,
+        `${selectedCount} selected preferred above, plus up to ${marketplaceCount} vetted ${categoryLabel.toLowerCase()} pros${zipCode ? ` in ${zipCode}` : ''} if no preferred responds first.`,
         <div style={{ fontSize: 12, color: 'var(--bp-muted)', lineHeight: 1.5 }}>
-          Recommended — preferred get first crack; marketplace is the safety net.
+          Recommended — preferred get first crack; marketplace is the safety net. Same checklist applies above; toggle vendors there to refine the preferred list.
         </div>,
       )}
     </div>
@@ -1080,6 +1147,16 @@ export default function BusinessChat() {
       try { localStorage.setItem(audienceStorageKey(selectedWorkspace, category.id), next); } catch { /* ignore */ }
     }
   }, [selectedWorkspace, category]);
+  /** ProviderIds the PM has explicitly selected via the
+   *  AudienceSelector checklist. Pre-populated by DiagnosisSummaryCard
+   *  to the category-matching preferred vendors when the list loads;
+   *  the PM can then toggle others on (e.g. include a vendor that
+   *  doesn't normally serve this category). null = "use server-side
+   *  default" (let the backend auto-match by category). */
+  const [selectedPreferredIds, setSelectedPreferredIds] = useState<Set<string> | null>(null);
+  // Reset on category/workspace switch so the previous chat's
+  // selection doesn't leak into the next dispatch.
+  useEffect(() => { setSelectedPreferredIds(null); }, [selectedWorkspace, category]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
 
@@ -2518,6 +2595,11 @@ export default function BusinessChat() {
         // backend uses this to skip marketplace discovery when set
         // to 'preferred_only'.
         audience: selectedWorkspace ? audience : undefined,
+        // Explicit preferred-vendor cherry-pick from the checklist.
+        // null/empty = let the backend auto-match by category.
+        preferredProviderIds: selectedWorkspace && selectedPreferredIds && selectedPreferredIds.size > 0
+          ? Array.from(selectedPreferredIds)
+          : undefined,
       });
 
       if (res.data) {
@@ -3558,6 +3640,8 @@ export default function BusinessChat() {
               workspaceId={selectedWorkspace || undefined}
               audience={audience}
               onAudienceChange={handleAudienceChange}
+              selectedPreferredIds={selectedPreferredIds ?? undefined}
+              onSelectedPreferredChange={setSelectedPreferredIds}
             />
           )}
 

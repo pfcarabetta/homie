@@ -239,9 +239,14 @@ router.post('/', async (req: Request, res: Response) => {
       const audience = body.audience === 'preferred_only'
         ? 'preferred_only' as const
         : 'preferred_plus_marketplace' as const;
-      logger.info(`[jobs] B2B job ${job.id} created — launching outreach immediately (audience=${audience})`);
+      // Optional explicit preferred provider override list — lets the
+      // PM cherry-pick preferred vendors regardless of category match.
+      const preferredProviderIds = Array.isArray(body.preferred_provider_ids) && body.preferred_provider_ids.length > 0
+        ? body.preferred_provider_ids.filter((id): id is string => typeof id === 'string')
+        : undefined;
+      logger.info(`[jobs] B2B job ${job.id} created — launching outreach immediately (audience=${audience}, explicit_preferred=${preferredProviderIds?.length ?? 0})`);
       await db.update(jobs).set({ status: 'dispatching', paymentStatus: 'paid' }).where(eq(jobs.id, job.id));
-      void dispatchJob(job.id, { audience });
+      void dispatchJob(job.id, { audience, preferredProviderIds });
     } else {
       logger.info(`[jobs] Job ${job.id} created, awaiting payment`);
     }

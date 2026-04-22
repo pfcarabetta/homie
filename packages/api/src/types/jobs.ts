@@ -24,6 +24,13 @@ export interface CreateJobBody {
   property_id?: string;
   notify_guest?: boolean;
   audience?: JobAudience;
+  /** Explicit list of preferred provider IDs to contact for this
+   *  dispatch. Set by the PM via the AudienceSelector checklist on
+   *  the dispatch summary card. When provided, replaces the
+   *  category-auto-match — lets the PM include preferred vendors
+   *  who don't normally serve this category, or exclude
+   *  category-matched vendors they don't want for this job. */
+  preferred_provider_ids?: string[];
 }
 
 export interface CreateJobResponse {

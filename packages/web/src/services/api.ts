@@ -388,6 +388,10 @@ export const jobService = {
      *  through to discovery if no preferred provider responds.
      *  Ignored for jobs without workspaceId. */
     audience?: 'preferred_only' | 'preferred_plus_marketplace';
+    /** Explicit list of preferred provider IDs to contact. Set when
+     *  the PM cherry-picks vendors via the AudienceSelector
+     *  checklist — overrides the category-auto-match on the backend. */
+    preferredProviderIds?: string[];
   }): Promise<ApiResponse<CreateJobResponse>> {
     return fetchAPI<CreateJobResponse>('/api/v1/jobs', {
       method: 'POST',
@@ -402,6 +406,9 @@ export const jobService = {
         ...(params.propertyId ? { property_id: params.propertyId } : {}),
         ...(params.notifyGuest ? { notify_guest: true } : {}),
         ...(params.audience ? { audience: params.audience } : {}),
+        ...(params.preferredProviderIds && params.preferredProviderIds.length > 0
+          ? { preferred_provider_ids: params.preferredProviderIds }
+          : {}),
       }),
     });
   },
