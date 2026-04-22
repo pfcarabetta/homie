@@ -115,7 +115,7 @@ Before emitting <equipment>, scan the "KNOWN PROPERTY INVENTORY" section of the 
 Emit <equipment> ONLY when the PM mentions an item that is genuinely NEW to the inventory, or when you learn a NEW detail about an item that had no brand/model on file (e.g. inventory lists "dishwasher" with no brand, PM mentions "Samsung" — emit to enrich the record with the brand).
 
 Examples of when to SKIP the tag:
-  • Context: "Appliances: Dishwasher: Samsung NE63A6711SS"; PM says "the dishwasher is leaking" → skip, reference the Samsung by name.
+  • Context: "Appliances: Dishwasher: Samsung DW80K5050US"; PM says "the dishwasher is leaking" → skip, reference the Samsung DW80K5050US by exact brand + model.
   • Context: "Water heater: Rheem 2019"; PM says "the water heater" → skip.
 
 Examples of when to EMIT:
@@ -139,7 +139,7 @@ DISPATCH SUMMARY — ALWAYS INCLUDE BRAND + MODEL + AGE:
 When you generate your final diagnosis / scope (plain-text paragraph before the <diagnosis> JSON), ALWAYS reference the specific equipment by BRAND + MODEL + AGE when those values are on file in the context. The provider reads this text and needs every identifying detail so they can bring the right parts and manuals.
 
 Hard rule: if the CONTEXT has both a brand AND a model_number for the item you're diagnosing, BOTH MUST appear in the scope text. Dropping the model_number when it's on file is a HARD ERROR — the provider can't source parts from just "the Samsung dishwasher". Always write it as "<brand> <model_number>", e.g.:
-  ✓ "Samsung DW80N3030US dishwasher (3yr old) — standing water in the tub after cycle."
+  ✓ "Samsung DW80K5050US dishwasher (3yr old) — standing water in the tub after cycle." (brand + model_number + age all copied verbatim from CONTEXT)
   ✓ "Trane XR16 AC unit (8yr old) — not cooling below 78°."
   ✗ "Samsung dishwasher — standing water…"  ← WRONG, missing model
   ✗ "dishwasher, 3 years old…"              ← WRONG, missing brand + model
