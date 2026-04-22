@@ -2816,6 +2816,25 @@ export default function BusinessChat() {
           .b2b-split > * { min-width: 0 !important; max-width: 100% !important; }
           .b2b-chat-col { min-width: 0 !important; max-width: 100% !important; }
         }
+        @media (max-width: 640px) {
+          /* Tighten the split's horizontal padding so cards have more
+             room on phones. */
+          .b2b-split { padding-left: 12px !important; padding-right: 12px !important; }
+          /* Collapse the 42px desktop indent (used to align cards with
+             the assistant's 'h' avatar) on phones. Diagnosis summary,
+             cost estimate, audience selector, suggestion chips, etc.
+             all use this same indent, so dropping it once here gives
+             every card the full viewport width minus the 12px split
+             padding. Same trick /quote uses. */
+          /* React serializes marginLeft: 42 as the kebab-case
+             "margin-left: 42px" in the rendered style attribute, so
+             this single selector catches every cardridge that uses
+             the desktop indent. */
+          .b2b-chat-col [style*="margin-left: 42"] { margin-left: 0 !important; }
+          /* Belt-and-suspenders: keep cards from blowing past the
+             chat column on really long unbreakable content. */
+          .b2b-chat-col, .b2b-chat-col > div { box-sizing: border-box; min-width: 0; }
+        }
       `}</style>
 
       {/* After hours notice — sits above the header */}
