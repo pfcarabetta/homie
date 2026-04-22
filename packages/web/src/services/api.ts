@@ -129,6 +129,7 @@ import type {
   BedConfig,
   PropertyDetails,
   MaintenanceFlag,
+  DIYAnalysisPayload,
 } from '@homie/shared';
 
 export interface DiagnosticStreamCallbacks {
@@ -303,6 +304,22 @@ export const diagnosticService = {
 
     return controller;
   },
+};
+
+// ── diyService ─────────────────────────────────────────────────────────────
+// Lazy-loaded DIY analysis. The quote-chat DIY panel calls this only when
+// the homeowner taps "try fixing it yourself?" — so users who dispatch
+// straight to pros never incur the AI call.
+export const diyService = {
+  analyze: (params: { diagnosis: string; category?: string | null; userDescription?: string | null }) =>
+    fetchAPI<DIYAnalysisPayload>('/api/v1/diy/analyze', {
+      method: 'POST',
+      body: JSON.stringify({
+        diagnosis: params.diagnosis,
+        category: params.category ?? undefined,
+        userDescription: params.userDescription ?? undefined,
+      }),
+    }),
 };
 
 /** Extracts <diagnosis> and <job_summary> JSON blocks from streamed text. */

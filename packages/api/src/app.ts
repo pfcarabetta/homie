@@ -3,6 +3,7 @@ import cors from 'cors';
 import healthRouter from './routes/health';
 import authRouter from './routes/auth';
 import diagnosticRouter from './routes/diagnostic';
+import diyRouter from './routes/diy';
 import voiceRouter from './routes/voice';
 import geoRouter from './routes/geo';
 import jobsRouter from './routes/jobs';
@@ -77,6 +78,9 @@ app.use('/api/v1/config', configRouter);
 app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/auth', authLimiter, authRouter);
 app.use('/api/v1/diagnostic', diagnosticLimiter, diagnosticRouter);
+// DIY analysis — public (no auth) so it works during pre-auth intake,
+// rate-limited like diagnostic since it's also an LLM call per request.
+app.use('/api/v1/diy', diagnosticLimiter, diyRouter);
 app.use('/api/v1/voice', diagnosticLimiter, voiceRouter);
 app.use('/api/v1/geo', apiLimiter, geoRouter);
 app.use('/api/v1/jobs', apiLimiter, requireAuth, jobsRouter);

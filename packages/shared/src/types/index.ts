@@ -34,6 +34,30 @@ export interface DiagnosisPayload {
   source?: string;
 }
 
+/** Structured DIY analysis returned from POST /api/v1/diy/analyze.
+ *  Lazy-loaded when the homeowner taps the DIY panel — if `feasible` is
+ *  false, the panel renders a "call a pro" state instead of steps. */
+export interface DIYToolSupply {
+  name: string;
+  /** Generic search query used to build the Amazon affiliate URL. */
+  searchQuery: string;
+  /** False means "only if needed" — rendered as a softer row. */
+  essential: boolean;
+}
+
+export interface DIYAnalysisPayload {
+  feasible: boolean;
+  difficulty: 'beginner' | 'intermediate' | 'advanced' | null;
+  /** Human-readable: "30-60 min", "1-2 hours", etc. */
+  timeEstimate: string | null;
+  costDiyCents: { min: number; max: number } | null;
+  costProCents: { min: number; max: number } | null;
+  steps: string[];
+  toolsSupplies: DIYToolSupply[];
+  safetyWarnings: string[];
+  whenToCallPro: string | null;
+}
+
 export interface JobSummary {
   title: string;
   category: string;

@@ -9,6 +9,7 @@ import EstimateBadge from '@/components/EstimateBadge';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 import InlineVoicePanel from '@/components/InlineVoicePanel';
 import VideoChatPanel from '@/components/VideoChatPanel';
+import DIYPanel from '@/components/DIYPanel';
 import { primeAudio } from '@/components/audioUnlocker';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -2400,6 +2401,18 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                     <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
                       <EstimateCard estimate={costEstimate} />
                     </div>
+                  )}
+                  {/* DIY fork — collapsed secondary CTA. Lazy-loads an AI
+                      DIY guide with Amazon-affiliate tool links when tapped.
+                      Never pays an AI-call cost until the user actually
+                      wants DIY guidance, so it's free for the (majority)
+                      flow that goes straight to dispatch. */}
+                  {data.aiDiagnosis && (
+                    <DIYPanel
+                      diagnosis={data.aiDiagnosis}
+                      category={catMeta?.label ?? data.category}
+                      userDescription={data.a1}
+                    />
                   )}
                 </>
               )}
