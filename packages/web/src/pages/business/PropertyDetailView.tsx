@@ -54,7 +54,7 @@ const NAV_ITEMS: { id: SubPage; label: string }[] = [
   { id: 'bookings', label: 'Bookings' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'providers', label: 'Providers' },
-  { id: 'property', label: 'Property' },
+  { id: 'property', label: 'Property IQ' },
 ];
 
 /* ── Status badge helper ────────────────────────────────────────────────── */
