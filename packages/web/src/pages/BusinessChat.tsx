@@ -948,6 +948,20 @@ export default function BusinessChat() {
   // equipment (brand / model / age / condition) while the PM is chatting.
   const [propertyInventory, setPropertyInventory] = useState<PropertyInventoryItem[]>([]);
 
+  /** Property IQ inventory unified across the scan table AND the saved
+   *  Equipment & Systems form. Without this merge, an appliance the PM
+   *  entered manually in the form (e.g. dishwasher: Samsung DW80K5050US)
+   *  would be invisible to the Property IQ card, the chat-correlation
+   *  filter, and the dispatch summary — Claude would say "no brand/model
+   *  on file" even though the brand/model was right there in the form.
+   *  Recomputed when the property switches OR the scan inventory updates. */
+  const fullInventory = useCallback(() => {
+    const formRows = selectedProperty
+      ? inventoryFromPropertyDetails(selectedProperty.id, selectedProperty.details)
+      : [];
+    return mergedInventory(propertyInventory, formRows);
+  }, [propertyInventory, selectedProperty])();
+
   // Category-picker UI: service tier collapsed behind "+ N more" pill on
   // mobile, expanded by default on desktop where vertical real estate is
   // cheap. Checks on mount; stays put afterward (user can still toggle
@@ -1124,21 +1138,22 @@ export default function BusinessChat() {
     //   (a) duplicate the row in the Property IQ card
     //   (b) show a misleading "Added to Property IQ" inline callout
     //   (c) POST a duplicate to the inventory endpoint
+    // Use the merged inventory (scan rows + saved Equipment & Systems
+    // form rows) so a Samsung dishwasher entered in the form still
+    // counts as "already on file" and Homie skips emitting a redundant
+    // <equipment> tag for it.
     const inventoryKeys = new Set(
-      propertyInventory.map(it =>
+      fullInventory.map(it =>
         `${(it.itemType || '').toLowerCase()}|${(it.brand || '').toLowerCase()}|${(it.modelNumber || '').toLowerCase()}`,
       ),
     );
-    // Also build type+brand-only keys so we catch cases where Claude
-    // emits an <equipment> tag with a slightly different model string
-    // (or no model) for an item we already have on file.
     const inventoryTypeBrandKeys = new Set(
-      propertyInventory
+      fullInventory
         .filter(it => it.brand)
         .map(it => `${(it.itemType || '').toLowerCase()}|${(it.brand || '').toLowerCase()}`),
     );
     const inventoryTypeOnlyKeys = new Set(
-      propertyInventory.map(it => (it.itemType || '').toLowerCase()),
+      fullInventory.map(it => (it.itemType || '').toLowerCase()),
     );
 
     while ((match = re.exec(raw)) !== null) {
@@ -1257,108 +1272,98 @@ export default function BusinessChat() {
         if (accessParts.length > 0) parts.push(`Security: ${accessParts.join(', ')}`);
       }
 
-      // Category-specific details
-      if (['hvac', 'chimney', 'insulation'].includes(catId)) {
+      // ALL equipment sections — no longer category-gated. The chat
+      // category is just a user-facing tag; the property's full
+      // equipment picture should always be in CONTEXT so Claude can
+      // reference the dishwasher's brand/model even on a chat that
+      // started under a different category.
+      if (d.hvac) {
         const h = d.hvac;
-        if (h) {
-          const hvacParts = [
-            h.acType && `${h.acType} AC`,
-            h.acBrand && `(${h.acBrand}${h.acModel ? ` ${h.acModel}` : ''})`,
-            h.acAge && `${h.acAge} old`,
-            h.heatingType && `Heating: ${h.heatingType}`,
-            h.heatingBrand && `(${h.heatingBrand}${h.heatingModel ? ` ${h.heatingModel}` : ''})`,
-            h.thermostatBrand && `Thermostat: ${h.thermostatBrand}${h.thermostatModel ? ` ${h.thermostatModel}` : ''}`,
-            h.filterSize && `Filter: ${h.filterSize}`,
-          ].filter(Boolean);
-          if (hvacParts.length > 0) parts.push(`HVAC: ${hvacParts.join(', ')}`);
-        }
+        const hvacParts = [
+          h.acType && `${h.acType} AC`,
+          h.acBrand && `(${h.acBrand}${h.acModel ? ` ${h.acModel}` : ''})`,
+          h.acAge && `${h.acAge} old`,
+          h.heatingType && `Heating: ${h.heatingType}`,
+          h.heatingBrand && `(${h.heatingBrand}${h.heatingModel ? ` ${h.heatingModel}` : ''})`,
+          h.thermostatBrand && `Thermostat: ${h.thermostatBrand}${h.thermostatModel ? ` ${h.thermostatModel}` : ''}`,
+          h.filterSize && `Filter: ${h.filterSize}`,
+        ].filter(Boolean);
+        if (hvacParts.length > 0) parts.push(`HVAC: ${hvacParts.join(', ')}`);
       }
 
-      if (['water_heater', 'plumbing'].includes(catId)) {
+      if (d.waterHeater) {
         const wh = d.waterHeater;
-        if (wh) {
-          const whParts = [
-            wh.type && `${wh.type}`,
-            wh.brand && `${wh.brand}`,
-            wh.model && `${wh.model}`,
-            wh.fuel && `${wh.fuel}`,
-            wh.capacity && `${wh.capacity}`,
-            wh.age && `${wh.age} old`,
-            wh.location && `in ${wh.location}`,
-          ].filter(Boolean);
-          if (whParts.length > 0) parts.push(`Water heater: ${whParts.join(', ')}`);
-        }
+        const whParts = [
+          wh.type && `${wh.type}`,
+          wh.brand && `${wh.brand}`,
+          wh.model && `${wh.model}`,
+          wh.fuel && `${wh.fuel}`,
+          wh.capacity && `${wh.capacity}`,
+          wh.age && `${wh.age} old`,
+          wh.location && `in ${wh.location}`,
+        ].filter(Boolean);
+        if (whParts.length > 0) parts.push(`Water heater: ${whParts.join(' · ')}`);
       }
 
-      if (['plumbing', 'septic_sewer'].includes(catId)) {
+      if (d.plumbing) {
         const pl = d.plumbing;
-        if (pl) {
-          const plParts = [
-            pl.kitchenFaucetBrand && `Kitchen faucet: ${pl.kitchenFaucetBrand}`,
-            pl.bathroomFaucetBrand && `Bathroom faucet: ${pl.bathroomFaucetBrand}`,
-            pl.toiletBrand && `Toilet: ${pl.toiletBrand}`,
-            pl.waterSoftener && `Water softener: ${pl.waterSoftener}`,
-            pl.septicOrSewer && `${pl.septicOrSewer}`,
-            pl.mainShutoffLocation && `Main shutoff: ${pl.mainShutoffLocation}`,
-          ].filter(Boolean);
-          if (plParts.length > 0) parts.push(`Plumbing: ${plParts.join(', ')}`);
-        }
+        const plParts = [
+          pl.kitchenFaucetBrand && `Kitchen faucet: ${pl.kitchenFaucetBrand}`,
+          pl.bathroomFaucetBrand && `Bathroom faucet: ${pl.bathroomFaucetBrand}`,
+          pl.toiletBrand && `Toilet: ${pl.toiletBrand}`,
+          pl.waterSoftener && `Water softener: ${pl.waterSoftener}`,
+          pl.septicOrSewer && `${pl.septicOrSewer}`,
+          pl.mainShutoffLocation && `Main shutoff: ${pl.mainShutoffLocation}`,
+        ].filter(Boolean);
+        if (plParts.length > 0) parts.push(`Plumbing: ${plParts.join(', ')}`);
       }
 
-      if (['appliance', 'cleaning'].includes(catId)) {
+      if (d.appliances) {
         const ap = d.appliances;
-        if (ap) {
-          const appParts: string[] = [];
-          for (const [name, info] of Object.entries(ap)) {
-            if (!info) continue;
-            const appInfo = info as Record<string, string>;
-            const desc = [appInfo.brand, appInfo.model, appInfo.fuel].filter(Boolean).join(' ');
-            if (desc) appParts.push(`${name.charAt(0).toUpperCase() + name.slice(1)}: ${desc}`);
-          }
-          if (appParts.length > 0) parts.push(`Appliances: ${appParts.join(', ')}`);
+        const appParts: string[] = [];
+        for (const [name, info] of Object.entries(ap)) {
+          if (!info) continue;
+          const appInfo = info as Record<string, string>;
+          const desc = [appInfo.brand, appInfo.model, appInfo.fuel].filter(Boolean).join(' ');
+          if (desc) appParts.push(`${name.charAt(0).toUpperCase() + name.slice(1)}: ${desc}`);
         }
+        if (appParts.length > 0) parts.push(`Appliances: ${appParts.join(', ')}`);
       }
 
-      if (['electrical', 'generator_install', 'ev_charger_install', 'solar', 'security_systems'].includes(catId)) {
+      if (d.electrical) {
         const el = d.electrical;
-        if (el) {
-          const elParts = [
-            el.breakerBoxLocation && `Breaker: ${el.breakerBoxLocation}`,
-            el.panelAmperage && `Panel: ${el.panelAmperage}`,
-            el.hasGenerator && el.generatorType && `Generator: ${el.generatorType}`,
-            el.hasSolar && el.solarSystem && `Solar: ${el.solarSystem}`,
-            el.hasEvCharger && el.evChargerBrand && `EV charger: ${el.evChargerBrand}`,
-          ].filter(Boolean);
-          if (elParts.length > 0) parts.push(`Electrical: ${elParts.join(', ')}`);
-        }
+        const elParts = [
+          el.breakerBoxLocation && `Breaker: ${el.breakerBoxLocation}`,
+          el.panelAmperage && `Panel: ${el.panelAmperage}`,
+          el.hasGenerator && el.generatorType && `Generator: ${el.generatorType}`,
+          el.hasSolar && el.solarSystem && `Solar: ${el.solarSystem}`,
+          el.hasEvCharger && el.evChargerBrand && `EV charger: ${el.evChargerBrand}`,
+        ].filter(Boolean);
+        if (elParts.length > 0) parts.push(`Electrical: ${elParts.join(', ')}`);
       }
 
-      if (['pool', 'hot_tub'].includes(catId)) {
+      if (d.poolSpa) {
         const ps = d.poolSpa;
-        if (ps) {
-          const psParts = [
-            ps.poolType && `Pool: ${ps.poolType}`,
-            ps.poolHeaterBrand && `Heater: ${ps.poolHeaterBrand}`,
-            ps.poolPumpBrand && `Pump: ${ps.poolPumpBrand}`,
-            ps.hotTubBrand && `Hot tub: ${ps.hotTubBrand}${ps.hotTubModel ? ` ${ps.hotTubModel}` : ''}`,
-          ].filter(Boolean);
-          if (psParts.length > 0) parts.push(`Pool/Spa: ${psParts.join(', ')}`);
-        }
+        const psParts = [
+          ps.poolType && `Pool: ${ps.poolType}`,
+          ps.poolHeaterBrand && `Heater: ${ps.poolHeaterBrand}`,
+          ps.poolPumpBrand && `Pump: ${ps.poolPumpBrand}`,
+          ps.hotTubBrand && `Hot tub: ${ps.hotTubBrand}${ps.hotTubModel ? ` ${ps.hotTubModel}` : ''}`,
+        ].filter(Boolean);
+        if (psParts.length > 0) parts.push(`Pool/Spa: ${psParts.join(', ')}`);
       }
 
-      if (['roofing', 'siding', 'gutter', 'garage_door', 'fencing', 'sprinkler_irrigation', 'landscaping', 'painting', 'pressure_washing'].includes(catId)) {
+      if (d.exterior) {
         const ex = d.exterior;
-        if (ex) {
-          const exParts = [
-            ex.roofType && `Roof: ${ex.roofType}`,
-            ex.roofAge && `(${ex.roofAge} old)`,
-            ex.sidingMaterial && `Siding: ${ex.sidingMaterial}`,
-            ex.fenceMaterial && `Fence: ${ex.fenceMaterial}`,
-            ex.garageDoorBrand && `Garage door: ${ex.garageDoorBrand}`,
-            ex.irrigationBrand && `Irrigation: ${ex.irrigationBrand}`,
-          ].filter(Boolean);
-          if (exParts.length > 0) parts.push(`Exterior: ${exParts.join(', ')}`);
-        }
+        const exParts = [
+          ex.roofType && `Roof: ${ex.roofType}`,
+          ex.roofAge && `(${ex.roofAge} old)`,
+          ex.sidingMaterial && `Siding: ${ex.sidingMaterial}`,
+          ex.fenceMaterial && `Fence: ${ex.fenceMaterial}`,
+          ex.garageDoorBrand && `Garage door: ${ex.garageDoorBrand}`,
+          ex.irrigationBrand && `Irrigation: ${ex.irrigationBrand}`,
+        ].filter(Boolean);
+        if (exParts.length > 0) parts.push(`Exterior: ${exParts.join(', ')}`);
       }
 
       if (d.general) {
@@ -1377,8 +1382,11 @@ export default function BusinessChat() {
     // live exclusively in the Property IQ table. Dedupe before
     // formatting so duplicate rows don't confuse Claude. Cap at 40
     // items to stay within the prompt budget.
-    if (propertyInventory.length > 0) {
-      const deduped = dedupePropertyInventory(propertyInventory).slice(0, 40);
+    // Use the merged inventory so the saved Equipment & Systems form
+    // rows (dishwasher: Samsung DW80K5050US etc.) ride along with the
+    // scan rows in the same list.
+    if (fullInventory.length > 0) {
+      const deduped = fullInventory.slice(0, 40);
       const rows = deduped.map(it => {
         const who = [it.brand, it.modelNumber].filter(Boolean).join(' ');
         const typeLabel = it.itemType.replace(/_/g, ' ');
@@ -1778,10 +1786,10 @@ export default function BusinessChat() {
       }
     }
 
-    // ── Property IQ scan inventory — the big one. Every item with
-    // brand/model/age, up to 40 rows so large scans aren't clipped. ──
-    if (propertyInventory.length > 0) {
-      const rows = propertyInventory.slice(0, 40).map(it => {
+    // ── Property IQ inventory — merged across the scan table AND the
+    // saved Equipment & Systems form. Up to 40 rows. ──
+    if (fullInventory.length > 0) {
+      const rows = fullInventory.slice(0, 40).map(it => {
         const who = [it.brand, it.modelNumber].filter(Boolean).join(' ');
         const typeLabel = it.itemType.replace(/_/g, ' ');
         const age = it.estimatedAgeYears ? `${Math.round(parseFloat(it.estimatedAgeYears))}yr` : '';
@@ -1789,7 +1797,7 @@ export default function BusinessChat() {
         const notes = it.notes ? ` — ${it.notes}` : '';
         return `- ${typeLabel}${who ? `: ${who}` : ''}${age ? ` · ${age}` : ''}${cond ? ` ${cond}` : ''}${notes}`.trim();
       });
-      lines.push(`Property IQ inventory (${propertyInventory.length} item${propertyInventory.length === 1 ? '' : 's'} on file):\n${rows.join('\n')}`);
+      lines.push(`Property IQ inventory (${fullInventory.length} item${fullInventory.length === 1 ? '' : 's'} on file):\n${rows.join('\n')}`);
     }
 
     return lines.join('\n');
@@ -2274,7 +2282,7 @@ export default function BusinessChat() {
       // IQ card uses so "water heater leak" won't drag the softener in).
       // Dedupe first so duplicate inventory rows don't double-print
       // brand/model in the dispatch summary.
-      for (const it of dedupePropertyInventory(propertyInventory)) {
+      for (const it of fullInventory) {
         const strength = correlateItemToChat(it, chatCorrelationText);
         if (strength !== 'strong' && strength !== 'medium') continue;
         addRow({
@@ -2974,7 +2982,7 @@ export default function BusinessChat() {
                   discussed) inline. Hidden on ≥981px since the right-rail
                   card covers desktop. */}
               <MobileInlinePropertyIQ
-                items={propertyInventory}
+                items={fullInventory}
                 chatText={chatCorrelationText}
                 discovered={discoveredEquipment}
               />
@@ -3607,7 +3615,7 @@ export default function BusinessChat() {
             equipmentCaptured={
               discoveredEquipment.length > 0
               || (!!chatCorrelationText
-                  && propertyInventory.some(it => correlateItemToChat(it, chatCorrelationText) !== null))
+                  && fullInventory.some(it => correlateItemToChat(it, chatCorrelationText) !== null))
             }
             mediaAttached={uploadedPhotoUrlsRef.current.length > 0 || !!imgPreview}
             // Panel being merely OPEN doesn't count — the box was
@@ -3625,7 +3633,7 @@ export default function BusinessChat() {
           <B2BPropertyIQCard
             propertyId={selectedProperty?.id ?? null}
             categoryLabel={category?.label ?? null}
-            items={propertyInventory}
+            items={fullInventory}
             chatText={chatCorrelationText}
           />
           <B2BProsNearbyBadge
@@ -4076,6 +4084,125 @@ function itemCorrelatesWithChat(item: PropertyInventoryItem, chatText: string): 
  *  leaving the scan with two Samsung dishwashers etc. This keeps the
  *  best-conditioned + PM-confirmed entry and drops the shadow copies so
  *  the IQ card doesn't render dupes. Also runs for the mobile variant. */
+/** Convert the saved Equipment & Systems form (property.details) into
+ *  PropertyInventoryItem-shaped virtual rows so the Property IQ card,
+ *  chat correlation, and dispatch summary can treat both data sources
+ *  uniformly. The form lets PMs enter brand/model/age for HVAC, water
+ *  heater, every standard appliance, plumbing fixtures, electrical
+ *  add-ons, pool/spa, and exterior gear — all of which used to be
+ *  invisible to the IQ card (which read only from the scan table). */
+function inventoryFromPropertyDetails(
+  propertyId: string,
+  details: PropertyDetails | null | undefined,
+): PropertyInventoryItem[] {
+  if (!details) return [];
+  const out: PropertyInventoryItem[] = [];
+  const now = new Date().toISOString();
+  const parseAge = (raw?: string): string | null => {
+    if (!raw) return null;
+    const m = raw.match(/(\d+(?:\.\d+)?)/);
+    return m ? m[1] : null;
+  };
+  const make = (
+    itemType: string,
+    category: PropertyInventoryItem['category'],
+    bits: { brand?: string | null; model?: string | null; age?: string | null; fuel?: string | null; capacity?: string | null; condition?: string | null; notes?: string | null } = {},
+  ): PropertyInventoryItem | null => {
+    // Skip rows that have nothing useful to show — no brand, no model,
+    // no age. These would just clutter the IQ card.
+    if (!bits.brand && !bits.model && !bits.age) return null;
+    return {
+      id: `details:${propertyId}:${itemType}`,
+      propertyId,
+      roomId: null,
+      scanId: null,
+      category,
+      itemType,
+      brand: bits.brand || null,
+      modelNumber: bits.model || null,
+      serialNumber: null,
+      manufactureDate: null,
+      estimatedAgeYears: bits.age || null,
+      fuelType: bits.fuel || null,
+      capacity: bits.capacity || null,
+      condition: bits.condition || null,
+      identificationMethod: 'pm_manual',
+      confidenceScore: '1.00',
+      photoFrameUrl: null,
+      labelPhotoUrl: null,
+      maintenanceFlags: null,
+      notes: bits.notes || null,
+      status: 'pm_confirmed',
+      confirmedBy: null,
+      confirmedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    } as PropertyInventoryItem;
+  };
+  const push = (it: PropertyInventoryItem | null) => { if (it) out.push(it); };
+
+  if (details.hvac) {
+    const h = details.hvac;
+    push(make('hvac_ac_unit', 'system', { brand: h.acBrand, model: h.acModel, age: parseAge(h.acAge) }));
+    push(make(h.heatingType?.toLowerCase().includes('heat pump') ? 'heat_pump' : 'furnace', 'system', { brand: h.heatingBrand, model: h.heatingModel }));
+    push(make('thermostat', 'system', { brand: h.thermostatBrand, model: h.thermostatModel }));
+  }
+  if (details.waterHeater) {
+    const w = details.waterHeater;
+    push(make('water_heater', 'system', { brand: w.brand, model: w.model, age: parseAge(w.age), fuel: w.fuel, capacity: w.capacity }));
+  }
+  if (details.appliances) {
+    const a = details.appliances;
+    if (a.refrigerator) push(make('refrigerator', 'appliance', { brand: a.refrigerator.brand, model: a.refrigerator.model }));
+    if (a.washer) push(make('washer', 'appliance', { brand: a.washer.brand, model: a.washer.model }));
+    if (a.dryer) push(make('dryer', 'appliance', { brand: a.dryer.brand, model: a.dryer.model, fuel: a.dryer.fuel }));
+    if (a.dishwasher) push(make('dishwasher', 'appliance', { brand: a.dishwasher.brand, model: a.dishwasher.model }));
+    if (a.oven) push(make('oven', 'appliance', { brand: a.oven.brand, model: a.oven.model, fuel: a.oven.fuel }));
+    if (a.disposal) push(make('garbage_disposal', 'appliance', { brand: a.disposal.brand }));
+    if (a.microwave) push(make('microwave', 'appliance', { brand: a.microwave.brand, notes: a.microwave.type ?? null }));
+  }
+  if (details.plumbing) {
+    const p = details.plumbing;
+    push(make('kitchen_faucet', 'fixture', { brand: p.kitchenFaucetBrand }));
+    push(make('bathroom_faucet', 'fixture', { brand: p.bathroomFaucetBrand }));
+    push(make('toilet', 'fixture', { brand: p.toiletBrand }));
+    push(make('water_softener', 'system', { brand: p.waterSoftener }));
+  }
+  if (details.electrical) {
+    const e = details.electrical;
+    if (e.hasGenerator && e.generatorType) push(make('generator', 'system', { brand: e.generatorType }));
+    if (e.hasSolar && e.solarSystem) push(make('solar', 'system', { brand: e.solarSystem }));
+    if (e.hasEvCharger && e.evChargerBrand) push(make('ev_charger', 'system', { brand: e.evChargerBrand }));
+  }
+  if (details.poolSpa) {
+    const ps = details.poolSpa;
+    push(make('pool_heater', 'amenity', { brand: ps.poolHeaterBrand }));
+    push(make('pool_pump', 'amenity', { brand: ps.poolPumpBrand }));
+    push(make('hot_tub', 'amenity', { brand: ps.hotTubBrand, model: ps.hotTubModel }));
+  }
+  if (details.exterior) {
+    const ex = details.exterior;
+    push(make('garage_door_opener', 'system', { brand: ex.garageDoorBrand }));
+    push(make('irrigation_controller', 'system', { brand: ex.irrigationBrand }));
+  }
+  return out;
+}
+
+/** Property IQ inventory unified across both data sources — the scan
+ *  table (propertyInventory) AND the Equipment & Systems form
+ *  (property.details). Scan rows always win on dedupe collisions
+ *  because they typically carry condition + photo evidence the form
+ *  doesn't. Form rows fill in items that exist in the saved form but
+ *  weren't picked up by a scan. */
+function mergedInventory(
+  scanRows: PropertyInventoryItem[],
+  formRows: PropertyInventoryItem[],
+): PropertyInventoryItem[] {
+  // Pass scan rows first so they take precedence in dedupePropertyInventory's
+  // condition/status tiebreak when an item shows up in both sources.
+  return dedupePropertyInventory([...scanRows, ...formRows]);
+}
+
 function dedupePropertyInventory(items: PropertyInventoryItem[]): PropertyInventoryItem[] {
   const conditionRank: Record<string, number> = {
     new: 0, good: 1, fair: 2, aging: 3, needs_attention: 4, end_of_life: 5,
