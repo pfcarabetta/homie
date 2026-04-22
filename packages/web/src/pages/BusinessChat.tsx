@@ -1055,6 +1055,33 @@ export default function BusinessChat() {
     const re = /<equipment>([\s\S]*?)<\/equipment>/gi;
     const fresh: DiscoveredItem[] = [];
     let match: RegExpExecArray | null;
+
+    // Build a set of keys matching items that are ALREADY in the
+    // Property IQ inventory for this property. The prompt instructs
+    // Homie to only emit <equipment> for NEW items, but Claude
+    // occasionally re-tags an item that was already in the CONTEXT
+    // (especially mid-conversation when the call bounces back to the
+    // same appliance). Treat any such tag as a no-op here so we don't:
+    //   (a) duplicate the row in the Property IQ card
+    //   (b) show a misleading "Added to Property IQ" inline callout
+    //   (c) POST a duplicate to the inventory endpoint
+    const inventoryKeys = new Set(
+      propertyInventory.map(it =>
+        `${(it.itemType || '').toLowerCase()}|${(it.brand || '').toLowerCase()}|${(it.modelNumber || '').toLowerCase()}`,
+      ),
+    );
+    // Also build type+brand-only keys so we catch cases where Claude
+    // emits an <equipment> tag with a slightly different model string
+    // (or no model) for an item we already have on file.
+    const inventoryTypeBrandKeys = new Set(
+      propertyInventory
+        .filter(it => it.brand)
+        .map(it => `${(it.itemType || '').toLowerCase()}|${(it.brand || '').toLowerCase()}`),
+    );
+    const inventoryTypeOnlyKeys = new Set(
+      propertyInventory.map(it => (it.itemType || '').toLowerCase()),
+    );
+
     while ((match = re.exec(raw)) !== null) {
       try {
         const body = match[1].trim();
@@ -1065,8 +1092,19 @@ export default function BusinessChat() {
           condition?: string | null; notes?: string | null;
         };
         if (!parsed.item_type) continue;
-        const dedupeKey = `${parsed.item_type}|${(parsed.brand || '').toLowerCase()}|${(parsed.model_number || '').toLowerCase()}`;
+        const itemType = parsed.item_type.toLowerCase();
+        const brand = (parsed.brand || '').toLowerCase();
+        const modelNumber = (parsed.model_number || '').toLowerCase();
+        const dedupeKey = `${itemType}|${brand}|${modelNumber}`;
         if (discoveredPersistedKeysRef.current.has(dedupeKey)) continue;
+
+        // Skip entirely if this matches something already on file.
+        // Three-tier match: exact (type+brand+model), type+brand,
+        // type-only when no brand was specified in the tag.
+        if (inventoryKeys.has(dedupeKey)) continue;
+        if (brand && inventoryTypeBrandKeys.has(`${itemType}|${brand}`)) continue;
+        if (!brand && !modelNumber && inventoryTypeOnlyKeys.has(itemType)) continue;
+
         discoveredPersistedKeysRef.current.add(dedupeKey);
         fresh.push({
           itemType: parsed.item_type,
@@ -1756,7 +1794,7 @@ export default function BusinessChat() {
     //       React hasn't necessarily flushed that setMessages yet. The
     //       voice panel's historyRef is the authoritative transcript.
     setTimeout(() => {
-      generateFinalDiagnosis(picked, payload.history);
+      generateFinalDiagnosis(picked, payload.history, { silent: true });
     }, 200);
   };
 
@@ -1922,11 +1960,22 @@ export default function BusinessChat() {
    *  voice panel fires onReady. Relying on the `messages` state closure
    *  could send a truncated (sometimes empty) history to Claude, which
    *  would trigger replies like "no issue has been described yet." */
+  /** Suppresses the "Generating dispatch scope…" spinner + the chat
+   *  streaming-dots bubble while the voice/video path runs its silent
+   *  finalization. The PM already heard Homie say "Okay, dispatching
+   *  now." out loud — showing two more loading indicators is noisy. We
+   *  still stream Claude's text internally; we just don't render any
+   *  intermediate UI. Reset on every entry so a later text-chat dispatch
+   *  shows its normal spinner. */
+  const [silentGeneration, setSilentGeneration] = useState(false);
+
   function generateFinalDiagnosis(
     overrideCategory?: CatDef,
     historyOverride?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    opts?: { silent?: boolean },
   ) {
     const cat = overrideCategory ?? category;
+    setSilentGeneration(!!opts?.silent);
     const promptText = cat?.group === 'service'
       ? 'I am ready to dispatch. Generate the final scope summary NOW using whatever you already know. Do NOT ask any more clarifying questions — this is the final message before the job is sent to the provider. Output a committed scope description (plain text, 2–4 sentences) followed by the <diagnosis> JSON block. If any detail is missing, fill it with your best estimate and note "pending confirmation" in the scope — do not ask for it.'
       : 'I am ready to dispatch. Generate your final diagnosis NOW using whatever you already know. Do NOT ask any more clarifying questions — this is the final message before the job is sent to the pro. Output a committed diagnosis (plain text, 2–4 sentences) followed by the <diagnosis> JSON block. If any detail is missing, fill it with your best estimate and note "pending confirmation" in the diagnosis — do not ask for it.';
@@ -2072,11 +2121,52 @@ export default function BusinessChat() {
     try {
       let summaryText = aiDiagnosis || `${category?.label}: ${q1Answer}`;
 
-      // Fold any equipment details the AI extracted from chat into the
+      // Collect every piece of equipment that should appear in the
       // dispatch summary so the provider sees exactly what they'll be
-      // servicing (brand, model, age, condition, notes).
-      if (discoveredEquipment.length > 0) {
-        const lines = discoveredEquipment.map(d => {
+      // servicing. Two sources:
+      //   1. discoveredEquipment — items the AI tagged this session
+      //      (already deduped against propertyInventory at ingest).
+      //   2. propertyInventory items that correlate with the chat —
+      //      brand/model we already had on file that the PM referenced.
+      //      Covers the case where Homie mentions "the Samsung
+      //      dishwasher" without emitting a new <equipment> tag because
+      //      it was already on file — the brand/model still needs to
+      //      reach the provider.
+      type SummaryEquipmentRow = {
+        itemType: string;
+        brand?: string;
+        modelNumber?: string;
+        estimatedAgeYears?: number;
+        condition?: string;
+        notes?: string;
+      };
+      const summaryRows: SummaryEquipmentRow[] = [];
+      const seenKeys = new Set<string>();
+      const addRow = (row: SummaryEquipmentRow) => {
+        const key = `${row.itemType.toLowerCase()}|${(row.brand || '').toLowerCase()}|${(row.modelNumber || '').toLowerCase()}`;
+        if (seenKeys.has(key)) return;
+        seenKeys.add(key);
+        summaryRows.push(row);
+      };
+      for (const d of discoveredEquipment) addRow(d);
+      // Pull any inventory items the chat actually discussed (strong or
+      // medium correlation only — matches the same filter the Property
+      // IQ card uses so "water heater leak" won't drag the softener in).
+      for (const it of propertyInventory) {
+        const strength = correlateItemToChat(it, chatCorrelationText);
+        if (strength !== 'strong' && strength !== 'medium') continue;
+        addRow({
+          itemType: it.itemType,
+          brand: it.brand ?? undefined,
+          modelNumber: it.modelNumber ?? undefined,
+          estimatedAgeYears: it.estimatedAgeYears ? parseFloat(it.estimatedAgeYears) : undefined,
+          condition: it.condition ?? undefined,
+          notes: it.notes ?? undefined,
+        });
+      }
+
+      if (summaryRows.length > 0) {
+        const lines = summaryRows.map(d => {
           const parts: string[] = [];
           const typeLabel = d.itemType.replace(/_/g, ' ');
           parts.push(typeLabel);
@@ -2084,7 +2174,7 @@ export default function BusinessChat() {
           if (d.modelNumber) parts.push(d.modelNumber);
           const meta: string[] = [];
           if (d.estimatedAgeYears !== undefined) meta.push(`${Math.round(d.estimatedAgeYears)}yr old`);
-          if (d.condition) meta.push(d.condition);
+          if (d.condition && d.condition !== 'good') meta.push(d.condition);
           if (meta.length) parts.push(`(${meta.join(', ')})`);
           if (d.notes) parts.push(`— ${d.notes}`);
           return `• ${parts.join(' ')}`;
@@ -2724,7 +2814,7 @@ export default function BusinessChat() {
               {messages.map((m, i) => (
                 m.role === 'user' ? <UserMsg key={i} text={m.content} /> : <AssistantMsg key={i} text={m.content} />
               ))}
-              {streaming && <StreamingMsg text={streamText} />}
+              {streaming && !silentGeneration && <StreamingMsg text={streamText} />}
               {/* Inline "added to Property IQ" callouts — every item the AI
                   identified (visually or from a brand the PM spoke) gets a
                   small confirmation card right in the chat thread so the
@@ -3114,8 +3204,11 @@ export default function BusinessChat() {
             </div>
           )}
 
-          {/* Generating dispatch indicator */}
-          {step === 'generating' && (
+          {/* Generating dispatch indicator — suppressed during voice/
+              video-originated generation (silentGeneration) so the PM
+              doesn't see two loading states stacked after Homie's
+              spoken "Okay, dispatching now." */}
+          {step === 'generating' && !silentGeneration && (
             <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: W, borderRadius: 12, padding: '14px 18px' }}>
                 <div style={{ width: 20, height: 20, border: `2.5px solid ${O}30`, borderTopColor: O, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />

@@ -109,14 +109,20 @@ After EVERY question you ask, include a <suggestions> block with 3-5 likely answ
 Make suggestions specific and relevant to your question. For example, if you ask "How severe is the leak?", good suggestions would be: ["Active dripping", "Slow seep", "Major flooding", "Just a stain"]. Do NOT include generic options like "Other" — the app adds that automatically.
 Do NOT include <suggestions> when you provide a <diagnosis> — only include them with questions.
 
-EQUIPMENT DISCOVERY (IMPORTANT):
-Whenever the PM mentions a specific piece of equipment/appliance/system in their reply — brand, model number, approximate age, condition — emit a structured <equipment> block in the SAME response. This block is invisible to the PM but:
-  1. Adds the item to the dispatch summary sent to the provider (they see exactly what they'll be working on).
-  2. Is persisted to the property's inventory so future chats already know about it.
+EQUIPMENT DISCOVERY — FOR NEW ITEMS ONLY:
+Before emitting <equipment>, scan the "KNOWN PROPERTY INVENTORY" section of the property context (if provided) AND any equipment sections ("HVAC:", "Water heater:", "Appliances:", "Plumbing:", etc.) for a matching entry. If the item you're about to tag is ALREADY there (matching itemType, or matching brand+type), DO NOT emit an <equipment> tag — it's already on file. Re-emitting creates phantom "Added to Property IQ" confirmations and duplicate rows, which is worse than silence. Reference the existing item by brand/model in your spoken reply instead.
 
-Only emit <equipment> when you learn a NEW detail from the PM in this turn — don't re-emit the same item across turns. One block per item; multiple blocks allowed if the PM mentions several.
+Emit <equipment> ONLY when the PM mentions an item that is genuinely NEW to the inventory, or when you learn a NEW detail about an item that had no brand/model on file (e.g. inventory lists "dishwasher" with no brand, PM mentions "Samsung" — emit to enrich the record with the brand).
 
-Format (JSON, one item per block):
+Examples of when to SKIP the tag:
+  • Context: "Appliances: Dishwasher: Samsung NE63A6711SS"; PM says "the dishwasher is leaking" → skip, reference the Samsung by name.
+  • Context: "Water heater: Rheem 2019"; PM says "the water heater" → skip.
+
+Examples of when to EMIT:
+  • PM mentions a Kitchenaid stand mixer and nothing like it is in inventory → emit.
+  • Inventory has a dishwasher entry with no brand; PM says "it's a Bosch" → emit to fill in brand=Bosch.
+
+Tag format (JSON, one item per block; emit in the SAME response):
 <equipment>
 {
   "item_type": "hvac_ac_unit" | "water_heater" | "refrigerator" | "washer" | "dryer" | "dishwasher" | "oven" | "microwave" | "garbage_disposal" | "faucet" | "toilet" | "shower" | "water_softener" | "furnace" | "heat_pump" | "thermostat" | "electrical_panel" | "garage_door_opener" | "pool_pump" | "spa_heater" | "roof" | "smoke_detector" | "other_<short_snake_case>",
@@ -129,12 +135,12 @@ Format (JSON, one item per block):
 }
 </equipment>
 
-If the PM mentions equipment but gives no details beyond the type ("my AC" with no brand/model/age), still emit an <equipment> block with whatever fields you know and null for the rest — the record is still valuable.
-
-Example triggers:
-  - PM says "The Trane XR16 upstairs is 6 years old" → emit item_type=hvac_ac_unit, brand=Trane, model_number=XR16, estimated_age_years=6
-  - PM says "The dishwasher is leaking" → emit item_type=dishwasher, category=appliance, notes="leaking"
-  - PM says "Water heater is a 2019 Rheem" → item_type=water_heater, brand=Rheem, estimated_age_years=(current year - 2019)`;
+DISPATCH SUMMARY — ALWAYS INCLUDE EQUIPMENT DETAILS:
+When you generate your final diagnosis / scope (plain-text paragraph before the <diagnosis> JSON), ALWAYS reference the specific equipment by brand + model + age when it's on file in the context. The provider reads this text and needs to know what they're servicing. Acceptable phrasings:
+  • "Samsung NE63A6711SS gas range (4yr old) — front-right burner ignition failing."
+  • "Rheem tankless water heater (2019, gas) in the garage — no hot water on second-floor bathroom."
+  • "LG LRMVS3006S refrigerator — ice maker not producing."
+If the equipment isn't in the context, name what the PM described ("dishwasher, brand unknown"). NEVER omit a brand/model/age that IS on file.`;
 
 const SERVICE_SYSTEM_PROMPT = `You are Homie, an AI assistant for property managers scheduling non-repair services across their portfolio — things like cleaning, restocking, hot tub maintenance, landscaping, and similar tasks. You're efficient and focused on confirming scope so the PM can dispatch quickly.
 
@@ -225,10 +231,10 @@ After EVERY question you ask, include a <suggestions> block with 3-5 likely answ
 Make suggestions specific and relevant to your question. For example, if you ask "When do you need the clean done?", good suggestions would be: ["Today", "Tomorrow morning", "By end of week", "Before next guest arrives"]. Do NOT include generic options like "Other" — the app adds that automatically.
 Do NOT include <suggestions> when you provide a <diagnosis> — only include them with questions.
 
-EQUIPMENT DISCOVERY (IMPORTANT):
-If the PM mentions a specific piece of equipment that affects scope — e.g. hot tub model for maintenance, pool pump brand for service — emit a structured <equipment> block in the SAME response (invisible to the PM, folded into the dispatch summary for the provider and persisted to the property inventory for future chats).
+EQUIPMENT DISCOVERY — FOR NEW ITEMS ONLY:
+Before emitting <equipment>, scan the "KNOWN PROPERTY INVENTORY" + saved equipment sections ("Pool/Spa:", "Appliances:", etc.) in the property context. If the item you're about to tag is already on file, DO NOT emit — it would create a phantom "Added to Property IQ" confirmation and duplicate rows in the card. Reference the existing item by brand/model in your spoken scope instead.
 
-One block per item; multiple blocks allowed if they mention several. Format:
+Emit ONLY when the PM mentions an item that is genuinely NEW to the inventory, OR when you learn a NEW brand/model/age for an item that had no detail on file. One block per item; multiple blocks allowed if the PM mentions several. Format:
 <equipment>
 {
   "item_type": "pool_pump" | "spa_heater" | "hot_tub" | "dishwasher" | "washer" | "dryer" | "other_<short_snake_case>",
@@ -241,7 +247,10 @@ One block per item; multiple blocks allowed if they mention several. Format:
 }
 </equipment>
 
-Emit only when you learn a NEW detail — don't re-emit items you already captured earlier in the chat.`;
+Never re-emit an item you already tagged earlier in this chat.
+
+DISPATCH SUMMARY — ALWAYS INCLUDE EQUIPMENT DETAILS:
+When you generate your final scope summary (plain-text paragraph before the <diagnosis> JSON), ALWAYS reference the specific equipment by brand + model + age when it's on file in the context. The provider reads this text and needs to know what they'll be servicing. If the item isn't in the context, name what the PM described. NEVER omit a brand/model/age that IS on file.`;
 
 // ── POST /api/v1/business-chat/chat ─────────────────────────────────────────
 
