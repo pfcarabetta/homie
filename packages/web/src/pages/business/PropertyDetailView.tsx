@@ -6,6 +6,7 @@ import { O, G, D, W, PROPERTY_TYPES, VENDOR_CATEGORIES, MiniCalendar, cleanPrice
 import PropertySubPage from './PropertySubPage';
 import { getStoredNav, setStoredNav } from './nav-storage';
 import { AddVendorModal, EditVendorModal, groupVendors, type GroupedVendor } from './VendorsTab';
+import { TrackingShareModal } from './DispatchesTab';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
 
@@ -95,7 +96,7 @@ const PDV_CARD_STYLES = `
 
 /* ── Shared dispatch card renderer ─────────────────────────────────────── */
 
-function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, estimates, workspaceId }: {
+function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, estimates, workspaceId, onShare, onCancel, isCancelling }: {
   j: WorkspaceDispatch;
   isExpanded: boolean;
   onToggle: () => void;
@@ -103,11 +104,19 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
   loadingResponses: boolean;
   estimates: Record<string, CostEstimate>;
   workspaceId: string;
+  /** Called when the PM hits "Share Status" — parent opens the
+   *  TrackingShareModal seeded with this dispatch's id. */
+  onShare?: (jobId: string) => void;
+  /** Called when the PM hits "Cancel Dispatch" — parent shows a
+   *  confirmation modal and runs the cancel API on confirm. */
+  onCancel?: (jobId: string) => void;
+  isCancelling?: boolean;
 }) {
   const sc = DISPATCH_STATUS_COLORS[j.status] || DISPATCH_STATUS_COLORS.expired;
   const isActive = ['open', 'dispatching', 'collecting'].includes(j.status);
   const catLabel = j.diagnosis?.category ? j.diagnosis.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Dispatch';
   const responseCount = j.responseCount;
+  const isArchivedOrRefunded = ['archived', 'refunded'].includes(j.status);
 
   return (
     <div id={`pdv-dispatch-${j.id}`} onClick={onToggle} style={{
@@ -164,6 +173,18 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
           {j.diagnosis?.summary && (
             <div style={{ fontSize: 13, color: 'var(--bp-muted)', lineHeight: 1.6, marginBottom: 14, paddingTop: 12 }}>
               {renderBold(j.diagnosis.summary)}
+            </div>
+          )}
+
+          {/* Share Status button — parity with the main Active Jobs page.
+              Shown for any dispatch that isn't archived/refunded. Opens
+              the same TrackingShareModal used on DispatchesTab. */}
+          {!isArchivedOrRefunded && onShare && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              <button onClick={() => onShare(j.id)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${G}40`, background: `${G}08`, color: G, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                🔗 Share Status
+              </button>
             </div>
           )}
 
@@ -271,6 +292,19 @@ function DispatchCard({ j, isExpanded, onToggle, responses, loadingResponses, es
               </div>
             )}
           </div>
+
+          {/* Cancel Dispatch — parity with the main Active Jobs page.
+              Active dispatches only; opens parent's confirm modal. */}
+          {isActive && onCancel && (
+            <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 14 }}>
+              <button onClick={() => onCancel(j.id)} disabled={isCancelling} style={{
+                width: '100%', padding: '10px 0', borderRadius: 100,
+                border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#DC2626',
+                fontSize: 13, fontWeight: 600, cursor: isCancelling ? 'default' : 'pointer',
+                opacity: isCancelling ? 0.6 : 1,
+              }}>{isCancelling ? 'Cancelling...' : 'Cancel Dispatch'}</button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -772,12 +806,17 @@ function ActivitySubPage({ dispatches, bookings, loading, workspaceId, property,
 
 /* ── Sub-page: Jobs (expandable dispatch cards) ────────────────────────── */
 
-function JobsSubPage({ dispatches, loading, workspaceId, propertyId }: { dispatches: WorkspaceDispatch[]; loading: boolean; workspaceId: string; propertyId: string }) {
+function JobsSubPage({ dispatches, setDispatches, loading, workspaceId, propertyId, propertyName }: { dispatches: WorkspaceDispatch[]; setDispatches: React.Dispatch<React.SetStateAction<WorkspaceDispatch[]>>; loading: boolean; workspaceId: string; propertyId: string; propertyName?: string }) {
   const navigate = useNavigate();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [responses, setResponses] = useState<Record<string, ProviderResponseItem[]>>({});
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
   const [estimates, setEstimates] = useState<Record<string, CostEstimate>>({});
+  // Cancel + Share Status state — same shape DispatchesTab uses so the
+  // per-property Jobs tab matches behavior 1:1.
+  const [sharingJobId, setSharingJobId] = useState<string | null>(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   function goToNewDispatch() {
     navigate(`/business?tab=dispatch-chat&workspace=${workspaceId}&property=${propertyId}`);
@@ -850,11 +889,77 @@ function JobsSubPage({ dispatches, loading, workspaceId, propertyId }: { dispatc
                 loadingResponses={loadingResponses === j.id}
                 estimates={estimates}
                 workspaceId={workspaceId}
+                onShare={setSharingJobId}
+                onCancel={setShowCancelConfirm}
+                isCancelling={cancellingId === j.id}
               />
             </div>
           );
         })}
       </div>
+
+      {/* Share tracking modal — same component used by the main Active
+          Jobs page, opened on click of the per-card "Share Status"
+          button. */}
+      {sharingJobId && (
+        <TrackingShareModal
+          jobId={sharingJobId}
+          propertyName={propertyName ?? dispatches.find(d => d.id === sharingJobId)?.propertyName ?? undefined}
+          onClose={() => setSharingJobId(null)}
+        />
+      )}
+
+      {/* Cancel confirmation modal — port of the DispatchesTab modal
+          so the per-property Jobs tab confirms with the same flow. */}
+      {showCancelConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowCancelConfirm(null)}>
+          <div style={{ background: 'var(--bp-card)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <span style={{ fontSize: 22 }}>⚠️</span>
+              </div>
+              <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: '0 0 8px' }}>Cancel this dispatch?</h3>
+              <p style={{ fontSize: 14, color: 'var(--bp-muted)', lineHeight: 1.6, margin: 0 }}>
+                This will stop all outreach for this dispatch.
+                {(() => {
+                  const job = dispatches.find(d => d.id === showCancelConfirm);
+                  return job && job.responseCount > 0
+                    ? ' Any booked providers will be notified of the cancellation via SMS and email.'
+                    : ' If no providers have responded, there is no charge.';
+                })()}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowCancelConfirm(null)} style={{
+                flex: 1, padding: '12px 0', borderRadius: 100, border: '1px solid var(--bp-border)',
+                background: 'var(--bp-card)', color: D, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}>Keep dispatch</button>
+              <button onClick={async () => {
+                const jobId = showCancelConfirm;
+                setShowCancelConfirm(null);
+                setCancellingId(jobId);
+                try {
+                  const res = await businessService.cancelDispatch(workspaceId, jobId);
+                  setDispatches(prev => prev.map(d => d.id === jobId ? { ...d, status: 'expired' } : d));
+                  if (res.data?.credit_refunded) {
+                    alert('Dispatch cancelled. No charge for dispatches with zero responses.');
+                  } else if (res.data?.providers_notified && res.data.providers_notified > 0) {
+                    alert(`Dispatch cancelled. ${res.data.providers_notified} booked provider${res.data.providers_notified > 1 ? 's were' : ' was'} notified.`);
+                  } else {
+                    alert('Dispatch cancelled.');
+                  }
+                } catch (err) {
+                  alert((err as Error).message || 'Failed to cancel');
+                }
+                setCancellingId(null);
+              }} style={{
+                flex: 1, padding: '12px 0', borderRadius: 100, border: 'none',
+                background: '#DC2626', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}>Yes, cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1315,7 +1420,7 @@ export default function PropertyDetailView({ workspaceId, property, plan, onBack
       case 'activity':
         return <ActivitySubPage dispatches={dispatches} bookings={bookings} loading={loadingDispatches || loadingBookings} workspaceId={workspaceId} property={currentProperty} plan={plan} />;
       case 'jobs':
-        return <JobsSubPage dispatches={dispatches} loading={loadingDispatches} workspaceId={workspaceId} propertyId={currentProperty.id} />;
+        return <JobsSubPage dispatches={dispatches} setDispatches={setDispatches} loading={loadingDispatches} workspaceId={workspaceId} propertyId={currentProperty.id} propertyName={currentProperty.name} />;
       case 'bookings':
         return <BookingsSubPage bookings={bookings} loading={loadingBookings} workspaceId={workspaceId} />;
       case 'calendar':

@@ -68,7 +68,7 @@ const DPC_CHANNELS = [
 
 /* ── Tracking Share Modal ──────────────────────────────────────────── */
 
-function TrackingShareModal({ jobId, propertyName, onClose }: { jobId: string; propertyName?: string; onClose: () => void }) {
+export function TrackingShareModal({ jobId, propertyName, onClose }: { jobId: string; propertyName?: string; onClose: () => void }) {
   const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
   const [creating, setCreating] = useState(true);
   const [copied, setCopied] = useState(false);
