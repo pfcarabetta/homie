@@ -2065,7 +2065,48 @@ export default function BusinessChat() {
 
 
   return (
-    <div className="b2b-root" data-theme={b2bTheme} style={{ height: '100%', background: 'var(--bp-card)', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div
+      className="b2b-root"
+      data-theme={b2bTheme}
+      style={{
+        // Inline --bp-* CSS vars guarantee the chat's theme wins over any
+        // wrapper (.bp-portal, layout shell, etc.) regardless of CSS
+        // specificity. Inline styles trump every non-!important rule, so
+        // once useBusinessChatTheme resolves, the whole subtree flips
+        // immediately — no race with parent theme toggles, no dependency
+        // on stylesheet loading order.
+        ...(b2bTheme === 'dark' ? {
+          '--bp-bg': '#1A1A1A',
+          '--bp-card': '#242424',
+          '--bp-input': '#2E2E2E',
+          '--bp-text': '#E8E4E0',
+          '--bp-muted': '#9B9490',
+          '--bp-subtle': '#6B6560',
+          '--bp-border': '#3A3A3A',
+          '--bp-hover': '#2E2E2E',
+          '--bp-header': '#1E1E1E',
+          '--bp-warm': '#2E2E2E',
+        } : {
+          '--bp-bg': '#F9F5F2',
+          '--bp-card': '#ffffff',
+          '--bp-input': '#ffffff',
+          '--bp-text': '#2D2926',
+          '--bp-muted': '#6B6560',
+          '--bp-subtle': '#9B9490',
+          '--bp-border': '#E0DAD4',
+          '--bp-hover': '#FAFAF8',
+          '--bp-header': '#ffffff',
+          '--bp-warm': '#F9F5F2',
+        }),
+        colorScheme: b2bTheme,
+        height: '100%',
+        background: 'var(--bp-card)',
+        color: 'var(--bp-text)',
+        fontFamily: "'DM Sans', sans-serif",
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      } as React.CSSProperties}>
       <style>{`
         /* --bp-* theme tokens for the business chat surface.
            Three layers (from lowest to highest priority):
