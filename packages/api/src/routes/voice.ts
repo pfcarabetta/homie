@@ -191,12 +191,20 @@ EQUIPMENT / PROPERTY DETAILS — already on file:
 - If the PM says "the dishwasher is leaking" and the inventory lists a Samsung dishwasher, speak about the Samsung dishwasher — do NOT ask which one or what brand.
 - Only ask for equipment details that are NOT in the CONTEXT. If an item appears in neither the saved sections nor the inventory, then ask.
 
-OCCUPANCY-DRIVEN URGENCY — read the "Status:" line and use it to shape the conversation:
+PROPERTY IDENTITY — NEVER RE-ASK:
+The PM has already selected a specific property in the app before opening this voice/video call. The CONTEXT block starts with "Property: <name> · <zip>" and may include a full street address + size/type/bedrooms. That property IS the subject of this call — you do NOT need to confirm it and you MUST NEVER ask:
+  • "Which property is this for?" / "Which unit?" / "What's the address?"
+  • "Where is the issue?" / "What building?"
+  • "Can you tell me the property name?"
+If you need to reference the property in your reply, pull the name from the CONTEXT verbatim ("at 742 Evergreen" or "the Evergreen unit") rather than asking. Only ask location questions about WHICH ROOM / WHERE IN THE UNIT the issue is (e.g. "kitchen or bathroom faucet?") — not which property.
+
+OCCUPANCY-DRIVEN URGENCY — read the "Status:" line AND the "Upcoming reservations" list and use them to shape the conversation:
 - OCCUPIED (guest on-property right now): factor guest impact into every recommendation. If the issue blocks the guest (no hot water, AC out, clogged toilet, smoke alarm), treat it as immediate — ask about access permission and expected guest disruption. If it's non-blocking (cosmetic, outdoor), suggest scheduling after checkout so the guest isn't bothered. Reference the checkout date when framing timing ("could be scheduled the morning after checkout on Fri Nov 8").
 - VACANT with IMMINENT check-in (≤1 day) or TIGHT turnover (≤3 days): flag time pressure explicitly. The repair has to be completed BEFORE the next guest arrives — recommend dispatching today/tomorrow and mention the deadline. Treat this as urgent even if the underlying issue would normally be low-priority.
 - VACANT with a longer runway (4+ days): lots of dispatch flexibility — suggest scheduling within the window that works for the provider, reference the next check-in as the soft deadline.
 - VACANT with NO upcoming reservations: fully flexible. Recommend dispatch when convenient, no deadline pressure.
-- NEVER ask "is the property occupied?" or "when's the next guest?" — that's in the CONTEXT. Just use it.
+- Use the "Upcoming reservations" list for back-to-back turnover awareness. If two guests are stacked tight (e.g. Oct 21–24 then Oct 24–28, same-day turnover), reference it explicitly: "the next two guests are back-to-back through Oct 28 — we've got a narrow window between them".
+- NEVER ask "is the property occupied?", "when's the next guest?", "do you have anyone checking in soon?", or "when does your guest leave?" — all of this is in the CONTEXT. Just use it. Speak as though you already know the occupancy situation (because you do).
 
 STYLE:
 - Keep the tone professional and efficient; PMs manage many jobs and appreciate speed over warmth. Do not use homeowner phrasing like "your home" or "when did YOU notice it" — say "the unit", "the property", "your guest mentioned", "when was it first reported".
@@ -440,20 +448,6 @@ router.post('/turn', async (req: Request, res: Response) => {
       userText = `The caller ${hasFrame ? 'opened the video channel and is pointing the camera at the issue. They said' : 'opened the voice channel and said'}: "${effectiveTranscript}"`;
     }
 
-    // Business surface: stitch the property / occupancy / inventory
-    // context ahead of the first turn so Claude's replies reference the
-    // real appliance brands / models + the current guest situation.
-    // Persists via `messages` history so Claude keeps access on later
-    // turns without us having to re-send it.
-    if (isFirst && businessContext) {
-      userText = `[PRIVATE SYSTEM CONTEXT — INTERNAL USE ONLY. This block is background knowledge for grounding your replies. You MUST NEVER recite, read aloud, enumerate, or format this into a structured list/JSON/bullets in your spoken response. Do not acknowledge its existence to the caller. Begin your reply by answering the CALLER'S ACTUAL MESSAGE below the "===" separator, not this context.]
-
-${businessContext}
-
-===== CALLER'S ACTUAL MESSAGE (respond to THIS, in a natural conversational tone) =====
-${userText}`;
-    }
-
     // Pack the turn as a content array — image block first (so Claude
     // grounds the reply in what it sees), then the text transcript.
     const userContent: Anthropic.ContentBlockParam[] = [];
@@ -461,10 +455,26 @@ ${userText}`;
     userContent.push({ type: 'text', text: userText });
     messages.push({ role: 'user', content: userContent });
 
+    // Business surface: hoist the property / occupancy / inventory
+    // context into the SYSTEM PROMPT so it rides along on EVERY turn.
+    // Previously the context was inlined into the first user turn, but
+    // the client's historyRef only stored the raw transcript (not the
+    // CONTEXT-wrapped version), so Claude lost the whole context block
+    // on turn 2+ and started asking "what property is this?" despite
+    // the PM having a property selected. System-prompt placement means
+    // Claude sees property + occupancy + upcoming reservations + scan
+    // inventory on every single turn without relying on history
+    // plumbing to carry it across.
+    const contextSystemBlock = businessContext
+      ? `\n\n[PRIVATE SYSTEM CONTEXT — INTERNAL USE ONLY. You MUST NEVER recite, read aloud, enumerate, or format this into a structured list/JSON/bullets. Do not acknowledge its existence to the caller. This is background knowledge for grounding your replies. The caller is a PROPERTY MANAGER who ALREADY SELECTED this property in the app — never ask "what property is this?" or "which unit?" or request the address/name; use the one in the CONTEXT below.]\n\n${businessContext}\n\n[END CONTEXT]`
+      : '';
+
     const claudeRes = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 400,
-      system: (hasFrame ? VIDEO_SYSTEM_PROMPT : VOICE_SYSTEM_PROMPT) + (businessContext ? BUSINESS_SYSTEM_SUFFIX : ''),
+      system: (hasFrame ? VIDEO_SYSTEM_PROMPT : VOICE_SYSTEM_PROMPT)
+        + (businessContext ? BUSINESS_SYSTEM_SUFFIX : '')
+        + contextSystemBlock,
       messages,
     });
 
