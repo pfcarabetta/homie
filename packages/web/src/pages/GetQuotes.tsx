@@ -2154,6 +2154,49 @@ Write ONLY the summary — no questions, no conversational language, no greeting
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addUser]);
 
+  // ── Smart-suggestion prefill ──────────────────────────────────────────
+  // The dashboard's smart-suggestion tiles navigate here with the
+  // suggestion's description in `?prefill=...` (plus optional `title`,
+  // `category`, `reason`). We auto-submit it through handleDirectText
+  // exactly as if the user had typed it themselves — no extra UI to
+  // dismiss or confirm. Skips when:
+  //   • a saved snapshot is already mid-conversation (user returning
+  //     to an in-flight intake — don't clobber their context), OR
+  //   • the URL has no prefill param.
+  // Strips the params from the URL after consumption so a reload
+  // doesn't re-fire the prefill.
+  const prefillConsumedRef = useRef(false);
+  useEffect(() => {
+    if (prefillConsumedRef.current) return;
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const prefill = params.get('prefill');
+    if (!prefill || prefill.trim().length < 12) return;
+    // Don't override an in-flight chat the user might be returning to.
+    if (messages.length > 0 || data.category || data.a1) return;
+    prefillConsumedRef.current = true;
+    // Title + reason layered above the description give the AI a
+    // richer first turn ("Yearly water-heater flush — Stay ahead of
+    // sediment buildup; the 2018 Rheem unit at your place is due").
+    const title = params.get('title');
+    const reason = params.get('reason');
+    const composed = [
+      title && title !== prefill ? title : null,
+      prefill,
+      reason ? `(why now: ${reason})` : null,
+    ].filter(Boolean).join(' — ');
+    handleDirectText(composed);
+    // Strip from URL so a refresh doesn't re-prefill.
+    const cleaned = new URLSearchParams(params);
+    cleaned.delete('prefill');
+    cleaned.delete('title');
+    cleaned.delete('category');
+    cleaned.delete('reason');
+    const qs = cleaned.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const repairGroups = CATEGORY_TREE.filter(g => g.type === 'repair').map(g => ({ id: g.label, icon: g.icon, label: g.label }));
   const serviceGroups = CATEGORY_TREE.filter(g => g.type === 'service').map(g => ({ id: g.label, icon: g.icon, label: g.label }));
 

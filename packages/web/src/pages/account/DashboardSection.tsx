@@ -52,6 +52,11 @@ interface DashboardSectionProps {
   onNavigate: (tab: AccountTab) => void;
   onNewQuote: () => void;
   onDiagnostic: () => void;
+  /** Optional — fires when a smart-suggestion tile's "Get a quote"
+   *  button is tapped. Receives the full suggestion so the parent can
+   *  navigate to /quote with prefill params instead of opening a blank
+   *  chat. Falls back to onNewQuote if omitted. */
+  onSuggestionAct?: (s: SmartSuggestion) => void;
 }
 
 interface ActivityItem {
@@ -89,7 +94,7 @@ function statusColor(status: string): { bg: string; text: string } {
   }
 }
 
-export default function DashboardSection({ userFirstName, onNavigate, onNewQuote, onDiagnostic }: DashboardSectionProps) {
+export default function DashboardSection({ userFirstName, onNavigate, onNewQuote, onDiagnostic, onSuggestionAct }: DashboardSectionProps) {
   const [jobs, setJobs] = useState<AccountJob[]>([]);
   const [bookings, setBookings] = useState<AccountBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,7 +213,7 @@ export default function DashboardSection({ userFirstName, onNavigate, onNewQuote
       </div>
 
       {/* Smart Suggestions — seasonal + location + equipment-aware */}
-      <SmartSuggestions onNewQuote={onNewQuote} onNavigate={onNavigate} />
+      <SmartSuggestions onNewQuote={onNewQuote} onNavigate={onNavigate} onSuggestionAct={onSuggestionAct} />
 
       {/* Recent activity */}
       <div style={{ background: '#fff', borderRadius: 14, padding: '20px 22px', border: '1px solid rgba(0,0,0,0.06)' }}>
@@ -298,9 +303,14 @@ function Tile({ label, value, sub, accent, onClick, fontSize = 22 }: {
 
 // ── Smart Suggestions ──────────────────────────────────────────────────────
 
-function SmartSuggestions({ onNewQuote, onNavigate }: {
+function SmartSuggestions({ onNewQuote, onNavigate, onSuggestionAct }: {
   onNewQuote: () => void;
   onNavigate: (tab: AccountTab) => void;
+  /** Optional: when a tile's "Get a quote" button is tapped with the
+   *  full SmartSuggestion in hand. If set, parent uses it to navigate
+   *  to /quote with prefill params; otherwise we fall back to the plain
+   *  onNewQuote. */
+  onSuggestionAct?: (s: SmartSuggestion) => void;
 }) {
   const [suggestions, setSuggestions] = useState<SmartSuggestion[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -422,7 +432,7 @@ function SmartSuggestions({ onNewQuote, onNavigate }: {
             <SuggestionTile
               key={`${s.title}-${i}`}
               suggestion={s}
-              onAct={onNewQuote}
+              onAct={() => (onSuggestionAct ? onSuggestionAct(s) : onNewQuote())}
               onDismiss={() => dismiss(s.title)}
             />
           ))}

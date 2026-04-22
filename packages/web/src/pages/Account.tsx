@@ -2209,6 +2209,18 @@ export default function Account() {
           onNavigate={handleNavigate}
           onNewQuote={() => navigate('/quote')}
           onDiagnostic={() => navigate('/chat')}
+          onSuggestionAct={(s) => {
+            // Prefill /quote with the suggestion's description so the
+            // chat opens straight into the diagnostic flow with the
+            // PM's intent already typed in. Title + reason ride along
+            // for richer context if /quote wants to surface them.
+            const params = new URLSearchParams();
+            params.set('prefill', s.description || s.title);
+            if (s.title) params.set('title', s.title);
+            if (s.category) params.set('category', s.category);
+            if (s.reason) params.set('reason', s.reason);
+            navigate(`/quote?${params.toString()}`);
+          }}
         />
       )}
       {activeTab === 'profile' && <ProfileTab />}
