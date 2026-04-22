@@ -3102,10 +3102,7 @@ export default function BusinessChat() {
             property={selectedProperty}
             categoryLabel={category?.label ?? null}
             step={step}
-          />
-          <B2BChecklistCard
             propertySelected={!!selectedProperty}
-            categoryLabel={category?.label ?? null}
             describedIssue={!!q1Answer || messages.some(m => m.role === 'user')}
             // Only count equipment the AI captured DURING this chat session
             // — not the entire scan inventory (which is always populated
@@ -3119,7 +3116,6 @@ export default function BusinessChat() {
             // a voice dispatch sets it implicitly). The default '' value
             // for `timing` keeps this false at session start.
             urgencyConfirmed={!!timing}
-            step={step}
           />
           <B2BPropertyIQCard
             propertyId={selectedProperty?.id ?? null}
@@ -3297,19 +3293,46 @@ function B2BPropertyContextCard({
   );
 }
 
+/** "Homie is listening" panel — merges the diagnosis-grid header, status
+ *  panel, and the live Checklist into a single right-rail card. Mirrors
+ *  the /quote panel layout: panel header → diagnosis grid → divider →
+ *  checklist (with NEXT pill on the first incomplete row). One card
+ *  instead of two keeps the right rail visually anchored and gives the
+ *  progress signal more room to breathe. */
 function B2BHomieThinksCard({
   property, categoryLabel, step,
+  propertySelected, describedIssue, equipmentCaptured,
+  mediaAttached, voiceUsed, dispatchReady, urgencyConfirmed,
 }: {
   property: { name: string } | null;
   categoryLabel: string | null;
   step: string;
+  propertySelected: boolean;
+  describedIssue: boolean;
+  equipmentCaptured: boolean;
+  mediaAttached: boolean;
+  voiceUsed: boolean;
+  dispatchReady: boolean;
+  urgencyConfirmed: boolean;
 }) {
   const ready = !!categoryLabel;
+  const items: Array<{ done: boolean; txt: string; opt?: boolean }> = [
+    { done: propertySelected, txt: propertySelected ? 'Property selected' : 'Pick a property' },
+    { done: !!categoryLabel, txt: categoryLabel ? `Category: ${categoryLabel}` : 'Matching a category' },
+    { done: describedIssue, txt: describedIssue ? 'Issue described' : 'Describe the issue' },
+    { done: equipmentCaptured, txt: equipmentCaptured ? 'Equipment captured' : 'Equipment on file', opt: true },
+    { done: mediaAttached || voiceUsed, txt: 'Photo / video / voice attached', opt: true },
+    { done: dispatchReady, txt: dispatchReady ? 'Dispatch brief ready' : 'Generate dispatch brief' },
+    { done: urgencyConfirmed || dispatchReady, txt: urgencyConfirmed || dispatchReady ? 'Urgency set' : 'Next: confirm urgency & dispatch' },
+  ];
+  const nextIdx = items.findIndex(x => !x.done);
+
   return (
     <div style={{
       background: _CARD_R, borderRadius: 18, border: `1px solid ${_BORDER_R}`,
       padding: 18, boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
     }}>
+      {/* Panel header — avatar + label */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <div style={{ width: 34, height: 34, borderRadius: 10, background: _O_R, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
           <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
@@ -3322,6 +3345,10 @@ function B2BHomieThinksCard({
           <div style={{ fontSize: 11, color: _DIM_R, fontFamily: "'DM Mono',monospace", letterSpacing: .4, textTransform: 'uppercase' }}>updates as you chat</div>
         </div>
       </div>
+
+      {/* Diagnosis grid — property / category / step / priority.
+          Collapses to a "start describing" empty-state until a category
+          has been inferred. */}
       {ready ? (
         <div style={{
           display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: 12, borderRadius: 12, background: _W_R,
@@ -3348,73 +3375,40 @@ function B2BHomieThinksCard({
           Start describing — I'll read along ↗
         </div>
       )}
-    </div>
-  );
-}
 
-/** Live diagnostic checklist that hangs underneath B2BHomieThinksCard.
- *  Mirrors the /quote checklist pattern so PMs see the same "what's
- *  ticked off so far / what's NEXT" progress signal they get on the
- *  homeowner side. Each row has a green check when done, a soft hollow
- *  circle when pending, and a NEXT pill on the first incomplete row. */
-function B2BChecklistCard({
-  propertySelected, categoryLabel, describedIssue, equipmentCaptured,
-  mediaAttached, voiceUsed, dispatchReady, urgencyConfirmed, step,
-}: {
-  propertySelected: boolean;
-  categoryLabel: string | null;
-  describedIssue: boolean;
-  equipmentCaptured: boolean;
-  mediaAttached: boolean;
-  voiceUsed: boolean;
-  dispatchReady: boolean;
-  urgencyConfirmed: boolean;
-  step: string;
-}) {
-  const items: Array<{ done: boolean; txt: string; opt?: boolean }> = [
-    { done: propertySelected, txt: propertySelected ? 'Property selected' : 'Pick a property' },
-    { done: !!categoryLabel, txt: categoryLabel ? `Category: ${categoryLabel}` : 'Matching a category' },
-    { done: describedIssue, txt: describedIssue ? 'Issue described' : 'Describe the issue' },
-    { done: equipmentCaptured, txt: equipmentCaptured ? 'Equipment captured' : 'Equipment on file', opt: true },
-    { done: mediaAttached || voiceUsed, txt: 'Photo / video / voice attached', opt: true },
-    { done: dispatchReady, txt: dispatchReady ? 'Dispatch brief ready' : 'Generate dispatch brief' },
-    { done: urgencyConfirmed || dispatchReady, txt: urgencyConfirmed || dispatchReady ? 'Urgency set' : 'Next: confirm urgency & dispatch' },
-  ];
-  const nextIdx = items.findIndex(x => !x.done);
-
-  return (
-    <div style={{
-      background: _CARD_R, borderRadius: 18, border: `1px solid ${_BORDER_R}`,
-      padding: 16, boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
-    }}>
-      <div style={{ fontSize: 11, color: _DIM_R, textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: 700, marginBottom: 10, fontFamily: "'DM Mono',monospace" }}>
-        Checklist
-      </div>
-      <div style={{ display: 'grid', gap: 6 }}>
-        {items.map((p, i) => (
-          <div key={i} style={{
-            display: 'flex', alignItems: 'center', gap: 12, padding: '9px 11px', borderRadius: 10,
-            background: p.done ? `${_G_R}13` : 'transparent',
-            border: `1px solid ${p.done ? `${_G_R}33` : 'transparent'}`,
-            transition: 'all .2s',
-          }}>
-            <div style={{
-              width: 18, height: 18, borderRadius: '50%',
-              background: p.done ? _G_R : 'transparent',
-              border: p.done ? 'none' : `1.5px solid ${_BORDER_R}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 10, fontWeight: 700, flexShrink: 0,
+      {/* Checklist — merged inline below the diagnosis grid. Each row
+          gets a green check + green tint when done, hollow circle when
+          pending, orange NEXT pill on the first incomplete row. */}
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px dashed ${_BORDER_R}` }}>
+        <div style={{ fontSize: 10.5, color: _DIM_R, textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: 700, marginBottom: 8, fontFamily: "'DM Mono',monospace" }}>
+          Checklist
+        </div>
+        <div style={{ display: 'grid', gap: 5 }}>
+          {items.map((p, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9,
+              background: p.done ? `${_G_R}13` : 'transparent',
+              border: `1px solid ${p.done ? `${_G_R}33` : 'transparent'}`,
+              transition: 'all .2s',
             }}>
-              {p.done ? '✓' : ''}
+              <div style={{
+                width: 16, height: 16, borderRadius: '50%',
+                background: p.done ? _G_R : 'transparent',
+                border: p.done ? 'none' : `1.5px solid ${_BORDER_R}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: 9, fontWeight: 700, flexShrink: 0,
+              }}>
+                {p.done ? '✓' : ''}
+              </div>
+              <div style={{ flex: 1, fontSize: 12, color: p.done ? _D_R : _DIM_R, fontWeight: p.done ? 600 : 500, fontFamily: "'DM Sans',sans-serif", minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {p.txt} {p.opt && <span style={{ fontSize: 9.5, color: _DIM_R, fontWeight: 500, marginLeft: 3 }}>(optional)</span>}
+              </div>
+              {i === nextIdx && step !== 'outreach' && step !== 'results' && (
+                <span style={{ fontSize: 9, color: _O_R, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, flexShrink: 0 }}>NEXT</span>
+              )}
             </div>
-            <div style={{ flex: 1, fontSize: 12.5, color: p.done ? _D_R : _DIM_R, fontWeight: p.done ? 600 : 500, fontFamily: "'DM Sans',sans-serif", minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {p.txt} {p.opt && <span style={{ fontSize: 10, color: _DIM_R, fontWeight: 500, marginLeft: 4 }}>(optional)</span>}
-            </div>
-            {i === nextIdx && step !== 'outreach' && step !== 'results' && (
-              <span style={{ fontSize: 9.5, color: _O_R, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, flexShrink: 0 }}>NEXT</span>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
