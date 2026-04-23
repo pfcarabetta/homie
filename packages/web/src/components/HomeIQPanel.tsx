@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   correlateItemToChat, dedupeInventory, iqCategoryKeyFromLabel,
   iqLabelFor, IQ_CATEGORY_MATCH, computeSharedItemTypeWords,
 } from '@/utils/home-iq';
 import type { PropertyInventoryItem } from '@homie/shared';
+
+/** Exit /quote cleanly when jumping to /account or /login. Matches the
+ *  back-arrow pattern in GetQuotes' nav — react-router's navigate()
+ *  doesn't reliably land users on these routes from inside the quote
+ *  chat because of SPA state still holding references. A hard
+ *  navigation tears everything down. */
+function hardGo(href: string): void {
+  if (typeof window !== 'undefined') window.location.href = href;
+}
 
 /**
  * Home IQ panel for the consumer /quote chat — mirrors the business-side
@@ -50,7 +58,6 @@ interface HomeIQPanelProps {
 }
 
 export default function HomeIQPanel(props: HomeIQPanelProps) {
-  const navigate = useNavigate();
   const [editTarget, setEditTarget] = useState<PropertyInventoryItem | null>(null);
 
   // ── Anonymous state ────────────────────────────────────────────────
@@ -61,7 +68,7 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
         <div style={{ fontSize: 12, color: DIM, lineHeight: 1.5, marginBottom: 12 }}>
           Sign in and Homie remembers your appliances — faster diagnostics, better pro matches, no re-typing the model number every time.
         </div>
-        <button onClick={() => navigate('/login')} style={primaryBtn}>Sign in</button>
+        <button onClick={() => hardGo('/login')} style={primaryBtn}>Sign in</button>
       </div>
     );
   }
@@ -93,7 +100,7 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
         <div style={{ fontSize: 12, color: DIM, lineHeight: 1.5, marginBottom: 12 }}>
           Add your water heater, HVAC, appliances — Homie will use them for sharper diagnoses and accurate quotes.
         </div>
-        <button onClick={() => navigate('/account?tab=home')} style={primaryBtn}>
+        <button onClick={() => hardGo('/account?tab=home')} style={primaryBtn}>
           Add equipment →
         </button>
       </div>
@@ -162,7 +169,7 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
           </div>
         )}
         <div style={{ marginTop: 12, textAlign: 'right' }}>
-          <button onClick={() => navigate('/account?tab=home')} style={secondaryBtn}>
+          <button onClick={() => hardGo('/account?tab=home')} style={secondaryBtn}>
             Manage equipment →
           </button>
         </div>
@@ -174,7 +181,7 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
           onClose={() => setEditTarget(null)}
           onGoToAccount={() => {
             setEditTarget(null);
-            navigate('/account?tab=home');
+            hardGo('/account?tab=home');
           }}
         />
       )}
