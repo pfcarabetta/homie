@@ -59,7 +59,7 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
       <div style={shell(false)}>
         <Header subtitle="Personalize your quotes" />
         <div style={{ fontSize: 12, color: DIM, lineHeight: 1.5, marginBottom: 12 }}>
-          Sign in and Homie remembers your appliances \u2014 faster diagnostics, better pro matches, no re-typing the model number every time.
+          Sign in and Homie remembers your appliances — faster diagnostics, better pro matches, no re-typing the model number every time.
         </div>
         <button onClick={() => navigate('/login')} style={primaryBtn}>Sign in</button>
       </div>
@@ -70,7 +70,7 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
   if (props.loading) {
     return (
       <div style={shell(false)}>
-        <Header subtitle="Loading\u2026" />
+        <Header subtitle="Loading…" />
         <div style={{ display: 'grid', gap: 6 }}>
           {[0, 1, 2].map(i => (
             <div key={i} style={{
@@ -91,10 +91,10 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
       <div style={shell(false)}>
         <Header subtitle="No equipment on file" />
         <div style={{ fontSize: 12, color: DIM, lineHeight: 1.5, marginBottom: 12 }}>
-          Add your water heater, HVAC, appliances \u2014 Homie will use them for sharper diagnoses and accurate quotes.
+          Add your water heater, HVAC, appliances — Homie will use them for sharper diagnoses and accurate quotes.
         </div>
         <button onClick={() => navigate('/account?tab=home')} style={primaryBtn}>
-          Add equipment \u2192
+          Add equipment →
         </button>
       </div>
     );
@@ -120,17 +120,17 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
   if (!hasChatHits && !hasCategory) {
     return (
       <div style={shell(false)}>
-        <Header subtitle={`${items.length} on file \u00b7 ready`} />
+        <Header subtitle={`${items.length} on file · ready`} />
         <div style={{ fontSize: 12, color: DIM, lineHeight: 1.5 }}>
-          Mention an appliance or system \u2014 Homie will surface the matching equipment here.
+          Mention an appliance or system — Homie will surface the matching equipment here.
         </div>
       </div>
     );
   }
 
   const titleSuffix = hasChatHits
-    ? ' \u00b7 in chat'
-    : hasCategory && props.categoryLabel ? ` \u00b7 ${props.categoryLabel}` : '';
+    ? ' · in chat'
+    : hasCategory && props.categoryLabel ? ` · ${props.categoryLabel}` : '';
 
   return (
     <>
@@ -144,7 +144,7 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
             padding: 10, borderRadius: 10, background: W,
             fontSize: 12, color: DIM, lineHeight: 1.5,
           }}>
-            No {props.categoryLabel?.toLowerCase() ?? 'matching'} equipment on file \u2014 Homie will record what you mention.
+            No {props.categoryLabel?.toLowerCase() ?? 'matching'} equipment on file — Homie will record what you mention.
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 6 }}>
@@ -159,7 +159,7 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
         )}
         <div style={{ marginTop: 12, textAlign: 'right' }}>
           <button onClick={() => navigate('/account?tab=home')} style={secondaryBtn}>
-            Manage equipment \u2192
+            Manage equipment →
           </button>
         </div>
       </div>
@@ -209,9 +209,9 @@ export function HomeIQInlineChip({
           width: 22, height: 22, borderRadius: 7, background: `${O}14`,
           border: `1px solid ${O}33`, display: 'flex', alignItems: 'center',
           justifyContent: 'center', fontSize: 12,
-        }}>{'\uD83E\uDDE0'}</div>
+        }}>{'🧠'}</div>
         <span style={{ fontFamily: "'Fraunces',serif", fontSize: 12.5, fontWeight: 700, color: D }}>
-          Home IQ \u00b7 {correlated.length} {correlated.length === 1 ? 'match' : 'matches'}
+          Home IQ · {correlated.length} {correlated.length === 1 ? 'match' : 'matches'}
         </span>
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
@@ -230,7 +230,7 @@ function Header({ titleSuffix, subtitle }: { titleSuffix?: string; subtitle: str
         width: 30, height: 30, borderRadius: 9, background: `${O}14`,
         border: `1px solid ${O}33`, display: 'flex', alignItems: 'center',
         justifyContent: 'center', fontSize: 15, flexShrink: 0,
-      }}>{'\uD83E\uDDE0'}</div>
+      }}>{'🧠'}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, color: D }}>
           Home IQ{titleSuffix || ''}
@@ -278,19 +278,19 @@ function HomeIQRow({ item, onClick }: { item: PropertyInventoryItem; onClick?: (
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 12, flexShrink: 0,
       }}>
-        {item.category === 'appliance' && '\uD83C\uDF73'}
-        {item.category === 'fixture' && '\uD83D\uDEB0'}
-        {item.category === 'system' && '\u2744\uFE0F'}
-        {item.category === 'safety' && '\uD83D\uDEE1\uFE0F'}
-        {item.category === 'amenity' && '\u2728'}
-        {item.category === 'infrastructure' && '\uD83D\uDD28'}
+        {item.category === 'appliance' && '🍳'}
+        {item.category === 'fixture' && '🚰'}
+        {item.category === 'system' && '❄️'}
+        {item.category === 'safety' && '🛡️'}
+        {item.category === 'amenity' && '✨'}
+        {item.category === 'infrastructure' && '🔨'}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontFamily: "'Fraunces',serif", fontSize: 12.5, fontWeight: 700, color: D,
           lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          {[item.brand, item.modelNumber].filter(Boolean).join(' \u00b7 ') || iqLabelFor(item.itemType)}
+          {[item.brand, item.modelNumber].filter(Boolean).join(' · ') || iqLabelFor(item.itemType)}
         </div>
         <div style={{
           fontSize: 10, color: DIM, marginTop: 2,
@@ -299,13 +299,13 @@ function HomeIQRow({ item, onClick }: { item: PropertyInventoryItem; onClick?: (
           <span style={{ textTransform: 'capitalize' }}>{iqLabelFor(item.itemType)}</span>
           {ageYears !== null && (
             <>
-              <span style={{ opacity: 0.4 }}>\u00b7</span>
+              <span style={{ opacity: 0.4 }}>·</span>
               <span>{Math.round(ageYears)}yr</span>
             </>
           )}
           {item.condition && item.condition !== 'good' && (
             <>
-              <span style={{ opacity: 0.4 }}>\u00b7</span>
+              <span style={{ opacity: 0.4 }}>·</span>
               <span style={{ color: item.condition === 'poor' ? RED : AMBER, fontWeight: 700 }}>
                 {item.condition}
               </span>
@@ -315,7 +315,7 @@ function HomeIQRow({ item, onClick }: { item: PropertyInventoryItem; onClick?: (
       </div>
       {clickable && (
         <div style={{ fontSize: 11, color: DIM, flexShrink: 0, alignSelf: 'center' }}>
-          {'\u270F\uFE0F'}
+          {'✏️'}
         </div>
       )}
     </button>
@@ -329,7 +329,7 @@ function EditItemModal({
   onClose: () => void;
   onGoToAccount: () => void;
 }) {
-  const name = [item.brand, item.modelNumber].filter(Boolean).join(' \u00b7 ') || iqLabelFor(item.itemType);
+  const name = [item.brand, item.modelNumber].filter(Boolean).join(' · ') || iqLabelFor(item.itemType);
   const missing: string[] = [];
   if (!item.brand) missing.push('brand');
   if (!item.modelNumber) missing.push('model number');
@@ -352,7 +352,7 @@ function EditItemModal({
         }}
       >
         <div style={{ fontSize: 11, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>
-          Home IQ \u00b7 {iqLabelFor(item.itemType)}
+          Home IQ · {iqLabelFor(item.itemType)}
         </div>
         <div style={{ fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700, color: D, marginBottom: 10 }}>
           {name}
@@ -360,9 +360,9 @@ function EditItemModal({
 
         <div style={{ background: W, borderRadius: 12, padding: 14, marginBottom: 16 }}>
           <Row label="Type" value={iqLabelFor(item.itemType)} />
-          <Row label="Brand" value={item.brand || '\u2014'} missing={!item.brand} />
-          <Row label="Model" value={item.modelNumber || '\u2014'} missing={!item.modelNumber} />
-          <Row label="Age" value={item.estimatedAgeYears ? `${Math.round(parseFloat(item.estimatedAgeYears))} yrs` : '\u2014'} missing={!item.estimatedAgeYears} />
+          <Row label="Brand" value={item.brand || '—'} missing={!item.brand} />
+          <Row label="Model" value={item.modelNumber || '—'} missing={!item.modelNumber} />
+          <Row label="Age" value={item.estimatedAgeYears ? `${Math.round(parseFloat(item.estimatedAgeYears))} yrs` : '—'} missing={!item.estimatedAgeYears} />
           {item.condition && <Row label="Condition" value={item.condition.replace(/_/g, ' ')} />}
           {item.fuelType && <Row label="Fuel" value={item.fuelType} />}
           {item.capacity && <Row label="Capacity" value={item.capacity} />}
@@ -373,13 +373,13 @@ function EditItemModal({
             padding: 10, borderRadius: 10, background: `${O}08`, border: `1px solid ${O}22`,
             marginBottom: 16, fontSize: 12, color: D, lineHeight: 1.5,
           }}>
-            <strong>Fill in {missing.join(', ')}</strong> \u2014 Homie will use it in every future chat so you don\u2019t have to re-describe this {iqLabelFor(item.itemType).toLowerCase()}.
+            <strong>Fill in {missing.join(', ')}</strong> — Homie will use it in every future chat so you don’t have to re-describe this {iqLabelFor(item.itemType).toLowerCase()}.
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onClose} style={{ ...secondaryBtn, flex: 1 }}>Close</button>
-          <button onClick={onGoToAccount} style={{ ...primaryBtn, flex: 1 }}>Edit in Home IQ \u2192</button>
+          <button onClick={onGoToAccount} style={{ ...primaryBtn, flex: 1 }}>Edit in Home IQ →</button>
         </div>
       </div>
     </div>

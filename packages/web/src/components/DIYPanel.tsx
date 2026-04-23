@@ -108,7 +108,7 @@ export default function DIYPanel({
         <div style={{
           width: 32, height: 32, borderRadius: 8, background: `${G}15`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
-        }}>{'\uD83D\uDD27'}</div>
+        }}>{'🔧'}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
             Or try fixing it yourself?
@@ -120,7 +120,7 @@ export default function DIYPanel({
         <div style={{
           fontSize: 18, color: DIM, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.2s', flexShrink: 0,
-        }}>{'\u25BE'}</div>
+        }}>{'▾'}</div>
       </button>
 
       {expanded && (
@@ -148,14 +148,14 @@ export default function DIYPanel({
 }
 
 function subtitle(a: DIYAnalysisPayload | null, loading: boolean): string {
-  if (loading) return 'Loading\u2026';
+  if (loading) return 'Loading…';
   if (!a) return 'Step-by-step guide + tools';
-  if (!a.feasible) return 'This one\u2019s better left to a pro';
+  if (!a.feasible) return 'This one’s better left to a pro';
   const parts: string[] = [];
   if (a.difficulty) parts.push(capitalize(a.difficulty));
   if (a.timeEstimate) parts.push(a.timeEstimate);
-  if (a.costDiyCents) parts.push(`~$${Math.round(a.costDiyCents.min / 100)}\u2013$${Math.round(a.costDiyCents.max / 100)} in parts`);
-  return parts.length ? parts.join(' \u00b7 ') : 'Step-by-step guide';
+  if (a.costDiyCents) parts.push(`~$${Math.round(a.costDiyCents.min / 100)}–$${Math.round(a.costDiyCents.max / 100)} in parts`);
+  return parts.length ? parts.join(' · ') : 'Step-by-step guide';
 }
 
 function LoadingState() {
@@ -171,7 +171,7 @@ function LoadingState() {
       ))}
       <style>{`@keyframes diyShimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }`}</style>
       <div style={{ fontSize: 12, color: DIM, textAlign: 'center', marginTop: 4 }}>
-        Generating a DIY guide for you\u2026
+        Generating a DIY guide for you…
       </div>
     </div>
   );
@@ -205,7 +205,7 @@ function NotFeasibleContent({ analysis, onBackToPro }: { analysis: DIYAnalysisPa
       </div>
       {analysis.safetyWarnings.length > 0 && (
         <>
-          <SectionHeader tone="warn">Why this isn\u2019t DIY</SectionHeader>
+          <SectionHeader tone="warn">Why this isn’t DIY</SectionHeader>
           <ul style={{ margin: '0 0 16px', paddingLeft: 18, color: D, fontSize: 13, lineHeight: 1.6 }}>
             {analysis.safetyWarnings.map((w, i) => <li key={i} style={{ marginBottom: 4 }}>{w}</li>)}
           </ul>
@@ -215,7 +215,7 @@ function NotFeasibleContent({ analysis, onBackToPro }: { analysis: DIYAnalysisPa
         width: '100%', padding: '12px 16px', background: O, border: 'none',
         color: '#fff', fontWeight: 600, borderRadius: 10, cursor: 'pointer',
         fontSize: 14, fontFamily: "'DM Sans', sans-serif",
-      }}>Get pro quotes \u2192</button>
+      }}>Get pro quotes →</button>
     </div>
   );
 }
@@ -231,11 +231,11 @@ function FeasibleContent({ analysis, onBackToPro }: { analysis: DIYAnalysisPaylo
         {analysis.timeEstimate && <Chip label="Time" value={analysis.timeEstimate} />}
         {analysis.costDiyCents && (
           <Chip label="DIY cost" accent={G}
-            value={`$${Math.round(analysis.costDiyCents.min / 100)}\u2013$${Math.round(analysis.costDiyCents.max / 100)}`} />
+            value={`$${Math.round(analysis.costDiyCents.min / 100)}–$${Math.round(analysis.costDiyCents.max / 100)}`} />
         )}
         {analysis.costProCents && (
           <Chip label="Pro cost" accent={DIM} strike
-            value={`$${Math.round(analysis.costProCents.min / 100)}\u2013$${Math.round(analysis.costProCents.max / 100)}`} />
+            value={`$${Math.round(analysis.costProCents.min / 100)}–$${Math.round(analysis.costProCents.max / 100)}`} />
         )}
         {analysis.difficulty && <Chip label="Difficulty" value={capitalize(analysis.difficulty)} />}
       </div>
@@ -300,10 +300,10 @@ function FeasibleContent({ analysis, onBackToPro }: { analysis: DIYAnalysisPaylo
         border: `1.5px solid ${O}`, color: O, fontWeight: 600,
         borderRadius: 10, cursor: 'pointer', fontSize: 14,
         fontFamily: "'DM Sans', sans-serif",
-      }}>Didn\u2019t work? Get pro quotes \u2192</button>
+      }}>Didn’t work? Get pro quotes →</button>
 
       <p style={{ fontSize: 10.5, color: '#9B9490', marginTop: 10, marginBottom: 0, lineHeight: 1.5, textAlign: 'center' }}>
-        Homie earns a small commission from qualifying Amazon purchases. It doesn\u2019t change your price.
+        Homie earns a small commission from qualifying Amazon purchases. It doesn’t change your price.
       </p>
     </>
   );
@@ -333,7 +333,7 @@ function ToolRow({ tool }: { tool: DIYToolSupply }) {
         width: 28, height: 28, borderRadius: 6, background: W,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 14, flexShrink: 0,
-      }}>{tool.essential ? '\uD83D\uDD29' : '\uD83D\uDCE6'}</div>
+      }}>{tool.essential ? '🔩' : '📦'}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 600, color: D }}>
           {tool.name}
@@ -346,7 +346,7 @@ function ToolRow({ tool }: { tool: DIYToolSupply }) {
         <div style={{ fontSize: 11.5, color: DIM, marginTop: 2 }}>Search on Amazon</div>
       </div>
       <div style={{ fontSize: 13, color: O, fontWeight: 600, flexShrink: 0 }}>
-        View \u2197
+        View ↗
       </div>
     </a>
   );

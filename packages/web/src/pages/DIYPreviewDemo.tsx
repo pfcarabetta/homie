@@ -15,7 +15,7 @@ const DIM = '#6B6560';
 
 const MOCK_SCENARIO = {
   category: 'Plumbing',
-  categoryIcon: '\uD83D\uDCA7',
+  categoryIcon: '💧',
   userFirstMessage: 'Kitchen faucet drips from the base every few seconds, mostly when hot water is on',
   aiDiagnosis:
     'Based on drip location (from the base of the spout, not the aerator) and the hot-water trigger, this is almost certainly a worn O-ring or cartridge seal. Roughly 85% of base drips on single-handle pull-down faucets resolve with a $5-$20 replacement part. Around 15% of the time the cartridge itself needs swapping.',
@@ -36,7 +36,7 @@ export default function DIYPreviewDemo() {
         {/* Demo header */}
         <div style={{ marginBottom: 24, padding: '16px 20px', background: '#FFF7ED', border: `1px solid ${O}33`, borderRadius: 12 }}>
           <div style={{ fontSize: 11, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4, textTransform: 'uppercase', color: O, fontWeight: 700, marginBottom: 4 }}>
-            Live Preview \u00b7 Production Component
+            Live Preview · Production Component
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, color: D }}>DIY fork in the quote chat</div>
           <div style={{ fontSize: 13, color: DIM, marginTop: 4, lineHeight: 1.5 }}>
@@ -63,7 +63,7 @@ export default function DIYPreviewDemo() {
           </div>
           <div style={{ padding: '16px' }}>
             <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>
-              {MOCK_SCENARIO.categoryIcon} {MOCK_SCENARIO.category} \u2014 {MOCK_SCENARIO.userFirstMessage}
+              {MOCK_SCENARIO.categoryIcon} {MOCK_SCENARIO.category} — {MOCK_SCENARIO.userFirstMessage}
             </div>
             <div style={{ fontSize: 14, color: DIM, lineHeight: 1.6, marginBottom: 8 }}>
               {MOCK_SCENARIO.aiDiagnosis}
@@ -73,11 +73,11 @@ export default function DIYPreviewDemo() {
                 <span style={{ color: '#9B9490' }}>Category:</span> <span style={{ fontWeight: 600, color: D }}>{MOCK_SCENARIO.category}</span>
               </div>
               <div style={{ background: W, padding: '6px 12px', borderRadius: 8, fontSize: 13 }}>
-                <span style={{ color: '#9B9490' }}>Est. pro cost:</span> <span style={{ fontWeight: 600, color: D }}>${MOCK_SCENARIO.estimatedCostPro.min}\u2013${MOCK_SCENARIO.estimatedCostPro.max}</span>
+                <span style={{ color: '#9B9490' }}>Est. pro cost:</span> <span style={{ fontWeight: 600, color: D }}>${MOCK_SCENARIO.estimatedCostPro.min}–${MOCK_SCENARIO.estimatedCostPro.max}</span>
               </div>
             </div>
             <p style={{ fontSize: 12, color: '#9B9490', marginTop: 12, lineHeight: 1.5 }}>
-              This diagnosis will be shared with providers so they can give you an accurate quote \u2014 no need to explain twice.
+              This diagnosis will be shared with providers so they can give you an accurate quote — no need to explain twice.
             </p>
           </div>
         </div>
@@ -98,7 +98,7 @@ export default function DIYPreviewDemo() {
           <div style={{ fontSize: 12, color: DIM, marginBottom: 8, fontWeight: 600 }}>
             Ready to get quotes?
           </div>
-          <MockTierCard name="Standard" time="Within 24 hrs" detail="3\u20135 vetted pros reach out" price="$9" />
+          <MockTierCard name="Standard" time="Within 24 hrs" detail="3–5 vetted pros reach out" price="$9" />
           <MockTierCard name="Priority" time="Within 2 hrs" detail="Faster outreach, first in queue" price="$19" popular />
           <MockTierCard name="Emergency" time="ASAP" detail="24/7 on-call pros paged now" price="$49" />
         </div>
@@ -125,7 +125,7 @@ function MockTierCard({ name, time, detail, price, popular }: {
       )}
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 700, fontSize: 16, color: D }}>
-          {name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>\u00b7 {time}</span>
+          {name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>· {time}</span>
         </div>
         <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{detail}</div>
       </div>
