@@ -84,20 +84,36 @@ export async function buildJobStatus(id: string): Promise<JobStatusResponse | nu
     }
 
     // Map attempt status → frontend activity status.
-    //   pending + no respondedAt    → contacting
-    //   responded + respondedAt set → connected (mid-conversation)
-    //   accepted                    → quoted (stitch in quote detail)
-    //   declined                    → declined
-    //   failed / other              → contacting (treat as still trying)
+    //
+    // The subtlety: outreachAttempts.status === 'accepted' means the
+    // provider SAID YES to the job, but the SMS/voice AI may or may
+    // not have extracted an actual dollar figure. A bare "yes, I'm
+    // interested" shouldn't render as "Quote received" — only a real
+    // numerical price should. We check the joined provider_response's
+    // quotedPrice to distinguish:
+    //
+    //   pending                                → contacting
+    //   responded (mid-conversation)           → connected
+    //   accepted + provider_response has price → quoted
+    //   accepted + no price yet                → connected (engaged, not priced)
+    //   declined                               → declined
+    //   failed / other                         → contacting
+    const quoteRow = responseByProvider.get(a.providerId);
+    const hasNumericQuote = !!quoteRow?.quotedPrice
+      && typeof quoteRow.quotedPrice === 'string'
+      && quoteRow.quotedPrice.trim().length > 0;
+
     let status: ProviderActivityStatus = 'contacting';
-    if (a.status === 'accepted') status = 'quoted';
+    if (a.status === 'declined') status = 'declined';
+    else if (a.status === 'accepted') status = hasNumericQuote ? 'quoted' : 'connected';
     else if (a.status === 'responded') status = a.respondedAt ? 'connected' : 'contacting';
-    else if (a.status === 'declined') status = 'declined';
 
-    const quoteRow = status === 'quoted' ? responseByProvider.get(a.providerId) : undefined;
-
+    // Inline the quote block only when the row is truly 'quoted' —
+    // otherwise the provider_response row exists but has a null price
+    // (bare "yes" case), and shipping that as a quote would mislead
+    // the UI into rendering "Quote: TBD" cards.
     activities.push({
-      id: quoteRow ? quoteRow.id : a.providerId,
+      id: status === 'quoted' && quoteRow ? quoteRow.id : a.providerId,
       provider_id: a.providerId,
       name: p?.name ?? 'Unknown provider',
       rating: p?.rating != null ? parseFloat(String(p.rating)) : null,
@@ -106,10 +122,10 @@ export async function buildJobStatus(id: string): Promise<JobStatusResponse | nu
       channel: ch,
       status,
       responded_at: a.respondedAt?.toISOString() ?? null,
-      ...(quoteRow ? {
+      ...(status === 'quoted' && quoteRow ? {
         quote: {
           response_id: quoteRow.id,
-          price_label: quoteRow.quotedPrice ?? 'TBD',
+          price_label: quoteRow.quotedPrice ?? '',
           availability: quoteRow.availability ?? 'To be confirmed',
           message: quoteRow.message ?? '',
         },

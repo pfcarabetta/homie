@@ -140,7 +140,10 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
     if (!jobId || isDemo) return;
     startedAtRef.current = Date.now();
     pushLog(setLog, 0, 'Dispatch launched', 'system');
-    let lastResponded = 0;
+    // Track which providers we've already logged for each transition
+    // so the ticker doesn't re-spam on every 3-second poll.
+    const loggedConnected = new Set<string>();
+    const loggedQuoted = new Set<string>();
     const socket = connectJobSocket(jobId, (status: JobStatusResponse) => {
       setStats({ contacted: status.providers_contacted, responded: status.providers_responded });
       setChannels({
@@ -175,15 +178,37 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
         }));
       setProviders(quotedProviders);
 
-      // Append log entries for new aggregate milestones.
+      // Append log entries for per-provider transitions we haven't
+      // logged yet. Honest semantics:
+      //   connected = provider engaged (voice answered / SMS reply /
+      //               web form opened) — they're interested but no
+      //               dollar figure yet
+      //   quoted    = provider sent a real numerical price
+      //
+      // The old code logged "Quote X received" whenever the aggregate
+      // providers_responded count incremented, which fired on bare
+      // "yes" replies without actual prices. Now we drive the log
+      // off the per-provider activity array + dedupe on provider_id
+      // so a given transition is logged exactly once.
       const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
-      if (status.providers_responded > lastResponded) {
-        pushLog(setLog, elapsed, `Quote ${status.providers_responded} received`, 'quote');
-        lastResponded = status.providers_responded;
+      for (const a of incoming) {
+        if (a.status === 'connected' && !loggedConnected.has(a.provider_id)) {
+          loggedConnected.add(a.provider_id);
+          pushLog(setLog, elapsed, `Connected with ${a.name}`, 'connected');
+        }
+        if (a.status === 'quoted' && !loggedQuoted.has(a.provider_id)) {
+          loggedQuoted.add(a.provider_id);
+          const price = a.quote?.price_label ? `: ${a.quote.price_label}` : '';
+          pushLog(setLog, elapsed, `Quote from ${a.name}${price}`, 'quote');
+          // Mark as connected too so we don't re-log on any future
+          // state transition back through connected.
+          loggedConnected.add(a.provider_id);
+        }
       }
       if (['completed', 'expired'].includes(status.status)) {
         setOutreachDone(true);
-        pushLog(setLog, elapsed, status.providers_responded > 0 ? 'Outreach complete — quotes ready' : 'Outreach complete', 'system');
+        const quotedTotal = incoming.filter(a => a.status === 'quoted').length;
+        pushLog(setLog, elapsed, quotedTotal > 0 ? 'Outreach complete — quotes ready' : 'Outreach complete', 'system');
       }
     });
     return () => socket.close();
@@ -347,7 +372,16 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
       {/* Aggregate stats — 2-col honest counts */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <MiniStat label="Contacted" value={stats.contacted} color={O} />
-        <MiniStat label="Quoted" value={stats.responded} color={G} />
+        {/* Quoted = count of providers with a real numerical price
+            (status === 'quoted' in provider_activities). Do NOT use
+            the aggregate stats.responded here — that counts both
+            'responded' and 'accepted', which includes bare "yes"
+            replies without a price. */}
+        <MiniStat
+          label="Quoted"
+          value={activities.filter(a => a.status === 'quoted').length}
+          color={G}
+        />
       </div>
 
       {/* Transparency strip — QUOTES RECEIVED + LIVE OUTREACH sections.
