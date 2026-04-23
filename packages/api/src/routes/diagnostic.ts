@@ -5,6 +5,7 @@ import logger from '../logger';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
 import { propertyInventoryItems } from '../db/schema/property-scans';
+import { optionalAuth } from '../middleware/auth';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -80,6 +81,21 @@ When you have enough information to make a FULL diagnosis, respond with your dia
 
 When you provide a full <diagnosis>, you do NOT need to also include a <job_summary> — the diagnosis replaces it.
 
+PROACTIVE MODEL SCAN — critical:
+Once the homeowner has identified a SPECIFIC APPLIANCE, SYSTEM, or FIXTURE being discussed (a dishwasher, furnace, water heater, faucet, AC unit, etc.) AND the CONTEXT does not already list a BRAND + MODEL for that item, OFFER TO HAVE THEM SCAN THE MODEL-NUMBER LABEL. This is a one-time ask per item.
+
+HOW TO DO IT:
+1. In your NEXT conversational reply, include ONE line like: "If you can grab a quick photo of the model-number sticker (usually inside the door, on the back, or near the controls), I can pull up the exact specs, warranty, and any active recalls." Keep it casual and reassuring — "no worries if you can't find it."
+2. In the SAME message, emit a machine-readable tag on its own line:
+   <scan_request>{"itemType":"<snake_case_item_type>"}</scan_request>
+   where itemType is one of: refrigerator, dishwasher, washer, dryer, oven, microwave, garbage_disposal, water_heater, furnace, hvac_ac_unit, heat_pump, thermostat, kitchen_faucet, bathroom_faucet, toilet, water_softener, pool_heater, pool_pump, hot_tub, garage_door_opener, irrigation_controller, generator, solar, ev_charger, sump_pump.
+3. ONLY emit <scan_request> when:
+   - The homeowner has explicitly mentioned a specific appliance/system/fixture class
+   - AND brand OR model is missing from CONTEXT for that item
+   - AND you haven't already asked for this item's label in the conversation
+4. NEVER emit <scan_request> for ambiguous references ("the thing", "it's broken", "water is leaking"). The item class must be clear.
+5. Once you emit <scan_request>, continue the conversation normally — don't block on the scan. The UI handles photo upload; whatever they scan (or skip) will come back to you as context.
+
 HOMEOWNER COMFORT:
 - If the homeowner says they're not comfortable doing a repair, don't feel handy, want someone else to handle it, or prefer a professional — NEVER suggest DIY from that point on
 - If the homeowner says they "need help", "want help", "need someone", or similar phrasing that implies they want assistance — treat this as a preference for a professional. Do NOT suggest DIY. They're asking for help, not a tutorial.
@@ -122,6 +138,165 @@ router.post('/upload-image', async (req: Request, res: Response) => {
     res.status(500).json({ data: null, error: 'Image upload failed', meta: {} });
   }
 });
+
+// ── POST /api/v1/diagnostic/scan-model-label ──────────────────────────────
+// Proactive model identification: when the AI asks the user to snap a
+// photo of the appliance's model-number sticker, this endpoint is what
+// the UI posts it to. Focused Claude Vision call — reads BRAND, MODEL,
+// SERIAL from a label photo only, no room-detection / damage-analysis
+// bloat. If the user is authenticated, the result is saved to their
+// Home IQ inventory so the next chat already has the context.
+//
+// Returns null-safe fields (brand/modelNumber/serialNumber may be null
+// if the label wasn't readable). Frontend falls through to manual entry
+// in that case.
+router.post('/scan-model-label', optionalAuth, async (req: Request, res: Response) => {
+  const body = req.body as {
+    imageDataUrl?: unknown;
+    itemTypeHint?: unknown;
+  };
+
+  const imageDataUrl = typeof body.imageDataUrl === 'string' ? body.imageDataUrl : '';
+  const itemTypeHint = typeof body.itemTypeHint === 'string' ? body.itemTypeHint.trim().toLowerCase() : '';
+
+  if (!imageDataUrl || !imageDataUrl.startsWith('data:image/')) {
+    res.status(400).json({ data: null, error: 'imageDataUrl (data:image/*) required', meta: null });
+    return;
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    res.status(503).json({ data: null, error: 'Vision not configured', meta: null });
+    return;
+  }
+
+  // Decode the data URL into { mimeType, base64 } for the Anthropic SDK.
+  const match = imageDataUrl.match(/^data:(image\/[a-z0-9+.-]+);base64,(.*)$/i);
+  if (!match) {
+    res.status(400).json({ data: null, error: 'Could not decode imageDataUrl', meta: null });
+    return;
+  }
+  const mimeType = match[1] as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  const imageBase64 = match[2];
+
+  try {
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic({ apiKey });
+
+    const systemPrompt = `You are an appliance model-number reader. The user just took a photo of a rating plate / model sticker / manufacturer label on a home appliance, system, or fixture. Extract the identifying fields and return JSON ONLY.
+
+FIELDS TO EXTRACT (all optional — return null for any you can't read cleanly):
+- brand: manufacturer name printed on the label (e.g. "Samsung", "Rheem", "Kohler"). NEVER guess. If the photo is blurry or you cannot read the brand confidently, return null.
+- modelNumber: the model / product number exactly as printed. Keep hyphens and case. No extra text.
+- serialNumber: the serial number exactly as printed, if visible.
+- manufactureDate: ISO date (YYYY-MM-DD or YYYY-MM) if a date of manufacture is printed. Some labels print "MFG DATE" or "DOM". Return null if not present — do not infer from serial number (the frontend handles that).
+- labelText: a short (< 200 char) summary of the other fields you can read on the label (voltage, capacity, etc.). Useful for debugging.
+- confidence: 0.0–1.0 — your confidence the brand + model were read correctly.
+
+RULES:
+- NEVER invent a brand or model. Blurry → null.
+- If the photo is NOT a label / rating plate (random photo, a leak, a broken part), return everything null with confidence 0 and reason "not_a_label".
+
+OUTPUT: JSON object only, no markdown, no preamble.`;
+
+    const userText = itemTypeHint
+      ? `This should be the label for a ${itemTypeHint}. Read it.`
+      : 'Read this appliance label.';
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      system: systemPrompt,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
+          { type: 'text', text: userText },
+        ],
+      }],
+    });
+
+    const textBlock = response.content.find(b => b.type === 'text');
+    let raw = textBlock && textBlock.type === 'text' ? textBlock.text.trim() : '';
+    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) {
+        try { parsed = JSON.parse(m[0]); } catch { /* fall through */ }
+      }
+    }
+
+    const brand = typeof parsed.brand === 'string' && parsed.brand.trim().length >= 2 ? parsed.brand.trim() : null;
+    const modelNumber = typeof parsed.modelNumber === 'string' && parsed.modelNumber.trim().length >= 2 ? parsed.modelNumber.trim() : null;
+    const serialNumber = typeof parsed.serialNumber === 'string' && parsed.serialNumber.trim().length >= 3 ? parsed.serialNumber.trim() : null;
+    const manufactureDate = typeof parsed.manufactureDate === 'string' ? parsed.manufactureDate.trim() : null;
+    const confidence = typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0;
+    const labelText = typeof parsed.labelText === 'string' ? parsed.labelText.slice(0, 200) : null;
+
+    // If the user is authenticated, save to their Home IQ so the next
+    // chat already has it. Non-fatal — we still return the extracted data
+    // even if the save fails.
+    let savedItemId: string | null = null;
+    if (req.homeownerId && brand && modelNumber && itemTypeHint) {
+      try {
+        const { propertyInventoryItems } = await import('../db/schema/property-scans');
+        const inserted = await db.insert(propertyInventoryItems).values({
+          homeownerId: req.homeownerId,
+          propertyId: null,
+          roomId: null,
+          scanId: null,
+          category: guessCategory(itemTypeHint),
+          itemType: itemTypeHint,
+          brand,
+          modelNumber,
+          serialNumber,
+          identificationMethod: 'label_ocr',
+          confidenceScore: confidence.toFixed(2),
+          status: 'ai_identified',
+        }).returning({ id: propertyInventoryItems.id });
+        savedItemId = inserted[0]?.id ?? null;
+      } catch (err) {
+        logger.warn({ err, homeownerId: req.homeownerId }, '[diagnostic] Failed to save scanned label to inventory');
+      }
+    }
+
+    logger.info({
+      homeownerId: req.homeownerId ?? null,
+      itemTypeHint,
+      brand, modelNumber, confidence, savedItemId,
+    }, '[diagnostic] Scanned model label');
+
+    res.json({
+      data: {
+        brand, modelNumber, serialNumber, manufactureDate,
+        confidence, labelText, itemType: itemTypeHint || null,
+        savedToHomeIQ: !!savedItemId,
+        inventoryItemId: savedItemId,
+      },
+      error: null, meta: null,
+    });
+  } catch (err) {
+    logger.error({ err }, '[diagnostic] scan-model-label failed');
+    res.status(500).json({ data: null, error: 'Scan failed', meta: null });
+  }
+});
+
+/** Map an itemType hint to the closest propertyInventoryItems.category
+ *  value. Keeps the saved row aligned with the enum so Home IQ dedupe +
+ *  rendering work correctly. */
+function guessCategory(itemType: string): 'appliance' | 'fixture' | 'system' | 'safety' | 'amenity' | 'infrastructure' {
+  const t = itemType.toLowerCase();
+  if (/(fridge|refrig|washer|dryer|dishwash|oven|range|microwave|disposal)/.test(t)) return 'appliance';
+  if (/(faucet|sink|toilet|shower|tub)/.test(t)) return 'fixture';
+  if (/(alarm|camera|doorbell|smoke|detector)/.test(t)) return 'safety';
+  if (/(pool|spa|hot.?tub)/.test(t)) return 'amenity';
+  if (/(hvac|water.?heater|thermostat|furnace|ac|heat.?pump|boiler|mini.?split|softener|generator|solar|ev.?charger|irrigation|garage.?door)/.test(t)) return 'system';
+  return 'system';
+}
 
 // ── POST /api/v1/diagnostic/chat ────────────────────────────────────────────
 

@@ -11,6 +11,7 @@ import InlineVoicePanel from '@/components/InlineVoicePanel';
 import VideoChatPanel from '@/components/VideoChatPanel';
 import DIYPanel from '@/components/DIYPanel';
 import HomeIQPanel, { HomeIQInlineChip } from '@/components/HomeIQPanel';
+import ModelScanCard from '@/components/ModelScanCard';
 import { useHomeIQ } from '@/hooks/useHomeIQ';
 import { primeAudio } from '@/components/audioUnlocker';
 
@@ -1720,6 +1721,12 @@ export default function GetQuotes() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(() => snapshot?.costEstimate ?? null);
   const [neighborhoodStats, setNeighborhoodStats] = useState<NeighborhoodStats | null>(null);
+  // Proactive model-label scan. Populated when Claude emits a
+  // <scan_request> tag for a specific appliance whose brand/model aren't
+  // in Home IQ yet. The ModelScanCard renders inline in the chat and
+  // posts to /api/v1/diagnostic/scan-model-label on upload.
+  const [scanRequest, setScanRequest] = useState<{ itemType: string } | null>(null);
+  const scanAskedFor = useRef<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [videoChatOpen, setVideoChatOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
@@ -1770,12 +1777,25 @@ export default function GetQuotes() {
       {
         onToken: (token: string) => {
           fullText += token;
-          const display = fullText.replace(/<\/?ready>/g, '').replace(/<read$/g, '').replace(/<rea$/g, '').replace(/<re$/g, '').replace(/<r$/g, '').replace(/<$/g, '').trim();
+          // Strip tag blocks from the visible text. <scan_request>
+          // carries JSON between the tags so its regex is greedier.
+          const display = fullText
+            .replace(/<scan_request>[\s\S]*?<\/scan_request>/g, '')
+            .replace(/<scan_request>[\s\S]*$/g, '')
+            .replace(/<\/?ready>/g, '')
+            .replace(/<read$/g, '').replace(/<rea$/g, '').replace(/<re$/g, '').replace(/<r$/g, '').replace(/<$/g, '')
+            .trim();
           setMessages(m => m.map(msg => ('id' in msg && (msg as { id?: string }).id === streamMsgId) ? { ...msg, text: display } : msg));
           scrollDown();
         },
         onDiagnosis: () => {},
         onJobSummary: () => {},
+        onScanRequest: ({ itemType }) => {
+          // Debounce — same itemType twice in one session gets ignored.
+          if (scanAskedFor.current.has(itemType)) return;
+          scanAskedFor.current.add(itemType);
+          setScanRequest({ itemType });
+        },
         onDone: () => { setStreaming(false); onDone(fullText); },
         onError: (err: Error) => {
           setStreaming(false);
@@ -2563,6 +2583,32 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                         ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1 && i > 0} />
                         : <UserMsg key={i} text={m.text} />
                     ))}
+                    {/* Proactive model-label scan — fires when Claude
+                        emits <scan_request> for a specific appliance
+                        whose brand/model aren't yet in Home IQ. */}
+                    {scanRequest && (
+                      <ModelScanCard
+                        itemType={scanRequest.itemType}
+                        onComplete={(result) => {
+                          // Feed the extracted brand + model back into
+                          // the chat as a user-authored note so the AI's
+                          // next turn can reference it. Also keeps the
+                          // chatCorrelationText current for Home IQ.
+                          const parts: string[] = [];
+                          if (result.brand) parts.push(result.brand);
+                          if (result.modelNumber) parts.push(result.modelNumber);
+                          if (parts.length > 0) {
+                            addUser(`📷 Model label: ${parts.join(' ')}`);
+                          }
+                          // Keep the card visible showing the success
+                          // state for a beat, then clear after 4s.
+                          setTimeout(() => setScanRequest(null), 4000);
+                          // Refresh Home IQ so the new item appears.
+                          if (result.savedToHomeIQ) homeIQ.refresh?.();
+                        }}
+                        onDismiss={() => setScanRequest(null)}
+                      />
+                    )}
                   </>
                 );
               })()}

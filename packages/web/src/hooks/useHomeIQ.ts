@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { accountService, authService } from '@/services/api';
 import {
   inventoryFromPropertyDetails, mergedInventory,
@@ -15,9 +15,9 @@ import type { HomeData, PropertyInventoryItem } from '@homie/shared';
  * hook unconditionally and render the "sign in to unlock" empty state
  * without having to guard on auth at the call site.
  *
- * Returns a stable identity for `inventory` as long as the underlying
- * data hasn't changed (not by ref equality, but by content) so React
- * memoization downstream works.
+ * Exposes `refresh()` so callers can force a re-fetch after the
+ * inventory mutates elsewhere (e.g., the model-label scan flow writes a
+ * new row and wants the panel to light up immediately).
  */
 export function useHomeIQ(): {
   inventory: PropertyInventoryItem[];
@@ -27,16 +27,20 @@ export function useHomeIQ(): {
   hasAnyData: boolean;
   /** True when the user isn't signed in — the hook is idle. */
   anonymous: boolean;
+  /** Force a re-fetch of the inventory + home data. No-op when anonymous. */
+  refresh: () => void;
 } {
   const [inventory, setInventory] = useState<PropertyInventoryItem[]>([]);
   const [homeData, setHomeData] = useState<HomeData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [anonymous, setAnonymous] = useState<boolean>(() => !authService.isAuthenticated());
+  // Bumped by refresh() to re-run the fetch effect.
+  const [fetchKey, setFetchKey] = useState(0);
+
+  const refresh = useCallback(() => setFetchKey(k => k + 1), []);
 
   useEffect(() => {
     let cancelled = false;
-    // Check auth at mount — unauthenticated users skip the fetch
-    // entirely so we don't log a 401 spam into devtools.
     if (!authService.isAuthenticated()) {
       setAnonymous(true);
       setInventory([]);
@@ -52,20 +56,14 @@ export function useHomeIQ(): {
       accountService.getHome(),
     ]).then(([invRes, homeRes]) => {
       if (cancelled) return;
-      // Home data — used as the form-row source for the merged inventory.
       const home: HomeData | null = homeRes.data ?? null;
       setHomeData(home);
-      // Scan rows — flatten rooms + unassignedItems, drop pm_dismissed.
       const rooms = invRes.data?.rooms ?? [];
       const unassigned = invRes.data?.unassignedItems ?? [];
       const scanRows: PropertyInventoryItem[] = [
         ...rooms.flatMap(r => r.items),
         ...unassigned,
       ].filter(it => it.status !== 'pm_dismissed');
-      // Form rows — synthesized from the saved Equipment & Systems form.
-      // A homeowner-scoped inventory row doesn't have a propertyId; we pass
-      // a synthetic id to satisfy the helper (it's used to build a stable
-      // id for the virtual row and for rendering — never sent to the API).
       const formRows = home?.details
         ? inventoryFromPropertyDetails('home', home.details)
         : [];
@@ -79,7 +77,7 @@ export function useHomeIQ(): {
     });
 
     return () => { cancelled = true; };
-  }, []);
+  }, [fetchKey]);
 
   return {
     inventory,
@@ -87,5 +85,6 @@ export function useHomeIQ(): {
     loading,
     hasAnyData: inventory.length > 0 || !!homeData?.details,
     anonymous,
+    refresh,
   };
 }

@@ -138,6 +138,10 @@ export interface DiagnosticStreamCallbacks {
   onJobSummary: (summary: JobSummary) => void;
   onDone: () => void;
   onError: (error: Error) => void;
+  /** Fires when the AI emits a <scan_request>{"itemType":"…"}</scan_request>
+   *  tag — signals the UI to offer a model-label photo scan for that
+   *  item. Optional so existing callers don't break. */
+  onScanRequest?: (payload: { itemType: string }) => void;
 }
 
 /**
@@ -306,6 +310,33 @@ export const diagnosticService = {
   },
 };
 
+// ── Model-label scan ──────────────────────────────────────────────────────
+// Used by the proactive scan flow in /quote: AI asks user to photograph
+// their appliance label, UI posts the image here, Claude Vision extracts
+// brand/model/serial, and (if authenticated) auto-saves to Home IQ.
+export interface ModelScanResult {
+  brand: string | null;
+  modelNumber: string | null;
+  serialNumber: string | null;
+  manufactureDate: string | null;
+  confidence: number;
+  labelText: string | null;
+  itemType: string | null;
+  savedToHomeIQ: boolean;
+  inventoryItemId: string | null;
+}
+
+export const modelScanService = {
+  scanLabel: (params: { imageDataUrl: string; itemTypeHint: string }) =>
+    fetchAPI<ModelScanResult>('/api/v1/diagnostic/scan-model-label', {
+      method: 'POST',
+      body: JSON.stringify({
+        imageDataUrl: params.imageDataUrl,
+        itemTypeHint: params.itemTypeHint,
+      }),
+    }),
+};
+
 // ── diyService ─────────────────────────────────────────────────────────────
 // Lazy-loaded DIY analysis. The quote-chat DIY panel calls this only when
 // the homeowner taps "try fixing it yourself?" — so users who dispatch
@@ -322,10 +353,11 @@ export const diyService = {
     }),
 };
 
-/** Extracts <diagnosis> and <job_summary> JSON blocks from streamed text. */
+/** Extracts <diagnosis>, <job_summary>, and <scan_request> JSON blocks
+ *  from streamed text. */
 function parseStructuredTags(
   text: string,
-  callbacks: Pick<DiagnosticStreamCallbacks, 'onDiagnosis' | 'onJobSummary'>,
+  callbacks: Pick<DiagnosticStreamCallbacks, 'onDiagnosis' | 'onJobSummary' | 'onScanRequest'>,
 ): void {
   const diagMatch = text.match(/<diagnosis>([\s\S]*?)<\/diagnosis>/);
   if (diagMatch) {
@@ -338,6 +370,16 @@ function parseStructuredTags(
   if (summaryMatch) {
     try {
       callbacks.onJobSummary(JSON.parse(summaryMatch[1]) as JobSummary);
+    } catch { /* malformed JSON — skip */ }
+  }
+
+  const scanMatch = text.match(/<scan_request>([\s\S]*?)<\/scan_request>/);
+  if (scanMatch && callbacks.onScanRequest) {
+    try {
+      const parsed = JSON.parse(scanMatch[1]) as { itemType?: unknown };
+      if (typeof parsed.itemType === 'string' && parsed.itemType.trim().length > 0) {
+        callbacks.onScanRequest({ itemType: parsed.itemType.trim().toLowerCase() });
+      }
     } catch { /* malformed JSON — skip */ }
   }
 }
