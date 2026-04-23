@@ -9,6 +9,8 @@ import EstimateBadge from '@/components/EstimateBadge';
 import AccountLayout from './account/AccountLayout';
 import AccountSidebar, { type AccountTab } from './account/AccountSidebar';
 import DashboardSection from './account/DashboardSection';
+import QuoteTabsBar from '@/components/QuoteTabsBar';
+import { useQuoteTabs } from '@/hooks/useQuoteTabs';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -2126,6 +2128,7 @@ export default function Account() {
     return window.localStorage.getItem('homieAccountSidebarCollapsed') === '1';
   });
   const [mobileOpen, setMobileOpen] = useState(false);
+  const quoteTabs = useQuoteTabs();
 
   function handleSidebarCollapse(v: boolean) {
     setSidebarCollapsed(v);
@@ -2201,6 +2204,18 @@ export default function Account() {
       sidebarMobile={sidebarMobile}
       mobileOpen={mobileOpen}
       setMobileOpen={setMobileOpen}
+      topBarCenter={quoteTabs.tabs.length > 0 ? (
+        <QuoteTabsBar
+          tabs={quoteTabs.tabs}
+          activeTabId={null /* no active session on account surfaces */}
+          onSelect={(id) => {
+            quoteTabs.markRead(id);
+            navigate(`/quote?s=${encodeURIComponent(id)}`);
+          }}
+          onClose={(id) => quoteTabs.remove(id)}
+          onNewQuote={() => navigate('/quote')}
+        />
+      ) : null}
     >
       <style>{`@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }`}</style>
       {activeTab === 'dashboard' && (

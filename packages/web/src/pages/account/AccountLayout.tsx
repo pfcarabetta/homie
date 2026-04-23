@@ -10,6 +10,10 @@ interface AccountLayoutProps {
   sidebarMobile?: ReactNode;
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
+  /** Optional slot mounted in the center of the top bar. Account
+   *  renders the QuoteTabsBar here so in-progress quote chats are
+   *  one click away from every surface of the account portal. */
+  topBarCenter?: ReactNode;
 }
 
 function HamburgerIcon() {
@@ -26,7 +30,7 @@ function HamburgerIcon() {
  * desktop, slide-in drawer on mobile, top bar with hamburger button.
  */
 export default function AccountLayout({
-  children, sidebar, sidebarMobile, mobileOpen, setMobileOpen,
+  children, sidebar, sidebarMobile, mobileOpen, setMobileOpen, topBarCenter,
 }: AccountLayoutProps) {
   return (
     <div className="bp-portal" style={{ height: '100vh', background: 'var(--bp-bg)', display: 'flex', overflow: 'hidden' }}>
@@ -83,8 +87,10 @@ export default function AccountLayout({
           }}>
             <HamburgerIcon />
           </button>
-          <div />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'flex-start', marginLeft: 20 }}>
+            {topBarCenter}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
             <AccountNotificationsBell />
             <span style={{ fontSize: 12, color: 'var(--bp-subtle)', fontFamily: "'DM Sans', sans-serif" }}>Homie Personal</span>
           </div>
