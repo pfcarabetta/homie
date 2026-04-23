@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import EstimateBadge from '@/components/EstimateBadge';
 import type { CostEstimate } from '@/services/api';
+import {
+  OutreachThemeContext, useOutreachColors, outreachColors, type OutreachTheme,
+} from '@/components/outreach-theme';
 
 /**
  * Live-outreach transparency strip — sits above the existing
@@ -26,6 +29,9 @@ import type { CostEstimate } from '@/services/api';
  *     instead of a fake countdown.
  */
 
+// Module-level consumer-theme fallbacks — preserved so the call sites
+// that don't need theming (demo page, static styles) keep working. All
+// in-component uses are theme-aware via useOutreachColors().
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926';
 const DIM = '#6B6560';
 const BORDER = 'rgba(0,0,0,.08)';
@@ -110,10 +116,15 @@ interface Props {
    *  next to each provider's quote so the user sees "below estimate"
    *  / "above estimate" context inline. Matches Account → My Quotes. */
   costEstimate?: CostEstimate | null;
+  /** Visual theme. 'consumer' (default) uses fixed hex; 'business'
+   *  uses CSS vars so BusinessPortal's dark-mode toggle flows through.
+   *  Threaded down to every sub-component via OutreachThemeContext. */
+  theme?: OutreachTheme;
 }
 
 export default function OutreachTransparencyStrip({
   activity, maxVisible = 3, onBook, onCall, defaultBookAddress, skipAddressInput, costEstimate,
+  theme = 'consumer',
 }: Props) {
   // Single-open expansion — only one quoted row can be expanded at a
   // time so the panel doesn't balloon vertically.
@@ -149,6 +160,10 @@ export default function OutreachTransparencyStrip({
 
   if (quotes.length === 0 && live.length === 0) return null;
 
+  // Resolve theme once so root div styles use the right tokens. All
+  // sub-components read the same theme via context below.
+  const c = outreachColors(theme);
+
   // Quotes section is unbounded (they're the actionable payoff — show
   // them all). Live section capped at maxVisible; overflow collapses
   // into a "+N more" chip below.
@@ -157,8 +172,9 @@ export default function OutreachTransparencyStrip({
   const activeCount = activity.filter(a => a.status === 'contacting' || a.status === 'connected').length;
 
   return (
+    <OutreachThemeContext.Provider value={theme}>
     <div style={{
-      background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14,
+      background: c.CARD, border: `1px solid ${c.BORDER}`, borderRadius: 14,
       padding: 10, display: 'flex', flexDirection: 'column', gap: 14,
       animation: 'fadeSlide 0.3s ease',
     }}>
@@ -226,7 +242,7 @@ export default function OutreachTransparencyStrip({
           {liveHidden > 0 && (
             <div style={{
               padding: '4px 4px', alignSelf: 'flex-start',
-              fontSize: 10.5, color: DIM, fontFamily: "'DM Mono',monospace",
+              fontSize: 10.5, color: c.DIM, fontFamily: "'DM Mono',monospace",
               letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase',
             }}>
               +{liveHidden} more {liveHidden === 1 ? 'provider' : 'providers'} in queue
@@ -235,6 +251,7 @@ export default function OutreachTransparencyStrip({
         </section>
       )}
     </div>
+    </OutreachThemeContext.Provider>
   );
 }
 
@@ -252,19 +269,20 @@ function SectionHeader({
   countLabel: string;
   showCountWhenZero?: boolean;
 }) {
+  const c = useOutreachColors();
   const showCount = count > 0 || showCountWhenZero;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px' }}>
       {icon}
       <span style={{
         fontSize: 10.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.3,
-        textTransform: 'uppercase', fontWeight: 700, color: DIM,
+        textTransform: 'uppercase', fontWeight: 700, color: c.DIM,
       }}>
         {label}
       </span>
       <span style={{ flex: 1 }} />
       {showCount && (
-        <span style={{ fontSize: 11, color: G, fontWeight: 700 }}>
+        <span style={{ fontSize: 11, color: c.G, fontWeight: 700 }}>
           {count} {countLabel}
         </span>
       )}
@@ -273,20 +291,22 @@ function SectionHeader({
 }
 
 function LivePulseDot() {
+  const c = useOutreachColors();
   return (
     <div style={{ position: 'relative', width: 8, height: 8, flexShrink: 0 }}>
-      <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: G }} />
-      <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: G, opacity: .25, animation: 'otsPulse 1.6s infinite' }} />
+      <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: c.G }} />
+      <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: c.G, opacity: .25, animation: 'otsPulse 1.6s infinite' }} />
     </div>
   );
 }
 
 function QuoteDot() {
+  const c = useOutreachColors();
   // Solid check in a tinted green pill — signals "landed / stable"
   // rather than "in flight".
   return (
     <div style={{
-      width: 14, height: 14, borderRadius: 3, background: G,
+      width: 14, height: 14, borderRadius: 3, background: c.G,
       color: '#fff', fontSize: 9, fontWeight: 900,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       flexShrink: 0,
@@ -306,6 +326,7 @@ function ActivityRow({
   skipAddressInput?: boolean;
   costEstimate?: CostEstimate | null;
 }) {
+  const c = useOutreachColors();
   const { copy, accent, inFlight } = describe(activity);
   const initial = displayInitial(activity);
   const avatarBg = activity.avatarColor || stableColorFor(activity.company || activity.name);
@@ -315,8 +336,8 @@ function ActivityRow({
   return (
     <div style={{
       borderRadius: 10,
-      background: activity.status === 'quoted' ? `${G}10` : '#FAFAFA',
-      border: `1px solid ${activity.status === 'quoted' ? `${G}44` : BORDER}`,
+      background: activity.status === 'quoted' ? `${c.G}10` : c.W,
+      border: `1px solid ${activity.status === 'quoted' ? `${c.G}44` : c.BORDER}`,
       animation: 'otsSlideIn 0.25s ease',
       transition: 'background 0.15s, border-color 0.15s',
       overflow: 'hidden',
@@ -359,7 +380,7 @@ function ActivityRow({
         {/* Copy */}
         <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
           <div style={{
-            fontSize: 13, fontWeight: 600, color: D,
+            fontSize: 13, fontWeight: 600, color: c.D,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             lineHeight: 1.3,
           }}>
@@ -367,7 +388,7 @@ function ActivityRow({
           </div>
           {copy.secondary && (
             <div style={{
-              fontSize: 11.5, color: DIM, marginTop: 1,
+              fontSize: 11.5, color: c.DIM, marginTop: 1,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               lineHeight: 1.3,
             }}>
@@ -381,7 +402,7 @@ function ActivityRow({
           <ChannelBadge channel={activity.channel} inFlight={inFlight} />
           {expandable && (
             <span style={{
-              color: G, fontSize: 14, fontWeight: 700, marginLeft: 2,
+              color: c.G, fontSize: 14, fontWeight: 700, marginLeft: 2,
               transition: 'transform 0.2s',
               transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
               width: 18, textAlign: 'center',
@@ -417,6 +438,7 @@ function ExpandedQuoteDetail({
   skipAddressInput?: boolean;
   costEstimate?: CostEstimate | null;
 }) {
+  const c = useOutreachColors();
   const company = activity.company || activity.name;
   const { rating, reviewCount, phone, distanceMiles, reviews } = activity.profile ?? {};
   const price = activity.quote?.priceLabel ?? '';
@@ -445,8 +467,8 @@ function ExpandedQuoteDetail({
   return (
     <div style={{
       padding: '12px 14px 14px',
-      borderTop: `1px solid ${G}33`,
-      background: '#fff',
+      borderTop: `1px solid ${c.G}33`,
+      background: c.CARD,
       animation: 'otsSlideIn 0.25s ease',
       fontFamily: "'DM Sans',sans-serif",
     }}>
@@ -454,14 +476,14 @@ function ExpandedQuoteDetail({
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: D,
+            fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: c.D,
             lineHeight: 1.25,
           }}>
             {company}
           </div>
           <div style={{
             display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4,
-            fontSize: 12, color: DIM, alignItems: 'center',
+            fontSize: 12, color: c.DIM, alignItems: 'center',
           }}>
             {rating != null && <StarRating rating={rating} reviewCount={reviewCount} />}
             {distanceMiles != null && (
@@ -477,7 +499,7 @@ function ExpandedQuoteDetail({
             (matches the Account > My Quotes treatment) + availability. */}
         <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <div style={{
-            fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700, color: G,
+            fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700, color: c.G,
             lineHeight: 1,
           }}>{price}</div>
           {costEstimate && price && (
@@ -488,7 +510,7 @@ function ExpandedQuoteDetail({
             />
           )}
           {availability && (
-            <div style={{ fontSize: 11, color: DIM, maxWidth: 150 }}>
+            <div style={{ fontSize: 11, color: c.DIM, maxWidth: 150 }}>
               {availability}
             </div>
           )}
@@ -498,9 +520,9 @@ function ExpandedQuoteDetail({
       {/* Provider's quote note */}
       {message && (
         <div style={{
-          padding: '10px 12px', background: `${G}08`, borderLeft: `3px solid ${G}`,
+          padding: '10px 12px', background: `${c.G}08`, borderLeft: `3px solid ${c.G}`,
           borderRadius: 6, marginBottom: 12,
-          fontSize: 12.5, color: D, lineHeight: 1.5, fontStyle: 'italic',
+          fontSize: 12.5, color: c.D, lineHeight: 1.5, fontStyle: 'italic',
         }}>
           "{message}"
         </div>
@@ -511,7 +533,7 @@ function ExpandedQuoteDetail({
         <div style={{ marginBottom: 14 }}>
           <div style={{
             fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.2,
-            textTransform: 'uppercase', fontWeight: 700, color: DIM, marginBottom: 6,
+            textTransform: 'uppercase', fontWeight: 700, color: c.DIM, marginBottom: 6,
           }}>
             Recent reviews
           </div>
@@ -532,7 +554,7 @@ function ExpandedQuoteDetail({
           <label style={{
             display: 'block', fontSize: 10, fontFamily: "'DM Mono',monospace",
             letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 700,
-            color: DIM, marginBottom: 4,
+            color: c.DIM, marginBottom: 4,
           }}>
             Service address
           </label>
@@ -544,12 +566,13 @@ function ExpandedQuoteDetail({
             style={{
               width: '100%', padding: '9px 12px',
               fontSize: 13, fontFamily: "'DM Sans',sans-serif",
-              border: `1.5px solid ${addressError ? '#DC2626' : BORDER}`,
-              borderRadius: 8, outline: 'none', color: D,
+              border: `1.5px solid ${addressError ? '#DC2626' : c.BORDER}`,
+              borderRadius: 8, outline: 'none', color: c.D,
+              background: c.CARD,
               boxSizing: 'border-box', transition: 'border-color 0.15s',
             }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = G; }}
-            onBlur={(e) => { if (!addressError) e.currentTarget.style.borderColor = BORDER; }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = c.G; }}
+            onBlur={(e) => { if (!addressError) e.currentTarget.style.borderColor = c.BORDER; }}
           />
           {addressError && (
             <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>
@@ -564,9 +587,14 @@ function ExpandedQuoteDetail({
         <CallButton phone={phone} onCall={() => onCall?.(activity.providerId, phone)} />
         <button
           onClick={handleBookClick}
-          style={primaryBtnStyle}
+          style={{
+            flex: 1, padding: '10px 14px', background: c.G, color: '#fff',
+            border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700,
+            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+            transition: 'background 0.15s',
+          }}
           onMouseEnter={e => (e.currentTarget.style.background = '#17876A')}
-          onMouseLeave={e => (e.currentTarget.style.background = G)}
+          onMouseLeave={e => (e.currentTarget.style.background = c.G)}
         >
           Book this provider →
         </button>
@@ -576,6 +604,14 @@ function ExpandedQuoteDetail({
 }
 
 function CallButton({ phone, onCall }: { phone: string | undefined; onCall: () => void }) {
+  const c = useOutreachColors();
+  const secondaryStyle: React.CSSProperties = {
+    flex: 1, padding: '10px 14px', background: c.CARD, color: c.D,
+    border: `1px solid ${c.BORDER}`, borderRadius: 10, fontSize: 13, fontWeight: 600,
+    cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+    textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
+    justifyContent: 'center', gap: 4,
+  };
   // When a phone number is present, render as an anchor so mobile
   // "tap to call" just works. Desktop still honors the click for the
   // parent's analytics hook.
@@ -584,20 +620,21 @@ function CallButton({ phone, onCall }: { phone: string | undefined; onCall: () =
       <a
         href={`tel:${phone.replace(/[^\d+]/g, '')}`}
         onClick={onCall}
-        style={{ ...secondaryBtnStyle, textAlign: 'center' }}
+        style={{ ...secondaryStyle, textAlign: 'center' }}
       >
         📞 Call {phone}
       </a>
     );
   }
   return (
-    <button onClick={onCall} style={secondaryBtnStyle} disabled>
+    <button onClick={onCall} style={secondaryStyle} disabled>
       📞 Call
     </button>
   );
 }
 
 function StarRating({ rating, reviewCount }: { rating: number; reviewCount?: number }) {
+  const c = useOutreachColors();
   const full = Math.floor(rating);
   const half = rating - full >= 0.5;
   return (
@@ -605,32 +642,33 @@ function StarRating({ rating, reviewCount }: { rating: number; reviewCount?: num
       <span style={{ color: '#F5A623' }}>
         {'★'.repeat(full)}{half ? '☆' : ''}{'☆'.repeat(5 - full - (half ? 1 : 0))}
       </span>
-      <span style={{ color: D, fontWeight: 700 }}>{rating.toFixed(1)}</span>
+      <span style={{ color: c.D, fontWeight: 700 }}>{rating.toFixed(1)}</span>
       {reviewCount != null && (
-        <span style={{ color: DIM }}>({reviewCount.toLocaleString()})</span>
+        <span style={{ color: c.DIM }}>({reviewCount.toLocaleString()})</span>
       )}
     </span>
   );
 }
 
 function ReviewRow({ review }: { review: { author: string; rating: number; text: string; date?: string } }) {
+  const c = useOutreachColors();
   return (
     <div style={{
-      padding: '8px 10px', background: '#FAFAFA', borderRadius: 8,
-      border: `1px solid ${BORDER}`,
+      padding: '8px 10px', background: c.W, borderRadius: 8,
+      border: `1px solid ${c.BORDER}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
         <span style={{ color: '#F5A623', fontSize: 11 }}>{'★'.repeat(Math.round(review.rating))}</span>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: D }}>{review.author}</span>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: c.D }}>{review.author}</span>
         {review.date && (
           <>
             <Dot />
-            <span style={{ fontSize: 10.5, color: DIM }}>{review.date}</span>
+            <span style={{ fontSize: 10.5, color: c.DIM }}>{review.date}</span>
           </>
         )}
       </div>
       <div style={{
-        fontSize: 12, color: D, lineHeight: 1.5,
+        fontSize: 12, color: c.D, lineHeight: 1.5,
         display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
         overflow: 'hidden',
       }}>
@@ -641,25 +679,12 @@ function ReviewRow({ review }: { review: { author: string; rating: number; text:
 }
 
 function Dot() {
-  return <span style={{ color: DIM, opacity: 0.4 }}>·</span>;
+  const c = useOutreachColors();
+  return <span style={{ color: c.DIM, opacity: 0.4 }}>·</span>;
 }
 
-const primaryBtnStyle: React.CSSProperties = {
-  flex: 1, padding: '10px 14px', background: G, color: '#fff',
-  border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700,
-  cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-  transition: 'background 0.15s',
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  flex: 1, padding: '10px 14px', background: '#fff', color: D,
-  border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 13, fontWeight: 600,
-  cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-  textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
-  justifyContent: 'center', gap: 4,
-};
-
 function ChannelBadge({ channel, inFlight }: { channel: OutreachChannel; inFlight: boolean }) {
+  const c = useOutreachColors();
   const config = {
     voice: { icon: '📞', label: 'Call' },
     sms:   { icon: '💬', label: 'Text' },
@@ -669,9 +694,9 @@ function ChannelBadge({ channel, inFlight }: { channel: OutreachChannel; inFligh
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
       padding: '3px 8px', borderRadius: 100,
-      background: inFlight ? `${O}14` : '#F5F3F1',
-      border: `1px solid ${inFlight ? `${O}33` : BORDER}`,
-      fontSize: 10, fontWeight: 700, color: inFlight ? O : DIM,
+      background: inFlight ? `${c.O}14` : c.W,
+      border: `1px solid ${inFlight ? `${c.O}33` : c.BORDER}`,
+      fontSize: 10, fontWeight: 700, color: inFlight ? c.O : c.DIM,
       fontFamily: "'DM Mono',monospace", letterSpacing: 0.5,
       textTransform: 'uppercase',
     }}>

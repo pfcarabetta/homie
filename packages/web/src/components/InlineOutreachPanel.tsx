@@ -7,6 +7,9 @@ import {
   type CostEstimate, type JobStatusResponse,
 } from '@/services/api';
 import type { ProviderActivityPayload } from '@homie/shared';
+import {
+  OutreachThemeContext, useOutreachColors, outreachColors, type OutreachTheme,
+} from '@/components/outreach-theme';
 
 /**
  * InlineOutreachPanel — production version of the mockup from
@@ -105,9 +108,15 @@ interface Props {
    *  flip the quote-tab status (dispatching → quotes_ready) and
    *  drive the unread-count badge in the tab bar. */
   onActivitiesChange?: (activities: ProviderActivityPayload[]) => void;
+  /** 'consumer' (default) = fixed hex; 'business' = CSS vars so
+   *  BusinessPortal's dark-mode toggle flows through. */
+  theme?: OutreachTheme;
 }
 
-export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBooked, onActivitiesChange }: Props) {
+export default function InlineOutreachPanel({
+  jobId, isDemo, costEstimate, onBooked, onActivitiesChange, theme = 'consumer',
+}: Props) {
+  const c = outreachColors(theme);
   const [providers, setProviders] = useState<(MockProvider | RealProvider)[]>([]);
   // Per-provider activities from the backend WS feed. Includes rows
   // for providers in 'contacting' / 'connected' / 'quoted' / 'declined'
@@ -340,8 +349,9 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
   const pendingLive = Math.max(0, stats.contacted - stats.responded);
 
   return (
+    <OutreachThemeContext.Provider value={theme}>
     <div style={{
-      background: '#fff', borderRadius: 22, border: `1px solid ${BORDER}`,
+      background: c.CARD, borderRadius: 22, border: `1px solid ${c.BORDER}`,
       padding: '20px 20px 16px', boxShadow: '0 20px 60px -24px rgba(0,0,0,.12)',
       display: 'flex', flexDirection: 'column', gap: 14,
       fontFamily: "'DM Sans',sans-serif",
@@ -349,8 +359,8 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
       <style>{`
         @keyframes iopHomieSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes iopHomieBeat {
-          0%, 100% { transform: scale(1); box-shadow: 0 6px 16px -4px ${O}66; }
-          50%      { transform: scale(1.06); box-shadow: 0 10px 24px -4px ${O}99; }
+          0%, 100% { transform: scale(1); box-shadow: 0 6px 16px -4px ${c.O}66; }
+          50%      { transform: scale(1.06); box-shadow: 0 10px 24px -4px ${c.O}99; }
         }
       `}</style>
 
@@ -358,12 +368,12 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <HomieSpinningLogo />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 17, fontWeight: 700, color: D, lineHeight: 1.2 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 17, fontWeight: 700, color: c.D, lineHeight: 1.2 }}>
             {outreachDone && providers.length > 0 ? 'Quotes are in' :
              outreachDone ? 'Outreach complete' :
              'Homie is reaching out'}
           </div>
-          <div style={{ fontSize: 12, color: DIM, fontFamily: "'DM Mono',monospace", marginTop: 1 }}>
+          <div style={{ fontSize: 12, color: c.DIM, fontFamily: "'DM Mono',monospace", marginTop: 1 }}>
             {outreachDone ? `${providers.length} quote${providers.length === 1 ? '' : 's'} · tap to book` : 'usually ~2 min'}
           </div>
         </div>
@@ -371,7 +381,7 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
 
       {/* Aggregate stats — 2-col honest counts */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <MiniStat label="Contacted" value={stats.contacted} color={O} />
+        <MiniStat label="Contacted" value={stats.contacted} color={c.O} />
         {/* Quoted = count of providers with a real numerical price
             (status === 'quoted' in provider_activities). Do NOT use
             the aggregate stats.responded here — that counts both
@@ -380,7 +390,7 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
         <MiniStat
           label="Quoted"
           value={activities.filter(a => a.status === 'quoted').length}
-          color={G}
+          color={c.G}
         />
       </div>
 
@@ -392,6 +402,7 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
       {activity.length > 0 && (
         <OutreachTransparencyStrip
           activity={activity}
+          theme={theme}
           onBook={handleBook}
           onCall={() => { /* tel: link handles it */ }}
           defaultBookAddress={homeAddress}
@@ -405,16 +416,16 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
           (e.g., an older backend without provider_activities). */}
       {!outreachDone && activity.length === 0 && pendingLive > 0 && (
         <div style={{
-          padding: '10px 12px', background: `${G}10`,
-          border: `1px solid ${G}33`, borderRadius: 10,
+          padding: '10px 12px', background: `${c.G}10`,
+          border: `1px solid ${c.G}33`, borderRadius: 10,
           display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 12.5, color: D,
+          fontSize: 12.5, color: c.D,
         }}>
           <LivePulse />
           <span style={{ flex: 1 }}>
             Reaching out to <strong>{pendingLive}</strong> more provider{pendingLive === 1 ? '' : 's'}…
           </span>
-          <span style={{ fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase' }}>
+          <span style={{ fontSize: 10, color: c.DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase' }}>
             via {channels.voice > 0 ? 'call' : channels.sms > 0 ? 'sms' : 'web'}
           </span>
         </div>
@@ -425,7 +436,7 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
 
       {/* Footer */}
       <div style={{
-        fontSize: 11.5, color: DIM, textAlign: 'center',
+        fontSize: 11.5, color: c.DIM, textAlign: 'center',
         paddingTop: 4,
       }}>
         {outreachDone
@@ -433,6 +444,7 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
           : "Feel free to close the tab — we'll text you the quotes as they land."}
       </div>
     </div>
+    </OutreachThemeContext.Provider>
   );
 }
 
@@ -466,13 +478,14 @@ function HomieSpinningLogo() {
 }
 
 function MiniStat({ label, value, color }: { label: string; value: string | number; color: string }) {
+  const c = useOutreachColors();
   return (
     <div style={{
-      padding: '10px 8px', background: W, borderRadius: 10,
+      padding: '10px 8px', background: c.W, borderRadius: 10,
       textAlign: 'center',
     }}>
       <div style={{
-        fontSize: 9, color: DIM, fontFamily: "'DM Mono',monospace",
+        fontSize: 9, color: c.DIM, fontFamily: "'DM Mono',monospace",
         letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 700, marginBottom: 2,
       }}>{label}</div>
       <div style={{
