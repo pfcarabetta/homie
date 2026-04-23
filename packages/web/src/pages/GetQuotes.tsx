@@ -10,6 +10,8 @@ import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/compone
 import InlineVoicePanel from '@/components/InlineVoicePanel';
 import VideoChatPanel from '@/components/VideoChatPanel';
 import DIYPanel from '@/components/DIYPanel';
+import HomeIQPanel, { HomeIQInlineChip } from '@/components/HomeIQPanel';
+import { useHomeIQ } from '@/hooks/useHomeIQ';
 import { primeAudio } from '@/components/audioUnlocker';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -2206,6 +2208,26 @@ Write ONLY the summary — no questions, no conversational language, no greeting
   // card needs. Falls back to soft "—" when a section isn't known yet.
   const catMeta = data.category ? CATEGORY_FLOWS[data.category] : null;
   const repairGroupMeta = catMeta ? CATEGORY_TREE.find(g => g.subs.some(s => s.id === data.category)) : null;
+
+  // ── Home IQ (consumer analog of Property IQ) ───────────────────────────
+  // Fetch the homeowner's merged inventory once per mount when
+  // authenticated. Hook is a no-op for anonymous users. The panel below
+  // handles all three states (anonymous / empty / populated).
+  const homeIQ = useHomeIQ();
+  // Concatenated chat text for correlation — joined user + assistant
+  // messages plus whatever the user has typed but not yet sent and the
+  // in-flight AI streaming text. Lowercased; regex matching inside
+  // correlateItemToChat also runs case-insensitive but we normalize
+  // here for any downstream consumers.
+  const homeIQChatText = (() => {
+    const parts: string[] = [];
+    for (const m of messages) parts.push(m.text);
+    if (data.a1) parts.push(data.a1);
+    if (data.aiDiagnosis) parts.push(data.aiDiagnosis);
+    if (data.extra) parts.push(data.extra);
+    return parts.join(' ').toLowerCase();
+  })();
+  const homeIQCategoryLabel = repairGroupMeta?.label || catMeta?.label || null;
   const severityLabel: string | null = costEstimate
     ? (costEstimate.estimateHighCents > 50000 ? 'Medium' : 'Minor')
     : null;
@@ -2255,6 +2277,10 @@ Write ONLY the summary — no questions, no conversational language, no greeting
              the conversation. */
           .gq-right-panel { display: none !important; }
           .gq-mobile-status { display: flex !important; }
+          /* Home IQ inline chip is mobile-only — desktop renders the full
+             HomeIQPanel in the right rail, so this inline version would
+             just duplicate above 981px. */
+          .gq-mobile-iq { display: block; }
           /* Desktop indents the chat column by 42px to align with the
              assistant avatar. On mobile that eats a big chunk of a narrow
              viewport — collapse all 42px left-indents inside the chat to 0
@@ -2271,6 +2297,10 @@ Write ONLY the summary — no questions, no conversational language, no greeting
            grid compact: only 8 Repair tiles show up front. */
         .gq-cat-service:not(.gq-cat-expanded) { display: none !important; }
         .gq-cat-more-btn { display: block !important; }
+        /* Default-hide the Home IQ mobile chip on desktop — it's unhidden
+           inside the (max-width:980px) media query above. Keeps desktop
+           users seeing only the right-panel HomeIQPanel, no duplication. */
+        .gq-mobile-iq { display: none; }
         @media (max-width: 480px) {
           .gq-cat-grid { grid-template-columns: repeat(3, 1fr) !important; }
           .gq-section { padding: 16px 16px 80px !important; }
@@ -2369,6 +2399,14 @@ Write ONLY the summary — no questions, no conversational language, no greeting
 
               {phase === 'diagnosis' && data.a1 && (
                 <>
+                  {/* Mobile-only Home IQ chip — right panel is hidden
+                      below 981px, so this surfaces correlated equipment
+                      inline in the chat stream when the user is on
+                      phone/tablet. CSS-gated inside the component. */}
+                  <HomeIQInlineChip
+                    items={homeIQ.inventory}
+                    chatText={homeIQChatText}
+                  />
                   <DiagnosisSummary data={data} />
                   {/* Pros-nearby badge — concrete local-supply signal under
                       the dispatch brief. Always says "near you" regardless
@@ -2772,6 +2810,21 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Home IQ — consumer analog of the business Property IQ. Shows
+                the homeowner's equipment correlated against the live chat
+                (strong hits by brand/model, medium by name/synonym). Hidden
+                below 981px via .gq-right-panel CSS rule — the inline chip
+                inside the chat stream handles mobile. */}
+            <div style={{ marginTop: 14 }}>
+              <HomeIQPanel
+                items={homeIQ.inventory}
+                chatText={homeIQChatText}
+                categoryLabel={homeIQCategoryLabel}
+                anonymous={homeIQ.anonymous}
+                loading={homeIQ.loading}
+              />
             </div>
 
             {/* Assurance card — "Speed" preset (⚡) per design spec */}
