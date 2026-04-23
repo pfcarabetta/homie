@@ -13,7 +13,9 @@ import DIYPanel from '@/components/DIYPanel';
 import HomeIQPanel, { HomeIQInlineChip } from '@/components/HomeIQPanel';
 import ModelScanCard from '@/components/ModelScanCard';
 import ProtectionCard from '@/components/ProtectionCard';
+import QuoteTabsBar from '@/components/QuoteTabsBar';
 import { useHomeIQ } from '@/hooks/useHomeIQ';
+import { useQuoteTabs, newSessionId, sessionStorageKey, deriveTitle, inferStatus } from '@/hooks/useQuoteTabs';
 import { correlateItemToChat, computeSharedItemTypeWords } from '@/utils/home-iq';
 import { primeAudio } from '@/components/audioUnlocker';
 
@@ -1683,9 +1685,11 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
 
 /* -- Local storage snapshot of the in-flight quote intake -- */
 // Survives page reloads / tab close so a user can pop back into /quote
-// and pick up where they left off. Keyed with a version suffix so shape
-// changes invalidate the cache automatically.
-const QUOTE_STATE_KEY = 'homie_quote_state_v1';
+// and pick up where they left off. Session-scoped now (multi-tab):
+// each open quote chat has its own snapshot at homie_quote_session_<id>,
+// and the tab bar reads an index of all live sessions to render the
+// top-of-page strip. The useQuoteTabs hook owns the index + migration
+// from the pre-multi-tab single-snapshot key.
 const QUOTE_STATE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 interface QuoteStateSnapshot {
@@ -1697,14 +1701,14 @@ interface QuoteStateSnapshot {
   savedAt: number;
 }
 
-function loadQuoteSnapshot(): QuoteStateSnapshot | null {
+function loadQuoteSnapshot(sessionKey: string): QuoteStateSnapshot | null {
   try {
-    const raw = localStorage.getItem(QUOTE_STATE_KEY);
+    const raw = localStorage.getItem(sessionKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as QuoteStateSnapshot;
     if (!parsed || typeof parsed.savedAt !== 'number') return null;
     if (Date.now() - parsed.savedAt > QUOTE_STATE_TTL_MS) {
-      localStorage.removeItem(QUOTE_STATE_KEY);
+      localStorage.removeItem(sessionKey);
       return null;
     }
     return parsed;
@@ -1719,10 +1723,33 @@ export default function GetQuotes() {
   const { pricing } = usePricing();
   const isDemo = new URLSearchParams(window.location.search).has('demo');
 
-  // Try to restore the in-flight intake from localStorage so a user who
-  // closed the pricing modal (or the tab entirely) can come back and find
-  // the chat / diagnosis exactly as they left it.
-  const snapshot = (typeof window !== 'undefined') ? loadQuoteSnapshot() : null;
+  // Resolve the session id from the URL. Missing → mint a new one and
+  // rewrite the URL so the tab is deep-linkable. The tabs bar in the
+  // nav reads the same index so this session shows up there as soon
+  // as meaningful state accumulates (title + status upsert below).
+  const sessionIdSlot = useRef<string>('');
+  if (!sessionIdSlot.current && typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('s');
+    if (fromUrl && /^[a-z0-9_]+$/i.test(fromUrl)) {
+      sessionIdSlot.current = fromUrl;
+    } else {
+      sessionIdSlot.current = newSessionId();
+      const next = new URLSearchParams(params);
+      next.set('s', sessionIdSlot.current);
+      window.history.replaceState({}, '', `${window.location.pathname}?${next.toString()}`);
+    }
+  }
+  const sessionId = sessionIdSlot.current;
+  const sessionKey = sessionStorageKey(sessionId);
+
+  // Try to restore the in-flight intake for THIS session. If the user
+  // opened /quote with a specific `?s=` that has a saved snapshot, it
+  // rehydrates; fresh new-tab starts empty.
+  const snapshot = (typeof window !== 'undefined') ? loadQuoteSnapshot(sessionKey) : null;
+
+  // Live tabs index — for the nav bar mounted above.
+  const quoteTabs = useQuoteTabs();
 
   const [messages, setMessages] = useState<{ role: string; text: string }[]>(() => snapshot?.messages ?? []);
   const [phase, setPhase] = useState(() => snapshot?.phase ?? 'greeting');
@@ -1988,15 +2015,28 @@ export default function GetQuotes() {
         costEstimate,
         savedAt: Date.now(),
       };
-      localStorage.setItem(QUOTE_STATE_KEY, JSON.stringify(snap));
+      localStorage.setItem(sessionKey, JSON.stringify(snap));
+      // Mirror to the tabs index whenever the chat has something worth
+      // remembering — skip the empty greeting phase so brand-new /quote
+      // loads don't spawn an empty-title tab before the user types.
+      if (data.a1 || data.category || messages.length > 0) {
+        quoteTabs.upsert({
+          id: sessionId,
+          title: deriveTitle(data),
+          status: inferStatus(phase, data),
+          updatedAt: new Date().toISOString(),
+        });
+      }
     } catch { /* quota / disabled / whatever — best-effort only */ }
-  }, [messages, data, phase, costEstimate]);
+  }, [messages, data, phase, costEstimate, sessionId, sessionKey, quoteTabs]);
 
-  // Hard-reset helper: wipes in-flight state + the snapshot. Wired into
-  // the nav "+ New" button (below) and available for future "start over"
-  // affordances without needing a full page reload.
+  // Hard-reset helper: wipes in-flight state + the snapshot for THIS
+  // session. Drops the tab entry too. Wired into the nav "+ New"
+  // button (below) and available for future "start over" affordances
+  // without needing a full page reload.
   const resetQuoteFlow = useCallback(() => {
-    try { localStorage.removeItem(QUOTE_STATE_KEY); } catch { /* noop */ }
+    try { localStorage.removeItem(sessionKey); } catch { /* noop */ }
+    quoteTabs.remove(sessionId);
     aiConvoRef.current = [];
     setMessages([]);
     setData({ category: null, a1: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
@@ -2558,14 +2598,14 @@ Write ONLY the summary — no questions, no conversational language, no greeting
         }
       `}</style>
 
-      {/* Sticky nav — homie wordmark + back + avatar */}
+      {/* Sticky nav — homie wordmark + back + multi-session tabs + avatar */}
       <nav style={{
         position: 'sticky', top: 0, zIndex: 50,
         background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(16px) saturate(180%)',
-        padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', gap: 16,
         borderBottom: `1px solid ${BORDER}`,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
           {(() => {
             const backTo = authService.isAuthenticated() ? '/account' : '/';
             const backTitle = backTo === '/account' ? 'Back to my account' : 'Back to home';
@@ -2583,12 +2623,44 @@ Write ONLY the summary — no questions, no conversational language, no greeting
             );
           })()}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => { resetQuoteFlow(); window.location.href = '/quote'; }} style={{
-            background: 'none', border: `1px solid ${BORDER}`, borderRadius: 8,
-            padding: '5px 12px', fontSize: 13, fontWeight: 600, color: DIM,
-            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-          }}>+ New</button>
+        {/* Multi-session tabs — visible only when there's at least one
+            saved quote. Keeps the nav clean for brand-new visitors. */}
+        {quoteTabs.tabs.length > 0 && (
+          <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+            <QuoteTabsBar
+              tabs={quoteTabs.tabs}
+              activeTabId={sessionId}
+              onSelect={(id) => {
+                if (id === sessionId) return;
+                quoteTabs.markRead(id);
+                // Navigate + full page load so the session hydration
+                // path runs cleanly. Avoids having to tear down the
+                // current session's in-flight state in place.
+                window.location.href = `/quote?s=${encodeURIComponent(id)}`;
+              }}
+              onClose={(id) => {
+                quoteTabs.remove(id);
+                if (id === sessionId) {
+                  // Closing the active tab — navigate to a fresh one.
+                  window.location.href = '/quote';
+                }
+              }}
+              onNewQuote={() => {
+                // Fresh session: navigate without ?s= so the component
+                // mints a new id on mount.
+                window.location.href = '/quote';
+              }}
+            />
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          {quoteTabs.tabs.length === 0 && (
+            <button onClick={() => { resetQuoteFlow(); window.location.href = '/quote'; }} style={{
+              background: 'none', border: `1px solid ${BORDER}`, borderRadius: 8,
+              padding: '5px 12px', fontSize: 13, fontWeight: 600, color: DIM,
+              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+            }}>+ New</button>
+          )}
           <AvatarDropdown />
         </div>
       </nav>
@@ -3181,9 +3253,17 @@ Write ONLY the summary — no questions, no conversational language, no greeting
         onClose={(hasJob) => {
           setModalOpen(false);
           if (hasJob) {
-            // Booked — drop the snapshot so the next /quote visit starts
-            // fresh instead of restoring the completed conversation.
-            try { localStorage.removeItem(QUOTE_STATE_KEY); } catch { /* noop */ }
+            // Booked — flip this session's tab status to 'booked' so
+            // it sticks around in the bar for 48h as a quick re-entry
+            // point, then ages out into Account → My Quotes. Keep
+            // the snapshot too so the user can scroll back up to
+            // review their diagnosis.
+            quoteTabs.upsert({
+              id: sessionId,
+              title: deriveTitle(data),
+              status: 'booked',
+              updatedAt: new Date().toISOString(),
+            });
             navigate('/account?tab=quotes');
           }
           // If !hasJob: keep every piece of state (chat, diagnosis, phase,
