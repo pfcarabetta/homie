@@ -104,37 +104,48 @@ export default function OutreachTransparencyStrip({ activity, maxVisible = 3, on
   // Single-open expansion — only one quoted row can be expanded at a
   // time so the panel doesn't balloon vertically.
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  // Sort: in-flight items first (connected > contacting — connected is
-  // a stronger engagement signal), then quoted (newest), then declined.
-  // no_response is filtered out.
-  const sorted = useMemo(() => {
-    const rank: Record<ProviderActivityStatus, number> = {
+
+  // Split into two groups so the rendered strip has clear section
+  // breaks: QUOTES (actionable outcomes) rendered above LIVE OUTREACH
+  // (still-in-flight state). Within each group, newer items float to
+  // the top so the latest event is always visible.
+  const { quotes, live } = useMemo(() => {
+    const withStarted = (a: ProviderActivity) => a.startedAt ?? 0;
+    const liveRank: Record<ProviderActivityStatus, number> = {
       connected: 0,
       contacting: 1,
-      quoted: 2,
-      declined: 3,
-      no_response: 99,
+      quoted: 99,      // filtered out of live group
+      declined: 2,
+      no_response: 99, // filtered out entirely
     };
-    return activity
-      .filter(a => a.status !== 'no_response')
-      .slice()
-      .sort((a, b) => {
-        const r = rank[a.status] - rank[b.status];
-        if (r !== 0) return r;
-        // Within the same tier, newer-started on top.
-        return (b.startedAt ?? 0) - (a.startedAt ?? 0);
-      });
+    const quoted: ProviderActivity[] = [];
+    const liveOut: ProviderActivity[] = [];
+    for (const a of activity) {
+      if (a.status === 'quoted') quoted.push(a);
+      else if (a.status !== 'no_response') liveOut.push(a);
+    }
+    quoted.sort((a, b) => withStarted(b) - withStarted(a));
+    liveOut.sort((a, b) => {
+      const r = liveRank[a.status] - liveRank[b.status];
+      if (r !== 0) return r;
+      return withStarted(b) - withStarted(a);
+    });
+    return { quotes: quoted, live: liveOut };
   }, [activity]);
 
-  if (sorted.length === 0) return null;
+  if (quotes.length === 0 && live.length === 0) return null;
 
-  const visible = sorted.slice(0, maxVisible);
-  const hiddenCount = sorted.length - visible.length;
+  // Quotes section is unbounded (they're the actionable payoff — show
+  // them all). Live section capped at maxVisible; overflow collapses
+  // into a "+N more" chip below.
+  const liveVisible = live.slice(0, maxVisible);
+  const liveHidden = live.length - liveVisible.length;
+  const activeCount = activity.filter(a => a.status === 'contacting' || a.status === 'connected').length;
 
   return (
     <div style={{
       background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14,
-      padding: 10, display: 'flex', flexDirection: 'column', gap: 8,
+      padding: 10, display: 'flex', flexDirection: 'column', gap: 14,
       animation: 'fadeSlide 0.3s ease',
     }}>
       <style>{`
@@ -143,29 +154,65 @@ export default function OutreachTransparencyStrip({ activity, maxVisible = 3, on
         @keyframes otsSlideIn { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: translateY(0) } }
       `}</style>
 
-      <Header activeCount={activity.filter(a => a.status === 'contacting' || a.status === 'connected').length} />
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {visible.map(a => (
-          <ActivityRow
-            key={a.providerId}
-            activity={a}
-            expanded={expandedId === a.providerId}
-            onToggle={() => setExpandedId(id => id === a.providerId ? null : a.providerId)}
-            onBook={onBook}
-            onCall={onCall}
+      {/* QUOTES section — actionable, rendered first so the user sees
+          the outcome above the process. Hidden when no quotes yet. */}
+      {quotes.length > 0 && (
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <SectionHeader
+            icon={<QuoteDot />}
+            label="Quotes received"
+            count={quotes.length}
+            countLabel="ready to book"
           />
-        ))}
-      </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {quotes.map(a => (
+              <ActivityRow
+                key={a.providerId}
+                activity={a}
+                expanded={expandedId === a.providerId}
+                onToggle={() => setExpandedId(id => id === a.providerId ? null : a.providerId)}
+                onBook={onBook}
+                onCall={onCall}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
-      {hiddenCount > 0 && (
-        <div style={{
-          marginTop: 2, padding: '4px 10px', alignSelf: 'flex-start',
-          fontSize: 11, color: DIM, fontFamily: "'DM Mono',monospace",
-          letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase',
-        }}>
-          +{hiddenCount} more {hiddenCount === 1 ? 'provider' : 'providers'} in queue
-        </div>
+      {/* LIVE OUTREACH section — everything that's still in flight or
+          recently declined. Hidden once every provider has either
+          quoted or dropped off. */}
+      {live.length > 0 && (
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <SectionHeader
+            icon={<LivePulseDot />}
+            label="Live outreach"
+            count={activeCount}
+            countLabel={activeCount === 1 ? 'active' : 'active'}
+            showCountWhenZero={false}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {liveVisible.map(a => (
+              <ActivityRow
+                key={a.providerId}
+                activity={a}
+                expanded={false}
+                onToggle={() => {}}
+                onBook={onBook}
+                onCall={onCall}
+              />
+            ))}
+          </div>
+          {liveHidden > 0 && (
+            <div style={{
+              padding: '4px 4px', alignSelf: 'flex-start',
+              fontSize: 10.5, color: DIM, fontFamily: "'DM Mono',monospace",
+              letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase',
+            }}>
+              +{liveHidden} more {liveHidden === 1 ? 'provider' : 'providers'} in queue
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
@@ -173,28 +220,57 @@ export default function OutreachTransparencyStrip({ activity, maxVisible = 3, on
 
 // ── Internal pieces ──────────────────────────────────────────────────
 
-function Header({ activeCount }: { activeCount: number }) {
+/** Generic section header. Accepts a slotted icon so each section can
+ *  brand itself (pulsing green dot for Live, solid check for Quotes)
+ *  while keeping the typographic rhythm identical across sections. */
+function SectionHeader({
+  icon, label, count, countLabel, showCountWhenZero = true,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  countLabel: string;
+  showCountWhenZero?: boolean;
+}) {
+  const showCount = count > 0 || showCountWhenZero;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px' }}>
-      <div style={{ position: 'relative', width: 8, height: 8, flexShrink: 0 }}>
-        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: G }} />
-        <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: G, opacity: .25, animation: 'otsPulse 1.6s infinite' }} />
-      </div>
+      {icon}
       <span style={{
         fontSize: 10.5, fontFamily: "'DM Mono',monospace", letterSpacing: 1.3,
         textTransform: 'uppercase', fontWeight: 700, color: DIM,
       }}>
-        Live outreach
+        {label}
       </span>
       <span style={{ flex: 1 }} />
-      {activeCount > 0 && (
-        <span style={{
-          fontSize: 11, color: G, fontWeight: 700,
-        }}>
-          {activeCount} active
+      {showCount && (
+        <span style={{ fontSize: 11, color: G, fontWeight: 700 }}>
+          {count} {countLabel}
         </span>
       )}
     </div>
+  );
+}
+
+function LivePulseDot() {
+  return (
+    <div style={{ position: 'relative', width: 8, height: 8, flexShrink: 0 }}>
+      <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: G }} />
+      <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: G, opacity: .25, animation: 'otsPulse 1.6s infinite' }} />
+    </div>
+  );
+}
+
+function QuoteDot() {
+  // Solid check in a tinted green pill — signals "landed / stable"
+  // rather than "in flight".
+  return (
+    <div style={{
+      width: 14, height: 14, borderRadius: 3, background: G,
+      color: '#fff', fontSize: 9, fontWeight: 900,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0,
+    }}>✓</div>
   );
 }
 
