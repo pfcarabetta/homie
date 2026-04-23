@@ -1110,6 +1110,21 @@ function buildHomeContext(home: HomeData): string {
   return parts.join(' ');
 }
 
+/** Strip the "[Home details: …]" prefix that askFollowUp prepends to the
+ *  first user message in aiConvoRef. That prefix is meant ONLY to
+ *  enrich Claude's context — not to be treated as user-authored text
+ *  by anything downstream. In particular, the Home IQ correlation feeds
+ *  on data.extra (which is built from aiConvoRef), and leaving the
+ *  prefix in place causes every appliance brand in the home profile
+ *  (Rheem, Samsung, Train…) to light up as a STRONG correlation hit
+ *  for its item, regardless of what the user actually discussed. */
+function stripHomeContext(content: string): string {
+  // Matches `[Home details: ...]` up to and including the trailing "] "
+  // (followed by whatever the user actually typed). Non-greedy to avoid
+  // swallowing other bracketed mentions elsewhere in the message.
+  return content.replace(/\[Home details:[\s\S]*?\]\s*/g, '').trim();
+}
+
 /* -- Quote Outreach Modal -- */
 interface QuoteOutreachModalProps {
   isOpen: boolean;
@@ -2074,7 +2089,15 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
             if (!cleaned) {
               setMessages(m => m.filter(msg => !('id' in msg)));
             }
-            const allUserDetails = aiConvoRef.current.filter(m => m.role === 'user').map(m => m.content).join('. ');
+            // stripHomeContext removes the "[Home details: HVAC: ... Water
+            // heater: Rheem...]" prefix that askFollowUp prepends to the
+            // first user message for AI context. If we let that leak into
+            // data.extra, Home IQ correlation would see every appliance's
+            // brand name as chat text and light up EVERY item.
+            const allUserDetails = aiConvoRef.current
+              .filter(m => m.role === 'user')
+              .map(m => stripHomeContext(m.content))
+              .join('. ');
             setData(d => ({ ...d, extra: allUserDetails }));
             setTimeout(() => {
               addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
@@ -2107,7 +2130,13 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
   const handleSkipFollowUp = () => {
     setPhase('waiting');
     addUser("No, that covers it");
-    const allUserDetails = aiConvoRef.current.filter(m => m.role === 'user').map(m => m.content).join('. ');
+    // Same home-context strip as the <ready> branch above — without it,
+    // every appliance brand name in the home's profile leaks into
+    // data.extra and correlates against Home IQ.
+    const allUserDetails = aiConvoRef.current
+      .filter(m => m.role === 'user')
+      .map(m => stripHomeContext(m.content))
+      .join('. ');
     setData(d => ({ ...d, extra: allUserDetails }));
     setTimeout(() => {
       addAssistant("Anything else you want the pro to know? You can also add a photo to help with the diagnosis.");
