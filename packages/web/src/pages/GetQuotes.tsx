@@ -14,6 +14,7 @@ import HomeIQPanel, { HomeIQInlineChip } from '@/components/HomeIQPanel';
 import ModelScanCard from '@/components/ModelScanCard';
 import ProtectionCard from '@/components/ProtectionCard';
 import QuoteTabsBar from '@/components/QuoteTabsBar';
+import InlineOutreachPanel from '@/components/InlineOutreachPanel';
 import { useHomeIQ } from '@/hooks/useHomeIQ';
 import { useQuoteTabs, newSessionId, sessionStorageKey, deriveTitle, inferStatus } from '@/hooks/useQuoteTabs';
 import { correlateItemToChat, computeSharedItemTypeWords } from '@/utils/home-iq';
@@ -1127,7 +1128,14 @@ function stripHomeContext(content: string): string {
   return content.replace(/\[Home details:[\s\S]*?\]\s*/g, '').trim();
 }
 
-/* -- Quote Outreach Modal -- */
+/* -- Quote Outreach Modal --
+ *  Handles the pre-dispatch confirmation flow (tier → preferences →
+ *  auth_gate). Once the user is ready to launch outreach, the modal
+ *  calls `onOutreachStart(jobId)` and closes itself; the parent
+ *  renders `<InlineOutreachPanel>` in the right split so the live
+ *  dispatch view shares the screen with the diagnosis + estimate
+ *  instead of hiding inside a modal.
+ */
 interface QuoteOutreachModalProps {
   isOpen: boolean;
   onClose: (hasJob: boolean) => void;
@@ -1137,10 +1145,16 @@ interface QuoteOutreachModalProps {
   costEstimate: CostEstimate | null;
   isDemo: boolean;
   onBooked: (providerName: string) => void;
+  /** Fires the moment the modal transitions to the outreach phase
+   *  (real jobId minted OR demo mode kicked off). Parent uses this
+   *  to stash the jobId + close the modal + render the inline
+   *  outreach panel. */
+  onOutreachStart: (jobId: string | null) => void;
   initialJobId?: string | null;
 }
 
-function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory, costEstimate: initialEstimate, isDemo, onBooked, initialJobId }: QuoteOutreachModalProps) {
+function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory, costEstimate: initialEstimate, isDemo, onBooked: _onBooked, onOutreachStart, initialJobId }: QuoteOutreachModalProps) {
+  void _onBooked; // booking is handled by InlineOutreachPanel now
   const navigate = useNavigate();
   const { pricing } = usePricing();
   const [step, setStep] = useState<'tier' | 'preferences' | 'auth_gate' | 'outreach'>(initialJobId ? 'outreach' : 'tier');
@@ -1199,8 +1213,10 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
 
   useEffect(() => {
     if (initialJobId) {
-      setJobId(initialJobId);
-      setStep('outreach');
+      // Re-entering with an existing job (e.g., deep-link / tab-resume).
+      // Hand straight off to the inline panel — no modal chrome needed.
+      onOutreachStart(initialJobId);
+      onClose(true);
     }
   }, [initialJobId]);
 
@@ -1285,7 +1301,10 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
     setError(null);
 
     if (isDemo) {
-      setStep('outreach');
+      // Demo path has no real job; hand off to the inline panel with
+      // a null jobId so it runs the mock timeline instead.
+      onOutreachStart(null);
+      onClose(false);
       return;
     }
 
@@ -1345,7 +1364,8 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
       // No checkout URL or payment not configured — launch outreach directly
       setJobId(res.data.id);
       setLoading(false);
-      setStep('outreach');
+      onOutreachStart(res.data.id);
+      onClose(true);
     } catch (err) {
       setError(`Something went wrong: ${(err as Error).message || 'Unknown error'}. Please try again.`);
       setLoading(false);
@@ -1645,7 +1665,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                           <button onClick={async () => {
                             if (isDemo) {
                               setBooked(p as unknown as typeof MOCK_PROVIDERS[number]);
-                              onBooked(p.name);
+                              _onBooked(p.name);
                               return;
                             }
                             const addrInput = document.getElementById(`modal-addr-${i}`) as HTMLInputElement;
@@ -1655,7 +1675,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                               try {
                                 await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id, address);
                                 setBooked(p as unknown as typeof MOCK_PROVIDERS[number]);
-                                onBooked(p.name);
+                                _onBooked(p.name);
                               } catch (err) {
                                 console.error('[QuoteModal] Booking failed:', err);
                               }
@@ -1765,6 +1785,12 @@ export default function GetQuotes() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(() => snapshot?.costEstimate ?? null);
   const [neighborhoodStats, setNeighborhoodStats] = useState<NeighborhoodStats | null>(null);
+  // Once the QuoteOutreachModal transitions to outreach, it hands the
+  // jobId here and closes itself. We then render InlineOutreachPanel
+  // in the right split instead of "Homie is listening" — no modal,
+  // diagnosis + live outreach share the screen.
+  const [outreachJobId, setOutreachJobId] = useState<string | null>(null);
+  const [outreachActive, setOutreachActive] = useState(false);
   // Proactive model-label scan. Populated when Claude emits a
   // <scan_request> tag for a specific appliance whose brand/model aren't
   // in Home IQ yet. The ModelScanCard renders inline in the chat and
@@ -3100,8 +3126,30 @@ Write ONLY the summary — no questions, no conversational language, no greeting
             </div>
           </div>
 
-          {/* RIGHT — live "homie is listening" panel */}
+          {/* RIGHT — live "homie is listening" panel OR the inline
+              outreach panel once dispatch has launched. Diagnosis +
+              estimate stay on the left so both surfaces are visible
+              at once — no modal. */}
           <div className="gq-right-panel" style={{ position: 'sticky', top: 92 }}>
+            {outreachActive ? (
+              <InlineOutreachPanel
+                jobId={outreachJobId}
+                isDemo={isDemo}
+                costEstimate={costEstimate}
+                onBooked={(providerName: string) => {
+                  addAssistant(`Great news! ${providerName} has been booked. They'll be in touch to confirm details.`);
+                  // Flip this session's tab status to 'booked' so it
+                  // sticks around as a 48h re-entry chip, then ages
+                  // out into Account → My Quotes.
+                  quoteTabs.upsert({
+                    id: sessionId,
+                    title: deriveTitle(data),
+                    status: 'booked',
+                    updatedAt: new Date().toISOString(),
+                  });
+                }}
+              />
+            ) : (<>
             <div style={{
               background: '#fff', borderRadius: 24, border: `1px solid ${BORDER}`,
               padding: '24px 24px 22px', boxShadow: '0 20px 60px -24px rgba(0,0,0,.1)',
@@ -3239,6 +3287,8 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                 <div style={{ fontSize: 12, opacity: .75, marginTop: 2 }}>No calling around. No endless forms.</div>
               </div>
             </div>
+            </>
+            )}
           </div>
         </div>
       </section>
@@ -3252,28 +3302,22 @@ Write ONLY the summary — no questions, no conversational language, no greeting
           see `<InlineVoicePanel>` above where DirectInput would otherwise
           sit. No page-level modal mount needed. */}
 
-      {/* Quote Outreach Modal */}
+      {/* Quote Outreach Modal — pre-dispatch confirmation ONLY
+          (tier → preferences → auth_gate). The moment the modal is
+          ready to kick off outreach it fires onOutreachStart(jobId)
+          and closes; the inline panel in the right split takes over
+          from there. */}
       <QuoteOutreachModal
         isOpen={modalOpen}
-        onClose={(hasJob) => {
+        onClose={(_hasJob) => {
           setModalOpen(false);
-          if (hasJob) {
-            // Booked — flip this session's tab status to 'booked' so
-            // it sticks around in the bar for 48h as a quick re-entry
-            // point, then ages out into Account → My Quotes. Keep
-            // the snapshot too so the user can scroll back up to
-            // review their diagnosis.
-            quoteTabs.upsert({
-              id: sessionId,
-              title: deriveTitle(data),
-              status: 'booked',
-              updatedAt: new Date().toISOString(),
-            });
-            navigate('/account?tab=quotes');
-          }
-          // If !hasJob: keep every piece of state (chat, diagnosis, phase,
-          // estimate) intact so the user can review what they told Homie
-          // and re-tap Continue without starting over.
+          // Note: booking completion is now handled by
+          // InlineOutreachPanel's onBooked callback below, not here.
+        }}
+        onOutreachStart={(id) => {
+          setOutreachJobId(id);
+          setOutreachActive(true);
+          setJobId(id);
         }}
         diagnosis={data.aiDiagnosis || ''}
         category={data.category || ''}
@@ -3282,6 +3326,9 @@ Write ONLY the summary — no questions, no conversational language, no greeting
         isDemo={isDemo}
         initialJobId={jobId}
         onBooked={(providerName: string) => {
+          // Legacy callback — no longer fires from the modal, but kept
+          // for type compatibility. InlineOutreachPanel wires its own
+          // onBooked to the handler below.
           addAssistant(`Great news! ${providerName} has been booked. They'll be in touch to confirm details.`);
         }}
       />
