@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 /**
  * Live-outreach transparency strip — sits above the existing
  * HomieOutreachLive aggregate view during the 2-minute dispatch window.
  * Shows individual provider activity Uber-style so the wait feels
- * active: "Bob at Rapid Rooter is reviewing your job · quote expected
- * in ~4 min", "Quote from ABC Plumbing: $180 · available today 2–4pm",
- * etc.
+ * active: "Connected with Miguel at Rapid Rooter · Response expected
+ * soon", "Quote from ABC Plumbing: $180 · available today 2–4pm", etc.
  *
  * Component contract is designed for a future WS event —
  * `provider_activity` with the ProviderActivity shape below — but the
@@ -16,16 +15,17 @@ import { useEffect, useMemo, useState } from 'react';
  * UX decisions:
  *   • Max 3 visible rows so the strip stays compact. Older activity
  *     collapses into a "+N more" chip (click to expand — v2).
- *   • Activity rows auto-sort: in-flight (contacting/reviewing) on
+ *   • Activity rows auto-sort: in-flight (contacting/connected) on
  *     top, then quoted (most recent first), declined drops off.
  *   • Channel badge (📞 / 💬 / 🌐) + subtle pulse when in-flight.
- *   • Expected-response countdown ticks live; hits "any moment now"
- *     at ≤30s.
+ *   • No speculative time estimates — `connected` only fires when the
+ *     backend DETECTS engagement (voice answered / SMS reply / web
+ *     acknowledgment). Secondary line says "Response expected soon"
+ *     instead of a fake countdown.
  */
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926';
 const DIM = '#6B6560';
-const AMBER = '#EF9F27';
 const BORDER = 'rgba(0,0,0,.08)';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -33,8 +33,11 @@ const BORDER = 'rgba(0,0,0,.08)';
 export type ProviderActivityStatus =
   /** Just started contacting — voice ringing, SMS sending, web submitting. */
   | 'contacting'
-  /** Provider acknowledged / opened the request, reviewing now. */
-  | 'reviewing'
+  /** Provider engagement DETECTED by the backend — voice call
+   *  answered, SMS reply received, or web form acknowledged. Only
+   *  fires on real signal; no speculative "they're probably reading
+   *  it" states. */
+  | 'connected'
   /** Quote landed. Priceless visibility for the homeowner. */
   | 'quoted'
   /** Provider declined or opted out. Renders briefly then collapses. */
@@ -50,12 +53,8 @@ export interface ProviderActivity {
   company?: string | null;
   channel: OutreachChannel;
   status: ProviderActivityStatus;
-  /** Seconds from startedAt until we'd expect a response — driven by
-   *  the provider's historical avg_response_sec. Ticks down in the UI. */
-  expectedInSec?: number | null;
-  /** Timestamp (epoch ms) when we started contacting this provider —
-   *  used to compute the live countdown without relying on setInterval
-   *  inside each row. */
+  /** Timestamp (epoch ms) when we started contacting this provider.
+   *  Not rendered today — kept for future use (e.g., sort stability). */
   startedAt?: number;
   quote?: { priceLabel: string; availability?: string };
   /** Optional seed color — derived from company name in the demo. */
@@ -74,11 +73,12 @@ interface Props {
 }
 
 export default function OutreachTransparencyStrip({ activity, maxVisible = 3, onQuoteTap }: Props) {
-  // Sort: in-flight items first (contacting/reviewing), then quoted
-  // (newest), then declined. no_response is filtered out.
+  // Sort: in-flight items first (connected > contacting — connected is
+  // a stronger engagement signal), then quoted (newest), then declined.
+  // no_response is filtered out.
   const sorted = useMemo(() => {
     const rank: Record<ProviderActivityStatus, number> = {
-      reviewing: 0,
+      connected: 0,
       contacting: 1,
       quoted: 2,
       declined: 3,
@@ -112,7 +112,7 @@ export default function OutreachTransparencyStrip({ activity, maxVisible = 3, on
         @keyframes otsSlideIn { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: translateY(0) } }
       `}</style>
 
-      <Header activeCount={activity.filter(a => a.status === 'contacting' || a.status === 'reviewing').length} />
+      <Header activeCount={activity.filter(a => a.status === 'contacting' || a.status === 'connected').length} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {visible.map(a => (
@@ -292,13 +292,16 @@ function describe(a: ProviderActivity): {
           secondary: 'Reaching out now',
         },
       };
-    case 'reviewing':
+    case 'connected':
+      // Only fires when the backend DETECTS engagement (voice answered,
+      // SMS reply, web ack). We never fabricate a time estimate —
+      // "Response expected soon" is honest; "expected in ~4 min" is not.
       return {
         inFlight: true,
-        accent: AMBER,
+        accent: G,
         copy: {
-          primary: `${actor} is reviewing your job`,
-          secondary: <LiveCountdown startedAt={a.startedAt ?? Date.now()} expectedInSec={a.expectedInSec} />,
+          primary: `Connected with ${actor}`,
+          secondary: 'Response expected soon',
         },
       };
     case 'quoted':
@@ -322,28 +325,6 @@ function describe(a: ProviderActivity): {
     default:
       return { inFlight: false, accent: DIM, copy: { primary: company, secondary: null } };
   }
-}
-
-/** Small live countdown rendered into the secondary copy. Uses a local
- *  tick instead of a parent timer so only the one row that needs it
- *  re-renders each second. */
-function LiveCountdown({ startedAt, expectedInSec }: { startedAt: number; expectedInSec?: number | null }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const i = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(i);
-  }, []);
-  if (!expectedInSec || expectedInSec <= 0) {
-    return <>Typically responds fast</>;
-  }
-  const elapsed = Math.floor((now - startedAt) / 1000);
-  const remaining = Math.max(0, expectedInSec - elapsed);
-  if (remaining === 0) return <>Any moment now</>;
-  const mins = Math.floor(remaining / 60);
-  const secs = remaining % 60;
-  if (remaining <= 30) return <>Any moment now</>;
-  if (mins === 0) return <>Quote expected in ~{secs}s</>;
-  return <>Quote expected in ~{mins} min</>;
 }
 
 // ── Utilities ────────────────────────────────────────────────────────

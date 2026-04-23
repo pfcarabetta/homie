@@ -22,7 +22,6 @@ import OutreachTransparencyStrip, { type ProviderActivity } from '@/components/O
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 const DIM = '#6B6560';
 const BORDER = 'rgba(0,0,0,.08)';
-const AMBER = '#EF9F27';
 
 // ── Page ──────────────────────────────────────────────────────────────
 
@@ -50,14 +49,8 @@ export default function OutreachTransparencyDemo() {
   const stats = useMemo(() => {
     const contacted = activity.filter(a => a.status !== 'no_response').length;
     const quoted = activity.filter(a => a.status === 'quoted').length;
-    const reviewing = activity.filter(a => a.status === 'reviewing').length;
-    // Crude ETA: pick the min remaining expected time across reviewing.
-    const nowMs = Date.now();
-    const etas = activity
-      .filter(a => a.status === 'reviewing' && a.startedAt && a.expectedInSec)
-      .map(a => Math.max(0, (a.expectedInSec! - Math.floor((nowMs - a.startedAt!) / 1000))));
-    const etaSec = etas.length > 0 ? Math.min(...etas) : null;
-    return { contacted, quoted, reviewing, etaSec };
+    const connected = activity.filter(a => a.status === 'connected').length;
+    return { contacted, quoted, connected };
   }, [activity]);
 
   return (
@@ -230,7 +223,7 @@ function RightOutreachColumn({
 }: {
   activity: ProviderActivity[];
   log: LogEntry[];
-  stats: { contacted: number; quoted: number; reviewing: number; etaSec: number | null };
+  stats: { contacted: number; quoted: number; connected: number };
 }) {
   return (
     <div style={{ position: 'sticky', top: 72 }}>
@@ -239,21 +232,11 @@ function RightOutreachColumn({
         padding: '20px 20px 16px', boxShadow: '0 20px 60px -24px rgba(0,0,0,.12)',
         display: 'flex', flexDirection: 'column', gap: 14,
       }}>
-        {/* Header — swaps in where "homie is listening" used to be */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 10, background: O,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            position: 'relative',
-          }}>
-            <span style={{ fontFamily: "'Fraunces',serif", color: '#fff', fontWeight: 700, fontSize: 19 }}>h</span>
-            <span style={{
-              position: 'absolute', top: -2, right: -2,
-              width: 12, height: 12, borderRadius: '50%',
-              background: G, border: '2px solid #fff',
-              animation: 'pulse 1.6s infinite',
-            }} />
-          </div>
+        {/* Header — same animated spinning H as HomieGeneratingCard,
+            scaled down to fit the compact panel slot. Replaces the
+            square 40px block that was here before. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <HomieSpinningLogo />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "'Fraunces',serif", fontSize: 17, fontWeight: 700, color: D, lineHeight: 1.2 }}>
               Homie is reaching out
@@ -264,15 +247,12 @@ function RightOutreachColumn({
           </div>
         </div>
 
-        {/* Aggregate stats — small, shown as a single row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+        {/* Aggregate stats — two columns now (ETA removed; we no longer
+            fabricate time estimates). Contacted + Quoted is the honest
+            picture of what the outreach engine actually knows. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <MiniStat label="Contacted" value={stats.contacted} color={O} />
           <MiniStat label="Quoted" value={stats.quoted} color={G} />
-          <MiniStat
-            label="ETA"
-            value={stats.etaSec != null ? formatEta(stats.etaSec) : '—'}
-            color={D}
-          />
         </div>
 
         {/* The new transparency strip */}
@@ -391,11 +371,12 @@ function ActivityTicker({ log }: { log: LogEntry[] }) {
 
 function logColor(t: LogEntry['type']): string {
   switch (t) {
-    case 'quote':   return '#7ED0B1'; // softer green
-    case 'contact': return '#F6B76A'; // amber
-    case 'decline': return '#9B9490'; // muted
-    case 'system':  return '#C7C3BE';
-    default:        return '#E8E4DF';
+    case 'quote':     return '#7ED0B1'; // softer green
+    case 'connected': return '#9FD9BD'; // pale green — engagement signal
+    case 'contact':   return '#F6B76A'; // amber
+    case 'decline':   return '#9B9490'; // muted
+    case 'system':    return '#C7C3BE';
+    default:          return '#E8E4DF';
   }
 }
 
@@ -412,7 +393,7 @@ interface ScriptFrame {
 interface LogEntry {
   t: number;
   text: string;
-  type: 'contact' | 'quote' | 'decline' | 'system' | 'review';
+  type: 'contact' | 'quote' | 'decline' | 'system' | 'connected';
 }
 
 function buildScript(): ScriptFrame[] {
@@ -424,7 +405,7 @@ function buildScript(): ScriptFrame[] {
       channel: 'voice',
       frames: [
         { t: 0,  state: { status: 'contacting' } },
-        { t: 18, state: { status: 'reviewing', expectedInSec: 180 } },
+        { t: 18, state: { status: 'connected' } },
         { t: 44, state: { status: 'quoted', quote: { priceLabel: '$180', availability: 'Available today 2–4pm' } } },
       ],
     },
@@ -435,7 +416,7 @@ function buildScript(): ScriptFrame[] {
       channel: 'sms',
       frames: [
         { t: 2,  state: { status: 'contacting' } },
-        { t: 16, state: { status: 'reviewing', expectedInSec: 240 } },
+        { t: 16, state: { status: 'connected' } },
         { t: 70, state: { status: 'declined' } },
       ],
     },
@@ -446,7 +427,7 @@ function buildScript(): ScriptFrame[] {
       channel: 'web',
       frames: [
         { t: 8,  state: { status: 'contacting' } },
-        { t: 40, state: { status: 'reviewing', expectedInSec: 300 } },
+        { t: 40, state: { status: 'connected' } },
         { t: 95, state: { status: 'quoted', quote: { priceLabel: '$225', availability: 'Tomorrow 9–11am' } } },
       ],
     },
@@ -457,7 +438,7 @@ function buildScript(): ScriptFrame[] {
       channel: 'voice',
       frames: [
         { t: 75,  state: { status: 'contacting' } },
-        { t: 105, state: { status: 'reviewing', expectedInSec: 210 } },
+        { t: 105, state: { status: 'connected' } },
       ],
     },
   ];
@@ -499,8 +480,9 @@ function buildLog(script: ScriptFrame[], tSec: number): LogEntry[] {
       if (f.state.status === 'contacting') {
         const verb = p.channel === 'voice' ? 'Calling' : p.channel === 'sms' ? 'SMS to' : 'Web request to';
         out.push({ t: f.t, text: `${verb} ${actor}`, type: 'contact' });
-      } else if (f.state.status === 'reviewing') {
-        out.push({ t: f.t, text: `${p.name} opened the brief at ${actor}`, type: 'review' });
+      } else if (f.state.status === 'connected') {
+        const verb = p.channel === 'voice' ? 'answered' : p.channel === 'sms' ? 'replied' : 'opened the request';
+        out.push({ t: f.t, text: `${p.name} ${verb} at ${actor}`, type: 'connected' });
       } else if (f.state.status === 'quoted') {
         out.push({ t: f.t, text: `Quote from ${actor}: ${f.state.quote?.priceLabel ?? ''}`, type: 'quote' });
       } else if (f.state.status === 'declined') {
@@ -519,10 +501,43 @@ function formatClock(tSec: number): string {
   return `+${mm}:${ss}`;
 }
 
-function formatEta(sec: number): string {
-  if (sec < 60) return `<1m`;
-  const m = Math.round(sec / 60);
-  return `~${m}m`;
+/** Compact version of the HomieGeneratingCard's animated avatar.
+ *  Same spinning orange ring + pulsing orange "h" disk, scaled to fit
+ *  the panel header slot (48px outer / 32px inner). */
+function HomieSpinningLogo() {
+  return (
+    <div style={{
+      position: 'relative', width: 48, height: 48, flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <style>{`
+        @keyframes homieSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes homieBeat {
+          0%, 100% { transform: scale(1); box-shadow: 0 6px 16px -4px ${O}66; }
+          50%      { transform: scale(1.06); box-shadow: 0 10px 24px -4px ${O}99; }
+        }
+      `}</style>
+      {/* Orange spinning ring — matches the diagnosis-generating card. */}
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: '50%',
+        border: `2.5px solid ${O}22`,
+        borderTopColor: O,
+        borderRightColor: `${O}88`,
+        animation: 'homieSpin 1.4s linear infinite',
+      }} />
+      {/* Solid Homie disk with the "h" wordmark. */}
+      <div style={{
+        width: 32, height: 32, borderRadius: '50%', background: O,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        animation: 'homieBeat 1.8s ease-in-out infinite',
+      }}>
+        <span style={{
+          color: '#fff', fontFamily: "'Fraunces',serif",
+          fontWeight: 700, fontSize: 16, lineHeight: 1,
+        }}>h</span>
+      </div>
+    </div>
+  );
 }
 
 const controlBtn: React.CSSProperties = {
@@ -530,7 +545,3 @@ const controlBtn: React.CSSProperties = {
   borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
   fontFamily: "'DM Sans',sans-serif", color: D,
 };
-
-// Unused alias to satisfy older intent; kept to prevent a future refactor
-// from accidentally re-introducing amber styling for a non-reviewing row.
-void AMBER;
