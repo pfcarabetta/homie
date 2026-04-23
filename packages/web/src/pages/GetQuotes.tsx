@@ -2466,14 +2466,17 @@ Write ONLY the summary — no questions, no conversational language, no greeting
             <div style={{ height: 14 }} />
 
             {/* Chat log — existing AssistantMsg/UserMsg bubbles.
-                Hidden while the final dispatch summary is being generated;
-                replaced with the Homie spinner until the diagnosis card
-                takes over. Matches the business-chat silentGeneration
-                pattern so voice + text paths feel identical. */}
+                Hidden in two cases:
+                  1. generatingDispatch — the summary stream is in flight;
+                     replaced with the Homie spinner.
+                  2. phase === 'diagnosis' — once the diagnosis card takes
+                     over, the transcript becomes noise. User sees the
+                     dispatch brief + tier cards as the only content.
+                Matches the business-chat silentGeneration pattern. */}
             <div className="gq-chat-area">
               {generatingDispatch ? (
                 <HomieGeneratingCard />
-              ) : (
+              ) : phase !== 'diagnosis' ? (
                 <>
                   {messages.map((m, i) => (
                     m.role === 'assistant'
@@ -2481,7 +2484,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                       : <UserMsg key={i} text={m.text} />
                   ))}
                 </>
-              )}
+              ) : null}
 
               {phase === 'diagnosis' && data.a1 && (
                 <>
