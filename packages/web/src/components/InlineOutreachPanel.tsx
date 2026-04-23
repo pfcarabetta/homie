@@ -233,21 +233,21 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
     },
   })), [providers]);
 
-  async function handleBook(providerId: string) {
+  async function handleBook(providerId: string, address: string) {
     const p = providers.find(x => ('responseId' in x ? x.responseId : x.id) === providerId);
     if (!p) return;
     if (isDemo) {
       onBooked(p.name);
       return;
     }
-    // Real flow needs a service address. Prefer the home-address
-    // pre-fetched on mount; fall back to a native prompt so the
-    // user can always type one in.
-    const address = homeAddress || window.prompt(`Service address for ${p.name}?`) || '';
-    if (!address.trim()) return;
+    // The strip's expanded row collects the service address inline
+    // (pre-filled with homeAddress when available) and hands it to
+    // us here — no more window.prompt fallback.
+    const addr = address.trim();
+    if (!addr) return;
     if (!jobId || !('responseId' in p)) return;
     try {
-      await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id, address.trim());
+      await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id, addr);
       onBooked(p.name);
     } catch (err) {
       console.error('[InlineOutreach] Booking failed:', err);
@@ -303,6 +303,8 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
           activity={activity}
           onBook={handleBook}
           onCall={() => { /* tel: link handles it */ }}
+          defaultBookAddress={homeAddress}
+          skipAddressInput={isDemo}
         />
       )}
 

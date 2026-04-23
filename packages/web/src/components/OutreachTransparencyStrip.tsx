@@ -91,16 +91,24 @@ interface Props {
   /** How many rows are visible at once. Rest collapse into "+N more". */
   maxVisible?: number;
   /** Fires when the user taps "Book this provider" inside an expanded
-   *  quoted row. Receives the response id (same as ProviderActivity.providerId
-   *  in the mock; in production this would be the provider_response id). */
-  onBook?: (providerId: string) => void;
+   *  quoted row. Receives the provider id + the service address the
+   *  user typed (pre-filled with `defaultBookAddress` if provided). */
+  onBook?: (providerId: string, address: string) => void;
   /** Fires when the user taps the "Call" button — optional, defaults
    *  to opening the phone's tel: link when a phone number is on the
    *  profile. */
   onCall?: (providerId: string, phone: string | undefined) => void;
+  /** Pre-populate the service-address input shown in the expanded row.
+   *  Typically the homeowner's primary address from Home IQ. */
+  defaultBookAddress?: string;
+  /** When true, the inline address input is suppressed and the Book
+   *  button fires with an empty address (e.g., demo mode). */
+  skipAddressInput?: boolean;
 }
 
-export default function OutreachTransparencyStrip({ activity, maxVisible = 3, onBook, onCall }: Props) {
+export default function OutreachTransparencyStrip({
+  activity, maxVisible = 3, onBook, onCall, defaultBookAddress, skipAddressInput,
+}: Props) {
   // Single-open expansion — only one quoted row can be expanded at a
   // time so the panel doesn't balloon vertically.
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -173,6 +181,8 @@ export default function OutreachTransparencyStrip({ activity, maxVisible = 3, on
                 onToggle={() => setExpandedId(id => id === a.providerId ? null : a.providerId)}
                 onBook={onBook}
                 onCall={onCall}
+                defaultBookAddress={defaultBookAddress}
+                skipAddressInput={skipAddressInput}
               />
             ))}
           </div>
@@ -200,6 +210,8 @@ export default function OutreachTransparencyStrip({ activity, maxVisible = 3, on
                 onToggle={() => {}}
                 onBook={onBook}
                 onCall={onCall}
+                defaultBookAddress={defaultBookAddress}
+                skipAddressInput={skipAddressInput}
               />
             ))}
           </div>
@@ -275,13 +287,15 @@ function QuoteDot() {
 }
 
 function ActivityRow({
-  activity, expanded, onToggle, onBook, onCall,
+  activity, expanded, onToggle, onBook, onCall, defaultBookAddress, skipAddressInput,
 }: {
   activity: ProviderActivity;
   expanded: boolean;
   onToggle: () => void;
-  onBook?: (id: string) => void;
+  onBook?: (id: string, address: string) => void;
   onCall?: (id: string, phone: string | undefined) => void;
+  defaultBookAddress?: string;
+  skipAddressInput?: boolean;
 }) {
   const { copy, accent, inFlight } = describe(activity);
   const initial = displayInitial(activity);
@@ -375,6 +389,8 @@ function ActivityRow({
           activity={activity}
           onBook={onBook}
           onCall={onCall}
+          defaultBookAddress={defaultBookAddress}
+          skipAddressInput={skipAddressInput}
         />
       )}
     </div>
@@ -382,17 +398,38 @@ function ActivityRow({
 }
 
 function ExpandedQuoteDetail({
-  activity, onBook, onCall,
+  activity, onBook, onCall, defaultBookAddress, skipAddressInput,
 }: {
   activity: ProviderActivity;
-  onBook?: (id: string) => void;
+  onBook?: (id: string, address: string) => void;
   onCall?: (id: string, phone: string | undefined) => void;
+  defaultBookAddress?: string;
+  skipAddressInput?: boolean;
 }) {
   const company = activity.company || activity.name;
   const { rating, reviewCount, phone, distanceMiles, reviews } = activity.profile ?? {};
   const price = activity.quote?.priceLabel ?? '';
   const availability = activity.quote?.availability;
   const message = activity.quote?.message;
+
+  // Inline service-address input — pre-filled with the homeowner's
+  // primary address. Replaces the ugly window.prompt() fallback.
+  const [address, setAddress] = useState<string>(defaultBookAddress ?? '');
+  const [addressError, setAddressError] = useState(false);
+
+  function handleBookClick() {
+    if (skipAddressInput) {
+      onBook?.(activity.providerId, '');
+      return;
+    }
+    const trimmed = address.trim();
+    if (!trimmed) {
+      setAddressError(true);
+      return;
+    }
+    setAddressError(false);
+    onBook?.(activity.providerId, trimmed);
+  }
 
   return (
     <div style={{
@@ -467,11 +504,47 @@ function ExpandedQuoteDetail({
         </div>
       )}
 
+      {/* Service address input — required for the book call. Defaults
+          to the homeowner's primary address from Home IQ when
+          available so they rarely have to type it. Skipped entirely
+          for demo-mode flows. */}
+      {!skipAddressInput && (
+        <div style={{ marginBottom: 10 }}>
+          <label style={{
+            display: 'block', fontSize: 10, fontFamily: "'DM Mono',monospace",
+            letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 700,
+            color: DIM, marginBottom: 4,
+          }}>
+            Service address
+          </label>
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => { setAddress(e.target.value); if (addressError) setAddressError(false); }}
+            placeholder="123 Main St, San Diego, CA"
+            style={{
+              width: '100%', padding: '9px 12px',
+              fontSize: 13, fontFamily: "'DM Sans',sans-serif",
+              border: `1.5px solid ${addressError ? '#DC2626' : BORDER}`,
+              borderRadius: 8, outline: 'none', color: D,
+              boxSizing: 'border-box', transition: 'border-color 0.15s',
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = G; }}
+            onBlur={(e) => { if (!addressError) e.currentTarget.style.borderColor = BORDER; }}
+          />
+          {addressError && (
+            <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>
+              Enter the service address so the pro knows where to go.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: 8 }}>
         <CallButton phone={phone} onCall={() => onCall?.(activity.providerId, phone)} />
         <button
-          onClick={() => onBook?.(activity.providerId)}
+          onClick={handleBookClick}
           style={primaryBtnStyle}
           onMouseEnter={e => (e.currentTarget.style.background = '#17876A')}
           onMouseLeave={e => (e.currentTarget.style.background = G)}

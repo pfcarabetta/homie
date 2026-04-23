@@ -259,7 +259,8 @@ function RightOutreachColumn({
             inline with quote details, reviews, and book/call actions. */}
         <OutreachTransparencyStrip
           activity={activity}
-          onBook={(id) => alert(`Would book provider ${id}`)}
+          onBook={(id, address) => alert(`Would book provider ${id} at ${address || '(no address)'}`)}
+          defaultBookAddress="123 Main St, San Diego, CA"
           onCall={(id, phone) => {
             // tel: link fires automatically via the anchor; this is
             // just the analytics hook equivalent.
