@@ -15,6 +15,8 @@ import {
   JobTier,
   JobTiming,
   ChannelStats,
+  ProviderActivityPayload,
+  ProviderActivityStatus,
 } from '../types/jobs';
 import { ApiResponse } from '../types/api';
 
@@ -35,15 +37,31 @@ export async function buildJobStatus(id: string): Promise<JobStatusResponse | nu
   const [job] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
   if (!job) return null;
 
-  const attempts = await db
-    .select()
+  // Pull attempts + the joined provider profile in one sweep. The
+  // `provider_activities` derivation below wants name / rating /
+  // phone so the frontend can render rows without another fetch.
+  const attemptsWithProvider = await db
+    .select({
+      attempt: outreachAttempts,
+      provider: providers,
+    })
     .from(outreachAttempts)
+    .leftJoin(providers, eq(providers.id, outreachAttempts.providerId))
     .where(eq(outreachAttempts.jobId, id));
 
   const [{ value: accepted }] = await db
     .select({ value: count() })
     .from(providerResponses)
     .where(eq(providerResponses.jobId, id));
+
+  // Pre-index provider_responses by providerId so we can inline the
+  // quote details when a row shows up as 'quoted'.
+  const responses = await db
+    .select()
+    .from(providerResponses)
+    .where(eq(providerResponses.jobId, id));
+  const responseByProvider = new Map<string, typeof responses[number]>();
+  for (const r of responses) responseByProvider.set(r.providerId, r);
 
   const channels: Record<'voice' | 'sms' | 'web', ChannelStats> = {
     voice: { attempted: 0, connected: 0 },
@@ -52,7 +70,10 @@ export async function buildJobStatus(id: string): Promise<JobStatusResponse | nu
   };
 
   let responded = 0;
-  for (const a of attempts) {
+  const activities: ProviderActivityPayload[] = [];
+  for (const row of attemptsWithProvider) {
+    const a = row.attempt;
+    const p = row.provider;
     const ch = a.channel as 'voice' | 'sms' | 'web';
     if (ch in channels) {
       channels[ch].attempted++;
@@ -61,18 +82,52 @@ export async function buildJobStatus(id: string): Promise<JobStatusResponse | nu
         responded++;
       }
     }
+
+    // Map attempt status → frontend activity status.
+    //   pending + no respondedAt    → contacting
+    //   responded + respondedAt set → connected (mid-conversation)
+    //   accepted                    → quoted (stitch in quote detail)
+    //   declined                    → declined
+    //   failed / other              → contacting (treat as still trying)
+    let status: ProviderActivityStatus = 'contacting';
+    if (a.status === 'accepted') status = 'quoted';
+    else if (a.status === 'responded') status = a.respondedAt ? 'connected' : 'contacting';
+    else if (a.status === 'declined') status = 'declined';
+
+    const quoteRow = status === 'quoted' ? responseByProvider.get(a.providerId) : undefined;
+
+    activities.push({
+      id: quoteRow ? quoteRow.id : a.providerId,
+      provider_id: a.providerId,
+      name: p?.name ?? 'Unknown provider',
+      rating: p?.rating != null ? parseFloat(String(p.rating)) : null,
+      review_count: p?.reviewCount ?? null,
+      phone: p?.phone ?? null,
+      channel: ch,
+      status,
+      responded_at: a.respondedAt?.toISOString() ?? null,
+      ...(quoteRow ? {
+        quote: {
+          response_id: quoteRow.id,
+          price_label: quoteRow.quotedPrice ?? 'TBD',
+          availability: quoteRow.availability ?? 'To be confirmed',
+          message: quoteRow.message ?? '',
+        },
+      } : {}),
+    });
   }
 
   return {
     id: job.id,
     status: job.status,
     tier: job.tier,
-    providers_contacted: attempts.length,
+    providers_contacted: attemptsWithProvider.length,
     providers_responded: responded,
     providers_accepted: accepted,
     outreach_channels: channels,
     expires_at: job.expiresAt?.toISOString() ?? null,
     created_at: job.createdAt.toISOString(),
+    provider_activities: activities,
   };
 }
 

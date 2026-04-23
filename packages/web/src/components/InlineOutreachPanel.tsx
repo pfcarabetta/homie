@@ -4,8 +4,9 @@ import OutreachTransparencyStrip, {
 } from '@/components/OutreachTransparencyStrip';
 import {
   connectJobSocket, jobService, accountService,
-  type CostEstimate, type JobStatusResponse, type ProviderResponseItem,
+  type CostEstimate, type JobStatusResponse,
 } from '@/services/api';
+import type { ProviderActivityPayload } from '@homie/shared';
 
 /**
  * InlineOutreachPanel — production version of the mockup from
@@ -104,6 +105,11 @@ interface Props {
 
 export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBooked }: Props) {
   const [providers, setProviders] = useState<(MockProvider | RealProvider)[]>([]);
+  // Per-provider activities from the backend WS feed. Includes rows
+  // for providers in 'contacting' / 'connected' / 'quoted' / 'declined'
+  // — we feed these straight into the transparency strip so the LIVE
+  // OUTREACH section populates with real names.
+  const [activities, setActivities] = useState<ProviderActivityPayload[]>([]);
   const [outreachDone, setOutreachDone] = useState(false);
   const [stats, setStats] = useState({ contacted: 0, responded: 0 });
   const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
@@ -139,6 +145,31 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
         web: status.outreach_channels.web.attempted,
       });
 
+      // Per-provider activities (contacting / connected / quoted /
+      // declined) are now included directly in the WS payload —
+      // no second round-trip to /responses needed.
+      const incoming = status.provider_activities ?? [];
+      setActivities(incoming);
+      // Also rebuild the `providers` shape the booking flow still
+      // expects (legacy callers + the demo mock path).
+      const quotedProviders: RealProvider[] = incoming
+        .filter(a => a.status === 'quoted' && a.quote)
+        .map(a => ({
+          id: a.provider_id,
+          responseId: a.quote!.response_id,
+          name: a.name,
+          rating: a.rating ?? 0,
+          reviews: a.review_count ?? 0,
+          quote: cleanPrice(a.quote!.price_label),
+          availability: a.quote!.availability,
+          channel: a.channel,
+          note: a.quote!.message,
+          distance: '',
+          googlePlaceId: null,
+          phone: a.phone,
+        }));
+      setProviders(quotedProviders);
+
       // Append log entries for new aggregate milestones.
       const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
       if (status.providers_responded > lastResponded) {
@@ -148,27 +179,6 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
       if (['completed', 'expired'].includes(status.status)) {
         setOutreachDone(true);
         pushLog(setLog, elapsed, status.providers_responded > 0 ? 'Outreach complete — quotes ready' : 'Outreach complete', 'system');
-      }
-
-      if (status.providers_responded > 0) {
-        void jobService.getResponses(jobId).then(res => {
-          if (res.data?.responses) {
-            setProviders(res.data.responses.map((r: ProviderResponseItem) => ({
-              id: r.provider.id,
-              responseId: r.id,
-              name: r.provider.name,
-              rating: parseFloat(r.provider.google_rating ?? '0'),
-              reviews: r.provider.review_count,
-              quote: cleanPrice(r.quoted_price ?? 'TBD'),
-              availability: r.availability ?? 'To be confirmed',
-              channel: r.channel,
-              note: r.message ?? '',
-              distance: '',
-              googlePlaceId: r.provider.google_place_id,
-              phone: r.provider.phone ?? null,
-            } as RealProvider)));
-          }
-        });
       }
     });
     return () => socket.close();
@@ -208,30 +218,56 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
     };
   }, [isDemo]);
 
-  // Build ProviderActivity entries for the strip. Quoted providers
-  // flow into the QUOTES RECEIVED section; we don't synthesize
-  // per-provider live-outreach rows because the backend doesn't emit
-  // those yet — the aggregate contacted/quoted stats + activity
-  // ticker cover the live state.
-  const activity: ProviderActivity[] = useMemo(() => providers.map(p => ({
-    providerId: ('responseId' in p ? p.responseId : p.id),
-    name: p.name,
-    company: p.name,
-    channel: channelToBadge(p.channel),
-    status: 'quoted',
-    startedAt: startedAtRef.current,
-    quote: {
-      priceLabel: p.quote,
-      availability: p.availability,
-      message: p.note,
-    },
-    profile: {
-      rating: p.rating,
-      reviewCount: p.reviews,
-      phone: 'phone' in p ? (p.phone ?? undefined) : undefined,
-      distanceMiles: parseDistance(p.distance),
-    },
-  })), [providers]);
+  // Build ProviderActivity entries for the strip. Real-job flow
+  // drives off the backend WS `provider_activities` array (includes
+  // live-outreach rows for contacting / connected / declined states).
+  // Demo-mode falls back to the scripted `providers` list (quoted
+  // only — demo runs with synthesized timers).
+  const activity: ProviderActivity[] = useMemo(() => {
+    if (isDemo) {
+      return providers.map(p => ({
+        providerId: ('responseId' in p ? p.responseId : p.id),
+        name: p.name,
+        company: p.name,
+        channel: channelToBadge(p.channel),
+        status: 'quoted' as const,
+        startedAt: startedAtRef.current,
+        quote: {
+          priceLabel: p.quote,
+          availability: p.availability,
+          message: p.note,
+        },
+        profile: {
+          rating: p.rating,
+          reviewCount: p.reviews,
+          phone: 'phone' in p ? (p.phone ?? undefined) : undefined,
+          distanceMiles: parseDistance(p.distance),
+        },
+      }));
+    }
+    return activities.map(a => ({
+      providerId: a.id,
+      name: a.name,
+      company: a.name,
+      channel: a.channel,
+      status: a.status,
+      startedAt: a.responded_at
+        ? new Date(a.responded_at).getTime()
+        : startedAtRef.current,
+      ...(a.quote ? {
+        quote: {
+          priceLabel: cleanPrice(a.quote.price_label),
+          availability: a.quote.availability,
+          message: a.quote.message,
+        },
+      } : {}),
+      profile: {
+        rating: a.rating ?? undefined,
+        reviewCount: a.review_count ?? undefined,
+        phone: a.phone ?? undefined,
+      },
+    }));
+  }, [isDemo, providers, activities]);
 
   async function handleBook(providerId: string, address: string) {
     const p = providers.find(x => ('responseId' in x ? x.responseId : x.id) === providerId);
@@ -295,10 +331,10 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
         <MiniStat label="Quoted" value={stats.responded} color={G} />
       </div>
 
-      {/* Transparency strip — QUOTES RECEIVED section only. Live
-          outreach shows as an aggregate line below since we don't
-          have per-provider live events yet. */}
-      {providers.length > 0 && (
+      {/* Transparency strip — QUOTES RECEIVED + LIVE OUTREACH sections.
+          Real-job activity comes from the backend's provider_activities
+          field; demo synthesizes only quoted rows. */}
+      {activity.length > 0 && (
         <OutreachTransparencyStrip
           activity={activity}
           onBook={handleBook}
@@ -308,10 +344,10 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
         />
       )}
 
-      {/* Aggregate live-outreach line — only visible when there are
-          more providers being contacted than have quoted. Compact
-          fallback for the per-provider rows we can't render yet. */}
-      {!outreachDone && pendingLive > 0 && (
+      {/* Fallback aggregate line — shows if we have aggregate
+          contacted counts but no per-provider activity rows yet
+          (e.g., an older backend without provider_activities). */}
+      {!outreachDone && activity.length === 0 && pendingLive > 0 && (
         <div style={{
           padding: '10px 12px', background: `${G}10`,
           border: `1px solid ${G}33`, borderRadius: 10,

@@ -101,6 +101,38 @@ export interface JobStatusResponse {
   };
   expires_at: string | null;
   created_at: string;
+  /** Per-provider outreach rows — populated from outreach_attempts +
+   *  providers join, with quote detail stitched from provider_responses
+   *  when available. Lets the frontend render the LIVE OUTREACH +
+   *  QUOTES RECEIVED split in the transparency strip without a
+   *  second round-trip. */
+  provider_activities?: ProviderActivityPayload[];
+}
+
+export type ProviderActivityStatus = 'contacting' | 'connected' | 'quoted' | 'declined';
+
+export interface ProviderActivityPayload {
+  /** Stable id for this provider's row in the frontend. For quoted
+   *  providers this is the provider_response id (booking uses it);
+   *  for non-quoted providers it's the provider id. */
+  id: string;
+  provider_id: string;
+  name: string;
+  rating: number | null;
+  review_count: number | null;
+  phone: string | null;
+  channel: 'voice' | 'sms' | 'web';
+  status: ProviderActivityStatus;
+  /** ISO timestamp of first engagement (if any). Used for "connected
+   *  N seconds ago" style UX sorts. */
+  responded_at: string | null;
+  /** Only present when status === 'quoted'. */
+  quote?: {
+    response_id: string;
+    price_label: string;
+    availability: string;
+    message: string;
+  };
 }
 
 export interface ProviderSummary {

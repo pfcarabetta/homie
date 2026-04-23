@@ -61,6 +61,27 @@ export interface JobStatusResponse {
   };
   expires_at: string | null;
   created_at: string;
+  provider_activities?: ProviderActivityPayload[];
+}
+
+export type ProviderActivityStatus = 'contacting' | 'connected' | 'quoted' | 'declined';
+
+export interface ProviderActivityPayload {
+  id: string;
+  provider_id: string;
+  name: string;
+  rating: number | null;
+  review_count: number | null;
+  phone: string | null;
+  channel: 'voice' | 'sms' | 'web';
+  status: ProviderActivityStatus;
+  responded_at: string | null;
+  quote?: {
+    response_id: string;
+    price_label: string;
+    availability: string;
+    message: string;
+  };
 }
 
 export interface ProviderSummary {
