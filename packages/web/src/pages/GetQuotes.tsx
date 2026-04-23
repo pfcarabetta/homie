@@ -619,6 +619,70 @@ function PhotoUpload({ onUpload }: { onUpload: (url: string) => void }) {
   );
 }
 
+/* -- Homie "generating your diagnosis" spinner -- */
+/*
+ * Takes over the chat column during the short window between the chat
+ * ending and the diagnosis card rendering. Mirrors the BusinessChat
+ * silentGeneration / HomieGeneratingCard pattern — the user just
+ * finished describing the issue, so the transcript is noise; what they
+ * want is a clear "we're working on it" beat before the answer arrives.
+ */
+function HomieGeneratingCard() {
+  return (
+    <div style={{
+      marginLeft: 42, marginTop: 40, marginBottom: 40,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 20, animation: 'fadeIn 0.4s ease',
+    }}>
+      <style>{`
+        @keyframes gqHomieSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes gqHomiePulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 12px 32px -8px ${O}66; }
+          50%      { transform: scale(1.04); box-shadow: 0 16px 40px -6px ${O}99; }
+        }
+      `}</style>
+      <div style={{
+        position: 'relative', width: 84, height: 84,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {/* Orange spinning ring */}
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '50%',
+          border: `3px solid ${O}22`,
+          borderTopColor: O,
+          borderRightColor: `${O}88`,
+          animation: 'gqHomieSpin 1.4s linear infinite',
+        }} />
+        {/* Pulsing Homie "h" avatar */}
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%', background: O,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          animation: 'gqHomiePulse 1.8s ease-in-out infinite',
+        }}>
+          <span style={{
+            color: '#fff', fontFamily: "'Fraunces', serif",
+            fontWeight: 700, fontSize: 26, lineHeight: 1,
+          }}>h</span>
+        </div>
+      </div>
+      <div style={{ textAlign: 'center', maxWidth: 320 }}>
+        <div style={{
+          fontFamily: "'Fraunces', serif", fontSize: 18, fontWeight: 700,
+          color: D, marginBottom: 4,
+        }}>
+          Homie is preparing your diagnosis
+        </div>
+        <div style={{
+          fontFamily: "'DM Sans', sans-serif", fontSize: 13,
+          color: DIM, lineHeight: 1.5,
+        }}>
+          Pulling everything you said into a clean brief so local pros can quote accurately. Takes a few seconds.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* -- Diagnosis card shown before tier selection -- */
 function DiagnosisSummary({ data }: { data: QuoteData }) {
   const cat = data.category ? CATEGORY_FLOWS[data.category] : null;
@@ -1599,6 +1663,12 @@ export default function GetQuotes() {
 
   const [messages, setMessages] = useState<{ role: string; text: string }[]>(() => snapshot?.messages ?? []);
   const [phase, setPhase] = useState(() => snapshot?.phase ?? 'greeting');
+  // Hides the chat transcript + shows the spinning Homie animation while
+  // the final dispatch summary is being generated (same UX as the business
+  // chat's silentGeneration). Mirrors business/voice path: once the chat is
+  // "done" and we're assembling the provider-ready diagnosis, the rolling
+  // transcript noise isn't useful — the user cares about the outcome.
+  const [generatingDispatch, setGeneratingDispatch] = useState(false);
   const [data, setData] = useState<QuoteData>(() => snapshot?.data ?? { category: null, a1: null, aiDiagnosis: null, extra: null, photo: null, zip: '', timing: null, tier: null });
   const aiConvoRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>(snapshot?.aiConvo ?? []);
   const [streaming, setStreaming] = useState(false);
@@ -1996,6 +2066,9 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
     // Use a fresh session to generate the summary (not the chat session)
     const summarySessionId = crypto.randomUUID();
     setStreaming(true);
+    // Entering the silent-generation window: hide chat bubbles and show
+    // the Homie spinner until the diagnosis card renders.
+    setGeneratingDispatch(true);
     let diagText = '';
     setTimeout(() => {
       abortRef.current = diagnosticService.sendMessage(
@@ -2028,6 +2101,8 @@ Write ONLY the summary — no questions, no conversational language, no greeting
             setTimeout(() => {
               addAssistant("Got it \u2014 I've prepared your diagnosis. Tap Continue when you're ready to find a pro.");
               setPhase('diagnosis');
+              // Spinner off — diagnosis card now takes over the column.
+              setGeneratingDispatch(false);
               // Don't auto-open the pricing modal — the Continue bar below
               // becomes the explicit user-initiated gate into zip/timing/tier.
               scrollDown();
@@ -2048,6 +2123,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
             setTimeout(() => {
               addAssistant("Got it \u2014 I've prepared your diagnosis. Tap Continue when you're ready to find a pro.");
               setPhase('diagnosis');
+              setGeneratingDispatch(false);
               // Don't auto-open the pricing modal — user taps Continue.
               scrollDown();
             }, 300);
@@ -2389,13 +2465,23 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                 pill so users land straight on the intake. */}
             <div style={{ height: 14 }} />
 
-            {/* Chat log — existing AssistantMsg/UserMsg bubbles */}
+            {/* Chat log — existing AssistantMsg/UserMsg bubbles.
+                Hidden while the final dispatch summary is being generated;
+                replaced with the Homie spinner until the diagnosis card
+                takes over. Matches the business-chat silentGeneration
+                pattern so voice + text paths feel identical. */}
             <div className="gq-chat-area">
-              {messages.map((m, i) => (
-                m.role === 'assistant'
-                  ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1 && i > 0} />
-                  : <UserMsg key={i} text={m.text} />
-              ))}
+              {generatingDispatch ? (
+                <HomieGeneratingCard />
+              ) : (
+                <>
+                  {messages.map((m, i) => (
+                    m.role === 'assistant'
+                      ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1 && i > 0} />
+                      : <UserMsg key={i} text={m.text} />
+                  ))}
+                </>
+              )}
 
               {phase === 'diagnosis' && data.a1 && (
                 <>
