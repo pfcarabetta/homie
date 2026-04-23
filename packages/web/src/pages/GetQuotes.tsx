@@ -1813,7 +1813,28 @@ export default function GetQuotes() {
           scanAskedFor.current.add(itemType);
           setScanRequest({ itemType });
         },
-        onDone: () => { setStreaming(false); onDone(fullText); },
+        onDone: () => {
+          setStreaming(false);
+          // Finalise this specific stream bubble. Two cases:
+          //   1. Final visible text is empty (e.g. AI only emitted a
+          //      <ready> tag with no prose) — drop the bubble so we
+          //      don't leave a ghost message in the transcript.
+          //   2. Otherwise strip the `id` so the bubble becomes a
+          //      regular completed message. Previously the id hung
+          //      around forever, which meant a later bulk-filter could
+          //      accidentally nuke the ENTIRE AI history (every
+          //      follow-up question was "streamed" and still carried
+          //      its id).
+          setMessages(m => m.flatMap(msg => {
+            if ('id' in msg && (msg as { id?: string }).id === streamMsgId) {
+              if (!msg.text.trim()) return [];
+              const withoutId = { role: msg.role, text: msg.text };
+              return [withoutId];
+            }
+            return [msg];
+          }));
+          onDone(fullText);
+        },
         onError: (err: Error) => {
           setStreaming(false);
           console.error('[GetQuotes AI]', err);
@@ -2085,10 +2106,11 @@ You have asked ${questionCount} follow-up question(s) so far. Your job:
         (aiText) => {
           const cleaned = aiText.replace(/<\/?ready>/g, '').trim();
           if (aiText.includes('<ready>') || questionCount >= 4) {
-            // AI says it has enough — remove the empty/ready-only streamed bubble
-            if (!cleaned) {
-              setMessages(m => m.filter(msg => !('id' in msg)));
-            }
+            // streamAI now drops empty (tag-only) bubbles itself — no
+            // need for a bulk id-filter here. The previous version wiped
+            // every AI follow-up question because all streamed bubbles
+            // carry an `id`, not just the current one.
+            //
             // stripHomeContext removes the "[Home details: HVAC: ... Water
             // heater: Rheem...]" prefix that askFollowUp prepends to the
             // first user message for AI context. If we let that leak into
