@@ -2466,25 +2466,34 @@ Write ONLY the summary — no questions, no conversational language, no greeting
             <div style={{ height: 14 }} />
 
             {/* Chat log — existing AssistantMsg/UserMsg bubbles.
-                Hidden in two cases:
-                  1. generatingDispatch — the summary stream is in flight;
-                     replaced with the Homie spinner.
-                  2. phase === 'diagnosis' — once the diagnosis card takes
-                     over, the transcript becomes noise. User sees the
-                     dispatch brief + tier cards as the only content.
-                Matches the business-chat silentGeneration pattern. */}
+                Hidden as soon as we have ANY of the following:
+                  1. generatingDispatch — summary stream in flight →
+                     Homie spinner takes over.
+                  2. data.aiDiagnosis set — the dispatch card + tier
+                     selection + DIY panel fill the column instead.
+                  3. phase === 'diagnosis' — defense in depth in case the
+                     aiDiagnosis field is ever delayed a tick behind the
+                     phase transition.
+                Using aiDiagnosis as the primary signal (not phase alone)
+                handles snapshot restores + any path where phase lags the
+                data — key source of truth for "chat is done". */}
             <div className="gq-chat-area">
-              {generatingDispatch ? (
-                <HomieGeneratingCard />
-              ) : phase !== 'diagnosis' ? (
-                <>
-                  {messages.map((m, i) => (
-                    m.role === 'assistant'
-                      ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1 && i > 0} />
-                      : <UserMsg key={i} text={m.text} />
-                  ))}
-                </>
-              ) : null}
+              {(() => {
+                if (generatingDispatch) return <HomieGeneratingCard />;
+                // Once a diagnosis exists OR we've entered the diagnosis
+                // phase, the transcript is suppressed permanently for
+                // this session.
+                if (data.aiDiagnosis || phase === 'diagnosis') return null;
+                return (
+                  <>
+                    {messages.map((m, i) => (
+                      m.role === 'assistant'
+                        ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1 && i > 0} />
+                        : <UserMsg key={i} text={m.text} />
+                    ))}
+                  </>
+                );
+              })()}
 
               {phase === 'diagnosis' && data.a1 && (
                 <>
