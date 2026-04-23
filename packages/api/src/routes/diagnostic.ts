@@ -139,6 +139,46 @@ router.post('/upload-image', async (req: Request, res: Response) => {
   }
 });
 
+// ── POST /api/v1/diagnostic/protection-check ──────────────────────────────
+// Warranty + recall lookup for a (brand, model) pair. Called from the
+// frontend whenever Home IQ correlates an item with brand+model, or
+// right after a model-label scan succeeds. Returns active recalls from
+// CPSC SaferProducts.gov + an estimated warranty window based on
+// product class + manufactureDate. Results are cached server-side for
+// 24h per (brand, model, category, manufactureDate) key.
+router.post('/protection-check', async (req: Request, res: Response) => {
+  const body = req.body as {
+    brand?: unknown;
+    modelNumber?: unknown;
+    category?: unknown;
+    manufactureDate?: unknown;
+  };
+
+  const brand = typeof body.brand === 'string' ? body.brand.trim() : '';
+  const modelNumber = typeof body.modelNumber === 'string' ? body.modelNumber.trim() : null;
+  const category = typeof body.category === 'string' ? body.category.trim().toLowerCase() : null;
+  const manufactureDate = typeof body.manufactureDate === 'string' ? body.manufactureDate.trim() : null;
+
+  if (!brand || brand.length < 2) {
+    res.status(400).json({ data: null, error: 'brand required', meta: null });
+    return;
+  }
+
+  try {
+    const { lookupProtection } = await import('../services/warranty-recall');
+    const result = await lookupProtection({ brand, modelNumber, category, manufactureDate });
+    logger.info({
+      brand, modelNumber, category,
+      recallCount: result.recalls.length,
+      warrantyActive: result.warranty?.stillActive ?? null,
+    }, '[diagnostic] protection-check completed');
+    res.json({ data: result, error: null, meta: null });
+  } catch (err) {
+    logger.error({ err, brand, modelNumber }, '[diagnostic] protection-check failed');
+    res.status(500).json({ data: null, error: 'Protection check failed', meta: null });
+  }
+});
+
 // ── POST /api/v1/diagnostic/scan-model-label ──────────────────────────────
 // Proactive model identification: when the AI asks the user to snap a
 // photo of the appliance's model-number sticker, this endpoint is what

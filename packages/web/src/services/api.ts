@@ -337,6 +337,49 @@ export const modelScanService = {
     }),
 };
 
+// ── Warranty + recall scanner ──────────────────────────────────────────────
+export interface ProtectionRecallHit {
+  id: string;
+  title: string;
+  date: string | null;
+  url: string;
+  hazard: string | null;
+  remedy: string | null;
+  modelMatched: string | null;
+}
+
+export interface ProtectionWarrantyEstimate {
+  category: string;
+  description: string;
+  partsYears: number;
+  extendedComponentYears: number | null;
+  extendedComponentLabel: string | null;
+  expiresAt: string | null;
+  stillActive: boolean | null;
+}
+
+export interface ProtectionLookupResult {
+  recalls: ProtectionRecallHit[];
+  warranty: ProtectionWarrantyEstimate | null;
+}
+
+export const protectionService = {
+  check: (params: {
+    brand: string;
+    modelNumber?: string | null;
+    category?: string | null;
+    manufactureDate?: string | null;
+  }) => fetchAPI<ProtectionLookupResult>('/api/v1/diagnostic/protection-check', {
+    method: 'POST',
+    body: JSON.stringify({
+      brand: params.brand,
+      modelNumber: params.modelNumber ?? undefined,
+      category: params.category ?? undefined,
+      manufactureDate: params.manufactureDate ?? undefined,
+    }),
+  }),
+};
+
 // ── diyService ─────────────────────────────────────────────────────────────
 // Lazy-loaded DIY analysis. The quote-chat DIY panel calls this only when
 // the homeowner taps "try fixing it yourself?" — so users who dispatch

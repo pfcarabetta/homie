@@ -12,7 +12,9 @@ import VideoChatPanel from '@/components/VideoChatPanel';
 import DIYPanel from '@/components/DIYPanel';
 import HomeIQPanel, { HomeIQInlineChip } from '@/components/HomeIQPanel';
 import ModelScanCard from '@/components/ModelScanCard';
+import ProtectionCard from '@/components/ProtectionCard';
 import { useHomeIQ } from '@/hooks/useHomeIQ';
+import { correlateItemToChat } from '@/utils/home-iq';
 import { primeAudio } from '@/components/audioUnlocker';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -2396,6 +2398,33 @@ Write ONLY the summary — no questions, no conversational language, no greeting
     return parts.join(' \n ').toLowerCase();
   })();
   const homeIQCategoryLabel = repairGroupMeta?.label || catMeta?.label || null;
+
+  // ── Protection cards (warranty + recall scanner) ──────────────────────
+  // Candidates: correlated Home IQ items with brand AND model, deduped
+  // by brand|model. Scan-originated items (from ModelScanCard) also get
+  // added to this list once they land in Home IQ (refresh() is triggered
+  // after a successful scan). Cards surface once per session per item —
+  // dismissal is handled inside ProtectionCard itself.
+  const protectionCandidates = (() => {
+    const seen = new Set<string>();
+    const out: Array<{ brand: string; modelNumber: string; category: string; manufactureDate: string | null; key: string }> = [];
+    for (const it of homeIQ.inventory) {
+      if (!it.brand || !it.modelNumber) continue;
+      if (correlateItemToChat(it, homeIQChatText) !== 'strong' &&
+          correlateItemToChat(it, homeIQChatText) !== 'medium') continue;
+      const key = `${it.brand.toLowerCase()}|${it.modelNumber.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        brand: it.brand,
+        modelNumber: it.modelNumber,
+        category: it.itemType || '',
+        manufactureDate: it.manufactureDate ?? null,
+        key,
+      });
+    }
+    return out;
+  })();
   const severityLabel: string | null = costEstimate
     ? (costEstimate.estimateHighCents > 50000 ? 'Medium' : 'Minor')
     : null;
@@ -2582,6 +2611,21 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                       m.role === 'assistant'
                         ? <AssistantMsg key={i} text={m.text} animate={i === messages.length - 1 && i > 0} />
                         : <UserMsg key={i} text={m.text} />
+                    ))}
+                    {/* Warranty + recall scanner — one card per correlated
+                        Home IQ item with brand+model. Surfaces active
+                        recalls (CPSC) and likely-still-covered warranty
+                        windows so the user doesn't pay for a repair
+                        that's already covered. */}
+                    {protectionCandidates.map(c => (
+                      <ProtectionCard
+                        key={c.key}
+                        brand={c.brand}
+                        modelNumber={c.modelNumber}
+                        category={c.category}
+                        manufactureDate={c.manufactureDate}
+                        keyForDedupe={c.key}
+                      />
                     ))}
                     {/* Proactive model-label scan — fires when Claude
                         emits <scan_request> for a specific appliance
