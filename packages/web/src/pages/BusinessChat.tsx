@@ -14,6 +14,7 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 import InlineOutreachPanel from '@/components/InlineOutreachPanel';
+import QuoteTabsBar from '@/components/QuoteTabsBar';
 import {
   useBusinessChatTabs, loadB2bSnapshot, saveB2bSnapshot, newB2bSessionId,
   deriveB2bTabTitle, type B2bChatStateSnapshot,
@@ -3111,8 +3112,57 @@ export default function BusinessChat() {
             .b2b-header-actions > .b2b-chat-status { grid-column: 2 !important; grid-row: 2 !important; justify-self: end !important; }
             /* Calendar popover should still span the viewport when open. */
             .b2b-cal-popover { grid-column: 1 / -1 !important; }
+            /* Multi-session tabs bar is desktop-only — mobile PMs can
+               still switch via full-page nav, and hiding it keeps the
+               2-column grid from overflowing. */
+            .b2b-tabs-slot { display: none !important; }
           }
         `}</style>
+        {/* Multi-session tabs — mounted as a flex-1 middle region on
+            desktop so the PM can jump between concurrent dispatches for
+            different properties. Filtered to the active workspace so
+            switching workspaces hides (but doesn't destroy) unrelated
+            sessions. Hidden on mobile via b2b-tabs-slot media rule —
+            mobile PMs fall back to the "+ New" button in header-actions
+            which spins up a fresh session via full-page nav. */}
+        {(() => {
+          const workspaceTabs = b2bTabs.tabs.filter(t => t.workspaceId === selectedWorkspace);
+          if (workspaceTabs.length === 0) return null;
+          const freshUrl = `/business/chat${selectedWorkspace ? `?workspace=${encodeURIComponent(selectedWorkspace)}` : ''}`;
+          const sessionUrl = (id: string) => {
+            const params = new URLSearchParams();
+            if (selectedWorkspace) params.set('workspace', selectedWorkspace);
+            params.set('s', id);
+            return `/business/chat?${params.toString()}`;
+          };
+          return (
+            <div className="b2b-tabs-slot" style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+              <QuoteTabsBar
+                tabs={workspaceTabs}
+                activeTabId={sessionId}
+                onSelect={(id) => {
+                  if (id === sessionId) return;
+                  b2bTabs.markRead(id);
+                  // Full page nav so session hydration runs cleanly
+                  // — avoids tearing down any in-flight state in place.
+                  window.location.href = sessionUrl(id);
+                }}
+                onClose={(id) => {
+                  b2bTabs.remove(id);
+                  if (id === sessionId) {
+                    // Closing active tab — navigate to a fresh session.
+                    window.location.href = freshUrl;
+                  }
+                }}
+                onNewQuote={() => {
+                  // Fresh session: navigate without ?s= so the mount
+                  // path mints a new id + rewrites the URL.
+                  window.location.href = freshUrl;
+                }}
+              />
+            </div>
+          );
+        })()}
         <div className="b2b-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {(() => {
             const hour = new Date().getHours();
@@ -3129,42 +3179,24 @@ export default function BusinessChat() {
               </div>
             );
           })()}
-          <button onClick={() => {
-            setStep('property');
-            setSelectedProperty(null);
-            setCategory(null);
-            setMessages([]);
-            setStreamText('');
-            setStreaming(false);
-            setQ1Answer('');
-            setAiDiagnosis('');
-            setInputVal('');
-            setReadyToDispatch(false);
-            setExchangeCount(0);
-            setSuggestions([]);
-            setShowFreeInput(false);
-            setShowQ1Input(false);
-            setQ1InputVal('');
-            setTiming('');
-            setShowDatePicker(false);
-            setSelectedDate('');
-            setJobId(null);
-            setOutreachStatus(null);
-            setResponses([]);
-            setDispatching(false);
-            setSelectedResponse(null);
-            setBookedName(null);
-            setDiscoveredEquipment([]);
-            setSilentGeneration(false);
-            discoveredPersistedKeysRef.current.clear();
-            pendingDecisionRef.current = null;
-            latestVoiceCategoryRef.current = null;
-            sessionIdRef.current = `b2b-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-          }} style={{
-            background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
-            padding: '5px 12px', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)',
-            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-          }}>+ New</button>
+          {/* "+ New" button — only visible when this workspace has no
+              saved tabs (brand-new PM or fresh workspace). Otherwise
+              the QuoteTabsBar above carries the new-quote affordance. */}
+          {b2bTabs.tabs.filter(t => t.workspaceId === selectedWorkspace).length === 0 && (
+            <button onClick={() => {
+              // Fresh session via full-page nav — mirrors consumer
+              // pattern so the mount path re-mints sessionId + clears
+              // all stale state, and the previous session (if any)
+              // persists in localStorage as a tab.
+              const params = new URLSearchParams();
+              if (selectedWorkspace) params.set('workspace', selectedWorkspace);
+              window.location.href = `/business/chat${params.toString() ? `?${params.toString()}` : ''}`;
+            }} style={{
+              background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
+              padding: '5px 12px', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)',
+              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+            }}>+ New</button>
+          )}
         </div>
       </nav>
 
