@@ -306,7 +306,136 @@ const QUOTE_CARD_STYLES = `
 }
 `;
 
+/** Open quote chats surfaced at the top of QuotesTab. Renders the
+ *  local in-progress quote tabs (drafting / dispatching / quotes_ready)
+ *  as quick-resume cards. Booked sessions aren't shown here — those
+ *  appear in the main jobs list below. */
+function OpenQuotesSection({
+  tabs, onResume, onDismiss, onNewQuote,
+}: {
+  tabs: Array<{ id: string; title: string; status: 'drafting' | 'dispatching' | 'quotes_ready' | 'booked'; updatedAt: string; unreadQuotes?: number }>;
+  onResume: (id: string) => void;
+  onDismiss: (id: string) => void;
+  onNewQuote: () => void;
+}) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+      }}>
+        <span style={{
+          fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4,
+          textTransform: 'uppercase', fontWeight: 700, color: '#6B6560',
+        }}>
+          Open quote chats · {tabs.length}
+        </span>
+        <span style={{ flex: 1 }} />
+        <button
+          onClick={onNewQuote}
+          style={{
+            padding: '4px 12px', background: 'transparent',
+            border: '1px dashed rgba(0,0,0,.12)', borderRadius: 100,
+            fontSize: 11.5, fontWeight: 700, color: '#6B6560',
+            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+          }}
+        >+ New</button>
+      </div>
+      <div style={{
+        display: 'grid', gap: 10,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+      }}>
+        {tabs.map(t => (
+          <div key={t.id} style={{
+            background: '#fff', border: '1px solid rgba(0,0,0,.08)',
+            borderRadius: 12, padding: '12px 14px',
+            display: 'flex', flexDirection: 'column', gap: 6,
+            transition: 'all 0.15s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8632B'; e.currentTarget.style.boxShadow = '0 6px 20px -12px rgba(232,99,43,.3)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,.08)'; e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <OpenTabStatus status={t.status} />
+              <span style={{
+                fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 0.8,
+                textTransform: 'uppercase', fontWeight: 700, color: '#6B6560',
+                flex: 1,
+              }}>
+                {t.status === 'drafting' ? 'In progress' :
+                 t.status === 'dispatching' ? 'Dispatching' :
+                 t.status === 'quotes_ready' ? `${t.unreadQuotes ?? 0} new ${(t.unreadQuotes ?? 0) === 1 ? 'quote' : 'quotes'}` :
+                 'Booked'}
+              </span>
+              <button
+                onClick={() => onDismiss(t.id)}
+                style={{
+                  all: 'unset', cursor: 'pointer',
+                  width: 18, height: 18, borderRadius: '50%',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#9B9490', fontSize: 14,
+                }}
+                title="Remove from open quotes"
+              >×</button>
+            </div>
+            <button
+              onClick={() => onResume(t.id)}
+              style={{
+                all: 'unset', cursor: 'pointer', flex: 1,
+                fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700,
+                color: '#2D2926', lineHeight: 1.3,
+                overflow: 'hidden', textOverflow: 'ellipsis',
+                display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+              }}
+            >
+              {t.title}
+            </button>
+            <button
+              onClick={() => onResume(t.id)}
+              style={{
+                padding: '6px 10px', background: '#F9F5F2',
+                border: 'none', borderRadius: 8,
+                fontSize: 12, fontWeight: 700, color: '#E8632B',
+                cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                alignSelf: 'flex-start',
+              }}
+            >
+              Resume →
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OpenTabStatus({ status }: { status: 'drafting' | 'dispatching' | 'quotes_ready' | 'booked' }) {
+  if (status === 'drafting') {
+    return <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#E8632B' }} />;
+  }
+  if (status === 'dispatching') {
+    return (
+      <div style={{ position: 'relative', width: 8, height: 8 }}>
+        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#1B9E77' }} />
+        <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: '#1B9E77', opacity: .25, animation: 'pulse 1.6s infinite' }} />
+      </div>
+    );
+  }
+  if (status === 'quotes_ready') {
+    return (
+      <div style={{
+        width: 14, height: 14, borderRadius: 3, background: '#1B9E77', color: '#fff',
+        fontSize: 9, fontWeight: 900,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>✓</div>
+    );
+  }
+  return null;
+}
+
 function QuotesTab() {
+  const navigate = useNavigate();
+  const quoteTabs = useQuoteTabs();
   const [jobs, setJobs] = useState<AccountJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -314,6 +443,9 @@ function QuotesTab() {
   const [loadingResponses, setLoadingResponses] = useState<string | null>(null);
   const [estimates, setEstimates] = useState<Record<string, CostEstimate>>({});
   const [homeAddress, setHomeAddress] = useState('');
+  // Open-quote chats — in-progress sessions living in the tabs
+  // index. Excludes booked (those live in the job list below).
+  const openTabs = quoteTabs.tabs.filter(t => t.status !== 'booked');
 
   useEffect(() => {
     accountService.getJobs().then(res => {
@@ -354,7 +486,7 @@ function QuotesTab() {
   }
 
   if (loading) return <div style={{ color: '#9B9490', padding: 20 }}>Loading...</div>;
-  if (jobs.length === 0) return (
+  if (jobs.length === 0 && openTabs.length === 0) return (
     <div style={{ textAlign: 'center', padding: '40px 0', color: '#9B9490' }}>
       <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCCB'}</div>
       <div style={{ fontSize: 15, fontWeight: 500 }}>No quotes yet</div>
@@ -365,6 +497,16 @@ function QuotesTab() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: QUOTE_CARD_STYLES }} />
+      {/* Open quote chats — local in-progress sessions surfaced at the
+          top of the list so users can jump back in with one tap. */}
+      {openTabs.length > 0 && (
+        <OpenQuotesSection
+          tabs={openTabs}
+          onResume={(id) => { quoteTabs.markRead(id); navigate(`/quote?s=${encodeURIComponent(id)}`); }}
+          onDismiss={(id) => quoteTabs.remove(id)}
+          onNewQuote={() => navigate('/quote')}
+        />
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {(() => {
           // Track the last-rendered date label so we only emit a new
