@@ -1355,7 +1355,13 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
       try {
         const payRes = await paymentService.createCheckout(res.data.id, '', '', '/quote');
         if (payRes.data?.checkout_url) {
-          sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data.id, tier }));
+          // Stash the current ?s= session id so we can restore the
+          // same snapshot + tab when the user returns from Stripe.
+          // Without this the multi-session resolver mints a fresh id
+          // post-payment, loads an empty snapshot, and the left
+          // column renders blank.
+          const sid = new URLSearchParams(window.location.search).get('s');
+          sessionStorage.setItem('homie_paid_job', JSON.stringify({ jobId: res.data.id, tier, sessionId: sid }));
           window.location.href = payRes.data.checkout_url;
           return;
         }
@@ -1747,11 +1753,31 @@ export default function GetQuotes() {
   // rewrite the URL so the tab is deep-linkable. The tabs bar in the
   // nav reads the same index so this session shows up there as soon
   // as meaningful state accumulates (title + status upsert below).
+  //
+  // Special-case: returning from Stripe checkout has no ?s= in the
+  // URL (Stripe owns the redirect), so we fall back to a pre-Stripe
+  // session id that we stashed in sessionStorage at redirect time.
+  // Without this fallback the resolver would mint a fresh id + load
+  // an empty snapshot — blanking the left column post-payment.
   const sessionIdSlot = useRef<string>('');
   if (!sessionIdSlot.current && typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
     const fromUrl = params.get('s');
-    if (fromUrl && /^[a-z0-9_]+$/i.test(fromUrl)) {
+    let stripeReturnSessionId: string | null = null;
+    if (params.has('paid')) {
+      try {
+        const raw = sessionStorage.getItem('homie_paid_job');
+        if (raw) {
+          const parsed = JSON.parse(raw) as { sessionId?: string };
+          if (parsed.sessionId && /^[a-z0-9_]+$/i.test(parsed.sessionId)) {
+            stripeReturnSessionId = parsed.sessionId;
+          }
+        }
+      } catch { /* best-effort */ }
+    }
+    if (stripeReturnSessionId) {
+      sessionIdSlot.current = stripeReturnSessionId;
+    } else if (fromUrl && /^[a-z0-9_]+$/i.test(fromUrl)) {
       sessionIdSlot.current = fromUrl;
     } else {
       sessionIdSlot.current = newSessionId();

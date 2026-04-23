@@ -1,32 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
-import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
-import EstimateCard from '@/components/EstimateCard';
-import EstimateBadge from '@/components/EstimateBadge';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import OutreachTransparencyStrip, {
+  type ProviderActivity, type OutreachChannel,
+} from '@/components/OutreachTransparencyStrip';
 import {
   connectJobSocket, jobService, accountService,
   type CostEstimate, type JobStatusResponse, type ProviderResponseItem,
 } from '@/services/api';
 
 /**
- * InlineOutreachPanel — renders the live dispatch view in the right
- * split of /quote instead of inside QuoteOutreachModal. Once the user
- * confirms tier + zip + timing (still handled by the modal), the modal
- * fires `onOutreachStart(jobId)` to the parent and closes itself; the
- * parent then mounts this panel where the "Homie is listening" card
- * used to sit. Diagnosis + estimate stay visible on the left; live
- * outreach + provider quotes surface on the right.
+ * InlineOutreachPanel — production version of the mockup from
+ * /demo/outreach-transparency. Replaces the right-side "Homie is
+ * listening" card once dispatch launches. Header is the spinning
+ * Homie H (same avatar the diagnosis-generating card uses), followed
+ * by a compact stats row, the OutreachTransparencyStrip (which
+ * splits incoming quotes vs. still-in-flight live outreach), and a
+ * monospace activity ticker.
  *
- * State + WS + mock-demo logic is lifted wholesale from the modal's
- * old outreach step — same contract, same side-effects, just a
- * different container.
+ * Data wiring:
+ *   • Provider responses come from `jobService.getResponses` as they
+ *     arrive, and each one becomes a ProviderActivity with
+ *     status 'quoted' fed into the strip.
+ *   • Aggregate contacted / responded counts drive the mini-stats
+ *     and a synthetic "reaching out to N more" line.
+ *   • Activity log is derived from WS status transitions — compact,
+ *     human-readable copy.
+ *
+ * Demo-mode fallback: when `isDemo`, synthesizes a believable
+ * outreach timeline from a mock provider fixture so the page behaves
+ * end-to-end without a backend.
  */
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 const DIM = '#6B6560';
 const BORDER = 'rgba(0,0,0,.08)';
 
-// ── Types + fixtures (duplicated from GetQuotes so this component
-//    is self-contained). Shapes match the originals 1:1. ───────────
+// ── Types ────────────────────────────────────────────────────────────
 
 interface RealProvider {
   id: string;
@@ -40,9 +48,11 @@ interface RealProvider {
   note: string;
   distance: string;
   googlePlaceId?: string | null;
+  phone?: string | null;
 }
 
 interface MockProvider {
+  id: string;
   name: string;
   rating: number;
   reviews: number;
@@ -51,34 +61,39 @@ interface MockProvider {
   channel: string;
   note: string;
   distance: string;
+  phone: string;
   delay: number;
 }
 
+interface LogEntry {
+  t: number; // seconds from dispatch
+  text: string;
+  type: 'contact' | 'connected' | 'quote' | 'decline' | 'system';
+}
+
 const MOCK_PROVIDERS: MockProvider[] = [
-  { name: 'Rapid Rooter Plumbing', rating: 4.9, reviews: 214, quote: '$180', availability: 'Today 2–4pm', channel: 'voice', note: "I'll bring a cartridge kit.", distance: '2.3 mi', delay: 8000 },
-  { name: 'Blue Star Plumbing', rating: 4.7, reviews: 88, quote: '$210', availability: 'Tomorrow 9–11am', channel: 'sms', note: 'Call me to schedule.', distance: '4.1 mi', delay: 22000 },
-  { name: 'ABC Plumbing & Drain', rating: 4.6, reviews: 512, quote: '$225', availability: 'Tomorrow 1–3pm', channel: 'web', note: 'Price includes parts + labor.', distance: '6.8 mi', delay: 48000 },
+  { id: 'm1', name: 'Rapid Rooter Plumbing', rating: 4.9, reviews: 214, quote: '$180', availability: 'Today 2–4pm', channel: 'voice', note: "I'll bring a cartridge kit — if it's just the seal we can do it in one visit.", distance: '2.3 mi', phone: '(619) 555-0112', delay: 18000 },
+  { id: 'm2', name: 'Blue Star Plumbing', rating: 4.7, reviews: 88, quote: '$210', availability: 'Tomorrow 9–11am', channel: 'sms', note: 'Call me to schedule.', distance: '4.1 mi', phone: '(619) 555-0199', delay: 42000 },
+  { id: 'm3', name: 'ABC Plumbing & Drain', rating: 4.6, reviews: 512, quote: '$225', availability: 'Tomorrow 1–3pm', channel: 'web', note: 'Price includes parts + labor.', distance: '6.8 mi', phone: '(619) 555-0144', delay: 68000 },
 ];
 
-const OUTREACH_LOG = [
-  { t: 0, msg: 'Launching AI agent...', type: 'system' as const },
-  { t: 2000, msg: 'Calling Rapid Rooter Plumbing', type: 'voice' as const },
-  { t: 6000, msg: 'SMS sent to Blue Star Plumbing', type: 'sms' as const },
-  { t: 10000, msg: 'Submitting to ABC Plumbing & Drain', type: 'web' as const },
-  { t: 12000, msg: 'Rapid Rooter answered', type: 'success' as const },
-  { t: 22000, msg: 'Blue Star replied', type: 'success' as const },
-  { t: 48000, msg: 'ABC Plumbing responded', type: 'success' as const },
-  { t: 52000, msg: 'Outreach complete', type: 'done' as const },
-];
-
-/** Trim whitespace + collapse duplicate $ signs a provider might put
- *  in their quote field. Kept local so this component doesn't reach
- *  back into GetQuotes for one helper. */
 function cleanPrice(price: string): string {
   return price.replace(/\s+/g, ' ').replace(/\$+/g, '$').trim();
 }
 
-// ── Component ─────────────────────────────────────────────────────────
+function channelToBadge(raw: string): OutreachChannel {
+  const v = raw.toLowerCase();
+  if (v.includes('voice') || v.includes('call') || v.includes('phone')) return 'voice';
+  if (v.includes('sms') || v.includes('text')) return 'sms';
+  return 'web';
+}
+
+function parseDistance(raw: string): number | undefined {
+  const m = /(\d+(?:\.\d+)?)/.exec(raw);
+  return m ? parseFloat(m[1]) : undefined;
+}
+
+// ── Public component ─────────────────────────────────────────────────
 
 interface Props {
   jobId: string | null;
@@ -88,17 +103,17 @@ interface Props {
 }
 
 export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBooked }: Props) {
-  const [log, setLog] = useState<typeof OUTREACH_LOG>([]);
   const [providers, setProviders] = useState<(MockProvider | RealProvider)[]>([]);
   const [outreachDone, setOutreachDone] = useState(false);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [booked, setBooked] = useState<MockProvider | null>(null);
   const [stats, setStats] = useState({ contacted: 0, responded: 0 });
   const [channels, setChannels] = useState({ voice: 0, sms: 0, web: 0 });
+  const [log, setLog] = useState<LogEntry[]>([]);
   const [homeAddress, setHomeAddress] = useState('');
+  const [pendingBook, setPendingBook] = useState<RealProvider | MockProvider | null>(null);
+  const startedAtRef = useRef<number>(Date.now());
 
-  const fetchedResponses = useRef(0);
-
+  // Pre-fetch home address so the book flow can submit with a
+  // sensible default (user can override in the prompt).
   useEffect(() => {
     if (isDemo) return;
     accountService.getHome().then(res => {
@@ -109,211 +124,330 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
     }).catch(() => {});
   }, [isDemo]);
 
-  // Reset the response-fetch dedupe when the job changes (mainly for
-  // multi-session hot-swap scenarios).
-  useEffect(() => { fetchedResponses.current = 0; }, [jobId]);
-
-  // Main outreach effect — real WS subscription or mock demo simulation.
+  // WS wiring for real dispatch — subscribes to aggregate status +
+  // refreshes provider responses whenever the count changes.
   useEffect(() => {
-    if (jobId && !isDemo) {
-      setLog([{ t: 0, msg: 'Launching AI agent...', type: 'system' }]);
-
-      const socket = connectJobSocket(jobId, (status: JobStatusResponse) => {
-        setStats({ contacted: status.providers_contacted, responded: status.providers_responded });
-        setChannels({
-          voice: status.outreach_channels.voice.attempted,
-          sms: status.outreach_channels.sms.attempted,
-          web: status.outreach_channels.web.attempted,
-        });
-
-        const newLog: typeof OUTREACH_LOG = [{ t: 0, msg: `Contacting ${status.providers_contacted} providers...`, type: 'system' }];
-        if (status.outreach_channels.voice.attempted > 0) newLog.push({ t: 1, msg: `${status.outreach_channels.voice.attempted} voice calls`, type: 'voice' });
-        if (status.outreach_channels.sms.attempted > 0) newLog.push({ t: 2, msg: `${status.outreach_channels.sms.attempted} SMS messages`, type: 'sms' });
-        if (status.outreach_channels.web.attempted > 0) newLog.push({ t: 3, msg: `${status.outreach_channels.web.attempted} web contacts`, type: 'web' });
-        if (status.providers_responded > 0) newLog.push({ t: 4, msg: `${status.providers_responded} quote(s) received!`, type: 'success' });
-        if (['completed', 'expired'].includes(status.status)) {
-          newLog.push({ t: 5, msg: status.providers_responded > 0 ? `${status.providers_responded} quotes ready!` : 'Outreach complete', type: 'done' });
-          setOutreachDone(true);
-        }
-        setLog(newLog);
-
-        // Refresh provider responses whenever the count changes.
-        if (status.providers_responded > 0) {
-          void jobService.getResponses(jobId).then(res => {
-            if (res.data?.responses) {
-              setProviders(res.data.responses.map((r: ProviderResponseItem) => ({
-                id: r.provider.id,
-                responseId: r.id,
-                name: r.provider.name,
-                rating: parseFloat(r.provider.google_rating ?? '0'),
-                reviews: r.provider.review_count,
-                quote: cleanPrice(r.quoted_price ?? 'TBD'),
-                availability: r.availability ?? 'To be confirmed',
-                channel: r.channel,
-                note: r.message ?? '',
-                distance: '',
-                googlePlaceId: r.provider.google_place_id,
-              })));
-            }
-          });
-        }
+    if (!jobId || isDemo) return;
+    startedAtRef.current = Date.now();
+    pushLog(setLog, 0, 'Dispatch launched', 'system');
+    let lastResponded = 0;
+    const socket = connectJobSocket(jobId, (status: JobStatusResponse) => {
+      setStats({ contacted: status.providers_contacted, responded: status.providers_responded });
+      setChannels({
+        voice: status.outreach_channels.voice.attempted,
+        sms: status.outreach_channels.sms.attempted,
+        web: status.outreach_channels.web.attempted,
       });
 
-      return () => socket.close();
-    }
+      // Append log entries for new aggregate milestones.
+      const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+      if (status.providers_responded > lastResponded) {
+        pushLog(setLog, elapsed, `Quote ${status.providers_responded} received`, 'quote');
+        lastResponded = status.providers_responded;
+      }
+      if (['completed', 'expired'].includes(status.status)) {
+        setOutreachDone(true);
+        pushLog(setLog, elapsed, status.providers_responded > 0 ? 'Outreach complete — quotes ready' : 'Outreach complete', 'system');
+      }
 
-    // Non-demo without a jobId — rare (shouldn't happen once the
-    // parent resolves the job), but guard against a crash.
-    if (!isDemo) {
-      setLog([{ t: 0, msg: 'Setting up your search...', type: 'system' }]);
-      return;
-    }
-
-    // Mock demo — scheduled timers synthesize a plausible outreach.
-    const timers = OUTREACH_LOG.map((e) => setTimeout(() => {
-      setLog(p => [...p, e]);
-      if (['voice', 'sms', 'web'].includes(e.type)) setStats(s => ({ ...s, contacted: s.contacted + 1 }));
-      if (e.type === 'success') setStats(s => ({ ...s, responded: s.responded + 1 }));
-      if (e.type === 'done') setOutreachDone(true);
-    }, e.t));
-    const pt = MOCK_PROVIDERS.map(p => setTimeout(() => setProviders(prev => [...prev, p]), p.delay));
-    return () => { timers.forEach(clearTimeout); pt.forEach(clearTimeout); };
+      if (status.providers_responded > 0) {
+        void jobService.getResponses(jobId).then(res => {
+          if (res.data?.responses) {
+            setProviders(res.data.responses.map((r: ProviderResponseItem) => ({
+              id: r.provider.id,
+              responseId: r.id,
+              name: r.provider.name,
+              rating: parseFloat(r.provider.google_rating ?? '0'),
+              reviews: r.provider.review_count,
+              quote: cleanPrice(r.quoted_price ?? 'TBD'),
+              availability: r.availability ?? 'To be confirmed',
+              channel: r.channel,
+              note: r.message ?? '',
+              distance: '',
+              googlePlaceId: r.provider.google_place_id,
+              phone: r.provider.phone ?? null,
+            } as RealProvider)));
+          }
+        });
+      }
+    });
+    return () => socket.close();
   }, [jobId, isDemo]);
 
-  const outreachStatusObj: OutreachStatus = {
-    providers_contacted: stats.contacted,
-    providers_responded: stats.responded,
-    outreach_channels: {
-      voice: { attempted: channels.voice, connected: 0 },
-      sms: { attempted: channels.sms, connected: 0 },
-      web: { attempted: channels.web, connected: 0 },
+  // Demo simulation — scheduled timers synthesize a dispatch.
+  useEffect(() => {
+    if (!isDemo) return;
+    startedAtRef.current = Date.now();
+    pushLog(setLog, 0, 'Dispatch launched · demo mode', 'system');
+    const contactTimers = MOCK_PROVIDERS.map((p, idx) => setTimeout(() => {
+      const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+      const verb = p.channel === 'voice' ? 'Calling' : p.channel === 'sms' ? 'SMS to' : 'Web request to';
+      pushLog(setLog, elapsed, `${verb} ${p.name}`, 'contact');
+      setStats(s => ({ ...s, contacted: s.contacted + 1 }));
+      setChannels(c => ({ ...c, [p.channel]: (c as Record<string, number>)[p.channel] + 1 } as typeof c));
+      void idx;
+    }, idx * 2500));
+
+    const quoteTimers = MOCK_PROVIDERS.map(p => setTimeout(() => {
+      const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+      setProviders(prev => [...prev, p]);
+      setStats(s => ({ ...s, responded: s.responded + 1 }));
+      pushLog(setLog, elapsed, `Quote from ${p.name}: ${p.quote}`, 'quote');
+    }, p.delay));
+
+    const doneTimer = setTimeout(() => {
+      setOutreachDone(true);
+      const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+      pushLog(setLog, elapsed, 'Outreach complete — 3 quotes ready', 'system');
+    }, 75000);
+
+    return () => {
+      contactTimers.forEach(clearTimeout);
+      quoteTimers.forEach(clearTimeout);
+      clearTimeout(doneTimer);
+    };
+  }, [isDemo]);
+
+  // Build ProviderActivity entries for the strip. Quoted providers
+  // flow into the QUOTES RECEIVED section; we don't synthesize
+  // per-provider live-outreach rows because the backend doesn't emit
+  // those yet — the aggregate contacted/quoted stats + activity
+  // ticker cover the live state.
+  const activity: ProviderActivity[] = useMemo(() => providers.map(p => ({
+    providerId: ('responseId' in p ? p.responseId : p.id),
+    name: p.name,
+    company: p.name,
+    channel: channelToBadge(p.channel),
+    status: 'quoted',
+    startedAt: startedAtRef.current,
+    quote: {
+      priceLabel: p.quote,
+      availability: p.availability,
+      message: p.note,
     },
-    status: outreachDone ? 'completed' : 'dispatching',
-  };
-  const logEntries: LogEntry[] = log.map(e => ({ msg: e.msg, type: e.type as LogEntry['type'] }));
+    profile: {
+      rating: p.rating,
+      reviewCount: p.reviews,
+      phone: 'phone' in p ? (p.phone ?? undefined) : undefined,
+      distanceMiles: parseDistance(p.distance),
+    },
+  })), [providers]);
+
+  async function handleBook(providerId: string) {
+    const p = providers.find(x => ('responseId' in x ? x.responseId : x.id) === providerId);
+    if (!p) return;
+    if (isDemo) {
+      onBooked(p.name);
+      return;
+    }
+    // Real flow needs a service address. Prefer the home-address
+    // pre-fetched on mount; fall back to a native prompt so the
+    // user can always type one in.
+    const address = homeAddress || window.prompt(`Service address for ${p.name}?`) || '';
+    if (!address.trim()) return;
+    if (!jobId || !('responseId' in p)) return;
+    try {
+      await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id, address.trim());
+      onBooked(p.name);
+    } catch (err) {
+      console.error('[InlineOutreach] Booking failed:', err);
+      window.alert('Booking failed — please try again.');
+    }
+    setPendingBook(null);
+  }
+  void pendingBook;
+
+  const pendingLive = Math.max(0, stats.contacted - stats.responded);
 
   return (
     <div style={{
       background: '#fff', borderRadius: 22, border: `1px solid ${BORDER}`,
-      padding: '20px 20px 16px',
-      boxShadow: '0 20px 60px -24px rgba(0,0,0,.12)',
+      padding: '20px 20px 16px', boxShadow: '0 20px 60px -24px rgba(0,0,0,.12)',
       display: 'flex', flexDirection: 'column', gap: 14,
       fontFamily: "'DM Sans',sans-serif",
     }}>
-      <div style={{ marginBottom: 0 }}>
-        <HomieOutreachLive
-          status={outreachStatusObj}
-          log={logEntries}
-          done={outreachDone}
-          showSafeNotice={!outreachDone}
-          accountLink="/account?tab=quotes"
-        />
+      <style>{`
+        @keyframes iopHomieSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes iopHomieBeat {
+          0%, 100% { transform: scale(1); box-shadow: 0 6px 16px -4px ${O}66; }
+          50%      { transform: scale(1.06); box-shadow: 0 10px 24px -4px ${O}99; }
+        }
+      `}</style>
+
+      {/* Header — spinning Homie H + status copy */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <HomieSpinningLogo />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 17, fontWeight: 700, color: D, lineHeight: 1.2 }}>
+            {outreachDone && providers.length > 0 ? 'Quotes are in' :
+             outreachDone ? 'Outreach complete' :
+             'Homie is reaching out'}
+          </div>
+          <div style={{ fontSize: 12, color: DIM, fontFamily: "'DM Mono',monospace", marginTop: 1 }}>
+            {outreachDone ? `${providers.length} quote${providers.length === 1 ? '' : 's'} · tap to book` : 'usually ~2 min'}
+          </div>
+        </div>
       </div>
 
-      {costEstimate && <EstimateCard estimate={costEstimate} />}
+      {/* Aggregate stats — 2-col honest counts */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <MiniStat label="Contacted" value={stats.contacted} color={O} />
+        <MiniStat label="Quoted" value={stats.responded} color={G} />
+      </div>
 
-      {providers.map((p, i) => (
-        <div key={i}>
-          <div onClick={() => setSelected(selected === i ? null : i)} style={{
-            background: 'white', borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
-            border: selected === i ? `2px solid ${O}` : `1px solid ${BORDER}`,
-            boxShadow: selected === i ? `0 4px 20px ${O}18` : '0 1px 4px rgba(0,0,0,0.03)',
-            transition: 'all 0.2s',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, gap: 10 }}>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: D, lineHeight: 1.3 }}>{p.name}</div>
-                <div style={{ color: DIM, fontSize: 12, marginTop: 2 }}>
-                  {'\u2605'} {p.rating} ({p.reviews}){p.distance ? ` · ${p.distance}` : ''}
-                  {'googlePlaceId' in p && (p as RealProvider).googlePlaceId && (
-                    <a
-                      href={`https://www.google.com/maps/place/?q=place_id:${(p as RealProvider).googlePlaceId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={e => e.stopPropagation()}
-                      style={{ fontSize: 11, color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginLeft: 6 }}
-                    >Reviews</a>
-                  )}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                <span style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: O, lineHeight: 1 }}>{p.quote}</span>
-                {costEstimate ? (
-                  <EstimateBadge quotedPrice={p.quote} estimateLow={costEstimate.estimateLowCents} estimateHigh={costEstimate.estimateHighCents} />
-                ) : (
-                  <div style={{ fontSize: 10.5, color: DIM, fontWeight: 500 }}>quoted price</div>
-                )}
-              </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5 }}>
-              <span style={{ color: D }}>{'\uD83D\uDCC5'} {p.availability}</span>
-              <span style={{ background: W, padding: '2px 9px', borderRadius: 100, fontSize: 10.5, color: DIM }}>via {p.channel}</span>
-            </div>
-            {p.note && <div style={{ fontSize: 12, color: DIM, fontStyle: 'italic', marginTop: 6 }}>"{p.note}"</div>}
-            {selected === i && !booked && (
-              <div style={{ marginTop: 12 }} onClick={e => e.stopPropagation()}>
-                {!isDemo && (
-                  <input
-                    id={`inline-addr-${i}`}
-                    defaultValue={homeAddress}
-                    placeholder="Enter your service address"
-                    onClick={e => e.stopPropagation()}
-                    style={{
-                      width: '100%', padding: '9px 12px', borderRadius: 10, fontSize: 13,
-                      border: `2px solid ${BORDER}`, outline: 'none', color: D,
-                      fontFamily: "'DM Sans', sans-serif", marginBottom: 8, boxSizing: 'border-box',
-                    }}
-                  />
-                )}
-                <button onClick={async () => {
-                  if (isDemo) {
-                    setBooked(p as unknown as MockProvider);
-                    onBooked(p.name);
-                    return;
-                  }
-                  const addrInput = document.getElementById(`inline-addr-${i}`) as HTMLInputElement;
-                  const address = addrInput?.value?.trim();
-                  if (!address) { alert('Please enter your service address'); return; }
-                  if (jobId && 'responseId' in p) {
-                    try {
-                      await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id, address);
-                      setBooked(p as unknown as MockProvider);
-                      onBooked(p.name);
-                    } catch (err) {
-                      console.error('[InlineOutreach] Booking failed:', err);
-                    }
-                  }
-                }} style={{
-                  width: '100%', padding: '11px 0', borderRadius: 100, border: 'none',
-                  background: O, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                  fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40`,
-                }}>Book {p.name.split(' ')[0]}</button>
-              </div>
-            )}
-          </div>
-        </div>
-      ))}
-
-      {outreachDone && providers.length > 0 && selected === null && !booked && (
-        <div style={{ textAlign: 'center', color: DIM, fontSize: 13, marginTop: 4 }}>
-          {'\u2191'} Tap a provider to book
-        </div>
+      {/* Transparency strip — QUOTES RECEIVED section only. Live
+          outreach shows as an aggregate line below since we don't
+          have per-provider live events yet. */}
+      {providers.length > 0 && (
+        <OutreachTransparencyStrip
+          activity={activity}
+          onBook={handleBook}
+          onCall={() => { /* tel: link handles it */ }}
+        />
       )}
 
-      {booked && (
+      {/* Aggregate live-outreach line — only visible when there are
+          more providers being contacted than have quoted. Compact
+          fallback for the per-provider rows we can't render yet. */}
+      {!outreachDone && pendingLive > 0 && (
         <div style={{
-          padding: 14, background: `${G}10`, borderRadius: 12,
-          border: `1px solid ${G}44`, textAlign: 'center',
+          padding: '10px 12px', background: `${G}10`,
+          border: `1px solid ${G}33`, borderRadius: 10,
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 12.5, color: D,
         }}>
-          <div style={{ fontSize: 24, marginBottom: 4 }}>{'\u2705'}</div>
-          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, color: D, marginBottom: 2 }}>
-            Booked with {booked.name}
-          </div>
-          <div style={{ fontSize: 12.5, color: DIM }}>
-            They'll be in touch to confirm details.
-          </div>
+          <LivePulse />
+          <span style={{ flex: 1 }}>
+            Reaching out to <strong>{pendingLive}</strong> more provider{pendingLive === 1 ? '' : 's'}…
+          </span>
+          <span style={{ fontSize: 10, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase' }}>
+            via {channels.voice > 0 ? 'call' : channels.sms > 0 ? 'sms' : 'web'}
+          </span>
         </div>
       )}
+
+      {/* Activity ticker */}
+      <ActivityTicker log={log} />
+
+      {/* Footer */}
+      <div style={{
+        fontSize: 11.5, color: DIM, textAlign: 'center',
+        paddingTop: 4,
+      }}>
+        {outreachDone
+          ? 'Your quotes are saved — bookings available in Account → My Quotes.'
+          : "Feel free to close the tab — we'll text you the quotes as they land."}
+      </div>
     </div>
   );
+}
+
+// ── Pieces ──────────────────────────────────────────────────────────
+
+function HomieSpinningLogo() {
+  return (
+    <div style={{
+      position: 'relative', width: 48, height: 48, flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: '50%',
+        border: `2.5px solid ${O}22`,
+        borderTopColor: O,
+        borderRightColor: `${O}88`,
+        animation: 'iopHomieSpin 1.4s linear infinite',
+      }} />
+      <div style={{
+        width: 32, height: 32, borderRadius: '50%', background: O,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        animation: 'iopHomieBeat 1.8s ease-in-out infinite',
+      }}>
+        <span style={{
+          color: '#fff', fontFamily: "'Fraunces',serif",
+          fontWeight: 700, fontSize: 16, lineHeight: 1,
+        }}>h</span>
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, color }: { label: string; value: string | number; color: string }) {
+  return (
+    <div style={{
+      padding: '10px 8px', background: W, borderRadius: 10,
+      textAlign: 'center',
+    }}>
+      <div style={{
+        fontSize: 9, color: DIM, fontFamily: "'DM Mono',monospace",
+        letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 700, marginBottom: 2,
+      }}>{label}</div>
+      <div style={{
+        fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 700, color,
+        lineHeight: 1.1,
+      }}>{value}</div>
+    </div>
+  );
+}
+
+function LivePulse() {
+  return (
+    <div style={{ position: 'relative', width: 8, height: 8, flexShrink: 0 }}>
+      <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: G }} />
+      <span style={{
+        position: 'absolute', inset: -3, borderRadius: '50%', background: G,
+        opacity: .25, animation: 'iopHomieBeat 1.6s infinite',
+      }} />
+    </div>
+  );
+}
+
+function ActivityTicker({ log }: { log: LogEntry[] }) {
+  if (log.length === 0) return null;
+  const recent = log.slice(-5).reverse();
+  return (
+    <div style={{
+      background: '#1F1B18', borderRadius: 12,
+      padding: '10px 12px',
+      maxHeight: 140, overflow: 'hidden',
+      fontFamily: "'DM Mono',monospace",
+    }}>
+      <div style={{
+        fontSize: 9.5, letterSpacing: 1.3, textTransform: 'uppercase',
+        color: '#9B9490', fontWeight: 700, marginBottom: 6,
+      }}>
+        Activity
+      </div>
+      {recent.map((e, i) => (
+        <div key={`${e.t}-${i}`} style={{
+          fontSize: 11, color: logColor(e.type), lineHeight: 1.55,
+          opacity: 1 - i * 0.18,
+        }}>
+          <span style={{ color: '#6B6560' }}>{formatClock(e.t)}</span>
+          {' · '}
+          <span>{e.text}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function logColor(t: LogEntry['type']): string {
+  switch (t) {
+    case 'quote':     return '#7ED0B1';
+    case 'connected': return '#9FD9BD';
+    case 'contact':   return '#F6B76A';
+    case 'decline':   return '#9B9490';
+    case 'system':    return '#C7C3BE';
+    default:          return '#E8E4DF';
+  }
+}
+
+function formatClock(tSec: number): string {
+  const mm = String(Math.floor(tSec / 60)).padStart(2, '0');
+  const ss = String(Math.floor(tSec % 60)).padStart(2, '0');
+  return `+${mm}:${ss}`;
+}
+
+function pushLog(set: React.Dispatch<React.SetStateAction<LogEntry[]>>, t: number, text: string, type: LogEntry['type']) {
+  set(prev => [...prev, { t, text, type }]);
 }
