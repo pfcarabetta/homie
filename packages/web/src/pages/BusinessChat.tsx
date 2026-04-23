@@ -14,6 +14,10 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
 import InlineOutreachPanel from '@/components/InlineOutreachPanel';
+import {
+  useBusinessChatTabs, loadB2bSnapshot, saveB2bSnapshot, newB2bSessionId,
+  deriveB2bTabTitle, type B2bChatStateSnapshot,
+} from '@/hooks/useBusinessChatTabs';
 import InlineVoicePanel from '@/components/InlineVoicePanel';
 import VideoChatPanel from '@/components/VideoChatPanel';
 import { primeAudio } from '@/components/audioUnlocker';
@@ -1119,20 +1123,56 @@ export default function BusinessChat() {
   const prefillTitle = searchParams.get('prefill') || '';
   const prefillDescription = searchParams.get('description') || '';
 
+  // Multi-session tabs — resolve session id from URL ?s=<id>, mint a
+  // fresh one if missing (and rewrite the URL so the tab is deep-
+  // linkable + survives reload). Every snapshot save goes under
+  // homie_b2b_chat_session_<id> and mirrors to the tab-index hook
+  // below so the nav bar in commit 4 can render this session's chip.
+  const sessionIdSlot = useRef<string>('');
+  if (!sessionIdSlot.current && typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('s');
+    if (fromUrl && /^[a-z0-9_]+$/i.test(fromUrl)) {
+      sessionIdSlot.current = fromUrl;
+    } else {
+      sessionIdSlot.current = newB2bSessionId();
+      const next = new URLSearchParams(params);
+      next.set('s', sessionIdSlot.current);
+      window.history.replaceState({}, '', `${window.location.pathname}?${next.toString()}`);
+    }
+  }
+  const sessionId = sessionIdSlot.current;
+  // Snapshot is loaded once at mount — individual state initializers
+  // below pull from it so the chat reopens exactly where the PM
+  // left off (including live outreach reconnection via jobId).
+  const b2bSnapshot = (typeof window !== 'undefined') ? loadB2bSnapshot(sessionId) : null;
+  const b2bTabs = useBusinessChatTabs();
+
   // Workspace & properties
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState(workspaceId);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
 
-  // Chat state
-  const [step, setStep] = useState<Step>('property');
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Chat state — initializers pull from b2bSnapshot when the URL
+  // carried an ?s= that matched a saved session, otherwise fall
+  // back to fresh defaults. step/category/q1Answer/messages are
+  // all restored so reopening a tab lands the PM exactly where they
+  // left off (pre-dispatch or mid-outreach).
+  const [step, setStep] = useState<Step>(() => (b2bSnapshot?.step as Step | undefined) ?? 'property');
+  const [messages, setMessages] = useState<Message[]>(() => b2bSnapshot?.messages ?? []);
   const [streamText, setStreamText] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const [category, setCategory] = useState<CatDef | null>(null);
-  const [q1Answer, setQ1Answer] = useState('');
-  const [aiDiagnosis, setAiDiagnosis] = useState('');
+  const [category, setCategory] = useState<CatDef | null>(() => {
+    if (!b2bSnapshot?.categoryId) return null;
+    // CatDef lives in the flat B2B_CATEGORIES map (the subs in the
+    // tree are just { id, icon, label } stubs without the q1 prompt
+    // we need to resume mid-chat). Look up by id to rehydrate the
+    // full CatDef.
+    return B2B_CATEGORIES.find(c => c.id === b2bSnapshot.categoryId) ?? null;
+  });
+  const [q1Answer, setQ1Answer] = useState(() => b2bSnapshot?.q1Answer ?? '');
+  const [aiDiagnosis, setAiDiagnosis] = useState(() => b2bSnapshot?.summaryText ?? '');
   const [inputVal, setInputVal] = useState('');
   const [readyToDispatch, setReadyToDispatch] = useState(false);
   const [exchangeCount, setExchangeCount] = useState(0);
@@ -1157,13 +1197,17 @@ export default function BusinessChat() {
   // a default which made the checklist's "Urgency set" tick green from the
   // moment the PM picked a property — backwards. mapUserTimingToDispatch
   // safely treats '' as "flexible / low".
-  const [timing, setTiming] = useState('');
+  const [timing, setTiming] = useState(() => b2bSnapshot?.timing ?? '');
   /** PM's audience choice on the dispatch summary card. Defaults to
    *  'preferred_plus_marketplace' (preferred get first crack, marketplace
    *  is the fallback) — that's the safer default. Persists per
    *  workspace+category in localStorage so a PM who always sends
    *  plumbing in-network doesn't re-pick every dispatch. */
-  const [audience, setAudience] = useState<'preferred_only' | 'preferred_plus_marketplace'>('preferred_plus_marketplace');
+  const [audience, setAudience] = useState<'preferred_only' | 'preferred_plus_marketplace'>(() => {
+    const saved = b2bSnapshot?.audience;
+    return saved === 'preferred_only' || saved === 'preferred_plus_marketplace'
+      ? saved : 'preferred_plus_marketplace';
+  });
   // Re-hydrate the persisted choice whenever the workspace or category
   // flips (different category = potentially different preferred policy).
   useEffect(() => {
@@ -1189,15 +1233,20 @@ export default function BusinessChat() {
    *  the PM can then toggle others on (e.g. include a vendor that
    *  doesn't normally serve this category). null = "use server-side
    *  default" (let the backend auto-match by category). */
-  const [selectedPreferredIds, setSelectedPreferredIds] = useState<Set<string> | null>(null);
+  const [selectedPreferredIds, setSelectedPreferredIds] = useState<Set<string> | null>(() => {
+    const ids = b2bSnapshot?.preferredProviderIds;
+    return ids && ids.length > 0 ? new Set(ids) : null;
+  });
   // Reset on category/workspace switch so the previous chat's
   // selection doesn't leak into the next dispatch.
   useEffect(() => { setSelectedPreferredIds(null); }, [selectedWorkspace, category]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
 
-  // Outreach state
-  const [jobId, setJobId] = useState<string | null>(null);
+  // Outreach state — jobId + outreachActive hydrate from snapshot so
+  // reopening a dispatch tab reconnects to the live WS feed.
+  const [jobId, setJobId] = useState<string | null>(() => b2bSnapshot?.jobId ?? null);
+  const [outreachActive, setOutreachActive] = useState<boolean>(() => b2bSnapshot?.outreachActive ?? false);
   const [outreachStatus, setOutreachStatus] = useState<JobStatusResponse | null>(null);
   const [responses, setResponses] = useState<ProviderResponseItem[]>([]);
   const [dispatching, setDispatching] = useState(false);
@@ -1212,7 +1261,7 @@ export default function BusinessChat() {
     reservation: { guestName: string | null; guestEmail: string | null; guestPhone: string | null; checkIn: string; checkOut: string } | null;
   } | null>(null);
   const [entryPermission, setEntryPermission] = useState<string | null>(null);
-  const [notifyGuest, setNotifyGuest] = useState(false);
+  const [notifyGuest, setNotifyGuest] = useState(() => b2bSnapshot?.notifyGuest ?? false);
 
   // Header occupancy badge + calendar state
   const [headerOccupancy, setHeaderOccupancy] = useState<{
@@ -1319,14 +1368,93 @@ export default function BusinessChat() {
     });
   }, [homeowner]);
 
+  // Persist the chat snapshot + upsert the tab index whenever any
+  // meaningful piece of B2B chat state changes. Mirrors the consumer
+  // /quote save effect. The tabs bar (wired in the nav in commit 4)
+  // reads the index so this session renders as a chip with live
+  // status immediately — no reload required.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // Don't persist brand-new empty sessions (the `property` step
+    // with no property picked + no messages) — avoids spamming the
+    // index with placeholder entries.
+    if (!selectedProperty && messages.length === 0 && !q1Answer && !category) return;
+    if (!selectedWorkspace) return;
+    try {
+      const snap: B2bChatStateSnapshot = {
+        savedAt: Date.now(),
+        workspaceId: selectedWorkspace,
+        property: selectedProperty ? {
+          id: selectedProperty.id,
+          name: selectedProperty.name ?? null,
+          address: selectedProperty.address ?? null,
+          zipCode: selectedProperty.zipCode ?? null,
+        } : null,
+        categoryId: category?.id ?? null,
+        categoryLabel: category?.label ?? null,
+        subcategoryId: null,
+        q1Answer: q1Answer || null,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        aiConvo: [],
+        summaryText: aiDiagnosis || null,
+        timing: timing || null,
+        notifyGuest,
+        audience,
+        preferredProviderIds: selectedPreferredIds ? Array.from(selectedPreferredIds) : [],
+        step,
+        jobId,
+        outreachActive,
+      };
+      saveB2bSnapshot(sessionId, snap);
+
+      // Tab status inference: outreach active wins over step-based
+      // guess. Quotes-ready flips when any responded provider has an
+      // actual numeric price (responses state). booked is handled
+      // separately when bookedName is set.
+      const quotedCount = responses.filter(r => (r.quoted_price ?? '').trim().length > 0).length;
+      const tabStatus = bookedName ? 'booked'
+        : outreachActive ? (quotedCount > 0 ? 'quotes_ready' : 'dispatching')
+        : 'drafting';
+      b2bTabs.upsert({
+        id: sessionId,
+        title: deriveB2bTabTitle({
+          propertyName: selectedProperty?.name ?? null,
+          q1Answer,
+          categoryLabel: category?.label ?? null,
+        }),
+        status: tabStatus,
+        updatedAt: new Date().toISOString(),
+        workspaceId: selectedWorkspace,
+        propertyId: selectedProperty?.id ?? null,
+        propertyName: selectedProperty?.name ?? null,
+        ...(tabStatus === 'quotes_ready' ? { unreadQuotes: quotedCount } : {}),
+      });
+    } catch { /* quota / disabled — best-effort */ }
+  }, [
+    sessionId, selectedWorkspace, selectedProperty, category, q1Answer, messages,
+    aiDiagnosis, timing, notifyGuest, audience, selectedPreferredIds,
+    step, jobId, outreachActive, responses, bookedName, b2bTabs,
+  ]);
+
   // Load properties when workspace changes
   const prefillHandledRef = useRef(false);
+  const snapshotPropertyRestoredRef = useRef(false);
   useEffect(() => {
     if (!selectedWorkspace) return;
     businessService.listProperties(selectedWorkspace).then(res => {
       if (res.data) {
         const activeProps = res.data.filter(p => p.active);
         setProperties(activeProps);
+
+        // Restore the snapshot's property once, after properties have
+        // loaded. Done here (not in a useState initializer) because
+        // the full Property object only exists after the fetch — the
+        // snapshot stores the id so we can match.
+        if (!snapshotPropertyRestoredRef.current && b2bSnapshot?.property?.id) {
+          const match = activeProps.find(p => p.id === b2bSnapshot.property!.id);
+          if (match) setSelectedProperty(match);
+          snapshotPropertyRestoredRef.current = true;
+        }
 
         // Auto-select property (and optionally category) from URL params
         if (prefillPropertyId && !prefillHandledRef.current) {
@@ -2526,6 +2654,10 @@ export default function BusinessChat() {
   async function executeDispatch(permissionNote?: string) {
     setDispatching(true);
     setStep('outreach');
+    // Flip the outreachActive flag so the right-panel swap (and the
+    // snapshot save) both know dispatch is live. Reload / tab-switch
+    // into this session will re-enter the outreach view.
+    setOutreachActive(true);
 
     try {
       let summaryText = aiDiagnosis || `${category?.label}: ${q1Answer}`;
