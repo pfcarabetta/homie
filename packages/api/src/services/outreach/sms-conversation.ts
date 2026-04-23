@@ -16,6 +16,12 @@ export interface SmsConversationState {
   notes: string | null;
   jobContext: string;
   providerId: string;
+  /** ISO timestamp when the conversation transitioned to the 'notes'
+   *  phase — i.e., the provider has given us a quote + availability
+   *  and we've just asked "Any notes for the homeowner?". Used by
+   *  the sms-notes-timeout worker to auto-finalize the quote if the
+   *  provider doesn't reply within 5 minutes. */
+  notesAskedAt?: string | null;
 }
 
 // In-memory cache (fast path) — DB is the source of truth
@@ -170,6 +176,7 @@ export async function processSmsReply(
     if (conv.phase === 'availability' && hasAvailability) {
       conv.availability = providerReply;
       conv.phase = 'notes';
+      conv.notesAskedAt = new Date().toISOString();
     }
   } else if (conv.phase === 'quote') {
     if (hasPrice && !isQuestion) {
@@ -183,10 +190,12 @@ export async function processSmsReply(
     if (conv.phase === 'availability' && hasAvailability) {
       conv.availability = providerReply;
       conv.phase = 'notes';
+      conv.notesAskedAt = new Date().toISOString();
     }
   } else if (conv.phase === 'availability' && !isQuestion) {
     conv.availability = providerReply;
     conv.phase = 'notes';
+    conv.notesAskedAt = new Date().toISOString();
   } else if (conv.phase === 'notes') {
     conv.notes = ['no', 'none', 'nope', 'n/a', 'nothing'].includes(lower) ? null : providerReply;
     conv.phase = 'done';
