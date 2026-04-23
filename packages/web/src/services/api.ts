@@ -1486,6 +1486,23 @@ export interface CostEstimate {
   comparableRangeLabel: string;
 }
 
+export interface NeighborhoodStats {
+  eligible: boolean;
+  count: number;
+  /** Only set when eligible === true. */
+  medianCents?: number | null;
+  p25Cents?: number | null;
+  p75Cents?: number | null;
+  minCents?: number | null;
+  maxCents?: number | null;
+  windowDays: number;
+  zip: string;
+  category: string;
+  subcategory: string | null;
+  /** Only set when eligible === false. */
+  minSamples?: number;
+}
+
 export const estimateService = {
   generate: (data: {
     category: string; subcategory: string; complexity?: string;
@@ -1493,6 +1510,14 @@ export const estimateService = {
     brand?: string; system_age_years?: number; urgency?: string;
     photo_analysis_summary?: string;
   }) => fetchAPI<CostEstimate>('/api/v1/estimates/generate', { method: 'POST', body: JSON.stringify(data) }),
+  /** Fetch anonymized neighborhood pricing stats for the chip under the
+   *  diagnosis card. Returns eligible:false when N < MIN_SAMPLES so the
+   *  chip hides itself; no PII is ever returned. */
+  neighborhoodStats: (zip: string, category: string, subcategory?: string | null) => {
+    const params = new URLSearchParams({ zip, category });
+    if (subcategory) params.set('subcategory', subcategory);
+    return fetchAPI<NeighborhoodStats>(`/api/v1/estimates/neighborhood-stats?${params.toString()}`);
+  },
 };
 
 // ── Slack Integration ───────────────────────────────────────────────────────

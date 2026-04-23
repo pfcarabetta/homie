@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SEO from '@/components/SEO';
 import { usePricing, centsToDisplay } from '@/hooks/usePricing';
-import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, accountService, estimateService, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem, type HomeData, type CostEstimate } from '@/services/api';
+import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, accountService, estimateService, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem, type HomeData, type CostEstimate, type NeighborhoodStats } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
@@ -677,6 +677,51 @@ function HomieGeneratingCard() {
           color: DIM, lineHeight: 1.5,
         }}>
           Pulling everything you said into a clean brief so local pros can quote accurately. Takes a few seconds.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -- Neighborhood benchmarking chip --
+ *  Shows real anonymized aggregate pricing from homeowners in the same
+ *  zip + category over the last 90 days. Renders as a compact card with
+ *  sample count, median, and range. Hidden automatically when fewer
+ *  than 5 samples are available (enforced server-side, not here). */
+function NeighborhoodStatsChip({ stats, category }: { stats: NeighborhoodStats; category: string | null | undefined }) {
+  const median = stats.medianCents != null ? `$${Math.round(stats.medianCents / 100)}` : null;
+  const low = stats.p25Cents != null ? Math.round(stats.p25Cents / 100) : null;
+  const high = stats.p75Cents != null ? Math.round(stats.p75Cents / 100) : null;
+  const categoryLower = (category || 'service').toLowerCase();
+  return (
+    <div style={{
+      marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease',
+      padding: '12px 14px', borderRadius: 12,
+      background: `linear-gradient(90deg, ${G}10, ${G}04)`,
+      border: `1px solid ${G}33`,
+      display: 'flex', alignItems: 'center', gap: 12,
+    }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 10, background: `${G}22`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 16, flexShrink: 0,
+      }}>📊</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 9.5, color: DIM, fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 700, marginBottom: 2 }}>
+          Homeowners near you · last {stats.windowDays}d
+        </div>
+        <div style={{ fontSize: 13.5, color: D, fontWeight: 600, fontFamily: "'DM Sans',sans-serif", lineHeight: 1.35 }}>
+          <span style={{ color: G, fontWeight: 800 }}>{stats.count} {categoryLower} jobs</span>
+          <span style={{ color: DIM }}> in {stats.zip} </span>
+          {median && (
+            <>
+              <span style={{ color: DIM }}>· median </span>
+              <span style={{ color: D, fontWeight: 800 }}>{median}</span>
+            </>
+          )}
+          {low != null && high != null && low !== high && (
+            <span style={{ color: DIM, fontSize: 11.5 }}> (typical ${low}–${high})</span>
+          )}
         </div>
       </div>
     </div>
@@ -1674,6 +1719,7 @@ export default function GetQuotes() {
   const [streaming, setStreaming] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(() => snapshot?.costEstimate ?? null);
+  const [neighborhoodStats, setNeighborhoodStats] = useState<NeighborhoodStats | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [videoChatOpen, setVideoChatOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
@@ -1924,6 +1970,27 @@ export default function GetQuotes() {
     }).catch(() => { /* silent — status card falls back to category-only */ });
     return () => { cancelled = true; };
   }, [data.category, data.a1, data.zip, data.timing, ipZip]);
+
+  // Neighborhood benchmarking — aggregate price stats for the user's
+  // zip + category over the last 90 days. Shown as a trust chip under
+  // the diagnosis card ("12 dishwasher jobs in 92119 · median $180").
+  // Only fetches once we've reached the diagnosis phase (before that the
+  // category may still be narrowing), and only renders the chip if the
+  // backend returns eligible:true (N >= 5). Zip precedence matches the
+  // estimate fetch above.
+  useEffect(() => {
+    if (phase !== 'diagnosis' || !data.category) return;
+    const zip = data.zip || ipZip;
+    if (!zip) return;
+    let cancelled = false;
+    estimateService.neighborhoodStats(zip, data.category, data.a1 ?? null)
+      .then(res => {
+        if (cancelled) return;
+        if (res.data) setNeighborhoodStats(res.data);
+      })
+      .catch(() => { /* silent — chip just doesn't show */ });
+    return () => { cancelled = true; };
+  }, [phase, data.category, data.a1, data.zip, ipZip]);
 
   const flow = data.category ? CATEGORY_FLOWS[data.category] : null;
   const [activeGroup, setActiveGroup] = useState<CatGroup | null>(null);
@@ -2538,6 +2605,13 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                       </div>
                     );
                   })()}
+                  {/* Neighborhood benchmarking chip — real anonymized
+                      aggregate prices for this user's zip + category over
+                      the last 90 days. Only renders when we have enough
+                      data for it to be meaningful (backend enforces N>=5). */}
+                  {neighborhoodStats?.eligible && (
+                    <NeighborhoodStatsChip stats={neighborhoodStats} category={catMeta?.label || data.category} />
+                  )}
                   {costEstimate && (
                     <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
                       <EstimateCard estimate={costEstimate} />
