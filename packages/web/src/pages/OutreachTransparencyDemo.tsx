@@ -2,65 +2,99 @@ import { useEffect, useState, useMemo } from 'react';
 import OutreachTransparencyStrip, { type ProviderActivity } from '@/components/OutreachTransparencyStrip';
 
 /**
- * /demo/outreach-transparency — visual mockup of feature #8 from the
- * innovations list. Renders the OutreachTransparencyStrip against a
- * scripted sequence of provider events so we can judge the UX before
- * wiring the backend WS to emit per-provider events.
+ * /demo/outreach-transparency — full composed mockup.
  *
- * The scripted sequence mimics a realistic 2-minute dispatch:
- *   t=0s   two providers start getting contacted (SMS + voice)
- *   t=8s   a third provider gets pinged via web form
- *   t=22s  one is now reviewing
- *   t=44s  first quote lands — row turns green, jumps to top of queue
- *   t=60s  second provider declines, fades
- *   t=75s  fourth provider contacted
- *   t=95s  second quote lands
+ * Shows the proposed layout where the live outreach view is embedded
+ * inline in the /quote split layout — replacing the right-side "Homie
+ * is listening" card once the user hits dispatch. No modal; everything
+ * stays on one page so the user can see their diagnosis + estimate +
+ * live outreach progress all at once.
  *
- * The existing HomieOutreachLive aggregate view is rendered below the
- * strip so we can see how they compose.
+ * Left column: the existing chat column showing the completed chat,
+ * diagnosis card, AI estimate, and the selected tier (Priority in the
+ * demo). Right column: the NEW LiveOutreachPanel — header +
+ * mini-stats + OutreachTransparencyStrip + activity ticker — that
+ * replaces "Homie is listening" during the outreach phase.
+ *
+ * The scripted 2-min sequence loops so you can see the motion.
  */
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 const DIM = '#6B6560';
+const BORDER = 'rgba(0,0,0,.08)';
+const AMBER = '#EF9F27';
+
+// ── Page ──────────────────────────────────────────────────────────────
 
 export default function OutreachTransparencyDemo() {
   const script = useMemo(() => buildScript(), []);
   const [tick, setTick] = useState(0);
   const [paused, setPaused] = useState(false);
 
-  // Simple time-based state machine — advances every 500ms unless
-  // paused. The script describes what each provider's state is at
-  // each elapsed-seconds mark; we interpolate to find the current state.
+  const MAX_T = useMemo(() => script.reduce((m, p) => Math.max(m, lastFrame(p)), 0) + 15, [script]);
+
   useEffect(() => {
     if (paused) return;
-    const i = setInterval(() => setTick(t => (t + 1) % 260), 500);
+    const i = setInterval(() => setTick(t => (t + 1) % (MAX_T * 2)), 500);
     return () => clearInterval(i);
-  }, [paused]);
+  }, [paused, MAX_T]);
 
   const elapsedSec = tick * 0.5;
-  const activity: ProviderActivity[] = script.map(p => resolveAt(p, elapsedSec));
+  const activity: ProviderActivity[] = useMemo(
+    () => script.map(p => resolveAt(p, elapsedSec)),
+    [script, elapsedSec],
+  );
 
-  // Aggregate stats for the faux HomieOutreachLive below.
-  const aggregate = useMemo(() => {
+  const log = useMemo(() => buildLog(script, elapsedSec), [script, elapsedSec]);
+
+  const stats = useMemo(() => {
     const contacted = activity.filter(a => a.status !== 'no_response').length;
-    const responded = activity.filter(a => a.status === 'quoted' || a.status === 'declined').length;
-    return { contacted, responded };
+    const quoted = activity.filter(a => a.status === 'quoted').length;
+    const reviewing = activity.filter(a => a.status === 'reviewing').length;
+    // Crude ETA: pick the min remaining expected time across reviewing.
+    const nowMs = Date.now();
+    const etas = activity
+      .filter(a => a.status === 'reviewing' && a.startedAt && a.expectedInSec)
+      .map(a => Math.max(0, (a.expectedInSec! - Math.floor((nowMs - a.startedAt!) / 1000))));
+    const etaSec = etas.length > 0 ? Math.min(...etas) : null;
+    return { contacted, quoted, reviewing, etaSec };
   }, [activity]);
 
   return (
     <div style={{
-      minHeight: '100vh', background: W, padding: '32px 20px',
+      minHeight: '100vh', background: W,
       fontFamily: "'DM Sans',sans-serif", color: D,
     }}>
       <style>{`
         @keyframes fadeSlide { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity: 0.4 } }
+        @keyframes shimmer { 0%,100% { opacity:1 } 50% { opacity:.55 } }
       `}</style>
 
-      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      {/* Nav mock */}
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 10,
+        padding: '0 24px', height: 56,
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(16px) saturate(180%)',
+        borderBottom: `1px solid ${BORDER}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 700, color: O }}>
+          homie
+        </div>
+        <div style={{
+          fontSize: 11, fontFamily: "'DM Mono',monospace", letterSpacing: 1.2,
+          textTransform: 'uppercase', fontWeight: 700, color: DIM,
+        }}>
+          /quote
+        </div>
+      </nav>
+
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '22px 24px 80px' }}>
         {/* Demo header */}
         <div style={{
-          marginBottom: 20, padding: '16px 20px',
+          marginBottom: 18, padding: '14px 18px',
           background: '#FFF7ED', border: `1px solid ${O}33`, borderRadius: 12,
         }}>
           <div style={{
@@ -70,41 +104,302 @@ export default function OutreachTransparencyDemo() {
             Design Preview · Scripted Simulation
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, color: D }}>
-            Live outreach transparency strip
+            Inline outreach — live progress in the right split, no modal
           </div>
           <div style={{ fontSize: 13, color: DIM, marginTop: 4, lineHeight: 1.5 }}>
-            Sits above the existing HomieOutreachLive aggregate view during the 2-min dispatch window. Shows individual provider activity Uber-style so the wait feels active. This preview loops a scripted 2-minute sequence — not yet wired to real WebSocket events (backend emits aggregates today; we'd add a <code style={{ fontSize: 12 }}>provider_activity</code> event to drive this live).
+            Proposed: once the user taps a tier, the right panel swaps from "Homie is listening" to the LiveOutreachPanel. Diagnosis, estimate, and live progress live on one screen. The scripted 2-min sequence loops — <strong>pause</strong> any frame to inspect.
           </div>
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={() => setPaused(p => !p)} style={controlBtn}>
               {paused ? '▶ Resume' : '❚❚ Pause'}
             </button>
             <button onClick={() => setTick(0)} style={controlBtn}>↺ Restart</button>
-            <div style={{
-              flex: 1, fontSize: 11, color: DIM, textAlign: 'right',
-              fontFamily: "'DM Mono',monospace",
-            }}>
-              t={elapsedSec.toFixed(1)}s / {(script.reduce((m, p) => Math.max(m, lastFrame(p)), 0)).toFixed(0)}s
+            <div style={{ flex: 1, textAlign: 'right', fontSize: 11, color: DIM, fontFamily: "'DM Mono',monospace" }}>
+              t={elapsedSec.toFixed(1)}s / {MAX_T}s
             </div>
           </div>
         </div>
 
-        {/* The component under test */}
-        <OutreachTransparencyStrip
-          activity={activity}
-          onQuoteTap={(id) => alert(`Would jump to provider card for ${id}`)}
-        />
-
-        {/* Faux HomieOutreachLive to show composition */}
-        <div style={{ marginTop: 16 }}>
-          <FauxOutreachAggregate contacted={aggregate.contacted} responded={aggregate.responded} />
+        {/* The 2-column layout matching /quote */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 24,
+        }}>
+          <LeftChatColumn />
+          <RightOutreachColumn
+            activity={activity}
+            log={log}
+            stats={stats}
+          />
         </div>
       </div>
     </div>
   );
 }
 
-// ── Scripted sequence ──────────────────────────────────────────────────
+// ── Left: completed chat + diagnosis + estimate + selected tier ────────
+
+function LeftChatColumn() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Completed chat transcript */}
+      <UserBubble>Kitchen faucet drips from the base every few seconds, mostly when hot water is on</UserBubble>
+      <AIBubble>Got it — drips from the base (not the aerator) + hot-water trigger points to a worn O-ring or cartridge seal. Is the handle single-lever or two-handle?</AIBubble>
+      <UserBubble>Single lever, pull-down sprayer</UserBubble>
+      <AIBubble>Perfect. One last thing — do you know the brand on the faucet?</AIBubble>
+      <UserBubble>Kohler I think</UserBubble>
+      <AIBubble>
+        Great — that narrows it to a Kohler single-handle cartridge. I&rsquo;ve prepared your diagnosis. Tap Continue when you&rsquo;re ready to find a pro.
+      </AIBubble>
+
+      {/* Diagnosis card */}
+      <div style={{
+        marginLeft: 42, marginTop: 6, marginBottom: 8,
+        background: '#fff', border: `2px solid ${G}22`,
+        borderRadius: 16, overflow: 'hidden',
+      }}>
+        <div style={{
+          background: `${G}10`, padding: '12px 16px',
+          borderBottom: `1px solid ${G}22`,
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: G }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: G }}>AI diagnosis ready</span>
+        </div>
+        <div style={{ padding: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>
+            💧 Plumbing — Kohler single-handle kitchen faucet base drip
+          </div>
+          <div style={{ fontSize: 13.5, color: DIM, lineHeight: 1.55, marginBottom: 10 }}>
+            Worn O-ring or cartridge seal — 85% of base drips on single-handle pull-downs resolve with a $5–$20 replacement part. Roughly 15% of the time the cartridge itself needs swapping.
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <MiniChip label="Category" value="Plumbing" />
+            <MiniChip label="Est. pro cost" value="$150–$285" />
+          </div>
+        </div>
+      </div>
+
+      {/* Tier choice — Priority shown selected */}
+      <div style={{
+        marginLeft: 42, marginBottom: 8,
+        padding: '14px 16px', borderRadius: 14,
+        border: `2px solid ${O}`, background: `${O}08`,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%', background: O, color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14,
+        }}>⚡</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: D }}>Priority dispatch · $19</div>
+          <div style={{ fontSize: 12.5, color: DIM, marginTop: 1 }}>Within 2 hrs · first in queue</div>
+        </div>
+        <div style={{
+          fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1,
+          textTransform: 'uppercase', fontWeight: 700, color: O,
+        }}>
+          Selected
+        </div>
+      </div>
+
+      {/* Dispatch confirmation banner */}
+      <div style={{
+        marginLeft: 42, padding: '10px 14px', borderRadius: 12,
+        background: `linear-gradient(90deg, ${G}14, ${G}04)`,
+        border: `1px solid ${G}44`,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <div style={{ position: 'relative', width: 10, height: 10 }}>
+          <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: G }} />
+          <span style={{ position: 'absolute', inset: -4, borderRadius: '50%', background: G, opacity: .25, animation: 'pulse 1.8s infinite' }} />
+        </div>
+        <div style={{ flex: 1, fontSize: 12.5, color: D, fontWeight: 600 }}>
+          <span style={{ color: G, fontWeight: 800 }}>Dispatch launched</span>
+          <span style={{ color: DIM, fontWeight: 500 }}> — live progress on the right →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Right: the new LiveOutreachPanel ──────────────────────────────────
+
+function RightOutreachColumn({
+  activity, log, stats,
+}: {
+  activity: ProviderActivity[];
+  log: LogEntry[];
+  stats: { contacted: number; quoted: number; reviewing: number; etaSec: number | null };
+}) {
+  return (
+    <div style={{ position: 'sticky', top: 72 }}>
+      <div style={{
+        background: '#fff', borderRadius: 22, border: `1px solid ${BORDER}`,
+        padding: '20px 20px 16px', boxShadow: '0 20px 60px -24px rgba(0,0,0,.12)',
+        display: 'flex', flexDirection: 'column', gap: 14,
+      }}>
+        {/* Header — swaps in where "homie is listening" used to be */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10, background: O,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            position: 'relative',
+          }}>
+            <span style={{ fontFamily: "'Fraunces',serif", color: '#fff', fontWeight: 700, fontSize: 19 }}>h</span>
+            <span style={{
+              position: 'absolute', top: -2, right: -2,
+              width: 12, height: 12, borderRadius: '50%',
+              background: G, border: '2px solid #fff',
+              animation: 'pulse 1.6s infinite',
+            }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 17, fontWeight: 700, color: D, lineHeight: 1.2 }}>
+              Homie is reaching out
+            </div>
+            <div style={{ fontSize: 12, color: DIM, fontFamily: "'DM Mono',monospace", marginTop: 1 }}>
+              Priority dispatch · usually ~2 min
+            </div>
+          </div>
+        </div>
+
+        {/* Aggregate stats — small, shown as a single row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <MiniStat label="Contacted" value={stats.contacted} color={O} />
+          <MiniStat label="Quoted" value={stats.quoted} color={G} />
+          <MiniStat
+            label="ETA"
+            value={stats.etaSec != null ? formatEta(stats.etaSec) : '—'}
+            color={D}
+          />
+        </div>
+
+        {/* The new transparency strip */}
+        <OutreachTransparencyStrip
+          activity={activity}
+          onQuoteTap={(id) => alert(`Would jump to provider card for ${id}`)}
+        />
+
+        {/* Activity ticker */}
+        <ActivityTicker log={log} />
+
+        {/* Footer */}
+        <div style={{
+          fontSize: 11.5, color: DIM, textAlign: 'center', fontFamily: "'DM Sans',sans-serif",
+          paddingTop: 4,
+        }}>
+          Feel free to close the tab — we&rsquo;ll text you the quotes as they land.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Small pieces ──────────────────────────────────────────────────────
+
+function UserBubble({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 0 }}>
+      <div style={{
+        maxWidth: '78%', padding: '10px 14px',
+        background: O, color: '#fff',
+        borderRadius: 16, borderBottomRightRadius: 4,
+        fontSize: 14, lineHeight: 1.45,
+      }}>{children}</div>
+    </div>
+  );
+}
+
+function AIBubble({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 0 }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: '50%', background: O, color: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'Fraunces',serif", fontSize: 14, fontWeight: 700, flexShrink: 0,
+      }}>h</div>
+      <div style={{
+        maxWidth: '78%', padding: '10px 14px',
+        background: '#fff', color: D, border: `1px solid ${BORDER}`,
+        borderRadius: 16, borderBottomLeftRadius: 4,
+        fontSize: 14, lineHeight: 1.5,
+      }}>{children}</div>
+    </div>
+  );
+}
+
+function MiniChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{
+      background: W, padding: '6px 10px', borderRadius: 8,
+      fontSize: 12, color: DIM,
+    }}>
+      <span>{label}: </span>
+      <span style={{ color: D, fontWeight: 700 }}>{value}</span>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, color }: { label: string; value: string | number; color: string }) {
+  return (
+    <div style={{
+      padding: '10px 8px', background: W, borderRadius: 10,
+      textAlign: 'center',
+    }}>
+      <div style={{
+        fontSize: 9, color: DIM, fontFamily: "'DM Mono',monospace",
+        letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 700, marginBottom: 2,
+      }}>{label}</div>
+      <div style={{
+        fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 700, color,
+        lineHeight: 1.1,
+      }}>{value}</div>
+    </div>
+  );
+}
+
+function ActivityTicker({ log }: { log: LogEntry[] }) {
+  if (log.length === 0) return null;
+  const recent = log.slice(-4).reverse();
+  return (
+    <div style={{
+      background: '#1F1B18', borderRadius: 12,
+      padding: '10px 12px',
+      maxHeight: 130, overflow: 'hidden',
+      fontFamily: "'DM Mono',monospace",
+    }}>
+      <div style={{
+        fontSize: 9.5, letterSpacing: 1.3, textTransform: 'uppercase',
+        color: '#9B9490', fontWeight: 700, marginBottom: 6,
+      }}>
+        Activity
+      </div>
+      {recent.map((e, i) => (
+        <div key={`${e.t}-${i}`} style={{
+          fontSize: 11, color: logColor(e.type), lineHeight: 1.55,
+          opacity: 1 - i * 0.18,
+        }}>
+          <span style={{ color: '#6B6560' }}>{formatClock(e.t)}</span>
+          {' · '}
+          <span>{e.text}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function logColor(t: LogEntry['type']): string {
+  switch (t) {
+    case 'quote':   return '#7ED0B1'; // softer green
+    case 'contact': return '#F6B76A'; // amber
+    case 'decline': return '#9B9490'; // muted
+    case 'system':  return '#C7C3BE';
+    default:        return '#E8E4DF';
+  }
+}
+
+// ── Scripted simulation ────────────────────────────────────────────────
 
 interface ScriptFrame {
   providerId: string;
@@ -114,8 +409,13 @@ interface ScriptFrame {
   frames: Array<{ t: number; state: Partial<ProviderActivity> }>;
 }
 
+interface LogEntry {
+  t: number;
+  text: string;
+  type: 'contact' | 'quote' | 'decline' | 'system' | 'review';
+}
+
 function buildScript(): ScriptFrame[] {
-  // Each frame's `state` OVERRIDES the active state as of that t (seconds).
   return [
     {
       providerId: 'p1',
@@ -123,7 +423,7 @@ function buildScript(): ScriptFrame[] {
       company: 'Rapid Rooter Plumbing',
       channel: 'voice',
       frames: [
-        { t: 0,  state: { status: 'contacting', startedAt: Date.now() } },
+        { t: 0,  state: { status: 'contacting' } },
         { t: 18, state: { status: 'reviewing', expectedInSec: 180 } },
         { t: 44, state: { status: 'quoted', quote: { priceLabel: '$180', availability: 'Available today 2–4pm' } } },
       ],
@@ -134,9 +434,9 @@ function buildScript(): ScriptFrame[] {
       company: 'Blue Star Plumbing',
       channel: 'sms',
       frames: [
-        { t: 0,  state: { status: 'contacting' } },
-        { t: 15, state: { status: 'reviewing', expectedInSec: 240 } },
-        { t: 60, state: { status: 'declined' } },
+        { t: 2,  state: { status: 'contacting' } },
+        { t: 16, state: { status: 'reviewing', expectedInSec: 240 } },
+        { t: 70, state: { status: 'declined' } },
       ],
     },
     {
@@ -146,7 +446,7 @@ function buildScript(): ScriptFrame[] {
       channel: 'web',
       frames: [
         { t: 8,  state: { status: 'contacting' } },
-        { t: 35, state: { status: 'reviewing', expectedInSec: 300 } },
+        { t: 40, state: { status: 'reviewing', expectedInSec: 300 } },
         { t: 95, state: { status: 'quoted', quote: { priceLabel: '$225', availability: 'Tomorrow 9–11am' } } },
       ],
     },
@@ -156,38 +456,30 @@ function buildScript(): ScriptFrame[] {
       company: 'Reliable Home Services',
       channel: 'voice',
       frames: [
-        { t: 75, state: { status: 'contacting' } },
-        { t: 110, state: { status: 'reviewing', expectedInSec: 200 } },
+        { t: 75,  state: { status: 'contacting' } },
+        { t: 105, state: { status: 'reviewing', expectedInSec: 210 } },
       ],
     },
   ];
 }
 
 function resolveAt(p: ScriptFrame, tSec: number): ProviderActivity {
-  // Find the most recent frame whose `t` is ≤ current time.
-  const active = p.frames.reduce<ScriptFrame['frames'][number] | null>((acc, f) => {
-    if (f.t <= tSec) return f;
-    return acc;
-  }, null);
-  // Before the first frame, provider is a no-op.
+  const active = p.frames.reduce<ScriptFrame['frames'][number] | null>((acc, f) => (f.t <= tSec ? f : acc), null);
   if (!active) {
     return {
-      providerId: p.providerId,
-      name: p.name,
-      company: p.company,
-      channel: p.channel,
-      status: 'no_response',
+      providerId: p.providerId, name: p.name, company: p.company,
+      channel: p.channel, status: 'no_response',
     };
   }
-  // Compute startedAt as "time since the provider was first contacted".
   const firstContact = p.frames[0].t;
+  const startedMsAgo = (tSec - firstContact) * 1000;
   return {
     providerId: p.providerId,
     name: p.name,
     company: p.company,
     channel: p.channel,
-    status: 'contacting', // overridden by spread below if present
-    startedAt: Date.now() - (tSec - firstContact) * 1000,
+    status: 'contacting',
+    startedAt: Date.now() - startedMsAgo,
     ...active.state,
   };
 }
@@ -196,65 +488,49 @@ function lastFrame(p: ScriptFrame): number {
   return p.frames.reduce((m, f) => Math.max(m, f.t), 0);
 }
 
-// ── Faux aggregate view (simplified HomieOutreachLive) ─────────────────
-
-function FauxOutreachAggregate({ contacted, responded }: { contacted: number; responded: number }) {
-  return (
-    <div style={{
-      background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 18,
-      padding: '20px 22px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10, background: O,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontFamily: "'Fraunces',serif", fontWeight: 700, fontSize: 18,
-        }}>h</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, color: D }}>
-            Homie is finding you pros
-          </div>
-          <div style={{ fontSize: 12, color: DIM, marginTop: 2 }}>
-            This usually takes 2 minutes
-          </div>
-        </div>
-      </div>
-
-      {/* Summary bar */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14,
-      }}>
-        <Stat label="Contacted" value={contacted} color={O} />
-        <Stat label="Quoted" value={responded} color={G} />
-        <Stat label="Complete" value={responded > 0 ? `${Math.round((responded / Math.max(contacted,1)) * 100)}%` : '—'} color={D} />
-      </div>
-
-      <div style={{ fontSize: 11, color: DIM, textAlign: 'center', fontFamily: "'DM Mono',monospace", letterSpacing: 0.5 }}>
-        Existing HomieOutreachLive aggregate card — the transparency strip sits ABOVE this.
-      </div>
-    </div>
-  );
+/** Build a sparse activity log from the script, cut off at tSec. */
+function buildLog(script: ScriptFrame[], tSec: number): LogEntry[] {
+  const out: LogEntry[] = [];
+  out.push({ t: 0, text: 'Dispatch launched · Priority tier', type: 'system' });
+  for (const p of script) {
+    for (const f of p.frames) {
+      if (f.t > tSec) break;
+      const actor = p.company;
+      if (f.state.status === 'contacting') {
+        const verb = p.channel === 'voice' ? 'Calling' : p.channel === 'sms' ? 'SMS to' : 'Web request to';
+        out.push({ t: f.t, text: `${verb} ${actor}`, type: 'contact' });
+      } else if (f.state.status === 'reviewing') {
+        out.push({ t: f.t, text: `${p.name} opened the brief at ${actor}`, type: 'review' });
+      } else if (f.state.status === 'quoted') {
+        out.push({ t: f.t, text: `Quote from ${actor}: ${f.state.quote?.priceLabel ?? ''}`, type: 'quote' });
+      } else if (f.state.status === 'declined') {
+        out.push({ t: f.t, text: `${actor} declined — moving on`, type: 'decline' });
+      }
+    }
+  }
+  return out.sort((a, b) => a.t - b.t);
 }
 
-function Stat({ label, value, color }: { label: string; value: number | string; color: string }) {
-  return (
-    <div style={{
-      padding: '10px 12px', background: W, borderRadius: 10,
-      textAlign: 'center',
-    }}>
-      <div style={{
-        fontSize: 9, color: DIM, fontFamily: "'DM Mono',monospace",
-        letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 700, marginBottom: 3,
-      }}>{label}</div>
-      <div style={{
-        fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700, color,
-      }}>{value}</div>
-    </div>
-  );
+// ── Utilities ────────────────────────────────────────────────────────
+
+function formatClock(tSec: number): string {
+  const mm = String(Math.floor(tSec / 60)).padStart(2, '0');
+  const ss = String(Math.floor(tSec % 60)).padStart(2, '0');
+  return `+${mm}:${ss}`;
+}
+
+function formatEta(sec: number): string {
+  if (sec < 60) return `<1m`;
+  const m = Math.round(sec / 60);
+  return `~${m}m`;
 }
 
 const controlBtn: React.CSSProperties = {
-  padding: '6px 14px', background: '#fff', border: '1px solid rgba(0,0,0,0.12)',
+  padding: '6px 14px', background: '#fff', border: `1px solid ${BORDER}`,
   borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
   fontFamily: "'DM Sans',sans-serif", color: D,
 };
+
+// Unused alias to satisfy older intent; kept to prevent a future refactor
+// from accidentally re-introducing amber styling for a non-reviewing row.
+void AMBER;
