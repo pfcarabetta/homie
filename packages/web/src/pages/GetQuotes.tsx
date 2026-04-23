@@ -13,7 +13,7 @@ import DIYPanel from '@/components/DIYPanel';
 import HomeIQPanel, { HomeIQInlineChip } from '@/components/HomeIQPanel';
 import ModelScanCard from '@/components/ModelScanCard';
 import ProtectionCard from '@/components/ProtectionCard';
-import QuoteTabsBar from '@/components/QuoteTabsBar';
+import QuoteTabsBar, { type QuoteTabStatus } from '@/components/QuoteTabsBar';
 import InlineOutreachPanel from '@/components/InlineOutreachPanel';
 import { useHomeIQ } from '@/hooks/useHomeIQ';
 import { useQuoteTabs, newSessionId, sessionStorageKey, deriveTitle, inferStatus } from '@/hooks/useQuoteTabs';
@@ -1725,6 +1725,14 @@ interface QuoteStateSnapshot {
   phase: string;
   costEstimate: CostEstimate | null;
   savedAt: number;
+  /** Set once the modal hands off to inline outreach. Persisted so a
+   *  user who closes the tab mid-dispatch (or bounces from payment)
+   *  lands back on the live outreach view, not the pre-dispatch UI. */
+  outreachJobId?: string | null;
+  /** Mirrors the in-memory outreachActive flag — true whenever the
+   *  right panel should render InlineOutreachPanel instead of the
+   *  "Homie is listening" card. */
+  outreachActive?: boolean;
 }
 
 function loadQuoteSnapshot(sessionKey: string): QuoteStateSnapshot | null {
@@ -1814,9 +1822,16 @@ export default function GetQuotes() {
   // Once the QuoteOutreachModal transitions to outreach, it hands the
   // jobId here and closes itself. We then render InlineOutreachPanel
   // in the right split instead of "Homie is listening" — no modal,
-  // diagnosis + live outreach share the screen.
-  const [outreachJobId, setOutreachJobId] = useState<string | null>(null);
-  const [outreachActive, setOutreachActive] = useState(false);
+  // diagnosis + live outreach share the screen. Hydrated from the
+  // session snapshot so a tab-reopen after payment lands on the
+  // outreach view, not the pre-dispatch UI.
+  const [outreachJobId, setOutreachJobId] = useState<string | null>(() => snapshot?.outreachJobId ?? null);
+  const [outreachActive, setOutreachActive] = useState<boolean>(() => snapshot?.outreachActive ?? false);
+  // Populated from InlineOutreachPanel's onActivitiesChange callback
+  // so the tab status can flip to 'quotes_ready' the moment quotes
+  // land. Not snapshotted — the panel re-derives it from the WS feed
+  // on mount.
+  const [quotedCount, setQuotedCount] = useState<number>(0);
   // Proactive model-label scan. Populated when Claude emits a
   // <scan_request> tag for a specific appliance whose brand/model aren't
   // in Home IQ yet. The ModelScanCard renders inline in the chat and
@@ -2066,21 +2081,31 @@ export default function GetQuotes() {
         phase,
         costEstimate,
         savedAt: Date.now(),
+        outreachJobId,
+        outreachActive,
       };
       localStorage.setItem(sessionKey, JSON.stringify(snap));
       // Mirror to the tabs index whenever the chat has something worth
       // remembering — skip the empty greeting phase so brand-new /quote
       // loads don't spawn an empty-title tab before the user types.
       if (data.a1 || data.category || messages.length > 0) {
+        // Status inference: outreach state wins over phase-based guess.
+        //   • Outreach active + quote(s) landed → quotes_ready
+        //   • Outreach active, no quotes yet   → dispatching
+        //   • Otherwise fall back to inferStatus (drafting)
+        const tabStatus: QuoteTabStatus = outreachActive
+          ? (quotedCount > 0 ? 'quotes_ready' : 'dispatching')
+          : inferStatus(phase, data);
         quoteTabs.upsert({
           id: sessionId,
           title: deriveTitle(data),
-          status: inferStatus(phase, data),
+          status: tabStatus,
           updatedAt: new Date().toISOString(),
+          ...(tabStatus === 'quotes_ready' ? { unreadQuotes: quotedCount } : {}),
         });
       }
     } catch { /* quota / disabled / whatever — best-effort only */ }
-  }, [messages, data, phase, costEstimate, sessionId, sessionKey, quoteTabs]);
+  }, [messages, data, phase, costEstimate, sessionId, sessionKey, quoteTabs, outreachJobId, outreachActive, quotedCount]);
 
   // Hard-reset helper: wipes in-flight state + the snapshot for THIS
   // session. Drops the tab entry too. Wired into the nav "+ New"
@@ -3162,6 +3187,10 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                 jobId={outreachJobId}
                 isDemo={isDemo}
                 costEstimate={costEstimate}
+                onActivitiesChange={(acts) => {
+                  const newCount = acts.filter(a => a.status === 'quoted').length;
+                  setQuotedCount(prev => (prev === newCount ? prev : newCount));
+                }}
                 onBooked={(providerName: string) => {
                   addAssistant(`Great news! ${providerName} has been booked. They'll be in touch to confirm details.`);
                   // Flip this session's tab status to 'booked' so it

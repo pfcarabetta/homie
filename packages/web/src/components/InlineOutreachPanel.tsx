@@ -101,9 +101,13 @@ interface Props {
   isDemo: boolean;
   costEstimate: CostEstimate | null;
   onBooked: (providerName: string) => void;
+  /** Fires whenever provider_activities changes so the parent can
+   *  flip the quote-tab status (dispatching → quotes_ready) and
+   *  drive the unread-count badge in the tab bar. */
+  onActivitiesChange?: (activities: ProviderActivityPayload[]) => void;
 }
 
-export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBooked }: Props) {
+export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBooked, onActivitiesChange }: Props) {
   const [providers, setProviders] = useState<(MockProvider | RealProvider)[]>([]);
   // Per-provider activities from the backend WS feed. Includes rows
   // for providers in 'contacting' / 'connected' / 'quoted' / 'declined'
@@ -150,6 +154,7 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
       // no second round-trip to /responses needed.
       const incoming = status.provider_activities ?? [];
       setActivities(incoming);
+      onActivitiesChange?.(incoming);
       // Also rebuild the `providers` shape the booking flow still
       // expects (legacy callers + the demo mock path).
       const quotedProviders: RealProvider[] = incoming
@@ -200,7 +205,21 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
 
     const quoteTimers = MOCK_PROVIDERS.map(p => setTimeout(() => {
       const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
-      setProviders(prev => [...prev, p]);
+      setProviders(prev => {
+        const next = [...prev, p];
+        // Mirror to a synthetic provider_activities list so the
+        // parent's tab-status callback still fires for demo users.
+        onActivitiesChange?.(next.map(x => ({
+          id: x.id, provider_id: x.id, name: x.name,
+          rating: x.rating, review_count: x.reviews,
+          phone: ('phone' in x && typeof x.phone === 'string') ? x.phone : null,
+          channel: x.channel as 'voice' | 'sms' | 'web',
+          status: 'quoted' as const,
+          responded_at: new Date().toISOString(),
+          quote: { response_id: x.id, price_label: x.quote, availability: x.availability, message: x.note },
+        })));
+        return next;
+      });
       setStats(s => ({ ...s, responded: s.responded + 1 }));
       pushLog(setLog, elapsed, `Quote from ${p.name}: ${p.quote}`, 'quote');
     }, p.delay));
