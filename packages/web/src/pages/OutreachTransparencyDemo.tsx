@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import OutreachTransparencyStrip, { type ProviderActivity } from '@/components/OutreachTransparencyStrip';
+import OutreachTransparencyStrip, { type ProviderActivity, type ProviderProfile } from '@/components/OutreachTransparencyStrip';
 
 /**
  * /demo/outreach-transparency — full composed mockup.
@@ -255,10 +255,16 @@ function RightOutreachColumn({
           <MiniStat label="Quoted" value={stats.quoted} color={G} />
         </div>
 
-        {/* The new transparency strip */}
+        {/* The new transparency strip — tap a quoted row to expand
+            inline with quote details, reviews, and book/call actions. */}
         <OutreachTransparencyStrip
           activity={activity}
-          onQuoteTap={(id) => alert(`Would jump to provider card for ${id}`)}
+          onBook={(id) => alert(`Would book provider ${id}`)}
+          onCall={(id, phone) => {
+            // tel: link fires automatically via the anchor; this is
+            // just the analytics hook equivalent.
+            console.log('[demo] onCall', id, phone);
+          }}
         />
 
         {/* Activity ticker */}
@@ -387,6 +393,10 @@ interface ScriptFrame {
   name: string;
   company: string;
   channel: 'voice' | 'sms' | 'web';
+  /** Profile info that stays constant across the provider's states —
+   *  baked in once and merged into every frame so rating/reviews/phone
+   *  show up the instant the row becomes expandable. */
+  profile: ProviderProfile;
   frames: Array<{ t: number; state: Partial<ProviderActivity> }>;
 }
 
@@ -403,10 +413,25 @@ function buildScript(): ScriptFrame[] {
       name: 'Miguel',
       company: 'Rapid Rooter Plumbing',
       channel: 'voice',
+      profile: {
+        rating: 4.9, reviewCount: 214, distanceMiles: 2.3, phone: '(619) 555-0112',
+        reviews: [
+          { author: 'Kara D.', rating: 5, date: '3 weeks ago', text: 'Miguel showed up on time, found a worn O-ring in 5 min, replaced it, and charged exactly what he quoted. Saved me from calling 3 other guys.' },
+          { author: 'Jamal T.', rating: 5, date: '2 months ago', text: 'Honest pricing, really knew Kohler faucets inside and out. Will call them first next time.' },
+          { author: 'Priya S.', rating: 4, date: '4 months ago', text: 'Good work, arrived a bit later than promised but fixed the issue properly.' },
+        ],
+      },
       frames: [
         { t: 0,  state: { status: 'contacting' } },
         { t: 18, state: { status: 'connected' } },
-        { t: 44, state: { status: 'quoted', quote: { priceLabel: '$180', availability: 'Available today 2–4pm' } } },
+        { t: 44, state: {
+          status: 'quoted',
+          quote: {
+            priceLabel: '$180',
+            availability: 'Available today 2–4pm',
+            message: "I'll bring a Kohler cartridge kit — if it's just the seal we can do it in one visit.",
+          },
+        } },
       ],
     },
     {
@@ -414,6 +439,10 @@ function buildScript(): ScriptFrame[] {
       name: 'Ana',
       company: 'Blue Star Plumbing',
       channel: 'sms',
+      profile: {
+        rating: 4.7, reviewCount: 88, distanceMiles: 4.1, phone: '(619) 555-0199',
+        reviews: [],
+      },
       frames: [
         { t: 2,  state: { status: 'contacting' } },
         { t: 16, state: { status: 'connected' } },
@@ -425,10 +454,25 @@ function buildScript(): ScriptFrame[] {
       name: 'ABC Plumbing & Drain',
       company: 'ABC Plumbing & Drain',
       channel: 'web',
+      profile: {
+        rating: 4.6, reviewCount: 512, distanceMiles: 6.8, phone: '(619) 555-0144',
+        reviews: [
+          { author: 'Marcus L.', rating: 5, date: '1 week ago', text: 'Big team, could get to me next day when everyone else was a week out. Fair price, clean work.' },
+          { author: 'Diane R.', rating: 4, date: '1 month ago', text: 'Knocked it out in under an hour. Slightly more expensive than another quote I got but they were available the fastest.' },
+          { author: 'Tom W.', rating: 5, date: '2 months ago', text: 'Scheduling was easy through their app. Tech was friendly and explained everything.' },
+        ],
+      },
       frames: [
         { t: 8,  state: { status: 'contacting' } },
         { t: 40, state: { status: 'connected' } },
-        { t: 95, state: { status: 'quoted', quote: { priceLabel: '$225', availability: 'Tomorrow 9–11am' } } },
+        { t: 95, state: {
+          status: 'quoted',
+          quote: {
+            priceLabel: '$225',
+            availability: 'Tomorrow 9–11am',
+            message: 'Price includes parts + labor. If replacement is needed instead of reseal, we\'ll let you know on site before proceeding.',
+          },
+        } },
       ],
     },
     {
@@ -436,6 +480,10 @@ function buildScript(): ScriptFrame[] {
       name: 'Sarah',
       company: 'Reliable Home Services',
       channel: 'voice',
+      profile: {
+        rating: 4.8, reviewCount: 142, distanceMiles: 3.4, phone: '(619) 555-0170',
+        reviews: [],
+      },
       frames: [
         { t: 75,  state: { status: 'contacting' } },
         { t: 105, state: { status: 'connected' } },
@@ -450,6 +498,7 @@ function resolveAt(p: ScriptFrame, tSec: number): ProviderActivity {
     return {
       providerId: p.providerId, name: p.name, company: p.company,
       channel: p.channel, status: 'no_response',
+      profile: p.profile,
     };
   }
   const firstContact = p.frames[0].t;
@@ -461,6 +510,7 @@ function resolveAt(p: ScriptFrame, tSec: number): ProviderActivity {
     channel: p.channel,
     status: 'contacting',
     startedAt: Date.now() - startedMsAgo,
+    profile: p.profile,
     ...active.state,
   };
 }

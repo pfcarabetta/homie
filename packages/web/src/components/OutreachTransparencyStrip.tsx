@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 /**
  * Live-outreach transparency strip — sits above the existing
@@ -56,9 +56,32 @@ export interface ProviderActivity {
   /** Timestamp (epoch ms) when we started contacting this provider.
    *  Not rendered today — kept for future use (e.g., sort stability). */
   startedAt?: number;
-  quote?: { priceLabel: string; availability?: string };
+  /** Present only when status === 'quoted'. */
+  quote?: {
+    priceLabel: string;
+    availability?: string;
+    /** Free-text note from the provider ("I'll bring a cartridge
+     *  kit — if it's the seal we can do it in one visit"). */
+    message?: string;
+  };
+  /** Provider profile data surfaced when the row is expanded. Comes
+   *  from the original discovery payload — same provider across state
+   *  transitions so we don't re-fetch on every render. */
+  profile?: ProviderProfile;
   /** Optional seed color — derived from company name in the demo. */
   avatarColor?: string;
+}
+
+export interface ProviderProfile {
+  rating?: number;
+  reviewCount?: number;
+  /** E.164 or formatted — rendered verbatim in the Call button label
+   *  and used as the tel: link target. */
+  phone?: string;
+  distanceMiles?: number;
+  /** Sample of recent reviews to show in the expanded card. Ideally
+   *  3 — oldest/newest trimmed server-side. */
+  reviews?: Array<{ author: string; rating: number; text: string; date?: string }>;
 }
 
 // ── Public component ────────────────────────────────────────────────
@@ -67,12 +90,20 @@ interface Props {
   activity: ProviderActivity[];
   /** How many rows are visible at once. Rest collapse into "+N more". */
   maxVisible?: number;
-  /** Fires when the user taps a quote row (for the parent to jump to
-   *  the provider card / booking flow). Optional — mockup ignores. */
-  onQuoteTap?: (providerId: string) => void;
+  /** Fires when the user taps "Book this provider" inside an expanded
+   *  quoted row. Receives the response id (same as ProviderActivity.providerId
+   *  in the mock; in production this would be the provider_response id). */
+  onBook?: (providerId: string) => void;
+  /** Fires when the user taps the "Call" button — optional, defaults
+   *  to opening the phone's tel: link when a phone number is on the
+   *  profile. */
+  onCall?: (providerId: string, phone: string | undefined) => void;
 }
 
-export default function OutreachTransparencyStrip({ activity, maxVisible = 3, onQuoteTap }: Props) {
+export default function OutreachTransparencyStrip({ activity, maxVisible = 3, onBook, onCall }: Props) {
+  // Single-open expansion — only one quoted row can be expanded at a
+  // time so the panel doesn't balloon vertically.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   // Sort: in-flight items first (connected > contacting — connected is
   // a stronger engagement signal), then quoted (newest), then declined.
   // no_response is filtered out.
@@ -116,7 +147,14 @@ export default function OutreachTransparencyStrip({ activity, maxVisible = 3, on
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {visible.map(a => (
-          <ActivityRow key={a.providerId} activity={a} onQuoteTap={onQuoteTap} />
+          <ActivityRow
+            key={a.providerId}
+            activity={a}
+            expanded={expandedId === a.providerId}
+            onToggle={() => setExpandedId(id => id === a.providerId ? null : a.providerId)}
+            onBook={onBook}
+            onCall={onCall}
+          />
         ))}
       </div>
 
@@ -160,89 +198,298 @@ function Header({ activeCount }: { activeCount: number }) {
   );
 }
 
-function ActivityRow({ activity, onQuoteTap }: { activity: ProviderActivity; onQuoteTap?: (id: string) => void }) {
+function ActivityRow({
+  activity, expanded, onToggle, onBook, onCall,
+}: {
+  activity: ProviderActivity;
+  expanded: boolean;
+  onToggle: () => void;
+  onBook?: (id: string) => void;
+  onCall?: (id: string, phone: string | undefined) => void;
+}) {
   const { copy, accent, inFlight } = describe(activity);
   const initial = displayInitial(activity);
   const avatarBg = activity.avatarColor || stableColorFor(activity.company || activity.name);
 
-  const clickable = activity.status === 'quoted' && !!onQuoteTap;
-  const RowTag = clickable ? 'button' : 'div';
+  const expandable = activity.status === 'quoted';
 
   return (
-    <RowTag
-      onClick={clickable ? () => onQuoteTap!(activity.providerId) : undefined}
-      style={{
-        all: clickable ? 'unset' : undefined,
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 10px',
-        borderRadius: 10,
-        background: activity.status === 'quoted' ? `${G}10` : '#FAFAFA',
-        border: `1px solid ${activity.status === 'quoted' ? `${G}44` : BORDER}`,
-        cursor: clickable ? 'pointer' : 'default',
-        animation: 'otsSlideIn 0.25s ease',
-        transition: 'all 0.15s',
-        fontFamily: "'DM Sans',sans-serif",
-      } as React.CSSProperties}
-      onMouseEnter={clickable ? (e) => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = G;
-        (e.currentTarget as HTMLButtonElement).style.background = `${G}18`;
-      } : undefined}
-      onMouseLeave={clickable ? (e) => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = `${G}44`;
-        (e.currentTarget as HTMLButtonElement).style.background = `${G}10`;
-      } : undefined}
-    >
-      {/* Avatar */}
-      <div style={{
-        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-        background: avatarBg, color: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 13, fontWeight: 700,
-        boxShadow: inFlight ? `0 0 0 2px ${avatarBg}22` : undefined,
-        animation: inFlight ? 'otsShimmer 2s infinite' : undefined,
-        position: 'relative',
-      }}>
-        {initial}
-        {inFlight && (
-          <span style={{
-            position: 'absolute', bottom: -1, right: -1,
-            width: 10, height: 10, borderRadius: '50%',
-            background: accent, border: '2px solid #fff',
-            animation: 'otsPulse 1.4s infinite',
-          }} />
-        )}
-      </div>
-
-      {/* Copy */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{
+      borderRadius: 10,
+      background: activity.status === 'quoted' ? `${G}10` : '#FAFAFA',
+      border: `1px solid ${activity.status === 'quoted' ? `${G}44` : BORDER}`,
+      animation: 'otsSlideIn 0.25s ease',
+      transition: 'background 0.15s, border-color 0.15s',
+      overflow: 'hidden',
+    }}>
+      {/* Summary row — always visible. Clickable when there's a quote
+          to expand; inert otherwise. */}
+      <button
+        onClick={expandable ? onToggle : undefined}
+        disabled={!expandable}
+        style={{
+          all: 'unset',
+          width: '100%', boxSizing: 'border-box',
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px',
+          cursor: expandable ? 'pointer' : 'default',
+          fontFamily: "'DM Sans',sans-serif",
+        }}
+      >
+        {/* Avatar */}
         <div style={{
-          fontSize: 13, fontWeight: 600, color: D,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          lineHeight: 1.3,
+          width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+          background: avatarBg, color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, fontWeight: 700,
+          boxShadow: inFlight ? `0 0 0 2px ${avatarBg}22` : undefined,
+          animation: inFlight ? 'otsShimmer 2s infinite' : undefined,
+          position: 'relative',
         }}>
-          {copy.primary}
+          {initial}
+          {inFlight && (
+            <span style={{
+              position: 'absolute', bottom: -1, right: -1,
+              width: 10, height: 10, borderRadius: '50%',
+              background: accent, border: '2px solid #fff',
+              animation: 'otsPulse 1.4s infinite',
+            }} />
+          )}
         </div>
-        {copy.secondary && (
+
+        {/* Copy */}
+        <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
           <div style={{
-            fontSize: 11.5, color: DIM, marginTop: 1,
+            fontSize: 13, fontWeight: 600, color: D,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             lineHeight: 1.3,
           }}>
-            {copy.secondary}
+            {copy.primary}
           </div>
-        )}
-      </div>
+          {copy.secondary && (
+            <div style={{
+              fontSize: 11.5, color: DIM, marginTop: 1,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              lineHeight: 1.3,
+            }}>
+              {copy.secondary}
+            </div>
+          )}
+        </div>
 
-      {/* Channel badge + right-side affordance */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <ChannelBadge channel={activity.channel} inFlight={inFlight} />
-        {activity.status === 'quoted' && clickable && (
-          <span style={{ color: G, fontSize: 16, fontWeight: 700, marginLeft: 2 }}>→</span>
-        )}
-      </div>
-    </RowTag>
+        {/* Channel badge + expand chevron (quoted rows only) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <ChannelBadge channel={activity.channel} inFlight={inFlight} />
+          {expandable && (
+            <span style={{
+              color: G, fontSize: 14, fontWeight: 700, marginLeft: 2,
+              transition: 'transform 0.2s',
+              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              width: 18, textAlign: 'center',
+            }}>▾</span>
+          )}
+        </div>
+      </button>
+
+      {/* Expanded detail — only renders when the row is open. Takes
+          advantage of the right panel's vertical space: full quote
+          message, rating, reviews, action buttons. */}
+      {expandable && expanded && (
+        <ExpandedQuoteDetail
+          activity={activity}
+          onBook={onBook}
+          onCall={onCall}
+        />
+      )}
+    </div>
   );
 }
+
+function ExpandedQuoteDetail({
+  activity, onBook, onCall,
+}: {
+  activity: ProviderActivity;
+  onBook?: (id: string) => void;
+  onCall?: (id: string, phone: string | undefined) => void;
+}) {
+  const company = activity.company || activity.name;
+  const { rating, reviewCount, phone, distanceMiles, reviews } = activity.profile ?? {};
+  const price = activity.quote?.priceLabel ?? '';
+  const availability = activity.quote?.availability;
+  const message = activity.quote?.message;
+
+  return (
+    <div style={{
+      padding: '12px 14px 14px',
+      borderTop: `1px solid ${G}33`,
+      background: '#fff',
+      animation: 'otsSlideIn 0.25s ease',
+      fontFamily: "'DM Sans',sans-serif",
+    }}>
+      {/* Header block — company + rating + price breakdown */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: D,
+            lineHeight: 1.25,
+          }}>
+            {company}
+          </div>
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4,
+            fontSize: 12, color: DIM, alignItems: 'center',
+          }}>
+            {rating != null && <StarRating rating={rating} reviewCount={reviewCount} />}
+            {distanceMiles != null && (
+              <>
+                <Dot />
+                <span>{distanceMiles.toFixed(1)} mi away</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Price cluster on the right */}
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{
+            fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700, color: G,
+            lineHeight: 1,
+          }}>{price}</div>
+          {availability && (
+            <div style={{ fontSize: 11, color: DIM, marginTop: 4, maxWidth: 150 }}>
+              {availability}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Provider's quote note */}
+      {message && (
+        <div style={{
+          padding: '10px 12px', background: `${G}08`, borderLeft: `3px solid ${G}`,
+          borderRadius: 6, marginBottom: 12,
+          fontSize: 12.5, color: D, lineHeight: 1.5, fontStyle: 'italic',
+        }}>
+          "{message}"
+        </div>
+      )}
+
+      {/* Reviews */}
+      {reviews && reviews.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{
+            fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.2,
+            textTransform: 'uppercase', fontWeight: 700, color: DIM, marginBottom: 6,
+          }}>
+            Recent reviews
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {reviews.slice(0, 3).map((r, i) => (
+              <ReviewRow key={i} review={r} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <CallButton phone={phone} onCall={() => onCall?.(activity.providerId, phone)} />
+        <button
+          onClick={() => onBook?.(activity.providerId)}
+          style={primaryBtnStyle}
+          onMouseEnter={e => (e.currentTarget.style.background = '#17876A')}
+          onMouseLeave={e => (e.currentTarget.style.background = G)}
+        >
+          Book this provider →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CallButton({ phone, onCall }: { phone: string | undefined; onCall: () => void }) {
+  // When a phone number is present, render as an anchor so mobile
+  // "tap to call" just works. Desktop still honors the click for the
+  // parent's analytics hook.
+  if (phone) {
+    return (
+      <a
+        href={`tel:${phone.replace(/[^\d+]/g, '')}`}
+        onClick={onCall}
+        style={{ ...secondaryBtnStyle, textAlign: 'center' }}
+      >
+        📞 Call {phone}
+      </a>
+    );
+  }
+  return (
+    <button onClick={onCall} style={secondaryBtnStyle} disabled>
+      📞 Call
+    </button>
+  );
+}
+
+function StarRating({ rating, reviewCount }: { rating: number; reviewCount?: number }) {
+  const full = Math.floor(rating);
+  const half = rating - full >= 0.5;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      <span style={{ color: '#F5A623' }}>
+        {'★'.repeat(full)}{half ? '☆' : ''}{'☆'.repeat(5 - full - (half ? 1 : 0))}
+      </span>
+      <span style={{ color: D, fontWeight: 700 }}>{rating.toFixed(1)}</span>
+      {reviewCount != null && (
+        <span style={{ color: DIM }}>({reviewCount.toLocaleString()})</span>
+      )}
+    </span>
+  );
+}
+
+function ReviewRow({ review }: { review: { author: string; rating: number; text: string; date?: string } }) {
+  return (
+    <div style={{
+      padding: '8px 10px', background: '#FAFAFA', borderRadius: 8,
+      border: `1px solid ${BORDER}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+        <span style={{ color: '#F5A623', fontSize: 11 }}>{'★'.repeat(Math.round(review.rating))}</span>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: D }}>{review.author}</span>
+        {review.date && (
+          <>
+            <Dot />
+            <span style={{ fontSize: 10.5, color: DIM }}>{review.date}</span>
+          </>
+        )}
+      </div>
+      <div style={{
+        fontSize: 12, color: D, lineHeight: 1.5,
+        display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+        overflow: 'hidden',
+      }}>
+        {review.text}
+      </div>
+    </div>
+  );
+}
+
+function Dot() {
+  return <span style={{ color: DIM, opacity: 0.4 }}>·</span>;
+}
+
+const primaryBtnStyle: React.CSSProperties = {
+  flex: 1, padding: '10px 14px', background: G, color: '#fff',
+  border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700,
+  cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+  transition: 'background 0.15s',
+};
+
+const secondaryBtnStyle: React.CSSProperties = {
+  flex: 1, padding: '10px 14px', background: '#fff', color: D,
+  border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 13, fontWeight: 600,
+  cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+  textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
+  justifyContent: 'center', gap: 4,
+};
 
 function ChannelBadge({ channel, inFlight }: { channel: OutreachChannel; inFlight: boolean }) {
   const config = {
