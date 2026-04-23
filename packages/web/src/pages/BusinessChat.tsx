@@ -13,6 +13,7 @@ import { MiniCalendar, formatReservationMoment } from './business/constants';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import EstimateCard from '@/components/EstimateCard';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
+import InlineOutreachPanel from '@/components/InlineOutreachPanel';
 import InlineVoicePanel from '@/components/InlineVoicePanel';
 import VideoChatPanel from '@/components/VideoChatPanel';
 import { primeAudio } from '@/components/audioUnlocker';
@@ -3788,118 +3789,19 @@ export default function BusinessChat() {
             </div>
           )}
 
-          {/* Outreach live view */}
+          {/* Outreach view — chat-column version. Keeps only the
+              TrackingShareCard (B2B-specific feature for sharing job
+              status with tenants/guests). The live aggregate view +
+              provider quote cards + book flow + "you're all set!"
+              confirmation all moved into <InlineOutreachPanel> in the
+              right panel below — mirrors the consumer /quote layout. */}
           {(step === 'outreach' || step === 'results') && (
-            <>
-              {/* Outreach progress */}
-              {outreachStatus && (() => {
-                const outreachStatusObj: OutreachStatus = {
-                  providers_contacted: outreachStatus.providers_contacted,
-                  providers_responded: outreachStatus.providers_responded,
-                  outreach_channels: {
-                    voice: { attempted: outreachStatus.outreach_channels.voice.attempted, connected: outreachStatus.outreach_channels.voice.connected },
-                    sms: { attempted: outreachStatus.outreach_channels.sms.attempted, connected: outreachStatus.outreach_channels.sms.connected },
-                    web: { attempted: outreachStatus.outreach_channels.web.attempted, connected: outreachStatus.outreach_channels.web.connected },
-                  },
-                  status: step === 'results' ? 'completed' : outreachStatus.status,
-                };
-                const logEntries: LogEntry[] = [];
-                if (outreachStatus.providers_contacted > 0) logEntries.push({ msg: `Contacting ${outreachStatus.providers_contacted} providers...`, type: 'system' });
-                if (outreachStatus.outreach_channels.voice.attempted > 0) logEntries.push({ msg: `${outreachStatus.outreach_channels.voice.attempted} voice calls`, type: 'voice' });
-                if (outreachStatus.outreach_channels.sms.attempted > 0) logEntries.push({ msg: `${outreachStatus.outreach_channels.sms.attempted} SMS messages`, type: 'sms' });
-                if (outreachStatus.outreach_channels.web.attempted > 0) logEntries.push({ msg: `${outreachStatus.outreach_channels.web.attempted} email contacts`, type: 'web' });
-                if (outreachStatus.providers_responded > 0) logEntries.push({ msg: `${outreachStatus.providers_responded} quote(s) received!`, type: 'success' });
-                if (step === 'results') logEntries.push({ msg: `${responses.length} quotes ready!`, type: 'done' });
-                const isDone = step === 'results';
-                return (
-                  <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
-                    <HomieOutreachLive
-                      status={outreachStatusObj}
-                      log={logEntries}
-                      done={isDone}
-                      showSafeNotice={!isDone}
-                      accountLink="/business"
-                    />
-                  </div>
-                );
-              })()}
-
-              {/* Share status tracker */}
-              <TrackingShareCard
-                jobId={jobId}
-                propertyName={selectedProperty?.name}
-                trackingUrl={trackingUrl}
-                setTrackingUrl={setTrackingUrl}
-              />
-
-              {/* Provider cards */}
-              {responses.map((r, i) => (
-                <div key={r.id} style={{ marginLeft: 42, marginBottom: 10, animation: 'fadeSlide 0.4s ease' }}>
-                  <div onClick={() => setSelectedResponse(selectedResponse === i ? null : i)} style={{
-                    background: 'var(--bp-card)', borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
-                    border: selectedResponse === i ? `2px solid ${O}` : '1px solid rgba(0,0,0,0.06)',
-                    boxShadow: selectedResponse === i ? `0 4px 20px ${O}18` : '0 1px 4px rgba(0,0,0,0.03)',
-                    transition: 'all 0.2s',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <div>
-                        <span style={{ fontWeight: 700, fontSize: 16, color: D }}>{r.provider.name}</span>
-                        {r.provider.google_rating && (
-                          <span style={{ color: 'var(--bp-subtle)', fontSize: 13, marginLeft: 8 }}>{'★'} {r.provider.google_rating} ({r.provider.review_count})</span>
-                        )}
-                      </div>
-                      {r.quoted_price && (
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: O }}>{r.quoted_price}</span>
-                          <div style={{ fontSize: 11, color: 'var(--bp-subtle)', fontWeight: 500 }}>estimate</div>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      {r.availability && <span style={{ fontSize: 14, color: D }}>{'📅'} {r.availability}</span>}
-                      <span style={{ background: W, padding: '2px 10px', borderRadius: 100, fontSize: 11, color: 'var(--bp-subtle)' }}>via {r.channel}</span>
-                    </div>
-                    {r.message && <div style={{ fontSize: 13, color: 'var(--bp-muted)', fontStyle: 'italic', marginTop: 6 }}>"{r.message}"</div>}
-                    {selectedResponse === i && (
-                      <div style={{ marginTop: 14 }}>
-                        <button onClick={async (e) => {
-                          e.stopPropagation();
-                          await jobService.bookProvider(jobId!, r.id, r.provider.id, selectedProperty?.address || undefined);
-                          setBookedName(r.provider.name);
-                        }} style={{
-                          width: '100%', padding: '13px 0', borderRadius: 100, border: 'none',
-                          background: O, color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer',
-                          fontFamily: "'DM Sans', sans-serif", boxShadow: `0 4px 16px ${O}40`,
-                        }}>Book {r.provider.name.split(' ')[0]}</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {/* Booking confirmation */}
-              {bookedName && (
-                <div style={{ marginLeft: 42, animation: 'fadeSlide 0.4s ease' }}>
-                  <div style={{
-                    background: 'var(--bp-card)', borderRadius: 16, padding: '28px 24px', textAlign: 'center',
-                    border: `2px solid ${G}22`, boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-                  }}>
-                    <div style={{ width: 56, height: 56, borderRadius: '50%', background: `${G}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 12.75l6 6 9-13.5" /></svg>
-                    </div>
-                    <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, marginBottom: 6 }}>You're all set!</div>
-                    <div style={{ fontSize: 14, color: 'var(--bp-muted)' }}>
-                      <strong style={{ color: D }}>{bookedName}</strong> has been booked. They'll be in touch to confirm details.
-                    </div>
-                  </div>
-
-                </div>
-              )}
-
-              {step === 'results' && responses.length > 0 && selectedResponse === null && !bookedName && (
-                <div style={{ marginLeft: 42, textAlign: 'center', color: 'var(--bp-subtle)', fontSize: 14, marginTop: 8 }}>{'↑'} Tap a provider to book</div>
-              )}
-            </>
+            <TrackingShareCard
+              jobId={jobId}
+              propertyName={selectedProperty?.name}
+              trackingUrl={trackingUrl}
+              setTrackingUrl={setTrackingUrl}
+            />
           )}
 
           <div ref={chatEndRef} />
@@ -3908,55 +3810,76 @@ export default function BusinessChat() {
             narrower breakpoints where the header already carries the
             same occupancy + calendar cues). */}
         <aside className="b2b-right-panel" style={{ display: 'none', flexDirection: 'column', gap: 12, position: 'sticky', top: 16, alignSelf: 'start', minWidth: 0 }}>
+          {/* Property context stays pinned regardless of phase — PMs
+              always want to know which property they're looking at. */}
           <B2BPropertyContextCard
             property={selectedProperty}
             occupancy={headerOccupancy}
             reservations={calendarReservations}
           />
-          <B2BHomieThinksCard
-            property={selectedProperty}
-            categoryLabel={category?.label ?? null}
-            step={step}
-            propertySelected={!!selectedProperty}
-            describedIssue={!!q1Answer || messages.some(m => m.role === 'user')}
-            // Ticks when the chat is actively using equipment data —
-            // either a brand-new item the AI discovered (added to
-            // discoveredEquipment) OR an existing Property IQ row that
-            // correlates with what's being discussed. We still don't
-            // auto-tick just because a scan exists on the property;
-            // correlation requires the chat to explicitly name the
-            // appliance (strong/medium match).
-            equipmentCaptured={
-              discoveredEquipment.length > 0
-              || (!!chatCorrelationText
-                  && (() => {
-                    const shared = computeSharedItemTypeWords(fullInventory);
-                    return fullInventory.some(it => correlateItemToChat(it, chatCorrelationText, shared) !== null);
-                  })())
-            }
-            mediaAttached={uploadedPhotoUrlsRef.current.length > 0 || !!imgPreview}
-            // Panel being merely OPEN doesn't count — the box was
-            // ticking the instant the PM tapped Talk to Homie, before
-            // they'd said anything. Only count actual voice turns that
-            // made it into the chat thread (marked by the 🎤 prefix on
-            // user messages in handleVoiceTurn).
-            voiceUsed={messages.some(m => m.role === 'user' && m.content.startsWith('🎤'))}
-            dispatchReady={step === 'summary' || step === 'outreach' || step === 'results'}
-            // True only after the PM explicitly picks a timing button (or
-            // a voice dispatch sets it implicitly). The default '' value
-            // for `timing` keeps this false at session start.
-            urgencyConfirmed={!!timing}
-          />
-          <B2BPropertyIQCard
-            propertyId={selectedProperty?.id ?? null}
-            categoryLabel={category?.label ?? null}
-            items={fullInventory}
-            chatText={chatCorrelationText}
-          />
-          <B2BProsNearbyBadge
-            categoryLabel={category?.label ?? null}
-          />
-          <B2BAssuranceCard />
+          {(step === 'outreach' || step === 'results') ? (
+            /* Dispatch live — inline outreach panel replaces the
+                pre-dispatch context cards while the job is live. Same
+                component as consumer /quote, themed for B2B dark-mode
+                via outreach-theme's CSS-var token set. */
+            <InlineOutreachPanel
+              theme="business"
+              jobId={jobId}
+              isDemo={false}
+              costEstimate={costEstimate}
+              onBooked={(providerName) => setBookedName(providerName)}
+            />
+          ) : (
+            <>
+              <B2BHomieThinksCard
+                property={selectedProperty}
+                categoryLabel={category?.label ?? null}
+                step={step}
+                propertySelected={!!selectedProperty}
+                describedIssue={!!q1Answer || messages.some(m => m.role === 'user')}
+                // Ticks when the chat is actively using equipment data —
+                // either a brand-new item the AI discovered (added to
+                // discoveredEquipment) OR an existing Property IQ row that
+                // correlates with what's being discussed. We still don't
+                // auto-tick just because a scan exists on the property;
+                // correlation requires the chat to explicitly name the
+                // appliance (strong/medium match).
+                equipmentCaptured={
+                  discoveredEquipment.length > 0
+                  || (!!chatCorrelationText
+                      && (() => {
+                        const shared = computeSharedItemTypeWords(fullInventory);
+                        return fullInventory.some(it => correlateItemToChat(it, chatCorrelationText, shared) !== null);
+                      })())
+                }
+                mediaAttached={uploadedPhotoUrlsRef.current.length > 0 || !!imgPreview}
+                // Panel being merely OPEN doesn't count — the box was
+                // ticking the instant the PM tapped Talk to Homie, before
+                // they'd said anything. Only count actual voice turns that
+                // made it into the chat thread (marked by the 🎤 prefix on
+                // user messages in handleVoiceTurn).
+                voiceUsed={messages.some(m => m.role === 'user' && m.content.startsWith('🎤'))}
+                // HomieThinks only renders pre-dispatch now (outreach +
+                // results swap this card for InlineOutreachPanel), so
+                // the 'summary' step is the only remaining "ready" state.
+                dispatchReady={step === 'summary'}
+                // True only after the PM explicitly picks a timing button (or
+                // a voice dispatch sets it implicitly). The default '' value
+                // for `timing` keeps this false at session start.
+                urgencyConfirmed={!!timing}
+              />
+              <B2BPropertyIQCard
+                propertyId={selectedProperty?.id ?? null}
+                categoryLabel={category?.label ?? null}
+                items={fullInventory}
+                chatText={chatCorrelationText}
+              />
+              <B2BProsNearbyBadge
+                categoryLabel={category?.label ?? null}
+              />
+              <B2BAssuranceCard />
+            </>
+          )}
         </aside>
       </div>
       </div>
