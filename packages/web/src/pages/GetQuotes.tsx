@@ -2645,6 +2645,24 @@ Write ONLY the summary — no questions, no conversational language, no greeting
              the conversation. */
           .gq-right-panel { display: none !important; }
           .gq-mobile-status { display: flex !important; }
+          /* EXCEPTION — when outreach is active, the live dispatch view
+             is the primary thing the user wants to see on mobile. Flip
+             the right panel back on, strip the sticky positioning
+             (useless on a single-column mobile layout), and pull it
+             ABOVE the chat column so the spinning Homie + provider
+             quotes land at the top of the viewport. The chat history
+             + diagnosis stay below for context. */
+          .gq-outreach-active .gq-right-panel {
+            display: block !important;
+            position: static !important;
+            order: -1;
+            margin-bottom: 18px;
+          }
+          /* While outreach is live, suppress the bottom "Homie thinks"
+             pill and the Continue button — both point at pre-dispatch
+             state the user has already moved past. */
+          .gq-outreach-active .gq-mobile-status { display: none !important; }
+          .gq-outreach-active .gq-continue-cta { display: none !important; }
           /* Home IQ inline chip is mobile-only — desktop renders the full
              HomeIQPanel in the right rail, so this inline version would
              just duplicate above 981px. */
@@ -2760,10 +2778,13 @@ Write ONLY the summary — no questions, no conversational language, no greeting
 
       {/* Main split layout — left intake chat, right live status */}
       <section className="gq-section" style={{ padding: '32px 24px 80px', overflowX: 'hidden' }}>
-        <div className="gq-split" style={{
-          maxWidth: 1280, margin: '0 auto',
-          display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 28, alignItems: 'flex-start',
-        }}>
+        <div
+          className={`gq-split${outreachActive ? ' gq-outreach-active' : ''}`}
+          style={{
+            maxWidth: 1280, margin: '0 auto',
+            display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 28, alignItems: 'flex-start',
+          }}
+        >
           {/* LEFT — progressive chat-style intake */}
           <div>
             {/* Live status pill — business hours = Online, otherwise After hours */}
@@ -3111,8 +3132,8 @@ Write ONLY the summary — no questions, no conversational language, no greeting
                   </div>
                 </>
               )}
-              {phase === 'diagnosis' && !modalOpen && data.a1 && (
-                <div style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
+              {phase === 'diagnosis' && !modalOpen && !outreachActive && data.a1 && (
+                <div className="gq-continue-cta" style={{ marginLeft: 42, marginBottom: 16, animation: 'fadeSlide 0.3s ease' }}>
                   <button onClick={() => setModalOpen(true)} style={{
                     padding: '16px 28px', borderRadius: 16, border: 'none', fontSize: 15, fontWeight: 700,
                     background: O, color: 'white', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",

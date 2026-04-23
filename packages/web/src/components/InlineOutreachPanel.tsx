@@ -386,7 +386,9 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
 
       {/* Transparency strip — QUOTES RECEIVED + LIVE OUTREACH sections.
           Real-job activity comes from the backend's provider_activities
-          field; demo synthesizes only quoted rows. */}
+          field; demo synthesizes only quoted rows. costEstimate flows
+          through so quoted rows render the AI estimate badge inline
+          next to the price (same pattern as Account > My Quotes). */}
       {activity.length > 0 && (
         <OutreachTransparencyStrip
           activity={activity}
@@ -394,6 +396,7 @@ export default function InlineOutreachPanel({ jobId, isDemo, costEstimate, onBoo
           onCall={() => { /* tel: link handles it */ }}
           defaultBookAddress={homeAddress}
           skipAddressInput={isDemo}
+          costEstimate={costEstimate}
         />
       )}
 

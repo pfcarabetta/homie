@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import EstimateBadge from '@/components/EstimateBadge';
+import type { CostEstimate } from '@/services/api';
 
 /**
  * Live-outreach transparency strip — sits above the existing
@@ -104,10 +106,14 @@ interface Props {
   /** When true, the inline address input is suppressed and the Book
    *  button fires with an empty address (e.g., demo mode). */
   skipAddressInput?: boolean;
+  /** AI cost estimate for the job — used to render the EstimateBadge
+   *  next to each provider's quote so the user sees "below estimate"
+   *  / "above estimate" context inline. Matches Account → My Quotes. */
+  costEstimate?: CostEstimate | null;
 }
 
 export default function OutreachTransparencyStrip({
-  activity, maxVisible = 3, onBook, onCall, defaultBookAddress, skipAddressInput,
+  activity, maxVisible = 3, onBook, onCall, defaultBookAddress, skipAddressInput, costEstimate,
 }: Props) {
   // Single-open expansion — only one quoted row can be expanded at a
   // time so the panel doesn't balloon vertically.
@@ -183,6 +189,7 @@ export default function OutreachTransparencyStrip({
                 onCall={onCall}
                 defaultBookAddress={defaultBookAddress}
                 skipAddressInput={skipAddressInput}
+                costEstimate={costEstimate}
               />
             ))}
           </div>
@@ -212,6 +219,7 @@ export default function OutreachTransparencyStrip({
                 onCall={onCall}
                 defaultBookAddress={defaultBookAddress}
                 skipAddressInput={skipAddressInput}
+                costEstimate={costEstimate}
               />
             ))}
           </div>
@@ -287,7 +295,7 @@ function QuoteDot() {
 }
 
 function ActivityRow({
-  activity, expanded, onToggle, onBook, onCall, defaultBookAddress, skipAddressInput,
+  activity, expanded, onToggle, onBook, onCall, defaultBookAddress, skipAddressInput, costEstimate,
 }: {
   activity: ProviderActivity;
   expanded: boolean;
@@ -296,6 +304,7 @@ function ActivityRow({
   onCall?: (id: string, phone: string | undefined) => void;
   defaultBookAddress?: string;
   skipAddressInput?: boolean;
+  costEstimate?: CostEstimate | null;
 }) {
   const { copy, accent, inFlight } = describe(activity);
   const initial = displayInitial(activity);
@@ -391,6 +400,7 @@ function ActivityRow({
           onCall={onCall}
           defaultBookAddress={defaultBookAddress}
           skipAddressInput={skipAddressInput}
+          costEstimate={costEstimate}
         />
       )}
     </div>
@@ -398,13 +408,14 @@ function ActivityRow({
 }
 
 function ExpandedQuoteDetail({
-  activity, onBook, onCall, defaultBookAddress, skipAddressInput,
+  activity, onBook, onCall, defaultBookAddress, skipAddressInput, costEstimate,
 }: {
   activity: ProviderActivity;
   onBook?: (id: string, address: string) => void;
   onCall?: (id: string, phone: string | undefined) => void;
   defaultBookAddress?: string;
   skipAddressInput?: boolean;
+  costEstimate?: CostEstimate | null;
 }) {
   const company = activity.company || activity.name;
   const { rating, reviewCount, phone, distanceMiles, reviews } = activity.profile ?? {};
@@ -462,14 +473,22 @@ function ExpandedQuoteDetail({
           </div>
         </div>
 
-        {/* Price cluster on the right */}
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        {/* Price cluster on the right — big $ + AI estimate badge
+            (matches the Account > My Quotes treatment) + availability. */}
+        <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <div style={{
             fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700, color: G,
             lineHeight: 1,
           }}>{price}</div>
+          {costEstimate && price && (
+            <EstimateBadge
+              quotedPrice={price}
+              estimateLow={costEstimate.estimateLowCents}
+              estimateHigh={costEstimate.estimateHighCents}
+            />
+          )}
           {availability && (
-            <div style={{ fontSize: 11, color: DIM, marginTop: 4, maxWidth: 150 }}>
+            <div style={{ fontSize: 11, color: DIM, maxWidth: 150 }}>
               {availability}
             </div>
           )}
