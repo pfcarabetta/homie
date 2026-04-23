@@ -2609,16 +2609,21 @@ Write ONLY the summary — no questions, no conversational language, no greeting
           {(() => {
             const backTo = authService.isAuthenticated() ? '/account' : '/';
             const backTitle = backTo === '/account' ? 'Back to my account' : 'Back to home';
+            // Hard navigate (full page load) rather than react-router's
+            // `navigate` so we tear down any active streams/WS + match
+            // the behavior of the tab-switching buttons in this same
+            // nav. Avoids any stale SPA state when exiting /quote.
+            const goBack = () => { window.location.href = backTo; };
             return (
               <>
-                <button onClick={() => navigate(backTo)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', fontSize: 18, color: DIM, display: 'flex', alignItems: 'center' }} title={backTitle}>←</button>
+                <button onClick={goBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', fontSize: 18, color: DIM, display: 'flex', alignItems: 'center' }} title={backTitle}>←</button>
                 {/* Mark — 48×48, rx14, orange tile, white house, orange circle in gable */}
-                <svg width={30} height={30} viewBox="0 0 48 48" onClick={() => navigate(backTo)} style={{ cursor: 'pointer' }}>
+                <svg width={30} height={30} viewBox="0 0 48 48" onClick={goBack} style={{ cursor: 'pointer' }}>
                   <rect width="48" height="48" rx="14" fill={O} />
                   <path d="M24 12L10 23H14V35H21V28H27V35H34V23H38L24 12Z" fill="#fff" />
                   <circle cx="24" cy="22" r="3" fill={O} />
                 </svg>
-                <span onClick={() => navigate(backTo)} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, cursor: 'pointer', letterSpacing: '-.01em' }}>homie</span>
+                <span onClick={goBack} style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, cursor: 'pointer', letterSpacing: '-.01em' }}>homie</span>
               </>
             );
           })()}
