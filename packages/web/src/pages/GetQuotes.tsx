@@ -14,7 +14,7 @@ import HomeIQPanel, { HomeIQInlineChip } from '@/components/HomeIQPanel';
 import ModelScanCard from '@/components/ModelScanCard';
 import ProtectionCard from '@/components/ProtectionCard';
 import { useHomeIQ } from '@/hooks/useHomeIQ';
-import { correlateItemToChat } from '@/utils/home-iq';
+import { correlateItemToChat, computeSharedItemTypeWords } from '@/utils/home-iq';
 import { primeAudio } from '@/components/audioUnlocker';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
@@ -2408,10 +2408,13 @@ Write ONLY the summary — no questions, no conversational language, no greeting
   const protectionCandidates = (() => {
     const seen = new Set<string>();
     const out: Array<{ brand: string; modelNumber: string; category: string; manufactureDate: string | null; key: string }> = [];
+    // Shared-word disambiguation so "heater" doesn't spuriously trigger
+    // both water_heater and pool_heater protection cards.
+    const sharedWords = computeSharedItemTypeWords(homeIQ.inventory);
     for (const it of homeIQ.inventory) {
       if (!it.brand || !it.modelNumber) continue;
-      if (correlateItemToChat(it, homeIQChatText) !== 'strong' &&
-          correlateItemToChat(it, homeIQChatText) !== 'medium') continue;
+      const strength = correlateItemToChat(it, homeIQChatText, sharedWords);
+      if (strength !== 'strong' && strength !== 'medium') continue;
       const key = `${it.brand.toLowerCase()}|${it.modelNumber.toLowerCase()}`;
       if (seen.has(key)) continue;
       seen.add(key);

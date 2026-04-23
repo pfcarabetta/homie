@@ -25,6 +25,7 @@ import {
   iqLabelFor,
   iqCategoryKeyFromLabel,
   IQ_CATEGORY_MATCH,
+  computeSharedItemTypeWords,
   type CorrelationStrength,
 } from '@/utils/home-iq';
 
@@ -2561,8 +2562,9 @@ export default function BusinessChat() {
       // IQ card uses so "water heater leak" won't drag the softener in).
       // Dedupe first so duplicate inventory rows don't double-print
       // brand/model in the dispatch summary.
+      const dispatchSharedWords = computeSharedItemTypeWords(fullInventory);
       for (const it of fullInventory) {
-        const strength = correlateItemToChat(it, chatCorrelationText);
+        const strength = correlateItemToChat(it, chatCorrelationText, dispatchSharedWords);
         if (strength !== 'strong' && strength !== 'medium') continue;
         addRow({
           itemType: it.itemType,
@@ -3927,7 +3929,10 @@ export default function BusinessChat() {
             equipmentCaptured={
               discoveredEquipment.length > 0
               || (!!chatCorrelationText
-                  && fullInventory.some(it => correlateItemToChat(it, chatCorrelationText) !== null))
+                  && (() => {
+                    const shared = computeSharedItemTypeWords(fullInventory);
+                    return fullInventory.some(it => correlateItemToChat(it, chatCorrelationText, shared) !== null);
+                  })())
             }
             mediaAttached={uploadedPhotoUrlsRef.current.length > 0 || !!imgPreview}
             // Panel being merely OPEN doesn't count — the box was
@@ -4285,9 +4290,10 @@ function B2BPropertyIQCard({
   // because they share a plumbing keyword with the dishwasher. When
   // brand/model hits exist they take priority over simple name hits.
   const catKey = iqCategoryKeyFromLabel(categoryLabel);
+  const iqSharedWords = computeSharedItemTypeWords(items);
   const scored = chatText
     ? items
-        .map(it => ({ it, strength: correlateItemToChat(it, chatText) }))
+        .map(it => ({ it, strength: correlateItemToChat(it, chatText, iqSharedWords) }))
         .filter((x): x is { it: PropertyInventoryItem; strength: 'strong' | 'medium' } => x.strength !== null)
     : [];
   const hasStrong = scored.some(x => x.strength === 'strong');
@@ -4432,9 +4438,10 @@ function MobileInlinePropertyIQ({
   // Only items explicitly called out by name/synonym/brand. Matches the
   // desktop card — no broad category keywords, so a follow-up question
   // can't pull unrelated items into the list.
+  const mobileSharedWords = computeSharedItemTypeWords(items);
   const scored = chatText
     ? items
-        .map(it => ({ it, strength: correlateItemToChat(it, chatText) }))
+        .map(it => ({ it, strength: correlateItemToChat(it, chatText, mobileSharedWords) }))
         .filter((x): x is { it: PropertyInventoryItem; strength: 'strong' | 'medium' } => x.strength !== null)
     : [];
   const hasStrong = scored.some(x => x.strength === 'strong');

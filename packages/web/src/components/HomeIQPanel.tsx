@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   correlateItemToChat, dedupeInventory, iqCategoryKeyFromLabel,
-  iqLabelFor, IQ_CATEGORY_MATCH,
+  iqLabelFor, IQ_CATEGORY_MATCH, computeSharedItemTypeWords,
 } from '@/utils/home-iq';
 import type { PropertyInventoryItem } from '@homie/shared';
 
@@ -101,10 +101,14 @@ export default function HomeIQPanel(props: HomeIQPanelProps) {
   }
 
   // ── Correlation + filter ───────────────────────────────────────────
+  // Compute shared itemType words ONCE per render so the correlation
+  // call can disambiguate compound types (e.g., prevent "heater" from
+  // matching both water_heater AND pool_heater).
+  const sharedWords = computeSharedItemTypeWords(items);
   const catKey = iqCategoryKeyFromLabel(props.categoryLabel);
   const scored = props.chatText
     ? items
-        .map(it => ({ it, strength: correlateItemToChat(it, props.chatText) }))
+        .map(it => ({ it, strength: correlateItemToChat(it, props.chatText, sharedWords) }))
         .filter((x): x is { it: PropertyInventoryItem; strength: 'strong' | 'medium' } => x.strength !== null)
     : [];
   const hasStrong = scored.some(x => x.strength === 'strong');
@@ -187,9 +191,10 @@ export function HomeIQInlineChip({
   items, chatText,
 }: { items: PropertyInventoryItem[]; chatText: string }) {
   const deduped = dedupeInventory(items);
+  const sharedWords = computeSharedItemTypeWords(deduped);
   const scored = chatText
     ? deduped
-        .map(it => ({ it, strength: correlateItemToChat(it, chatText) }))
+        .map(it => ({ it, strength: correlateItemToChat(it, chatText, sharedWords) }))
         .filter((x): x is { it: PropertyInventoryItem; strength: 'strong' | 'medium' } => x.strength !== null)
     : [];
   const hasStrong = scored.some(x => x.strength === 'strong');

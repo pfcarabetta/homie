@@ -106,12 +106,56 @@ export function escapeRegex(s: string): string {
 
 export type CorrelationStrength = 'strong' | 'medium' | null;
 
+/** Returns the distinctive (non-generic, length-≥4) words that make up
+ *  an itemType. Used by both the correlation function and the
+ *  shared-word pre-computation below. */
+function distinctiveWordsOf(itemType: string): string[] {
+  return (itemType || '').toLowerCase()
+    .split(/[_\s]/)
+    .filter(w => w.length >= 4 && !IQ_GENERIC_TOKENS.has(w));
+}
+
+/** Pre-compute the set of itemType words that appear in more than one
+ *  inventory item. Used by correlateItemToChat to disambiguate
+ *  compound types that share suffixes — "pool_heater" and
+ *  "water_heater" both end in "heater", so a bare "heater" in chat
+ *  should NOT blindly match both. When a candidate word is in this
+ *  set, the correlator requires additional specificity (another
+ *  distinctive word OR a synonym row hit) before firing. */
+export function computeSharedItemTypeWords(items: Array<{ itemType: string | null }>): Set<string> {
+  const counts = new Map<string, number>();
+  for (const it of items) {
+    const words = distinctiveWordsOf(it.itemType || '');
+    // De-dupe within a single item so "heater" only counts once per item.
+    const seen = new Set(words);
+    for (const w of seen) {
+      counts.set(w, (counts.get(w) ?? 0) + 1);
+    }
+  }
+  const shared = new Set<string>();
+  for (const [w, c] of counts) {
+    if (c >= 2) shared.add(w);
+  }
+  return shared;
+}
+
 /** Score an inventory item against the live chat text.
  *   strong : brand or model number appears verbatim in chat
  *   medium : distinctive itemType word OR an unambiguous synonym fires
  *   null   : broad / generic signals — deliberately dropped so a
- *            follow-up question can't widen the card to unrelated items */
-export function correlateItemToChat(item: PropertyInventoryItem, chatText: string): CorrelationStrength {
+ *            follow-up question can't widen the card to unrelated items
+ *
+ *  `sharedWords` (optional) — set of distinctive words shared by 2+
+ *  items in the inventory. When a matching word is in this set, we
+ *  require another disambiguating signal (a second distinctive word of
+ *  this item, OR a synonym row) before treating it as a match. Prevents
+ *  "heater" from lighting up both water_heater AND pool_heater when the
+ *  user is talking about just one of them. */
+export function correlateItemToChat(
+  item: PropertyInventoryItem,
+  chatText: string,
+  sharedWords?: Set<string>,
+): CorrelationStrength {
   if (!chatText) return null;
 
   if (item.brand && item.brand.trim().length >= 2) {
@@ -122,11 +166,36 @@ export function correlateItemToChat(item: PropertyInventoryItem, chatText: strin
   }
 
   const itemType = (item.itemType || '').toLowerCase();
-  const words = itemType.split(/[_\s]/).filter(w => w.length >= 4 && !IQ_GENERIC_TOKENS.has(w));
+  const words = distinctiveWordsOf(itemType);
+
+  // Tier 2a — itemType word match, disambiguated.
+  // Gather which distinctive words of THIS item are present in chat,
+  // split by uniqueness (unique to this item vs. shared with another).
+  const presentUnique: string[] = [];
+  const presentShared: string[] = [];
   for (const w of words) {
-    if (new RegExp(`\\b${escapeRegex(w)}\\b`, 'i').test(chatText)) return 'medium';
+    if (!new RegExp(`\\b${escapeRegex(w)}\\b`, 'i').test(chatText)) continue;
+    if (sharedWords && sharedWords.has(w)) presentShared.push(w);
+    else presentUnique.push(w);
   }
 
+  // A unique-word hit is always a medium match (no ambiguity — only
+  // this item has that word).
+  if (presentUnique.length > 0) return 'medium';
+
+  // If the ONLY present words are shared ones, we need more specificity
+  // before firing — either (a) the item has a second distinctive word
+  // also present (so the full name "pool heater" appears, not just
+  // "heater"), or (b) a synonym row confirms the match. For items with
+  // just ONE distinctive word that happens to be shared (e.g.,
+  // water_heater whose distinctive words reduce to ["heater"] because
+  // "water" is generic), the only way to win is the synonym row — and
+  // that's exactly the right outcome: the user needs to type "water
+  // heater", "hot water", or "tankless" to disambiguate from the pool
+  // heater.
+  if (presentShared.length > 0 && presentShared.length >= 2) return 'medium';
+
+  // Tier 2b — synonym row (always runs, even when presentShared hits).
   for (const syn of IQ_SYNONYMS) {
     if (!syn.match.test(itemType)) continue;
     if (syn.signals.test(chatText)) return 'medium';
@@ -136,8 +205,8 @@ export function correlateItemToChat(item: PropertyInventoryItem, chatText: strin
 }
 
 /** Back-compat — returns true for any non-null correlation. */
-export function itemCorrelatesWithChat(item: PropertyInventoryItem, chatText: string): boolean {
-  return correlateItemToChat(item, chatText) !== null;
+export function itemCorrelatesWithChat(item: PropertyInventoryItem, chatText: string, sharedWords?: Set<string>): boolean {
+  return correlateItemToChat(item, chatText, sharedWords) !== null;
 }
 
 // ── Form → virtual inventory rows ─────────────────────────────────────
