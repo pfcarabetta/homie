@@ -57,6 +57,7 @@ import OutreachDemo from '@/pages/OutreachDemo';
 import QuoteCardDemo from '@/pages/QuoteCardDemo';
 import BusinessChatPreview from '@/pages/BusinessChatPreview';
 import DIYPreviewDemo from '@/pages/DIYPreviewDemo';
+import OutreachTransparencyDemo from '@/pages/OutreachTransparencyDemo';
 
 export default function App() {
   return (
@@ -90,6 +91,7 @@ export default function App() {
           <Route path="/demo/quote-card" element={<QuoteCardDemo />} />
           <Route path="/demo/business-chat-preview" element={<BusinessChatPreview />} />
           <Route path="/demo/diy-preview" element={<DIYPreviewDemo />} />
+          <Route path="/demo/outreach-transparency" element={<OutreachTransparencyDemo />} />
           <Route path="/guest/:workspaceId/:propertyId" element={<GuestReporterPage />} />
           <Route path="/t/:token" element={<TrackingStatus />} />
           <Route path="/results/:jobId" element={<ProviderResults />} />
