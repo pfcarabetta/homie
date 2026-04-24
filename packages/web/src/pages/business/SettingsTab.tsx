@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { businessService, slackService, accountService, getToken, type WorkspaceDetail, type SlackSettings, type AccountProfile } from '@/services/api';
+import { businessService, slackService, accountService, getToken, type WorkspaceDetail, type SlackSettings, type AccountProfile, type RentalType } from '@/services/api';
+import { rentalTermsFor } from '@/hooks/useRentalTerms';
 import { O, G, D, W } from './constants';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
@@ -349,6 +350,36 @@ export default function SettingsTab({ workspace, onUpdated, themeMode, onThemeCh
   const [savingDetails, setSavingDetails] = useState(false);
   const [detailsMsg, setDetailsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Rental type — saves immediately on select (no explicit Save button
+  // needed; the two-card UI makes the current selection obvious, and
+  // rolling back is a single click). Optimistic update + revert on
+  // error so the toggle feels snappy.
+  const [rentalType, setRentalType] = useState<RentalType>(workspace.rentalType);
+  const [savingRentalType, setSavingRentalType] = useState(false);
+  const [rentalTypeMsg, setRentalTypeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  async function handleRentalTypeChange(next: RentalType) {
+    if (next === rentalType || savingRentalType) return;
+    const prev = rentalType;
+    setRentalType(next);
+    setSavingRentalType(true);
+    setRentalTypeMsg(null);
+    try {
+      const res = await businessService.updateWorkspace(workspace.id, { rental_type: next });
+      if (res.data) {
+        onUpdated({ ...workspace, rentalType: next });
+        setRentalTypeMsg({ type: 'success', text: 'Saved' });
+        // Auto-clear success message after 2s so it doesn't linger.
+        setTimeout(() => setRentalTypeMsg(null), 2000);
+      }
+    } catch (err: unknown) {
+      setRentalType(prev);
+      setRentalTypeMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save' });
+    } finally {
+      setSavingRentalType(false);
+    }
+  }
+
   // My Profile state
   const profileSectionRef = useRef<HTMLDivElement>(null);
   const [myProfile, setMyProfile] = useState<AccountProfile | null>(null);
@@ -529,6 +560,77 @@ export default function SettingsTab({ workspace, onUpdated, themeMode, onThemeCh
           style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: O, color: '#fff', cursor: saving ? 'default' : 'pointer', fontSize: 14, fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
+      </div>
+
+      {/* Property Type — STR vs LTR. Drives terminology (guest/tenant),
+          occupancy/calendar visibility, and which PMS integrations
+          surface. Workspace-level default; individual properties can
+          override on their detail page for mixed portfolios. */}
+      <div style={{ background: 'var(--bp-card)', borderRadius: 12, border: '1px solid var(--bp-border)', padding: 24, marginTop: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)', margin: 0 }}>Property Type</label>
+          {rentalTypeMsg && (
+            <span style={{ fontSize: 12, color: rentalTypeMsg.type === 'success' ? G : '#DC2626' }}>{rentalTypeMsg.text}</span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+          Sets the default for all properties in this workspace. Individual properties can override on their detail page.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {([
+            {
+              value: 'short_term' as const,
+              icon: '\uD83C\uDFD6\uFE0F',
+              title: 'Short-term rental',
+              description: 'Vacation rentals, Airbnbs. Tracks guests, reservations, and check-in/out dates.',
+            },
+            {
+              value: 'long_term' as const,
+              icon: '\uD83C\uDFE0',
+              title: 'Long-term rental',
+              description: 'Apartments, houses, multi-family. Tracks tenants; no occupancy calendar.',
+            },
+          ]).map(opt => {
+            const selected = rentalType === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => handleRentalTypeChange(opt.value)}
+                disabled={savingRentalType}
+                style={{
+                  textAlign: 'left',
+                  padding: 14,
+                  borderRadius: 10,
+                  border: `2px solid ${selected ? O : 'var(--bp-border)'}`,
+                  background: selected ? `${O}08` : 'var(--bp-bg)',
+                  cursor: savingRentalType ? 'default' : 'pointer',
+                  transition: 'all 0.15s',
+                  opacity: savingRentalType && !selected ? 0.6 : 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 20 }}>{opt.icon}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--bp-text)' }}>{opt.title}</span>
+                  {selected && (
+                    <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: O, background: `${O}18`, padding: '2px 8px', borderRadius: 100 }}>
+                      Active
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--bp-muted)', lineHeight: 1.5 }}>
+                  {opt.description}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--bp-subtle)', fontFamily: "'DM Mono', monospace", letterSpacing: 0.5, marginTop: 2 }}>
+                  Occupant: {rentalTermsFor(opt.value).Occupant}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Workspace Details */}
