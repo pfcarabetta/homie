@@ -3112,10 +3112,18 @@ export default function BusinessChat() {
             .b2b-header-actions > .b2b-chat-status { grid-column: 2 !important; grid-row: 2 !important; justify-self: end !important; }
             /* Calendar popover should still span the viewport when open. */
             .b2b-cal-popover { grid-column: 1 / -1 !important; }
-            /* Multi-session tabs bar is desktop-only — mobile PMs can
-               still switch via full-page nav, and hiding it keeps the
-               2-column grid from overflowing. */
-            .b2b-tabs-slot { display: none !important; }
+            /* Multi-session tabs — on mobile they drop to their own full-
+               width row below the occupancy/status row. QuoteTabsBar's
+               built-in mobile CSS collapses to a single compact pill
+               ("Title — 3 tabs ▾") so this only adds ~36px of height,
+               and the PM still gets one-tap access to all sessions
+               without crowding the property name or + New button. */
+            .b2b-tabs-slot {
+              grid-column: 1 / -1 !important;
+              grid-row: 3 !important;
+              min-width: 0 !important;
+              margin-top: 2px !important;
+            }
           }
         `}</style>
         {/* Multi-session tabs — mounted as a flex-1 middle region on
