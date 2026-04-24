@@ -120,11 +120,20 @@ interface Props {
    *  uses CSS vars so BusinessPortal's dark-mode toggle flows through.
    *  Threaded down to every sub-component via OutreachThemeContext. */
   theme?: OutreachTheme;
+  /** ProviderId (== expanded row's providerId) whose book button is
+   *  mid-flight. The row's button flips to a disabled "Booking…"
+   *  state so the PM can't double-fire the request. */
+  bookingProviderId?: string | null;
+  /** ProviderId of a row that's been successfully booked. Flips that
+   *  row's button into a static "✓ Booked" so the PM sees the
+   *  outcome inline instead of the page state silently changing
+   *  underneath them. */
+  bookedProviderId?: string | null;
 }
 
 export default function OutreachTransparencyStrip({
   activity, maxVisible = 3, onBook, onCall, defaultBookAddress, skipAddressInput, costEstimate,
-  theme = 'consumer',
+  theme = 'consumer', bookingProviderId = null, bookedProviderId = null,
 }: Props) {
   // Single-open expansion — only one quoted row can be expanded at a
   // time so the panel doesn't balloon vertically.
@@ -182,6 +191,7 @@ export default function OutreachTransparencyStrip({
         @keyframes otsShimmer { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
         @keyframes otsPulse { 0%,100% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.2); opacity: 0.5 } }
         @keyframes otsSlideIn { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: translateY(0) } }
+        @keyframes otsSpin { to { transform: rotate(360deg) } }
       `}</style>
 
       {/* QUOTES section — actionable, rendered first so the user sees
@@ -206,6 +216,8 @@ export default function OutreachTransparencyStrip({
                 defaultBookAddress={defaultBookAddress}
                 skipAddressInput={skipAddressInput}
                 costEstimate={costEstimate}
+                isBooking={bookingProviderId === a.providerId}
+                isBooked={bookedProviderId === a.providerId}
               />
             ))}
           </div>
@@ -316,6 +328,7 @@ function QuoteDot() {
 
 function ActivityRow({
   activity, expanded, onToggle, onBook, onCall, defaultBookAddress, skipAddressInput, costEstimate,
+  isBooking = false, isBooked = false,
 }: {
   activity: ProviderActivity;
   expanded: boolean;
@@ -325,6 +338,8 @@ function ActivityRow({
   defaultBookAddress?: string;
   skipAddressInput?: boolean;
   costEstimate?: CostEstimate | null;
+  isBooking?: boolean;
+  isBooked?: boolean;
 }) {
   const c = useOutreachColors();
   const { copy, accent, inFlight } = describe(activity);
@@ -422,6 +437,8 @@ function ActivityRow({
           defaultBookAddress={defaultBookAddress}
           skipAddressInput={skipAddressInput}
           costEstimate={costEstimate}
+          isBooking={isBooking}
+          isBooked={isBooked}
         />
       )}
     </div>
@@ -430,6 +447,7 @@ function ActivityRow({
 
 function ExpandedQuoteDetail({
   activity, onBook, onCall, defaultBookAddress, skipAddressInput, costEstimate,
+  isBooking = false, isBooked = false,
 }: {
   activity: ProviderActivity;
   onBook?: (id: string, address: string) => void;
@@ -437,6 +455,8 @@ function ExpandedQuoteDetail({
   defaultBookAddress?: string;
   skipAddressInput?: boolean;
   costEstimate?: CostEstimate | null;
+  isBooking?: boolean;
+  isBooked?: boolean;
 }) {
   const c = useOutreachColors();
   const company = activity.company || activity.name;
@@ -449,8 +469,13 @@ function ExpandedQuoteDetail({
   // primary address. Replaces the ugly window.prompt() fallback.
   const [address, setAddress] = useState<string>(defaultBookAddress ?? '');
   const [addressError, setAddressError] = useState(false);
+  const disabled = isBooking || isBooked;
 
   function handleBookClick() {
+    // Belt & suspenders guard — parent also ignores re-entries, but
+    // blocking the click before it fires keeps the UX honest (no
+    // visible "pressed" state that then does nothing).
+    if (disabled) return;
     if (skipAddressInput) {
       onBook?.(activity.providerId, '');
       return;
@@ -587,19 +612,39 @@ function ExpandedQuoteDetail({
         <CallButton phone={phone} onCall={() => onCall?.(activity.providerId, phone)} />
         <button
           onClick={handleBookClick}
+          disabled={disabled}
           style={{
-            flex: 1, padding: '10px 14px', background: c.G, color: '#fff',
+            flex: 1, padding: '10px 14px',
+            background: isBooked ? '#17876A' : c.G, color: '#fff',
             border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700,
-            cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-            transition: 'background 0.15s',
+            cursor: disabled ? 'default' : 'pointer', fontFamily: "'DM Sans',sans-serif",
+            opacity: isBooking ? 0.85 : 1,
+            transition: 'background 0.15s, opacity 0.15s',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}
-          onMouseEnter={e => (e.currentTarget.style.background = '#17876A')}
-          onMouseLeave={e => (e.currentTarget.style.background = c.G)}
+          onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#17876A'; }}
+          onMouseLeave={e => { if (!disabled && !isBooked) e.currentTarget.style.background = c.G; }}
         >
-          Book this provider →
+          {isBooked
+            ? '✓ Booked'
+            : isBooking
+              ? <><BookingSpinner />Booking…</>
+              : 'Book this provider →'}
         </button>
       </div>
     </div>
+  );
+}
+
+/** 14px ring spinner shown inside the Book button while the booking
+ *  endpoint is in flight. Kept as an inline SVG so it ships in the
+ *  same bundle chunk as the button without pulling in a new dep. */
+function BookingSpinner() {
+  return (
+    <svg width={13} height={13} viewBox="0 0 16 16" style={{ animation: 'otsSpin 0.7s linear infinite' }}>
+      <circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" fill="none" />
+      <path d="M8 2 A 6 6 0 0 1 14 8" stroke="#fff" strokeWidth="2" strokeLinecap="round" fill="none" />
+    </svg>
   );
 }
 

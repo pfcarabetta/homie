@@ -569,7 +569,7 @@ function audienceStorageKey(workspaceId: string, categoryId: string) {
   return `b2b_audience:${workspaceId}:${categoryId}`;
 }
 
-function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching, estimate, workspaceId, audience, onAudienceChange, selectedPreferredIds, onSelectedPreferredChange }: {
+function DiagnosisSummaryCard({ category, property, summary, isService, onDispatch, dispatching, estimate, workspaceId, audience, onAudienceChange, selectedPreferredIds, onSelectedPreferredChange, readOnly = false }: {
   category: CatDef; property: Property; summary: string; isService: boolean;
   onDispatch: () => void; dispatching: boolean; estimate?: CostEstimate;
   /** B2B dispatch — when set, the audience selector renders. */
@@ -582,6 +582,11 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
    *  this category, or toggle off matched ones they don't want. */
   selectedPreferredIds?: Set<string>;
   onSelectedPreferredChange?: (next: Set<string>) => void;
+  /** Recap mode — once dispatch is live, the same card is reused to
+   *  show the scope + estimate on the chat column without the
+   *  dispatch button, audience selector, or preferred-vendor
+   *  checklist (those were all pre-dispatch controls). */
+  readOnly?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = summary.length > 300;
@@ -595,6 +600,9 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
   // categories/notes/availability), falling back to workspace-wide.
   const [preferred, setPreferred] = useState<PreferredVendor[] | null>(null);
   useEffect(() => {
+    // readOnly recap doesn't render the audience selector or dispatch
+    // button, so skip the vendors fetch entirely.
+    if (readOnly) { setPreferred(null); return; }
     if (!workspaceId) { setPreferred(null); return; }
     let cancelled = false;
     businessService.listVendors(workspaceId)
@@ -621,7 +629,7 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
       })
       .catch(() => { if (!cancelled) setPreferred([]); });
     return () => { cancelled = true; };
-  }, [workspaceId, property.id]);
+  }, [workspaceId, property.id, readOnly]);
   const marketplaceCount = B2B_PROS_NEARBY[category.label] ?? 12;
   const selectedAudience: Audience = audience ?? 'preferred_plus_marketplace';
   const showAudience = !!workspaceId && preferred !== null && preferred.length > 0;
@@ -650,7 +658,9 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
     <div style={{ marginLeft: 42, marginBottom: 16, background: 'var(--bp-card)', border: `2px solid ${G}22`, borderRadius: 16, overflow: 'hidden' }}>
       <div style={{ background: `${G}10`, padding: '12px 16px', borderBottom: `1px solid ${G}22`, display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: G }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: G }}>{isService ? 'Scope confirmed' : 'AI diagnosis ready'}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: G }}>
+          {readOnly ? 'Dispatched — scope locked' : (isService ? 'Scope confirmed' : 'AI diagnosis ready')}
+        </span>
       </div>
       <div style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 16, color: D, marginBottom: 8 }}>{category.icon} {category.label}</div>
@@ -681,14 +691,16 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
             <EstimateCard estimate={estimate} />
           </div>
         )}
-        <p style={{ fontSize: 12, color: 'var(--bp-subtle)', lineHeight: 1.5, marginBottom: 16 }}>
-          This {isService ? 'scope' : 'diagnosis'} will be shared with providers so they can respond quickly — no need to explain twice.
-        </p>
+        {!readOnly && (
+          <p style={{ fontSize: 12, color: 'var(--bp-subtle)', lineHeight: 1.5, marginBottom: 16 }}>
+            This {isService ? 'scope' : 'diagnosis'} will be shared with providers so they can respond quickly — no need to explain twice.
+          </p>
+        )}
         {/* Audience selector — only shows when at least one preferred
             vendor exists for this category. PMs without preferred
             vendors get the existing single-button dispatch (defaults
-            to marketplace on the backend). */}
-        {showAudience && preferred && (
+            to marketplace on the backend). Hidden in readOnly recap. */}
+        {!readOnly && showAudience && preferred && (
           <AudienceSelector
             preferred={preferred}
             marketplaceCount={marketplaceCount}
@@ -701,21 +713,23 @@ function DiagnosisSummaryCard({ category, property, summary, isService, onDispat
             onSelectedChange={onSelectedPreferredChange ?? (() => {})}
           />
         )}
-        <button onClick={onDispatch} disabled={dispatching} style={{
-          padding: '14px 28px', borderRadius: 10, border: 'none', background: O, color: '#fff',
-          fontSize: 15, fontWeight: 700, cursor: dispatching ? 'default' : 'pointer', width: '100%',
-          opacity: dispatching ? 0.7 : 1,
-        }}>
-          {(() => {
-            if (dispatching) return 'Dispatching...';
-            if (!showAudience) return `Dispatch ${category.label} Pro`;
-            const n = effectiveSelectedIds.size;
-            const word = n === 1 ? 'pro' : 'pros';
-            return selectedAudience === 'preferred_only'
-              ? `Dispatch to ${n} preferred ${word} →`
-              : `Dispatch to ${n} preferred + marketplace →`;
-          })()}
-        </button>
+        {!readOnly && (
+          <button onClick={onDispatch} disabled={dispatching} style={{
+            padding: '14px 28px', borderRadius: 10, border: 'none', background: O, color: '#fff',
+            fontSize: 15, fontWeight: 700, cursor: dispatching ? 'default' : 'pointer', width: '100%',
+            opacity: dispatching ? 0.7 : 1,
+          }}>
+            {(() => {
+              if (dispatching) return 'Dispatching...';
+              if (!showAudience) return `Dispatch ${category.label} Pro`;
+              const n = effectiveSelectedIds.size;
+              const word = n === 1 ? 'pro' : 'pros';
+              return selectedAudience === 'preferred_only'
+                ? `Dispatch to ${n} preferred ${word} →`
+                : `Dispatch to ${n} preferred + marketplace →`;
+            })()}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -3454,8 +3468,12 @@ export default function BusinessChat() {
               (silentGeneration) so the PM sees just the Homie spinner
               and then the diagnosis card, not the full transcript
               they already spoke through. Text-chat path still shows
-              bubbles normally. */}
-          {step !== 'property' && step !== 'category' && !silentGeneration && (
+              bubbles normally. Also hidden during outreach/results —
+              once the dispatch is live the PM wants the scope +
+              estimate summary on the left, not the full Q&A transcript
+              they already completed. The read-only recap card below
+              surfaces the key bits without scrollback clutter. */}
+          {step !== 'property' && step !== 'category' && step !== 'outreach' && step !== 'results' && !silentGeneration && (
             <>
               {messages.map((m, i) => (
                 m.role === 'user' ? <UserMsg key={i} text={m.content} /> : <AssistantMsg key={i} text={m.content} />
@@ -3975,6 +3993,26 @@ export default function BusinessChat() {
               provider quote cards + book flow + "you're all set!"
               confirmation all moved into <InlineOutreachPanel> in the
               right panel below — mirrors the consumer /quote layout. */}
+          {/* Scope & Estimate recap — read-only card that replaces the
+              chat transcript once dispatch is live. The PM no longer
+              needs to scroll back through their Q&A with Homie — the
+              finalized scope text + AI estimate is what matters now.
+              DiagnosisSummaryCard is reused in read-only mode (hides
+              the dispatch button + audience selector since those were
+              pre-dispatch controls). */}
+          {(step === 'outreach' || step === 'results') && category && selectedProperty && aiDiagnosis && (
+            <DiagnosisSummaryCard
+              category={category}
+              property={selectedProperty}
+              summary={aiDiagnosis}
+              isService={category.group === 'service'}
+              onDispatch={() => { /* no-op in read-only mode */ }}
+              dispatching={false}
+              estimate={costEstimate ?? undefined}
+              readOnly
+            />
+          )}
+
           {(step === 'outreach' || step === 'results') && (
             <TrackingShareCard
               jobId={jobId}
@@ -4007,7 +4045,22 @@ export default function BusinessChat() {
               jobId={jobId}
               isDemo={false}
               costEstimate={costEstimate}
-              onBooked={(providerName) => setBookedName(providerName)}
+              onBooked={(providerName) => {
+                // Track the booked-provider name so the tab status flips
+                // to 'booked' (see the snapshot useEffect dependency) and
+                // so the quote-tabs index shows the right chip color.
+                setBookedName(providerName);
+                // Append a confirmation line to the chat transcript
+                // (mirrors the consumer /quote flow). Even though the
+                // transcript is hidden during outreach/results, the
+                // assistant message becomes visible if the PM later
+                // scrolls or reopens the tab — and it persists into
+                // the session snapshot for audit.
+                setMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: `✅ Great news! **${providerName}** has been booked. They'll be in touch to confirm details — you can track status in the Bookings tab.`,
+                }]);
+              }}
             />
           ) : (
             <>

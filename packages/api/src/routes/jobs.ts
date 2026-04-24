@@ -510,6 +510,54 @@ router.post('/:id/book', async (req: Request, res: Response) => {
       res.status(402).json(out);
       return;
     }
+    // Idempotency — if this exact (jobId, responseId, providerId) has
+    // already been booked, return the existing booking with 200 instead
+    // of 409'ing. Fixes a race where the client's first POST succeeds
+    // on the server but its response is lost (network blip, double-
+    // click before React disables the button, etc.) and the second POST
+    // sees job.status === 'completed' and surfaces "Booking failed"
+    // even though the booking actually landed.
+    const [existingBooking] = await db
+      .select({
+        id: bookings.id,
+        serviceAddress: bookings.serviceAddress,
+      })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.jobId, id),
+          eq(bookings.responseId, body.response_id),
+          eq(bookings.providerId, body.provider_id),
+        ),
+      )
+      .limit(1);
+    if (existingBooking) {
+      // Fetch the provider + response so we can mirror the normal
+      // response shape. Both are on this job by construction so the
+      // lookups never miss.
+      const [row] = await db
+        .select({ response: providerResponses, provider: providers })
+        .from(providerResponses)
+        .innerJoin(providers, eq(providerResponses.providerId, providers.id))
+        .where(eq(providerResponses.id, body.response_id))
+        .limit(1);
+      if (row) {
+        const { response: r, provider: p } = row;
+        const out: ApiResponse<BookJobResponse> = {
+          data: {
+            booking_id: existingBooking.id,
+            status: 'confirmed',
+            provider: { name: p.name, phone: p.phone },
+            scheduled: r.availability,
+            quoted_price: r.quotedPrice,
+          },
+          error: null,
+          meta: {},
+        };
+        res.json(out);
+        return;
+      }
+    }
     if (job.status === 'completed') {
       const out: ApiResponse<null> = { data: null, error: 'Job is already completed', meta: {} };
       res.status(409).json(out);

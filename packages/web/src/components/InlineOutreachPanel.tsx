@@ -129,6 +129,17 @@ export default function InlineOutreachPanel({
   const [log, setLog] = useState<LogEntry[]>([]);
   const [homeAddress, setHomeAddress] = useState('');
   const [pendingBook, setPendingBook] = useState<RealProvider | MockProvider | null>(null);
+  /** Provider id (== provider_response.id for quoted rows) currently
+   *  mid-book. Drives the strip's button into a disabled "Booking…"
+   *  state so the PM can't double-fire the endpoint — the first
+   *  request marks the job completed, and any race-triggered second
+   *  request would 409 and surface a misleading "Booking failed" alert
+   *  even though the booking actually landed. */
+  const [bookingProviderId, setBookingProviderId] = useState<string | null>(null);
+  /** After a successful book call the strip flips the booked row into
+   *  a "✓ Booked" state so the PM gets visual confirmation inline
+   *  (they can still see the other quotes for context). */
+  const [bookedProviderId, setBookedProviderId] = useState<string | null>(null);
   const startedAtRef = useRef<number>(Date.now());
 
   // Pre-fetch home address so the book flow can submit with a
@@ -323,9 +334,15 @@ export default function InlineOutreachPanel({
   }, [isDemo, providers, activities]);
 
   async function handleBook(providerId: string, address: string) {
+    // Re-entry guard — the button is disabled visually while a booking
+    // is in flight, but a direct event re-dispatch or a rapid click
+    // before React flushes the disabled attribute could still fire
+    // twice. This makes the second call a no-op.
+    if (bookingProviderId || bookedProviderId) return;
     const p = providers.find(x => ('responseId' in x ? x.responseId : x.id) === providerId);
     if (!p) return;
     if (isDemo) {
+      setBookedProviderId(providerId);
       onBooked(p.name);
       return;
     }
@@ -335,14 +352,24 @@ export default function InlineOutreachPanel({
     const addr = address.trim();
     if (!addr) return;
     if (!jobId || !('responseId' in p)) return;
+    setBookingProviderId(providerId);
     try {
       await jobService.bookProvider(jobId, (p as RealProvider).responseId, (p as RealProvider).id, addr);
+      setBookedProviderId(providerId);
       onBooked(p.name);
     } catch (err) {
       console.error('[InlineOutreach] Booking failed:', err);
+      // Some race paths (e.g. a double-fire where the first request
+      // succeeded on the server but its response was lost) surface as
+      // a thrown error here even though the booking actually landed.
+      // The server-side booking endpoint is idempotent on
+      // (jobId, responseId, providerId) — a retry returns the
+      // existing booking, so the user can safely try again.
       window.alert('Booking failed — please try again.');
+    } finally {
+      setBookingProviderId(null);
+      setPendingBook(null);
     }
-    setPendingBook(null);
   }
   void pendingBook;
 
@@ -408,6 +435,8 @@ export default function InlineOutreachPanel({
           defaultBookAddress={homeAddress}
           skipAddressInput={isDemo}
           costEstimate={costEstimate}
+          bookingProviderId={bookingProviderId}
+          bookedProviderId={bookedProviderId}
         />
       )}
 
