@@ -21,122 +21,164 @@ function useInView(ref: React.RefObject<HTMLElement | null>, threshold = 0.15) {
   return visible;
 }
 
-/* -- Simulated outreach demo -- */
-const DEMO_PROVIDERS = [
-  { name: 'Rodriguez Plumbing', rating: 4.9, reviews: 214, quote: '$175', avail: 'Tomorrow 9-11 AM', channel: 'phone', note: 'Done hundreds of Moen cartridge swaps', delay: 3200 },
-  { name: 'Atlas Home Services', rating: 4.7, reviews: 89, quote: '$150-200', avail: 'Wednesday afternoon', channel: 'text', note: 'Can bring the part with me', delay: 5800 },
-  { name: 'Quick Fix Pros', rating: 4.6, reviews: 156, quote: '$195', avail: 'Thursday morning', channel: 'web', note: '15 years experience with Moen fixtures', delay: 8400 },
-];
+/* -- Big-input hero: V1b from design handoff -----------------------
+   A single oversized textarea is the page's primary surface. Users:
+   • Type what's broken (Send → /quote?prefill=…, auto-submits)
+   • Tap "Talk to Homie" (→ /quote?start=voice, opens voice panel)
+   • Tap "Video chat with Homie" (→ /quote?start=video)
+   • Or click a category chip (→ /quote?prefill=<canned desc>&category=<id>)
+   All four entry points land inside the existing quote flow with the
+   right initial state; GetQuotes.tsx reads the URL params on mount. */
 
-const OUTREACH_STEPS = [
-  { time: 0, text: 'Finding plumbers near 92103...', providers: 0, contacted: 0, responded: 0 },
-  { time: 800, text: '12 providers found. Starting outreach...', providers: 12, contacted: 0, responded: 0 },
-  { time: 1600, text: 'Calling Rodriguez Plumbing...', providers: 12, contacted: 1, responded: 0 },
-  { time: 2200, text: 'Texting Atlas Home Services...', providers: 12, contacted: 3, responded: 0 },
-  { time: 3000, text: 'Rodriguez Plumbing quoted $175', providers: 12, contacted: 5, responded: 1 },
-  { time: 4200, text: 'Submitting form on quickfixpros.com...', providers: 12, contacted: 7, responded: 1 },
-  { time: 5600, text: 'Atlas Home Services quoted $150-200', providers: 12, contacted: 9, responded: 2 },
-  { time: 7000, text: 'Following up with 3 more providers...', providers: 12, contacted: 11, responded: 2 },
-  { time: 8200, text: 'Quick Fix Pros quoted $195', providers: 12, contacted: 12, responded: 3 },
-  { time: 9500, text: '3 quotes ready! Here are your options:', providers: 12, contacted: 12, responded: 3 },
-];
-
-interface DemoProvider {
-  name: string;
-  rating: number;
-  reviews: number;
-  quote: string;
-  avail: string;
-  channel: string;
-  note: string;
-  delay: number;
+interface QuickIssue {
+  /** Emoji icon shown in the chip. */
+  icon: string;
+  /** Short label the user sees on the chip. */
+  label: string;
+  /** Full description shipped as ?prefill= (must be ≥12 chars so
+   *  handleDirectText in /quote doesn't drop it on the floor). */
+  prefill: string;
+  /** Category id that maps to a CATEGORY_FLOWS entry in /quote.
+   *  If omitted, /quote falls back to 'general'. */
+  category: string;
 }
 
-function LiveDemo() {
-  const [step, setStep] = useState(0);
-  const [results, setResults] = useState<DemoProvider[]>([]);
-  const [running, setRunning] = useState(false);
-  const [hasRun, setHasRun] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const visible = useInView(ref, 0.3);
+const QUICK_ISSUES: QuickIssue[] = [
+  { icon: '\uD83D\uDCA7', label: 'Leaky faucet',    prefill: 'Leaky faucet — dripping from the base',       category: 'plumbing' },
+  { icon: '\u2744\uFE0F',  label: 'AC not cooling',  prefill: 'AC is not cooling, just blowing warm air',    category: 'hvac' },
+  { icon: '\uD83D\uDD0C', label: 'Dead outlet',     prefill: 'Outlet stopped working, nothing plugs in',    category: 'electrical' },
+  { icon: '\uD83D\uDEBD', label: 'Toilet running',  prefill: 'Toilet keeps running after every flush',      category: 'plumbing' },
+  { icon: '\uD83C\uDFE0', label: 'Roof leak',       prefill: 'Roof is leaking, water showing on ceiling',   category: 'roofing' },
+  { icon: '\uD83E\uDDCA', label: 'Fridge noise',    prefill: 'Fridge making a loud grinding noise',         category: 'appliance' },
+];
 
+function BigInputHero({
+  onSubmit, onVoice, onVideo, onChip,
+}: {
+  onSubmit: (text: string) => void;
+  onVoice: () => void;
+  onVideo: () => void;
+  onChip: (issue: QuickIssue) => void;
+}) {
+  const SAMPLE = "My kitchen faucet is dripping from the base — worse when hot water's on. 92103.";
+  const [val, setVal] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [typedIdx, setTypedIdx] = useState(0);
+  const userInteractedRef = useRef(false);
+
+  // Auto-type the sample when idle. The moment the user types, blurs
+  // an edit, or clicks a chip, we freeze the autotype so we don't
+  // fight their cursor. Also freezes once focused so the sample
+  // doesn't scroll past their caret on first keystroke.
   useEffect(() => {
-    if (visible && !hasRun) { setRunning(true); setHasRun(true); }
-  }, [visible, hasRun]);
+    if (userInteractedRef.current) return;
+    if (focused) return;
+    if (typedIdx >= SAMPLE.length) return;
+    const id = setTimeout(() => {
+      setVal(SAMPLE.slice(0, typedIdx + 1));
+      setTypedIdx(i => i + 1);
+    }, 55);
+    return () => clearTimeout(id);
+  }, [typedIdx, focused]);
 
-  useEffect(() => {
-    if (!running) return;
-    const timers = OUTREACH_STEPS.map((s, i) => setTimeout(() => setStep(i), s.time));
-    const resultTimers = DEMO_PROVIDERS.map((p) => setTimeout(() => setResults(prev => [...prev, p]), p.delay));
-    return () => { timers.forEach(clearTimeout); resultTimers.forEach(clearTimeout); };
-  }, [running]);
+  const text = val;
+  const ready = text.trim().length >= 12;
 
-  const current = OUTREACH_STEPS[step] || OUTREACH_STEPS[0];
-  const pct = (current.contacted / Math.max(current.providers, 1)) * 100;
+  function handleChange(v: string) {
+    userInteractedRef.current = true;
+    setVal(v);
+  }
+
+  function handleSend() {
+    if (!ready) return;
+    onSubmit(text.trim());
+  }
 
   return (
-    <div ref={ref} className="hp-demo">
-      <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#FF5F57' }} />
-        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#FEBC2E' }} />
-        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#28C840' }} />
-        <span style={{ marginLeft: 8, color: 'rgba(255,255,255,0.4)', fontSize: 12, fontFamily: "'DM Mono', monospace" }}>homie-agent</span>
-      </div>
-      <div style={{ padding: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          {running && step < OUTREACH_STEPS.length - 1 ? (
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: ORANGE, animation: 'pulse 1.2s infinite', flexShrink: 0 }} />
-          ) : results.length === 3 ? (
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: GREEN, flexShrink: 0 }} />
-          ) : (
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', flexShrink: 0 }} />
-          )}
-          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
-            {running ? current.text : 'Ready to find providers...'}
-          </span>
+    <section className="hp-big-hero">
+      <div className="hp-big-hero-inner">
+        <div className="hp-big-hero-head">
+          <div className="hp-chip hp-chip-orange">
+            <span className="hp-chip-dot" /> Describe it in your own words
+          </div>
+          <h1 className="hp-big-title">What&rsquo;s broken?</h1>
+          <p className="hp-big-sub">
+            Type it like you&rsquo;d text a friend. Homie handles diagnosis, outreach, and quotes.
+          </p>
         </div>
-        {running && (
-          <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 6, height: 5, marginBottom: 16, overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: `linear-gradient(90deg, ${ORANGE}, ${GREEN})`, borderRadius: 6, width: `${pct}%`, transition: 'width 0.6s ease' }} />
-          </div>
-        )}
-        {running && current.contacted > 0 && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-            {[
-              { label: 'Voice', icon: '\uD83D\uDCDE', count: Math.min(Math.floor(current.contacted * 0.4), 5) },
-              { label: 'SMS', icon: '\uD83D\uDCAC', count: Math.min(Math.floor(current.contacted * 0.35), 4) },
-              { label: 'Web', icon: '\uD83C\uDF10', count: Math.min(Math.floor(current.contacted * 0.25), 3) },
-            ].map(ch => (
-              <div key={ch.label} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: '8px 6px', textAlign: 'center' }}>
-                <div style={{ fontSize: 14, marginBottom: 2 }}>{ch.icon}</div>
-                <div style={{ color: 'white', fontSize: 14, fontWeight: 600 }}>{ch.count}</div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>{ch.label}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {results.map((p, i) => (
-          <div key={i} style={{
-            background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px', marginBottom: 8,
-            border: '1px solid rgba(255,255,255,0.08)', animation: 'slideUp 0.4s ease',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <div style={{ minWidth: 0 }}>
-                <span style={{ color: 'white', fontWeight: 600, fontSize: 13 }}>{p.name}</span>
-                <span className="hp-demo-meta" style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginLeft: 6 }}>&#9733; {p.rating}</span>
-              </div>
-              <span style={{ color: ORANGE, fontWeight: 700, fontSize: 16, flexShrink: 0, marginLeft: 8 }}>{p.quote}</span>
+
+        {/* The Big Input */}
+        <div className={`hp-big-input-wrap${focused ? ' focused' : ''}`}>
+          <div className="hp-big-input-eyebrow">&#9656; Tell homie about it</div>
+          <textarea
+            className="hp-big-textarea"
+            value={text}
+            onChange={e => handleChange(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onKeyDown={e => {
+              // Cmd/Ctrl+Enter submits from the textarea so keyboard-
+              // native users can send without reaching for the button.
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder="My dishwasher makes a grinding noise when it drains\u2026"
+          />
+          <div className="hp-big-input-bar">
+            <div className="hp-big-actions">
+              <button
+                type="button"
+                className="hp-big-action"
+                onClick={onVoice}
+                title="Talk to Homie with your voice"
+              >
+                <span className="hp-big-action-ic">&#x1F3A4;</span> Talk to Homie
+              </button>
+              <button
+                type="button"
+                className="hp-big-action"
+                onClick={onVideo}
+                title="Video chat with Homie"
+              >
+                <span className="hp-big-action-ic">&#x1F4F9;</span> Video chat
+              </button>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>{p.avail}</span>
-              <span style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', fontSize: 10, padding: '1px 6px', borderRadius: 20 }}>
-                via {p.channel}
-              </span>
-            </div>
+            <button
+              type="button"
+              className={`hp-big-send${ready ? ' ready' : ''}`}
+              disabled={!ready}
+              onClick={handleSend}
+            >
+              {ready ? 'Send to homie \u2192' : 'Describe your issue'}
+            </button>
           </div>
-        ))}
+        </div>
+
+        {/* Quick category chips */}
+        <div className="hp-big-chips">
+          <span className="hp-big-chips-label">Or pick one:</span>
+          {QUICK_ISSUES.map(q => (
+            <button
+              key={q.label}
+              type="button"
+              className="hp-big-chip"
+              onClick={() => onChip(q)}
+            >
+              <span>{q.icon}</span>{q.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Availability pill — moved below the input so it reads as
+            a trust signal after the CTA, not a distraction above it. */}
+        <div className="hp-avail-pill">
+          <span className="hp-avail-dot" />
+          <span>AI agent available 24/7 &middot; Pay only if pros quote</span>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -180,15 +222,164 @@ export default function HomePage() {
         @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
         @keyframes hpMosaicScroll { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
 
-        .hp-demo { background: ${DARK}; border-radius: 20px; overflow: hidden; max-width: 540px; width: 100%; box-shadow: 0 24px 80px rgba(0,0,0,0.25); }
         .hp-nav-links { display: flex; align-items: center; gap: 28px; }
         .hp-nav-burger { display: none; background: none; border: none; font-size: 24px; cursor: pointer; color: ${DARK}; }
         .hp-mobile-menu { display: none; }
-        .hp-hero { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 100px 32px 60px; gap: 60px; flex-wrap: wrap; }
-        .hp-hero-text { max-width: 520px; flex: 1 1 400px; }
-        .hp-hero-demo { flex: 1 1 400px; display: flex; justify-content: center; }
-        .hp-hero h1 { font-family: 'Fraunces', serif; font-size: 52px; font-weight: 700; line-height: 1.12; color: ${DARK}; margin-bottom: 20px; letter-spacing: -0.02em; }
-        .hp-hero p.hp-sub { font-size: 20px; line-height: 1.65; color: #6B6560; margin-bottom: 36px; max-width: 460px; }
+
+        /* ── Big-input hero (V1b) ─────────────────────────────────────
+           Sits directly under the sticky 56px nav. Centered column, ~900
+           max — matches the design handoff's centered layout. */
+        .hp-big-hero {
+          background: linear-gradient(180deg, #fff 0%, ${WARM} 100%);
+          padding: 100px 32px 72px;
+          min-height: calc(100vh - 56px);
+          display: flex; align-items: flex-start; justify-content: center;
+        }
+        .hp-big-hero-inner { max-width: 900px; width: 100%; margin: 0 auto; }
+        .hp-big-hero-head { text-align: center; margin-bottom: 40px; }
+        .hp-big-title {
+          font-family: 'Fraunces', serif;
+          font-size: clamp(44px, 6.5vw, 84px);
+          font-weight: 700;
+          line-height: 1.02;
+          letter-spacing: -0.03em;
+          color: ${DARK};
+          margin: 18px 0 16px;
+        }
+        .hp-big-sub {
+          font-size: 20px;
+          color: #6B6560;
+          max-width: 560px;
+          margin: 0 auto;
+          line-height: 1.55;
+        }
+        .hp-chip {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 6px 14px; border-radius: 100;
+          font-size: 13px; font-weight: 600;
+          font-family: 'DM Sans', sans-serif;
+        }
+        .hp-chip-orange { background: rgba(232,99,43,0.1); color: ${ORANGE}; }
+        .hp-chip-dot {
+          display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+          background: currentColor;
+        }
+
+        /* ── The big card ──
+           White surface, heavy rounding, orange focus ring. Textarea
+           fills the card; toolbar sits in a footer row. */
+        .hp-big-input-wrap {
+          background: #fff;
+          border-radius: 32px;
+          border: 2px solid rgba(0,0,0,0.08);
+          box-shadow: 0 24px 64px -28px rgba(0,0,0,0.18);
+          padding: 32px 32px 24px;
+          transition: all 0.25s;
+        }
+        .hp-big-input-wrap.focused {
+          border-color: ${ORANGE};
+          box-shadow: 0 24px 72px -20px rgba(232,99,43,0.35);
+        }
+        .hp-big-input-eyebrow {
+          font-size: 12px; color: #9B9490;
+          font-family: 'DM Mono', monospace;
+          letter-spacing: 1.2px;
+          margin-bottom: 12px;
+          text-transform: uppercase;
+        }
+        .hp-big-textarea {
+          width: 100%; border: none; outline: none; resize: none;
+          font-family: 'Fraunces', serif;
+          font-size: 32px; line-height: 1.25;
+          color: ${DARK};
+          background: transparent;
+          min-height: 120px; padding: 0;
+          letter-spacing: -0.01em;
+        }
+        .hp-big-textarea::placeholder { color: #C4BFBB; }
+        .hp-big-input-bar {
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 12px; flex-wrap: wrap;
+          margin-top: 14px; padding-top: 14px;
+          border-top: 1px solid rgba(0,0,0,0.06);
+        }
+        .hp-big-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .hp-big-action {
+          background: ${WARM};
+          border: 1px solid rgba(0,0,0,0.08);
+          border-radius: 100px;
+          padding: 8px 14px;
+          font-size: 13px; color: ${DARK}; cursor: pointer;
+          display: inline-flex; align-items: center; gap: 6px;
+          font-family: 'DM Sans', sans-serif;
+          transition: all 0.15s;
+        }
+        .hp-big-action:hover {
+          background: #fff;
+          border-color: ${ORANGE};
+          color: ${ORANGE};
+        }
+        .hp-big-action-ic { font-size: 15px; line-height: 1; }
+        .hp-big-send {
+          background: rgba(0,0,0,0.08);
+          color: #9B9490;
+          border: none;
+          border-radius: 100px;
+          padding: 14px 28px;
+          font-size: 15px; font-weight: 700;
+          cursor: not-allowed;
+          transition: all 0.2s;
+          font-family: 'DM Sans', sans-serif;
+        }
+        .hp-big-send.ready {
+          background: ${ORANGE};
+          color: #fff;
+          cursor: pointer;
+          box-shadow: 0 8px 24px -6px rgba(232,99,43,0.55);
+        }
+        .hp-big-send.ready:hover { background: #C8531E; }
+
+        /* ── Quick category chips ── */
+        .hp-big-chips {
+          display: flex; gap: 8px;
+          justify-content: center; flex-wrap: wrap;
+          margin-top: 18px;
+        }
+        .hp-big-chips-label {
+          font-size: 12px; color: #9B9490;
+          padding: 8px 0; margin-right: 4px;
+        }
+        .hp-big-chip {
+          background: #fff;
+          border: 1px solid rgba(0,0,0,0.1);
+          border-radius: 100px;
+          padding: 8px 14px;
+          font-size: 13px; color: ${DARK}; cursor: pointer;
+          display: inline-flex; align-items: center; gap: 6px;
+          font-family: 'DM Sans', sans-serif;
+          transition: all 0.15s;
+        }
+        .hp-big-chip:hover {
+          border-color: ${ORANGE};
+          background: rgba(232,99,43,0.05);
+        }
+
+        /* ── Availability pill ── */
+        .hp-avail-pill {
+          display: inline-flex; align-items: center; gap: 8px;
+          background: rgba(27,158,119,0.08);
+          padding: 8px 16px; border-radius: 100px;
+          margin: 28px auto 0;
+          font-size: 13px; font-weight: 500; color: ${GREEN};
+        }
+        .hp-avail-pill {
+          display: flex; width: fit-content;
+        }
+        .hp-avail-dot {
+          display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+          background: ${GREEN};
+        }
+
         .hp-section { padding: 100px 32px; }
         .hp-section-title { font-family: 'Fraunces', serif; font-size: 40px; font-weight: 700; margin-bottom: 12px; }
         .hp-section-sub { font-size: 18px; color: #6B6560; }
@@ -220,12 +411,15 @@ export default function HomePage() {
             font-family: 'DM Sans', sans-serif;
           }
           .hp-mobile-menu button { color: ${ORANGE}; font-weight: 600; }
-          .hp-hero { min-height: auto; padding: 80px 20px 40px; gap: 32px; flex-direction: column; }
-          .hp-hero-text { flex: none; max-width: 100%; }
-          .hp-hero-demo { flex: none; width: 100%; }
-          .hp-hero h1 { font-size: 32px; }
-          .hp-hero p.hp-sub { font-size: 16px; margin-bottom: 24px; }
-          .hp-hero .hp-cta-buttons button, .hp-hero .hp-cta-buttons a { font-size: 15px; padding: 14px 24px; }
+          .hp-big-hero { padding: 64px 16px 48px; min-height: auto; }
+          .hp-big-title { font-size: 38px !important; }
+          .hp-big-sub { font-size: 16px; }
+          .hp-big-input-wrap { padding: 22px 20px 18px; border-radius: 24px; }
+          .hp-big-textarea { font-size: 22px; min-height: 90px; }
+          .hp-big-input-bar { flex-direction: column; align-items: stretch; }
+          .hp-big-actions { justify-content: center; }
+          .hp-big-send { width: 100%; padding: 14px; }
+          .hp-big-chip { font-size: 12px; padding: 7px 12px; }
           .hp-section { padding: 60px 20px; }
           .hp-section-title { font-size: 28px; }
           .hp-section-sub { font-size: 16px; }
@@ -242,7 +436,6 @@ export default function HomePage() {
           .hp-social-bar { gap: 16px; padding: 20px 16px; flex-direction: column; align-items: flex-start; }
           .hp-social-item { gap: 6px; }
           .hp-social-item span { font-size: 13px !important; }
-          .hp-demo { border-radius: 14px; }
         }
       `}</style>
 
@@ -276,39 +469,22 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* HERO */}
-      <section className="hp-hero" style={{ background: `linear-gradient(180deg, white 0%, ${WARM} 100%)` }}>
-        <div className="hp-hero-text">
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(27,158,119,0.08)',
-            padding: '6px 14px', borderRadius: 100, marginBottom: 20,
-          }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: GREEN }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: GREEN }}>AI agent available 24/7</span>
-          </div>
-
-          <h1>
-            Stop calling around.<br />
-            <span style={{ color: ORANGE }}>Let homie do it.</span>
-          </h1>
-
-          <p className="hp-sub">
-            From emergency repairs to planned upgrades — just describe what your home needs. Our AI agent simultaneously calls, texts, and contacts local pros on your behalf, and brings you back quotes and availability in minutes.
-          </p>
-
-          <div className="hp-cta-buttons" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
-            <button onClick={() => navigate('/quote')} style={{
-              background: ORANGE, color: 'white', border: 'none', borderRadius: 100,
-              padding: '16px 32px', fontSize: 17, fontWeight: 600, cursor: 'pointer',
-              boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
-            }}>Get quotes now</button>
-          </div>
-        </div>
-
-        <div className="hp-hero-demo">
-          <LiveDemo />
-        </div>
-      </section>
+      {/* HERO — V1b "Big Input" from the design handoff. The textarea
+          + action buttons are the homepage's primary CTA; each path
+          hands off to /quote with URL params that GetQuotes reads on
+          mount to land the user in the right initial state. */}
+      <BigInputHero
+        onSubmit={(t) => {
+          const params = new URLSearchParams({ prefill: t });
+          navigate(`/quote?${params.toString()}`);
+        }}
+        onVoice={() => navigate('/quote?start=voice')}
+        onVideo={() => navigate('/quote?start=video')}
+        onChip={(q) => {
+          const params = new URLSearchParams({ prefill: q.prefill, category: q.category });
+          navigate(`/quote?${params.toString()}`);
+        }}
+      />
 
       {/* SOCIAL PROOF BAR */}
       <section className="hp-social-bar" style={{ background: DARK }}>

@@ -2507,9 +2507,46 @@ Write ONLY the summary — no questions, no conversational language, no greeting
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const prefill = params.get('prefill');
-    if (!prefill || prefill.trim().length < 12) return;
+    const start = params.get('start');
+    const categoryParam = params.get('category');
+    // Three entry points from the new homepage's big-input hero:
+    //   • ?prefill=…  — user typed (or clicked a category chip that
+    //                   ships a prefilled description). Auto-submits.
+    //   • ?start=voice — user tapped "Talk to Homie". Open the inline
+    //                    voice panel immediately, no chat in between.
+    //   • ?start=video — user tapped "Video chat with Homie". Same,
+    //                    but the video panel.
+    // Any of the three consumes the ref so we don't fire twice.
     // Don't override an in-flight chat the user might be returning to.
     if (messages.length > 0 || data.category || data.a1) return;
+
+    // ── Voice / video auto-start ─────────────────────────────────────
+    if (start === 'voice' || start === 'video') {
+      prefillConsumedRef.current = true;
+      // If a category was passed alongside (e.g. chip → voice), pre-
+      // select it so the voice panel's category-aware prompts fire.
+      if (categoryParam && CATEGORY_FLOWS[categoryParam]) {
+        setData(d => ({ ...d, category: categoryParam }));
+      }
+      // Prime iOS audio the same way the DirectInput buttons do — this
+      // effect runs synchronously in response to the prior gesture
+      // (the user's click on the homepage) which iOS still counts as
+      // an activation for the next audio.play() on this tab.
+      primeAudio();
+      if (start === 'voice') setVoiceOpen(true);
+      else setVideoChatOpen(true);
+      // Strip the start + category from the URL so a reload doesn't
+      // re-open the panel on top of whatever state the user is in.
+      const cleaned = new URLSearchParams(params);
+      cleaned.delete('start');
+      cleaned.delete('category');
+      const qs = cleaned.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+      return;
+    }
+
+    // ── Text prefill ─────────────────────────────────────────────────
+    if (!prefill || prefill.trim().length < 12) return;
     prefillConsumedRef.current = true;
     // Title + reason layered above the description give the AI a
     // richer first turn ("Yearly water-heater flush — Stay ahead of
@@ -2521,13 +2558,26 @@ Write ONLY the summary — no questions, no conversational language, no greeting
       prefill,
       reason ? `(why now: ${reason})` : null,
     ].filter(Boolean).join(' — ');
-    handleDirectText(composed);
+    const trimmedComposed = composed.trim();
+    if (trimmedComposed.length >= 12) {
+      // Inline the handleDirectText logic so we can honor an incoming
+      // category param. handleDirectText hardcodes 'general', which
+      // would clobber any category the homepage chip passed along.
+      const effectiveCategory = (categoryParam && CATEGORY_FLOWS[categoryParam])
+        ? categoryParam
+        : 'general';
+      setData(d => ({ ...d, category: effectiveCategory, a1: trimmedComposed }));
+      setPhase('waiting');
+      addUser(trimmedComposed);
+      askFollowUp(trimmedComposed, true);
+    }
     // Strip from URL so a refresh doesn't re-prefill.
     const cleaned = new URLSearchParams(params);
     cleaned.delete('prefill');
     cleaned.delete('title');
     cleaned.delete('category');
     cleaned.delete('reason');
+    cleaned.delete('start');
     const qs = cleaned.toString();
     window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
