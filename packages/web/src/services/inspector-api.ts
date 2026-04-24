@@ -259,8 +259,37 @@ export const inspectorService = {
     });
   },
 
-  createReport(formData: FormData) {
-    return inspectorFetchMultipart<InspectionReport>('/api/v1/inspector/reports', formData);
+  /** Upload-and-pay: POSTs the report metadata + base64 PDF and gets
+   *  back a Stripe Checkout Session URL. The caller redirects to that
+   *  URL; on Stripe success the inspector lands back on
+   *  /inspector/reports/:id?paid=1 where parsing is already kicking
+   *  off (the webhook fires the parser, not the upload handler). */
+  createReport(payload: {
+    property_address: string;
+    property_city: string;
+    property_state: string;
+    property_zip: string;
+    client_name: string;
+    client_email: string;
+    client_phone?: string;
+    inspection_date: string;
+    inspection_type?: string;
+    report_file_data_url: string;
+  }) {
+    return inspectorFetch<{ reportId: string; checkoutUrl: string; priceCents: number }>(
+      '/api/v1/inspector/reports',
+      { method: 'POST', body: JSON.stringify(payload) },
+    );
+  },
+
+  /** Send a free copy of an already-parsed report to an extra
+   *  recipient (spouse, agent, attorney). No charge; doesn't affect
+   *  the homeowner-tracking columns. */
+  sendCopyOfReport(reportId: string, payload: { email: string; name?: string }) {
+    return inspectorFetch<{ sent: boolean; email: string }>(
+      `/api/v1/inspector/reports/${reportId}/send-copy`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    );
   },
 
   listReports(status?: string) {

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { eq, desc, and, sql, count } from 'drizzle-orm';
+import { eq, desc, and, sql, count, isNull, lt } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import {
@@ -186,6 +186,22 @@ router.put('/profile', requireInspectorAuth, async (req: Request, res: Response)
 // ── Reports ───────────────────────────────────────────────────────────────
 
 // POST /api/v1/inspector/reports — upload a new report
+//
+// Wholesale-payment flow:
+//   1. Validate inputs + upload PDF to Cloudinary
+//   2. Create the inspectionReports row in payment_status='pending'
+//      and parsing_status='awaiting_payment' — file is on disk but the
+//      parser is gated until Stripe confirms payment
+//   3. Create a Stripe Checkout Session for the inspector's wholesale
+//      fee and return its URL. The frontend redirects there.
+//   4. Stripe webhook (checkout.session.completed, product:'inspector_upload')
+//      flips payment_status='paid' + parsing_status='processing' and
+//      kicks off parseInspectionReportAsync. See stripe-webhook.ts.
+//
+// Returning the checkout URL means the response shape changes from
+// {report, clientAccessUrl} to {reportId, checkoutUrl}. The frontend
+// upload form follows the redirect; on Stripe success it lands back on
+// /inspector/reports/<id>.
 router.post('/reports', requireInspectorAuth, async (req: Request, res: Response) => {
   const body = req.body as {
     property_address: string; property_city: string; property_state: string; property_zip: string;
@@ -198,22 +214,50 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
     res.status(400).json({ data: null, error: 'property_address, client_name, client_email, and inspection_date are required', meta: {} });
     return;
   }
+  // PDF is required for the wholesale flow — without one there's nothing
+  // to parse. (Pre-payment flows that wanted to "create the row first
+  // and upload later" are not supported in this model.)
+  if (!body.report_file_data_url) {
+    res.status(400).json({ data: null, error: 'report_file_data_url is required — upload the PDF before checkout', meta: {} });
+    return;
+  }
 
   try {
     const clientAccessToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
 
-    // Upload report file to Cloudinary if provided
+    // Upload PDF to Cloudinary first; bail if upload fails so we don't
+    // create an orphan row pointing at nothing.
     let reportFileUrl: string | null = null;
-    if (body.report_file_data_url) {
-      try {
-        const { uploadImage } = await import('../services/image-upload');
-        const result = await uploadImage(body.report_file_data_url, 'homie/inspection-reports');
-        if (result) reportFileUrl = result.url;
-      } catch (err) {
-        logger.warn({ err }, '[inspector/reports] Report file upload failed');
-      }
+    try {
+      const { uploadImage } = await import('../services/image-upload');
+      const result = await uploadImage(body.report_file_data_url, 'homie/inspection-reports');
+      if (result) reportFileUrl = result.url;
+    } catch (err) {
+      logger.warn({ err }, '[inspector/reports] Report file upload failed');
     }
+    if (!reportFileUrl) {
+      res.status(500).json({ data: null, error: 'Report file upload failed — please retry', meta: {} });
+      return;
+    }
+
+    // Look up the inspector for Stripe receipt email + brand on the
+    // checkout description.
+    const [inspector] = await db
+      .select({ email: inspectorPartners.email, companyName: inspectorPartners.companyName })
+      .from(inspectorPartners)
+      .where(eq(inspectorPartners.id, req.inspectorId))
+      .limit(1);
+    if (!inspector) {
+      res.status(404).json({ data: null, error: 'Inspector not found', meta: {} });
+      return;
+    }
+
+    // Resolve current wholesale price (config-driven so admin can
+    // change it without a deploy). Stamp the price onto the row so
+    // history is immutable when the rate changes.
+    const { getInspectorReportPriceCents } = await import('../services/pricing');
+    const priceCents = await getInspectorReportPriceCents();
 
     const [report] = await db.insert(inspectionReports).values({
       inspectorPartnerId: req.inspectorId,
@@ -228,23 +272,40 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
       inspectionType: body.inspection_type || 'general',
       reportFileUrl,
       source: 'manual_upload',
-      parsingStatus: reportFileUrl ? 'processing' : 'uploading',
+      // Hold parser off until Stripe webhook flips this to 'processing'.
+      parsingStatus: 'awaiting_payment',
+      paymentStatus: 'pending',
+      priceCentsPaid: priceCents,
       clientAccessToken,
       expiresAt,
     }).returning();
 
-    // Kick off async parsing if file was uploaded
-    if (reportFileUrl) {
-      void parseInspectionReportAsync(report.id).catch(err =>
-        logger.error({ err, reportId: report.id }, '[inspector/reports] Async parsing failed'),
-      );
-    }
-
+    // Build the Stripe Checkout Session.
     const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
-    const clientAccessUrl = `${APP_URL}/inspect/${clientAccessToken}`;
+    const successUrl = `${APP_URL}/inspector/reports/${report.id}?paid=1`;
+    const cancelUrl = `${APP_URL}/inspector/reports/upload?cancelled=${report.id}`;
+    const { createInspectorReportUploadCheckoutSession } = await import('../services/stripe');
+    const session = await createInspectorReportUploadCheckoutSession({
+      reportId: report.id,
+      inspectorPartnerId: req.inspectorId,
+      inspectorEmail: inspector.email,
+      inspectorCompanyName: inspector.companyName,
+      amountCents: priceCents,
+      successUrl,
+      cancelUrl,
+    });
+
+    // Stash the session id so the webhook can correlate.
+    await db.update(inspectionReports)
+      .set({ stripeSessionId: session.id, updatedAt: new Date() })
+      .where(eq(inspectionReports.id, report.id));
 
     res.status(201).json({
-      data: { ...report, clientAccessUrl },
+      data: {
+        reportId: report.id,
+        checkoutUrl: session.url,
+        priceCents,
+      },
       error: null, meta: {},
     });
   } catch (err) {
@@ -344,6 +405,77 @@ router.post('/reports/:id/send-to-client', requireInspectorAuth, async (req: Req
   } catch (err) {
     logger.error({ err }, '[POST /inspector/reports/:id/send-to-client]');
     res.status(500).json({ data: null, error: 'Failed to send report', meta: {} });
+  }
+});
+
+// POST /api/v1/inspector/reports/:id/send-copy
+//
+// Sends a copy of an already-parsed report to an additional recipient
+// (spouse, agent, attorney, listing partner). No charge — the wholesale
+// fee covers the report itself; extra recipients are free. Doesn't
+// affect the homeowner-tracking columns (homeownerEmailedAt /
+// homeownerOpenedAt / homeownerReminderSentAt) — those track the
+// primary client only.
+//
+// Body: { email: string, name?: string }
+// Auth: requireInspectorAuth + ownership check on the report.
+router.post('/reports/:id/send-copy', requireInspectorAuth, async (req: Request, res: Response) => {
+  const body = req.body as { email?: string; name?: string };
+  if (!body.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+    res.status(400).json({ data: null, error: 'A valid email is required', meta: {} });
+    return;
+  }
+
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.id), eq(inspectionReports.inspectorPartnerId, req.inspectorId)))
+      .limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    if (report.parsingStatus !== 'parsed' && report.parsingStatus !== 'review_pending' && report.parsingStatus !== 'sent_to_client') {
+      res.status(400).json({ data: null, error: `Report must be parsed before sending copies (current: ${report.parsingStatus})`, meta: {} });
+      return;
+    }
+
+    const [inspector] = await db
+      .select({ companyName: inspectorPartners.companyName })
+      .from(inspectorPartners)
+      .where(eq(inspectorPartners.id, req.inspectorId))
+      .limit(1);
+    const fromCompany = inspector?.companyName ?? 'your inspector';
+
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+    const reportUrl = `${APP_URL}/inspect/${report.clientAccessToken}`;
+    const greeting = body.name ? `Hi ${body.name.split(' ')[0]},` : 'Hi,';
+    const subject = `${report.clientName} shared their Homie inspection report from ${fromCompany}`;
+    const html = `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#2D2926;">
+        <h2 style="font-family:Georgia,serif;font-size:22px;margin:0 0 12px;">An inspection report has been shared with you</h2>
+        <p style="font-size:15px;line-height:1.5;color:#6B6560;">${greeting}</p>
+        <p style="font-size:15px;line-height:1.5;color:#6B6560;">
+          ${fromCompany} parsed the inspection report for ${report.propertyAddress}, ${report.propertyCity}, ${report.propertyState}
+          and shared it with you. The report breaks every finding into a maintenance item with AI cost estimates,
+          and lets you pull real quotes from local pros.
+        </p>
+        <p style="text-align:center;margin:28px 0;">
+          <a href="${reportUrl}" style="display:inline-block;background:#E8632B;color:#fff;text-decoration:none;padding:14px 28px;border-radius:100px;font-weight:600;font-size:15px;">View the report &rarr;</a>
+        </p>
+        <p style="font-size:13px;color:#9B9490;line-height:1.5;">
+          This link expires 90 days after the report was uploaded. If you have questions about the inspection
+          itself, reach out to ${fromCompany} directly.
+        </p>
+      </div>
+    `.trim();
+
+    await sendEmail(body.email, subject, html);
+    logger.info({ reportId: report.id, copyEmail: body.email, requestedBy: req.inspectorId }, '[inspector] Report copy sent');
+
+    res.json({ data: { sent: true, email: body.email }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspector/reports/:id/send-copy]');
+    res.status(500).json({ data: null, error: 'Failed to send copy', meta: {} });
   }
 });
 
@@ -678,6 +810,53 @@ export function computeSellerAction(category: string, severity: string, costLowC
 }
 
 // ── Client-facing (token-based, no auth) ──────────────────────────────────
+
+// GET /api/v1/inspect/track-open/:reportId/pixel.png
+//
+// 1×1 transparent PNG embedded at the bottom of the auto-email sent
+// to the homeowner after parsing completes. When their email client
+// loads the image, this endpoint fires and stamps homeownerOpenedAt
+// — which suppresses the 5-day reminder sweep for that report.
+//
+// Public route (no auth) since email recipients aren't logged in.
+// Only the report id is leaked to anyone who has the email or sees
+// the pixel URL — and the URL itself doesn't expose the report data.
+//
+// Always returns the pixel even if the report id doesn't match, so
+// failed lookups don't render as broken images in clients that show
+// alt text or 404 placeholders.
+router.get('/track-open/:reportId/pixel.png', async (req: Request, res: Response) => {
+  // 43-byte transparent PNG (smallest possible).
+  const PIXEL = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    'base64',
+  );
+  try {
+    const { reportId } = req.params;
+    if (reportId && /^[0-9a-f-]{36}$/i.test(reportId)) {
+      // Idempotent — only stamps the first time so reload-driven re-pings
+      // don't keep nudging timestamps forward (would inadvertently delay
+      // any future "you haven't opened in N days" sweeps if we add one).
+      await db.update(inspectionReports).set({
+        homeownerOpenedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(
+        and(
+          eq(inspectionReports.id, reportId),
+          isNull(inspectionReports.homeownerOpenedAt),
+        ),
+      );
+    }
+  } catch (err) {
+    // Pixel always responds 200 — never let a logging error break image rendering.
+    logger.warn({ err, reportId: req.params.reportId }, '[inspect/track-open] pixel handler logged but ignored');
+  }
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Content-Length', String(PIXEL.length));
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.status(200).send(PIXEL);
+});
 
 // GET /api/v1/inspect/:token — client views their report
 router.get('/:token', async (req: Request, res: Response) => {
@@ -2184,11 +2363,137 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
     }).where(eq(inspectionReports.id, reportId));
 
     logger.info({ reportId, itemCount: parsedItems.length, hasLowConfidence }, '[inspector] Report parsed successfully');
+
+    // ── Auto-email the parsed report to the homeowner ──
+    // Fires unconditionally on success (review_pending OR parsed) — the
+    // inspector chose to send it when they uploaded; we don't second-
+    // guess on confidence. If the email is missing for any reason we
+    // skip silently. Wraps in try/catch so a SendGrid hiccup doesn't
+    // unwind the parser's success status.
+    try {
+      await sendParsedReportToHomeowner(reportId);
+    } catch (emailErr) {
+      logger.error({ err: emailErr, reportId }, '[inspector] Auto-email to homeowner failed (parser still succeeded)');
+    }
   } catch (err) {
     logger.error({ err, reportId }, '[inspector] Report parsing failed');
-    await db.update(inspectionReports).set({
-      parsingStatus: 'failed',
-      parsingError: (err as Error).message,
-    }).where(eq(inspectionReports.id, reportId));
+    // ── Retry once, then auto-refund ──
+    // Read the current retry count + payment intent so we can decide:
+    // first failure → bump retry_count, kick the parser again with a
+    // small delay; second failure → mark failed and refund the
+    // wholesale fee. Inspector isn't paying for compute that didn't
+    // deliver, no manual ops involvement needed.
+    try {
+      const [row] = await db.select({
+        parseRetryCount: inspectionReports.parseRetryCount,
+        stripePaymentIntentId: inspectionReports.stripePaymentIntentId,
+        paymentStatus: inspectionReports.paymentStatus,
+      }).from(inspectionReports).where(eq(inspectionReports.id, reportId)).limit(1);
+
+      const nextCount = (row?.parseRetryCount ?? 0) + 1;
+      await db.update(inspectionReports).set({
+        parseRetryCount: nextCount,
+        updatedAt: new Date(),
+      }).where(eq(inspectionReports.id, reportId));
+
+      if (nextCount === 1) {
+        // First failure — flip back to processing + retry after a
+        // 30-second wait so transient Claude errors / rate-limits
+        // settle. Status stays 'processing' so the inspector UI keeps
+        // showing the spinner instead of a scary "failed".
+        await db.update(inspectionReports).set({
+          parsingStatus: 'processing',
+          parsingError: `Retrying after error: ${(err as Error).message}`,
+          updatedAt: new Date(),
+        }).where(eq(inspectionReports.id, reportId));
+        setTimeout(() => {
+          void parseInspectionReportAsync(reportId).catch(retryErr =>
+            logger.error({ err: retryErr, reportId }, '[inspector] Retry parse failed'),
+          );
+        }, 30_000);
+        logger.warn({ reportId }, '[inspector] Parse failed once — retrying in 30s');
+      } else {
+        // Second failure — mark failed and auto-refund.
+        await db.update(inspectionReports).set({
+          parsingStatus: 'failed',
+          parsingError: (err as Error).message,
+          updatedAt: new Date(),
+        }).where(eq(inspectionReports.id, reportId));
+        if (row?.paymentStatus === 'paid' && row.stripePaymentIntentId) {
+          try {
+            const { refundPaymentInFull } = await import('../services/stripe');
+            await refundPaymentInFull(row.stripePaymentIntentId, `Auto-refund: parsing failed twice for report ${reportId}`);
+            await db.update(inspectionReports).set({
+              paymentStatus: 'refunded',
+              updatedAt: new Date(),
+            }).where(eq(inspectionReports.id, reportId));
+            logger.info({ reportId }, '[inspector] Parse failed twice — auto-refunded');
+          } catch (refundErr) {
+            logger.error({ err: refundErr, reportId }, '[inspector] Auto-refund failed (manual ops needed)');
+          }
+        }
+      }
+    } catch (handlerErr) {
+      logger.error({ err: handlerErr, reportId }, '[inspector] Failure-handler crashed');
+      // Best-effort fallback to the legacy behavior so the row doesn't
+      // get stuck in 'processing'.
+      await db.update(inspectionReports).set({
+        parsingStatus: 'failed',
+        parsingError: (err as Error).message,
+      }).where(eq(inspectionReports.id, reportId));
+    }
   }
+}
+
+/** Send the parsed report to the homeowner whose contact info the
+ *  inspector entered at upload. Idempotent on the homeownerEmailedAt
+ *  column so a double-fire (e.g. retry path that succeeds the second
+ *  time) only emails once. The email body includes a 1×1 tracking
+ *  pixel that pings /api/v1/inspect/track-open/:reportId.png to flip
+ *  homeownerOpenedAt — drives the 5-day reminder sweep. */
+export async function sendParsedReportToHomeowner(reportId: string): Promise<void> {
+  const [report] = await db.select().from(inspectionReports).where(eq(inspectionReports.id, reportId)).limit(1);
+  if (!report) return;
+  if (!report.clientEmail) return;
+  if (report.homeownerEmailedAt) return; // already emailed
+  if (report.parsingStatus !== 'parsed' && report.parsingStatus !== 'review_pending') return;
+
+  const [inspector] = await db.select({
+    companyName: inspectorPartners.companyName,
+  }).from(inspectorPartners).where(eq(inspectorPartners.id, report.inspectorPartnerId!)).limit(1);
+  const fromCompany = inspector?.companyName ?? 'your inspector';
+
+  const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+  const reportUrl = `${APP_URL}/inspect/${report.clientAccessToken}`;
+  const trackingPixel = `${APP_URL.replace(/^http/, process.env.NODE_ENV === 'production' ? 'https' : 'http')}/api/v1/inspect/track-open/${report.id}.png`;
+
+  const subject = `Your Homie inspection report from ${fromCompany} is ready`;
+  const greeting = report.clientName ? `Hi ${report.clientName.split(' ')[0]},` : 'Hi,';
+  const html = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#2D2926;">
+      <h2 style="font-family:Georgia,serif;font-size:22px;margin:0 0 12px;">Your Homie report is ready</h2>
+      <p style="font-size:15px;line-height:1.5;color:#6B6560;">${greeting}</p>
+      <p style="font-size:15px;line-height:1.5;color:#6B6560;">
+        ${fromCompany} just sent you a parsed copy of your inspection report through Homie. We've
+        broken it down into individual maintenance items, added AI cost estimates for each, and made
+        it shareable with contractors so you can get real quotes in minutes — not days.
+      </p>
+      <p style="text-align:center;margin:28px 0;">
+        <a href="${reportUrl}" style="display:inline-block;background:#E8632B;color:#fff;text-decoration:none;padding:14px 28px;border-radius:100px;font-weight:600;font-size:15px;">View your report &rarr;</a>
+      </p>
+      <p style="font-size:13px;color:#9B9490;line-height:1.5;">
+        This link is private to you and stays active for 90 days. If you have questions about
+        the inspection itself, reach out to ${fromCompany} directly.
+      </p>
+      <img src="${trackingPixel}" width="1" height="1" alt="" style="display:block;border:0;" />
+    </div>
+  `.trim();
+
+  await sendEmail(report.clientEmail, subject, html);
+  await db.update(inspectionReports).set({
+    homeownerEmailedAt: new Date(),
+    clientNotifiedAt: new Date(), // legacy column kept in sync for back-compat
+    updatedAt: new Date(),
+  }).where(eq(inspectionReports.id, report.id));
+  logger.info({ reportId, email: report.clientEmail }, '[inspector] Parsed report emailed to homeowner');
 }

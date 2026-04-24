@@ -1105,6 +1105,11 @@ router.patch('/pricing', async (req: Request, res: Response) => {
       business: updates.business
         ? { ...current.business, ...updates.business }
         : current.business,
+      // Inspector wholesale fee (per-report) — admin can patch the
+      // single field via POST /admin/pricing { inspector: { reportPriceCents: N } }.
+      inspector: updates.inspector
+        ? { ...current.inspector, ...updates.inspector }
+        : current.inspector,
     };
 
     await db

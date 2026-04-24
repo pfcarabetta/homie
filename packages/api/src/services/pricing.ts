@@ -18,9 +18,20 @@ export interface BusinessPlanConfig {
   maxTeamMembers: number;
 }
 
+/** Inspector-side wholesale pricing — what an inspector pays Homie
+ *  per parsed report. The inspector sells the parsed-report add-on to
+ *  their own client at whatever markup they choose (off-platform, on
+ *  their own invoice); they only pay this number to us. Flat per
+ *  report, no volume tiers. */
+export interface InspectorPricingConfig {
+  /** Per-report wholesale fee in cents. */
+  reportPriceCents: number;
+}
+
 export interface PricingConfig {
   homeowner: Record<string, HomeownerTierConfig>;
   business: Record<string, BusinessPlanConfig>;
+  inspector: InspectorPricingConfig;
 }
 
 export const DEFAULT_PRICING: PricingConfig = {
@@ -36,6 +47,13 @@ export const DEFAULT_PRICING: PricingConfig = {
     business:     { base: 249, perProperty: 10, promoBase: null, promoLabel: null, searchesPerProperty: 5, maxProperties: 500,  maxTeamMembers: 9999 },
     enterprise:   { base: 0,   perProperty: 10, promoBase: null, promoLabel: null, searchesPerProperty: 5, maxProperties: 9999, maxTeamMembers: 9999 },
   },
+  inspector: {
+    // Placeholder $9.99 — set the production rate by writing to the
+    // singleton pricing-config row in DB; this default only applies
+    // when the row is missing or doesn't include an `inspector` key
+    // (e.g. on first deploy before someone has touched the config).
+    reportPriceCents: 999,
+  },
 };
 
 let _cache: { config: PricingConfig; at: number } | null = null;
@@ -50,12 +68,27 @@ export async function getPricingConfig(): Promise<PricingConfig> {
       .from(pricingConfig)
       .where(eq(pricingConfig.id, 'singleton'))
       .limit(1);
-    const config = (row?.config as PricingConfig) ?? DEFAULT_PRICING;
+    const stored = (row?.config as Partial<PricingConfig> | null) ?? null;
+    // Fill in any keys the stored singleton is missing (e.g. legacy
+    // rows from before the inspector tier landed). Stored values take
+    // precedence so prod overrides aren't silently reverted.
+    const config: PricingConfig = {
+      homeowner: stored?.homeowner ?? DEFAULT_PRICING.homeowner,
+      business: stored?.business ?? DEFAULT_PRICING.business,
+      inspector: stored?.inspector ?? DEFAULT_PRICING.inspector,
+    };
     _cache = { config, at: Date.now() };
     return config;
   } catch {
     return DEFAULT_PRICING;
   }
+}
+
+/** Convenience wrapper — most callers just want the per-report
+ *  wholesale fee, not the whole config blob. */
+export async function getInspectorReportPriceCents(): Promise<number> {
+  const config = await getPricingConfig();
+  return config.inspector.reportPriceCents;
 }
 
 export function invalidatePricingCache(): void {

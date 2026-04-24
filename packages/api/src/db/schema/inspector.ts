@@ -83,6 +83,39 @@ export const inspectionReports = pgTable('inspection_reports', {
   clientAccessToken: text('client_access_token').unique().notNull(),
   /** 90 days after upload, client link expires */
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  // ── Wholesale-payment / homeowner-email pipeline ───────────────────────
+  /** pending | paid | refunded | failed.  Set 'pending' when the report
+   *  row is first created at upload (file already on disk but parser
+   *  hasn't fired); flips to 'paid' from the Stripe webhook, which is
+   *  what unblocks the parser. 'refunded' when we auto-refund after two
+   *  parse failures. 'failed' = checkout abandoned / Stripe declined. */
+  paymentStatus: text('payment_status').notNull().default('pending'),
+  /** Stripe Checkout Session id — used to look up the report when the
+   *  webhook fires (we stash report_id in metadata too, but session id
+   *  is the canonical handle). */
+  stripeSessionId: text('stripe_session_id'),
+  /** Stripe PaymentIntent id from the captured session — required for
+   *  the auto-refund path on second parse failure. */
+  stripePaymentIntentId: text('stripe_payment_intent_id'),
+  /** Locked-in price in cents at the moment of upload. We could read
+   *  from pricing-config but stamping it on the row keeps history
+   *  immutable when the wholesale rate changes mid-flight. */
+  priceCentsPaid: integer('price_cents_paid'),
+  /** How many times the parser has tried this report. 0 on first
+   *  attempt; on failure we increment + retry once; on second failure
+   *  we mark parsingStatus='failed' + auto-refund. */
+  parseRetryCount: integer('parse_retry_count').notNull().default(0),
+  /** When we auto-emailed the parsed report to clientEmail. Drives
+   *  the 5-day-reminder sweep — null = no email sent yet (parser
+   *  hasn't finished or no email captured), set = waiting on open. */
+  homeownerEmailedAt: timestamp('homeowner_emailed_at', { withTimezone: true }),
+  /** First time the homeowner's email tracking pixel fired. Used to
+   *  suppress the reminder — if they've opened, they don't need a
+   *  nudge. Null = never opened. */
+  homeownerOpenedAt: timestamp('homeowner_opened_at', { withTimezone: true }),
+  /** When the 5-day reminder went out. Prevents the sweep from
+   *  re-sending on every tick. */
+  homeownerReminderSentAt: timestamp('homeowner_reminder_sent_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [

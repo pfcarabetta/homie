@@ -52,6 +52,41 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       return;
     }
 
+    // ── Inspector pays wholesale at upload ─────────────────────────────
+    // The inspector hit Stripe Checkout from the upload form. Flip the
+    // report row from awaiting_payment → processing and trigger the
+    // parser. Auto-email to the homeowner fires inside the parser when
+    // it transitions to 'parsed'.
+    if (session.metadata?.product === 'inspector_upload' && session.metadata?.report_id) {
+      const reportId = session.metadata.report_id;
+      try {
+        const paymentIntentId = typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : session.payment_intent?.id ?? null;
+
+        const { inspectionReports } = await import('../db/schema/inspector');
+        await db.update(inspectionReports).set({
+          paymentStatus: 'paid',
+          stripePaymentIntentId: paymentIntentId,
+          parsingStatus: 'processing',
+          updatedAt: new Date(),
+        }).where(eq(inspectionReports.id, reportId));
+
+        // Fire the parser. Lazy-imported to avoid cycle with the
+        // inspector route module that owns parseInspectionReportAsync.
+        const { parseInspectionReportAsync } = await import('./inspector');
+        void parseInspectionReportAsync(reportId).catch(err =>
+          logger.error({ err, reportId }, '[Stripe webhook] inspector_upload parse failed'),
+        );
+
+        logger.info({ reportId, paymentIntentId }, '[Stripe webhook] inspector_upload paid → parsing');
+      } catch (err) {
+        logger.error({ err, reportId }, '[Stripe webhook] inspector_upload handler failed');
+      }
+      res.status(200).json({ received: true });
+      return;
+    }
+
     // Inspection report checkout — dispatch items after payment confirmed
     if (session.metadata?.report_id && session.metadata?.token) {
       try {

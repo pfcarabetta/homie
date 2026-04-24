@@ -21,6 +21,7 @@ import { startReservationSync } from './services/reservation-sync';
 import { startOutreachExpansionWorker } from './services/outreach-expansion-worker';
 import { startIcalSyncWorker } from './services/ical-sync-worker';
 import { startSmsNotesTimeoutWorker } from './services/sms-notes-timeout-worker';
+import { startInspectionReminderWorker } from './services/inspection-reminder-worker';
 import type { JwtPayload } from './middleware/auth';
 
 const PORT = process.env.PORT ?? 3001;
@@ -146,6 +147,20 @@ async function start() {
     // to short_term so behavior is unchanged until a PM opts in.
     await db.execute(sql`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS rental_type text NOT NULL DEFAULT 'short_term'`);
     await db.execute(sql`ALTER TABLE properties ADD COLUMN IF NOT EXISTS rental_type text`);
+    // Inspector wholesale-payment + homeowner-email tracking on
+    // inspection_reports. Inspector pays at upload; the parser is gated
+    // on payment_status='paid' (set by the Stripe webhook). Email
+    // tracking columns drive the 5-day-reminder sweep.
+    await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS payment_status text NOT NULL DEFAULT 'pending'`);
+    await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS stripe_session_id text`);
+    await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS stripe_payment_intent_id text`);
+    await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS price_cents_paid integer`);
+    await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS parse_retry_count integer NOT NULL DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS homeowner_emailed_at timestamp with time zone`);
+    await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS homeowner_opened_at timestamp with time zone`);
+    await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS homeowner_reminder_sent_at timestamp with time zone`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS inspection_reports_payment_idx ON inspection_reports (payment_status)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS inspection_reports_reminder_idx ON inspection_reports (homeowner_emailed_at) WHERE homeowner_opened_at IS NULL AND homeowner_reminder_sent_at IS NULL`);
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');
@@ -236,6 +251,7 @@ async function start() {
     startOutreachExpansionWorker();
     startIcalSyncWorker();
     startSmsNotesTimeoutWorker();
+    startInspectionReminderWorker();
   });
 }
 

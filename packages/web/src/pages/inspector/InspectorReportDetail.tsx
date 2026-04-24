@@ -106,6 +106,43 @@ export default function InspectorReportDetail() {
     }
   }
 
+  // ── "Send copy" — additional free recipients (spouse, agent,
+  //    attorney, listing partner). No charge; doesn't bump the
+  //    primary client tracking columns. Modal collects email +
+  //    optional name, then POSTs to /reports/:id/send-copy.
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copyEmail, setCopyEmail] = useState('');
+  const [copyName, setCopyName] = useState('');
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [copyMsg, setCopyMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+  async function handleSendCopy() {
+    if (!report || copyBusy) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(copyEmail)) {
+      setCopyMsg({ type: 'error', text: 'Enter a valid email address' });
+      return;
+    }
+    setCopyBusy(true);
+    setCopyMsg(null);
+    try {
+      const res = await inspectorService.sendCopyOfReport(report.id, {
+        email: copyEmail.trim(),
+        name: copyName.trim() || undefined,
+      });
+      if (res.error || !res.data?.sent) {
+        throw new Error(res.error ?? 'Failed to send copy');
+      }
+      setCopyMsg({ type: 'ok', text: `Sent to ${copyEmail.trim()}` });
+      setCopyEmail('');
+      setCopyName('');
+      // Auto-close after a beat so the inspector sees the confirmation.
+      setTimeout(() => { setCopyOpen(false); setCopyMsg(null); }, 1400);
+    } catch (err) {
+      setCopyMsg({ type: 'error', text: (err as Error).message ?? 'Failed to send copy' });
+    } finally {
+      setCopyBusy(false);
+    }
+  }
+
   async function handleDeleteItem(itemId: string) {
     if (!report) return;
     try {
@@ -321,6 +358,101 @@ export default function InspectorReportDetail() {
             >
               {sending ? 'Sending...' : 'Send to Client'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* "Send a copy" — always available once the report is parsed.
+          Free extra recipients (spouse, agent, attorney, listing
+          partner). Compact section so it doesn't dominate the report
+          page; expands into an inline modal on click. */}
+      {report && (report.status === 'ready' || report.status === 'sent' || report.status === 'active' || report.status === 'completed') && (
+        <div style={{
+          background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4',
+          padding: 16, marginBottom: 24,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: D }}>Send a copy to someone else</div>
+            <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>Free &mdash; spouse, real-estate agent, attorney, listing partner.</div>
+          </div>
+          <button
+            onClick={() => setCopyOpen(true)}
+            style={{
+              padding: '8px 14px', background: 'transparent', color: O, border: `1px solid ${O}`,
+              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap',
+            }}
+          >Send copy</button>
+        </div>
+      )}
+
+      {copyOpen && report && (
+        <div
+          onClick={() => { if (!copyBusy) { setCopyOpen(false); setCopyMsg(null); } }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#fff', borderRadius: 16, padding: 24, maxWidth: 440, width: '100%',
+            boxShadow: '0 24px 64px -20px rgba(0,0,0,0.25)',
+          }}>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: D, marginBottom: 6 }}>
+              Send a copy
+            </div>
+            <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 18, lineHeight: 1.5 }}>
+              They&rsquo;ll get the same parsed report &mdash; AI estimates, items, everything &mdash;
+              with a private link that stays active until {report.clientName}&rsquo;s expires. No charge.
+            </div>
+            <label style={labelStyle}>Email *</label>
+            <input
+              type="email"
+              value={copyEmail}
+              onChange={e => setCopyEmail(e.target.value)}
+              placeholder="agent@example.com"
+              autoFocus
+              style={{ ...inputStyle, marginBottom: 12 }}
+            />
+            <label style={labelStyle}>Name <span style={{ color: '#9B9490', fontWeight: 400 }}>(optional)</span></label>
+            <input
+              value={copyName}
+              onChange={e => setCopyName(e.target.value)}
+              placeholder="Pat the realtor"
+              style={{ ...inputStyle, marginBottom: 16 }}
+            />
+            {copyMsg && (
+              <div style={{
+                fontSize: 13, marginBottom: 14, padding: '10px 12px', borderRadius: 8,
+                background: copyMsg.type === 'ok' ? '#F0FDF4' : '#FEF2F2',
+                color: copyMsg.type === 'ok' ? '#166534' : '#B91C1C',
+              }}>
+                {copyMsg.text}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setCopyOpen(false); setCopyMsg(null); }}
+                disabled={copyBusy}
+                style={{
+                  padding: '10px 18px', background: 'transparent', color: '#6B6560', border: '1px solid #E0DAD4',
+                  borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: copyBusy ? 'default' : 'pointer',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >Cancel</button>
+              <button
+                onClick={handleSendCopy}
+                disabled={copyBusy}
+                style={{
+                  padding: '10px 22px', background: O, color: '#fff', border: 'none',
+                  borderRadius: 8, fontSize: 14, fontWeight: 600,
+                  cursor: copyBusy ? 'default' : 'pointer', opacity: copyBusy ? 0.7 : 1,
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >{copyBusy ? 'Sending\u2026' : 'Send copy'}</button>
+            </div>
           </div>
         </div>
       )}

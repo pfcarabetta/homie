@@ -26,7 +26,18 @@ const TIER_NAMES: Record<string, string> = {
 // customer without ambiguity. Call sites may add extra fields on top (e.g.
 // job_id, report_id, response_id) for webhook routing — those stay alongside.
 
-export type HomieProduct = 'homie_quote' | 'inspect_report' | 'workspace_subscription';
+/** Slugs we tag every Stripe object with so the admin revenue
+ *  dashboard can group by product line:
+ *    homie_quote            — homeowner pays for a quote dispatch
+ *    inspect_report         — homeowner upgrades an inspection report
+ *                             tier (essential/professional/premium)
+ *    inspector_upload       — inspector pays the per-report wholesale
+ *                             fee at upload time. Triggers parsing +
+ *                             auto-emails the parsed report to the
+ *                             homeowner whose contact info is on the
+ *                             upload form.
+ *    workspace_subscription — business workspace SaaS subscription. */
+export type HomieProduct = 'homie_quote' | 'inspect_report' | 'inspector_upload' | 'workspace_subscription';
 
 export interface CanonicalStripeMetadata {
   product: HomieProduct;
@@ -113,6 +124,73 @@ export async function createCheckoutSession(params: {
     metadata,
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,
+  });
+}
+
+/** Inspector pays Homie's wholesale fee at upload time, before the
+ *  parser fires. Single-line-item flat fee, immediate capture (no
+ *  authorize-then-capture dance — we want the cash on file before
+ *  spending Claude tokens on parsing). The webhook for
+ *  product:'inspector_upload' is what flips the report to 'paid'
+ *  and kicks off parseInspectionReportAsync — see stripe-webhook.ts. */
+export async function createInspectorReportUploadCheckoutSession(params: {
+  reportId: string;
+  inspectorPartnerId: string;
+  inspectorEmail: string;
+  inspectorCompanyName: string | null;
+  amountCents: number;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<Stripe.Checkout.Session> {
+  const metadata = buildStripeMetadata({
+    product: 'inspector_upload',
+    report_id: params.reportId,
+    inspector_partner_id: params.inspectorPartnerId,
+  });
+
+  return getStripe().checkout.sessions.create({
+    mode: 'payment',
+    // Use customer_email rather than a stored Stripe Customer object
+    // — inspectors don't have a stripeCustomerId column today, and
+    // creating one per upload is wasteful. Stripe will prefill the
+    // email field on Checkout from this and emit a receipt to it.
+    customer_email: params.inspectorEmail,
+    line_items: [{
+      price_data: {
+        currency: 'usd',
+        unit_amount: params.amountCents,
+        product_data: {
+          name: 'Homie inspection report parsing',
+          description: params.inspectorCompanyName
+            ? `Per-report wholesale fee · ${params.inspectorCompanyName}`
+            : 'Per-report wholesale fee',
+        },
+      },
+      quantity: 1,
+    }],
+    payment_intent_data: {
+      // Capture immediately — different from the homeowner quote flow
+      // (which authorizes-then-captures-on-results) because there's no
+      // delivery-window risk here; parsing is on us, not the inspector.
+      capture_method: 'automatic',
+      metadata,
+    },
+    metadata,
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+  });
+}
+
+/** Auto-refund a captured payment in full. Used for the inspector
+ *  upload retry-then-refund path: if parsing fails twice in a row we
+ *  refund the wholesale fee so the inspector isn't paying for compute
+ *  that didn't deliver. Idempotent at the Stripe level — calling
+ *  twice returns the same Refund row. */
+export async function refundPaymentInFull(paymentIntentId: string, reason?: string): Promise<Stripe.Refund> {
+  return getStripe().refunds.create({
+    payment_intent: paymentIntentId,
+    reason: 'requested_by_customer',
+    metadata: reason ? { homie_reason: reason } : undefined,
   });
 }
 
