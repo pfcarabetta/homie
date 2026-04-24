@@ -19,6 +19,7 @@ import {
   useBusinessChatTabs, loadB2bSnapshot, saveB2bSnapshot, newB2bSessionId,
   deriveB2bTabTitle, type B2bChatStateSnapshot,
 } from '@/hooks/useBusinessChatTabs';
+import { useRentalTerms } from '@/hooks/useRentalTerms';
 import InlineVoicePanel from '@/components/InlineVoicePanel';
 import VideoChatPanel from '@/components/VideoChatPanel';
 import { primeAudio } from '@/components/audioUnlocker';
@@ -1210,6 +1211,15 @@ export default function BusinessChat() {
   const [selectedWorkspace, setSelectedWorkspace] = useState(workspaceId);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+
+  // Rental-type-aware vocabulary. Resolves the per-property override
+  // when a property is selected, else falls back to the workspace
+  // default. Every "guest"/"tenant" label + the showOccupancy gate
+  // below reads from `terms` so flipping a workspace to long_term
+  // mode automatically hides the reservation calendar / occupancy
+  // pills and swaps terminology everywhere.
+  const currentWorkspace = workspaces.find(w => w.id === selectedWorkspace) ?? null;
+  const terms = useRentalTerms({ workspace: currentWorkspace, property: selectedProperty });
 
   // Chat state — initializers pull from b2bSnapshot when the URL
   // carried an ?s= that matched a saved session, otherwise fall
@@ -3084,8 +3094,11 @@ export default function BusinessChat() {
               <span className="b2b-prop-name" style={{ fontSize: 14, color: D, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1 }}>
                 {selectedProperty.name}
               </span>
-              {/* Occupancy badge */}
-              {headerOccupancy && (
+              {/* Occupancy badge — STR only. LTR properties are
+                  continuously occupied by a tenant, so the
+                  vacant/occupied pill and calendar popover
+                  (below) aren't meaningful. */}
+              {terms.showOccupancy && headerOccupancy && (
                 <button
                   onClick={() => setShowCalendar(v => !v)}
                   style={{
@@ -3122,8 +3135,11 @@ export default function BusinessChat() {
                   </svg>
                 </button>
               )}
-              {/* Calendar popover */}
-              {showCalendar && (
+              {/* Calendar popover — STR only. The trigger pill above
+                  is also hidden for LTR so this branch shouldn't fire,
+                  but we guard defensively in case showCalendar state
+                  got stuck from a prior STR session on this property. */}
+              {terms.showOccupancy && showCalendar && (
                 <>
                   <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowCalendar(false)} />
                   <div className="b2b-cal-popover" style={{
@@ -3938,8 +3954,12 @@ export default function BusinessChat() {
             </div>
           )}
 
-          {/* Diagnosis summary card */}
-          {step === 'summary' && !streaming && category && selectedProperty && !occupancyCheck?.occupied && (
+          {/* Diagnosis summary card. The occupancy gate below only
+              applies to STR — LTR properties don't have a turnover
+              concept, so we always render the dispatch card directly
+              regardless of whether occupancyCheck happens to be set
+              (stale state from a property that flipped modes). */}
+          {step === 'summary' && !streaming && category && selectedProperty && (!terms.showOccupancy || !occupancyCheck?.occupied) && (
             <DiagnosisSummaryCard
               category={category}
               property={selectedProperty}
@@ -3956,8 +3976,10 @@ export default function BusinessChat() {
             />
           )}
 
-          {/* Occupancy check card — shown when property is occupied */}
-          {step === 'summary' && occupancyCheck?.occupied && occupancyCheck.reservation && category && (
+          {/* Occupancy check card — shown when property is occupied.
+              STR only; LTR properties are continuously occupied by
+              tenants so the "is anyone home?" gate doesn't apply. */}
+          {terms.showOccupancy && step === 'summary' && occupancyCheck?.occupied && occupancyCheck.reservation && category && (
             <div style={{
               marginLeft: 42, marginBottom: 16, background: 'var(--bp-card)', borderRadius: 16,
               border: `2px solid ${O}22`, overflow: 'hidden', animation: 'fadeSlide 0.3s ease',
@@ -4091,6 +4113,7 @@ export default function BusinessChat() {
             property={selectedProperty}
             occupancy={headerOccupancy}
             reservations={calendarReservations}
+            showOccupancy={terms.showOccupancy}
           />
           {(step === 'outreach' || step === 'results') ? (
             /* Dispatch live — inline outreach panel replaces the
@@ -4212,11 +4235,15 @@ function fmtShortDate(iso: string): string {
 }
 
 function B2BPropertyContextCard({
-  property, occupancy, reservations,
+  property, occupancy, reservations, showOccupancy = true,
 }: {
   property: { name: string; zipCode?: string | null } | null;
   occupancy: HeaderOccupancy;
   reservations: Reservation[];
+  /** Hide the Reservation block entirely (LTR mode). Card still
+   *  renders the property header so the PM sees which property
+   *  they're looking at. */
+  showOccupancy?: boolean;
 }) {
   const [calOpen, setCalOpen] = useState(false);
   if (!property) return null;
@@ -4246,7 +4273,11 @@ function B2BPropertyContextCard({
         </div>
       </div>
 
-      {/* Reservation block */}
+      {/* Reservation block — STR only. LTR properties hide this
+          entirely; the property header above is enough context for
+          an ongoing tenancy. */}
+      {showOccupancy && (
+        <>
       <div style={{ fontSize: 10, color: _DIM_R, textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, fontFamily: "'DM Mono',monospace", marginBottom: 8 }}>
         Reservation
       </div>
@@ -4331,6 +4362,8 @@ function B2BPropertyContextCard({
         }}>
           Connect your PMS to see live occupancy.
         </div>
+      )}
+        </>
       )}
     </div>
   );

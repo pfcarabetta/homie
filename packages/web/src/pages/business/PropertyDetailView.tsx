@@ -63,6 +63,16 @@ const NAV_ITEMS: { id: SubPage; label: string }[] = [
   { id: 'property', label: 'Property IQ' },
 ];
 
+/** Effective nav items after applying rental-type filtering. LTR
+ *  properties hide Calendar since reservations don't apply. The
+ *  Bookings tab stays (it's service-dispatch bookings, not guest
+ *  reservations — see earlier context). */
+function filterNavItems(items: typeof NAV_ITEMS, rentalType: RentalType, propertyOverride: RentalType | null): typeof NAV_ITEMS {
+  const effective = propertyOverride ?? rentalType;
+  if (effective !== 'long_term') return items;
+  return items.filter(i => i.id !== 'calendar');
+}
+
 /* ── Status badge helper ────────────────────────────────────────────────── */
 
 function StatusBadge({ status }: { status: string }) {
@@ -1370,6 +1380,22 @@ export default function PropertyDetailView({ workspaceId, workspaceRentalType, p
     setStoredNav('propertyPage', activePage);
   }, [activePage]);
   const [currentProperty, setCurrentProperty] = useState<Property>(property);
+
+  // If the active page has been filtered out (LTR property that was
+  // previously on Calendar), fall back to Activity. Prevents the
+  // right pane from rendering a blank panel because the current tab
+  // no longer exists in the nav.
+  useEffect(() => {
+    const effective = currentProperty.rentalType ?? workspaceRentalType;
+    if (effective === 'long_term' && activePage === 'calendar') {
+      setActivePage('activity');
+    }
+  }, [currentProperty.rentalType, workspaceRentalType, activePage]);
+  // Nav items filtered to the property's effective rental type —
+  // LTR properties hide Calendar since there are no reservations to
+  // show. The filter re-runs whenever the per-property override
+  // changes (PM flipped the rental type on the Property IQ tab).
+  const navItems = filterNavItems(NAV_ITEMS, workspaceRentalType, currentProperty.rentalType);
   const [dispatches, setDispatches] = useState<WorkspaceDispatch[]>([]);
   const [bookings, setBookings] = useState<WorkspaceBooking[]>([]);
   const [vendors, setVendors] = useState<PreferredVendor[]>([]);
@@ -1507,7 +1533,7 @@ export default function PropertyDetailView({ workspaceId, workspaceRentalType, p
 
       {/* Nav menu */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 8px' }}>
-        {NAV_ITEMS.map(item => {
+        {navItems.map(item => {
           const isActive = activePage === item.id;
           return (
             <button
@@ -1598,7 +1624,7 @@ export default function PropertyDetailView({ workspaceId, workspaceRentalType, p
         {/* Sub-page heading + content */}
         <div style={{ padding: '24px 32px', maxWidth: 900 }} className="bp-content-padding">
           <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: 'var(--bp-text)', margin: '0 0 20px' }}>
-            {NAV_ITEMS.find(n => n.id === activePage)?.label ?? 'Activity'}
+            {navItems.find(n => n.id === activePage)?.label ?? 'Activity'}
           </h3>
           {renderContent()}
         </div>
