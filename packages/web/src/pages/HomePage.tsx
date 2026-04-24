@@ -52,12 +52,31 @@ const QUICK_ISSUES: QuickIssue[] = [
   { icon: '\uD83E\uDDCA', label: 'Fridge noise',    prefill: 'Fridge making a loud grinding noise',         category: 'appliance' },
 ];
 
+/** Rotating italic phrases that slot into the "Stop calling ___."
+ *  slot in the headline. Sourced from the final Claude Design handoff
+ *  — lands tongue-in-cheek on specific pain points (calling "every
+ *  plumber on Yelp", being stuck "around for hours", "waiting on
+ *  hold") rather than generic trade names. */
+const HEADLINE_PHRASES = [
+  'the HVAC guy',
+  "your neighbor's guy",
+  'every plumber on Yelp',
+  '10 handymen',
+  'around for hours',
+  "your dad's handyman",
+  'and waiting on hold',
+  'the number on the fridge',
+  'Angi',
+  'the drywall guy',
+];
+
 function BigInputHero({
-  onSubmit, onVoice, onVideo, onChip,
+  onSubmit, onVoice, onVideo, onPhoto, onChip,
 }: {
   onSubmit: (text: string) => void;
   onVoice: () => void;
   onVideo: () => void;
+  onPhoto: () => void;
   onChip: (issue: QuickIssue) => void;
 }) {
   const SAMPLE = "My kitchen faucet is dripping from the base — worse when hot water's on. 92103.";
@@ -66,10 +85,8 @@ function BigInputHero({
   const [typedIdx, setTypedIdx] = useState(0);
   const userInteractedRef = useRef(false);
 
-  // Auto-type the sample when idle. The moment the user types, blurs
-  // an edit, or clicks a chip, we freeze the autotype so we don't
-  // fight their cursor. Also freezes once focused so the sample
-  // doesn't scroll past their caret on first keystroke.
+  // Auto-type the sample while the textarea is idle. Freezes the
+  // moment the user focuses, types, or the sample finishes.
   useEffect(() => {
     if (userInteractedRef.current) return;
     if (focused) return;
@@ -80,6 +97,25 @@ function BigInputHero({
     }, 55);
     return () => clearTimeout(id);
   }, [typedIdx, focused]);
+
+  // Headline phrase rotator. 2.6s dwell + 0.6s exit/enter gap so the
+  // word has time to read before it swaps. Timing + easing mirror
+  // the design handoff (cubic-bezier(.16,1,.3,1) for a soft settle).
+  const [catIdx, setCatIdx] = useState(0);
+  const [catPhase, setCatPhase] = useState<'in' | 'out'>('in');
+  useEffect(() => {
+    if (catPhase !== 'in') return;
+    const id = setTimeout(() => setCatPhase('out'), 2600);
+    return () => clearTimeout(id);
+  }, [catIdx, catPhase]);
+  useEffect(() => {
+    if (catPhase !== 'out') return;
+    const id = setTimeout(() => {
+      setCatIdx(c => (c + 1) % HEADLINE_PHRASES.length);
+      setCatPhase('in');
+    }, 600);
+    return () => clearTimeout(id);
+  }, [catPhase]);
 
   const text = val;
   const ready = text.trim().length >= 12;
@@ -98,13 +134,31 @@ function BigInputHero({
     <section className="hp-big-hero">
       <div className="hp-big-hero-inner">
         <div className="hp-big-hero-head">
+          <h1 className="hp-big-title">
+            <span className="hp-big-title-row">
+              <span>Stop calling&nbsp;</span>
+              <span className="hp-rotator">
+                {/* Invisible spacer keeps the rotator slot on the same
+                    baseline as "Stop calling". Without it the absolutely-
+                    positioned rotating span has zero intrinsic height. */}
+                <span aria-hidden="true" className="hp-rotator-spacer">M</span>
+                <span
+                  key={catIdx}
+                  className={`hp-rotator-word hp-rotator-word-${catPhase}`}
+                >
+                  {HEADLINE_PHRASES[catIdx]}.
+                </span>
+              </span>
+            </span>
+            <br />
+            <span>Let <span className="hp-homie-inline">homie</span> do it.</span>
+          </h1>
+          <p className="hp-big-sub">
+            Homie calls, texts, and contacts local pros, and brings you back quotes and availability in minutes.
+          </p>
           <div className="hp-chip hp-chip-orange">
             <span className="hp-chip-dot" /> Describe it in your own words
           </div>
-          <h1 className="hp-big-title">What&rsquo;s broken?</h1>
-          <p className="hp-big-sub">
-            Type it like you&rsquo;d text a friend. Homie handles diagnosis, outreach, and quotes.
-          </p>
         </div>
 
         {/* The Big Input */}
@@ -131,10 +185,10 @@ function BigInputHero({
               <button
                 type="button"
                 className="hp-big-action"
-                onClick={onVoice}
-                title="Talk to Homie with your voice"
+                onClick={onPhoto}
+                title="Attach a photo and go straight to the quote chat"
               >
-                <span className="hp-big-action-ic">&#x1F3A4;</span> Talk to Homie
+                <span className="hp-big-action-ic">&#x1F4F7;</span> Photo
               </button>
               <button
                 type="button"
@@ -143,6 +197,14 @@ function BigInputHero({
                 title="Video chat with Homie"
               >
                 <span className="hp-big-action-ic">&#x1F4F9;</span> Video chat
+              </button>
+              <button
+                type="button"
+                className="hp-big-action"
+                onClick={onVoice}
+                title="Talk to Homie with your voice"
+              >
+                <span className="hp-big-action-ic">&#x1F3A4;</span> Talk to Homie
               </button>
             </div>
             <button
@@ -170,15 +232,46 @@ function BigInputHero({
             </button>
           ))}
         </div>
-
-        {/* Availability pill — moved below the input so it reads as
-            a trust signal after the CTA, not a distraction above it. */}
-        <div className="hp-avail-pill">
-          <span className="hp-avail-dot" />
-          <span>AI agent available 24/7 &middot; Pay only if pros quote</span>
-        </div>
       </div>
     </section>
+  );
+}
+
+/** Sticky bottom-right CTA pill that fades in after the user has
+ *  scrolled past the hero. Single tap → /quote. Mirrors the design
+ *  handoff's V1S StickyCTA: compact dark pill with a "live counter"
+ *  prefix + orange action button. */
+function StickyCTA({ onClick }: { onClick: () => void }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const h = () => setShow(window.scrollY > 800);
+    window.addEventListener('scroll', h);
+    h();
+    return () => window.removeEventListener('scroll', h);
+  }, []);
+  return (
+    <div className="hp-sticky-cta" style={{
+      position: 'fixed', bottom: 20, left: '50%',
+      transform: `translateX(-50%) translateY(${show ? 0 : 80}px)`,
+      opacity: show ? 1 : 0,
+      transition: 'all 0.3s',
+      zIndex: 40,
+      background: DARK, color: '#fff', borderRadius: 100,
+      padding: '6px 6px 6px 20px',
+      display: 'flex', alignItems: 'center', gap: 14,
+      boxShadow: '0 16px 48px -12px rgba(0,0,0,0.3)',
+      pointerEvents: show ? 'auto' : 'none',
+    }}>
+      <span style={{ fontSize: 13 }}>
+        <span style={{ color: GREEN, marginRight: 6 }}>&bull;</span>
+        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12 }}>127 quotes generated today</span>
+      </span>
+      <button onClick={onClick} style={{
+        background: ORANGE, color: '#fff', border: 'none', borderRadius: 100,
+        padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        fontFamily: "'DM Sans', sans-serif",
+      }}>Get quotes now &rarr;</button>
+    </div>
   );
 }
 
@@ -235,22 +328,61 @@ export default function HomePage() {
           min-height: calc(100vh - 56px);
           display: flex; align-items: flex-start; justify-content: center;
         }
-        .hp-big-hero-inner { max-width: 900px; width: 100%; margin: 0 auto; }
-        .hp-big-hero-head { text-align: center; margin-bottom: 40px; }
+        .hp-big-hero-inner { max-width: 1100px; width: 100%; margin: 0 auto; }
+        .hp-big-hero-head { text-align: center; margin-bottom: 28px; }
         .hp-big-title {
           font-family: 'Fraunces', serif;
-          font-size: clamp(44px, 6.5vw, 84px);
+          font-size: 50px;
           font-weight: 700;
-          line-height: 1.02;
+          line-height: 1.04;
           letter-spacing: -0.03em;
           color: ${DARK};
-          margin: 18px 0 16px;
+          margin: 0 0 14px;
         }
+        .hp-big-title-row {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 0.28em;
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+        .hp-homie-inline { color: ${ORANGE}; }
+        /* Rotating phrase slot — fixed-size box so the h1 doesn't
+           reflow on every swap. The absolutely-positioned word slides
+           up/out + fades for each rotation. Spacer "M" inside is
+           invisible but keeps the slot height locked to the line. */
+        .hp-rotator {
+          position: relative;
+          display: inline-block;
+          min-width: clamp(280px, 46vw, 680px);
+          height: 1.1em;
+          line-height: 1;
+          text-align: left;
+          overflow: hidden;
+          vertical-align: baseline;
+        }
+        .hp-rotator-spacer {
+          visibility: hidden;
+          display: inline-block;
+        }
+        .hp-rotator-word {
+          display: inline-block;
+          font-style: italic;
+          color: ${ORANGE};
+          position: absolute;
+          left: 0;
+          top: 0;
+          line-height: 1;
+          white-space: nowrap;
+          transition: transform 0.7s cubic-bezier(.16,1,.3,1), opacity 0.55s ease;
+        }
+        .hp-rotator-word-in  { transform: translateY(0);    opacity: 1; }
+        .hp-rotator-word-out { transform: translateY(-100%); opacity: 0; }
         .hp-big-sub {
           font-size: 20px;
           color: #6B6560;
           max-width: 560px;
-          margin: 0 auto;
+          margin: 14px auto 22px;
           line-height: 1.55;
         }
         .hp-chip {
@@ -364,22 +496,6 @@ export default function HomePage() {
           background: rgba(232,99,43,0.05);
         }
 
-        /* ── Availability pill ── */
-        .hp-avail-pill {
-          display: inline-flex; align-items: center; gap: 8px;
-          background: rgba(27,158,119,0.08);
-          padding: 8px 16px; border-radius: 100px;
-          margin: 28px auto 0;
-          font-size: 13px; font-weight: 500; color: ${GREEN};
-        }
-        .hp-avail-pill {
-          display: flex; width: fit-content;
-        }
-        .hp-avail-dot {
-          display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-          background: ${GREEN};
-        }
-
         .hp-section { padding: 100px 32px; }
         .hp-section-title { font-family: 'Fraunces', serif; font-size: 40px; font-weight: 700; margin-bottom: 12px; }
         .hp-section-sub { font-size: 18px; color: #6B6560; }
@@ -412,7 +528,11 @@ export default function HomePage() {
           }
           .hp-mobile-menu button { color: ${ORANGE}; font-weight: 600; }
           .hp-big-hero { padding: 64px 16px 48px; min-height: auto; }
-          .hp-big-title { font-size: 38px !important; }
+          .hp-big-title { font-size: 34px !important; line-height: 1.08 !important; }
+          /* On phones the rotating slot takes a full line so it
+             doesn't wrap mid-phrase. The headline reads as two
+             stacked lines: "Stop calling _____." / "Let homie do it." */
+          .hp-rotator { min-width: 100% !important; display: block !important; text-align: center !important; }
           .hp-big-sub { font-size: 16px; }
           .hp-big-input-wrap { padding: 22px 20px 18px; border-radius: 24px; }
           .hp-big-textarea { font-size: 22px; min-height: 90px; }
@@ -436,6 +556,16 @@ export default function HomePage() {
           .hp-social-bar { gap: 16px; padding: 20px 16px; flex-direction: column; align-items: flex-start; }
           .hp-social-item { gap: 6px; }
           .hp-social-item span { font-size: 13px !important; }
+          /* Drop the "old way vs homie way" block on mobile — per the
+             design handoff it's desktop-only; mobile goes
+             social → testimonials → pricing. */
+          .hp-why-section { display: none !important; }
+          /* Testimonials stack single column on phones. */
+          .hp-testi-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+          /* Sticky CTA shrinks on small screens so it doesn't block
+             primary content while scrolling. */
+          .hp-sticky-cta { font-size: 12px !important; padding: 4px 4px 4px 14px !important; bottom: 14px !important; }
+          .hp-sticky-cta button { padding: 9px 14px !important; font-size: 12px !important; }
         }
       `}</style>
 
@@ -480,6 +610,7 @@ export default function HomePage() {
         }}
         onVoice={() => navigate('/quote?start=voice')}
         onVideo={() => navigate('/quote?start=video')}
+        onPhoto={() => navigate('/quote')}
         onChip={(q) => {
           const params = new URLSearchParams({ prefill: q.prefill, category: q.category });
           navigate(`/quote?${params.toString()}`);
@@ -517,8 +648,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* WHY HOMIE */}
-      <section className="hp-section" style={{ background: DARK }}>
+      {/* WHY HOMIE — "The old way vs. the homie way" comparison.
+          Hidden on mobile via the .hp-why-section selector (see the
+          @media (max-width:768px) block in the styles above). Per
+          the design handoff, phones skip this and jump straight from
+          social proof → testimonials → pricing. */}
+      <section className="hp-section hp-why-section" style={{ background: DARK }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <h2 className="hp-section-title" style={{ color: 'white' }}>Not your typical home services platform</h2>
@@ -586,6 +721,47 @@ export default function HomePage() {
               padding: '14px 32px', fontSize: 16, fontWeight: 600, cursor: 'pointer',
               boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
             }}>See the difference — get quotes now</button>
+          </div>
+        </div>
+      </section>
+
+      {/* TESTIMONIALS — three quote cards on warm backdrop. Matches
+          the design handoff's V1S Testimonials section. Stacks to a
+          single column on phones via .hp-testi-grid media rule. */}
+      <section className="hp-section" style={{ padding: '100px 32px', background: '#fff' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div className="hp-testi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
+            {[
+              { q: "I asked homie at 11pm. Woke up to three quotes.", a: "Jenna R.", loc: "Austin, TX" },
+              { q: "It called pros I didn't even know existed.", a: "Marcus D.", loc: "San Diego, CA" },
+              { q: "Booked the plumber in under 10 minutes.", a: "Priya S.", loc: "Brooklyn, NY" },
+            ].map((t, i) => (
+              <div key={i} style={{
+                background: WARM, borderRadius: 20, padding: '32px 28px',
+                border: '1px solid rgba(0,0,0,0.06)',
+              }}>
+                <div style={{
+                  fontSize: 24, color: ORANGE, marginBottom: 14,
+                  fontFamily: "'Fraunces', serif", lineHeight: 0,
+                }}>&ldquo;</div>
+                <p style={{
+                  fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 500,
+                  lineHeight: 1.35, color: DARK, margin: '0 0 24px', letterSpacing: '-0.01em',
+                }}>{t.q}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: '50%',
+                    background: `linear-gradient(135deg, ${ORANGE}, #C8531E)`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontWeight: 700,
+                  }}>{t.a[0]}</div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: DARK }}>{t.a}</div>
+                    <div style={{ fontSize: 12, color: '#9B9490' }}>{t.loc}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -679,6 +855,11 @@ export default function HomePage() {
           }}>Get quotes now</button>
         </div>
       </section>
+
+      {/* STICKY CTA — appears once the user scrolls past the hero,
+          gives a persistent one-tap route to /quote throughout the
+          lower sections. */}
+      <StickyCTA onClick={() => navigate('/quote')} />
 
       {/* FOOTER */}
       <footer style={{ background: DARK, padding: '64px 24px 40px' }}>
