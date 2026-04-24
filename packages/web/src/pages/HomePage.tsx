@@ -157,10 +157,17 @@ function BigInputHero({
             <span className="hp-big-title-row">
               <span>Stop calling&nbsp;</span>
               <span className="hp-rotator">
-                {/* Invisible spacer keeps the rotator slot on the same
-                    baseline as "Stop calling". Without it the absolutely-
-                    positioned rotating span has zero intrinsic height. */}
-                <span aria-hidden="true" className="hp-rotator-spacer">M</span>
+                {/* Invisible spacer sized to the CURRENT phrase — this
+                    is what gives the inline-block its width, so the
+                    slot hugs whatever word is on screen. The visible
+                    word is position:absolute on top. Without this,
+                    the slot would either collapse to 0 width (absolute
+                    children have no layout size) or need a big
+                    min-width that overshoots short phrases and throws
+                    the centered row off-axis. */}
+                <span aria-hidden="true" className="hp-rotator-spacer">
+                  {HEADLINE_PHRASES[catIdx]}.
+                </span>
                 <span
                   key={catIdx}
                   className={`hp-rotator-word hp-rotator-word-${catPhase}`}
@@ -851,23 +858,34 @@ export default function HomePage() {
           justify-content: center;
         }
         .hp-homie-inline { color: ${ORANGE}; }
-        /* Rotating phrase slot — fixed-size box so the h1 doesn't
-           reflow on every swap. The absolutely-positioned word slides
-           up/out + fades for each rotation. Spacer "M" inside is
-           invisible but keeps the slot height locked to the line. */
+        /* Rotating phrase slot — sized by the invisible spacer inside
+           (whose text matches the current phrase), so the slot hugs
+           each word instead of reserving a fixed 46vw band. That
+           means the entire "Stop calling [word]." row stays centered
+           on the same axis as "Let homie do it." below, regardless
+           of whether the current phrase is short ("Angi.") or long
+           ("the number on the fridge."). The absolutely-positioned
+           visible word overlays on top of the spacer and slides
+           up/out + fades for each rotation. Row width does jump
+           slightly when phrases swap; acceptable because the whole
+           row remains centered and the swap animation hides the
+           reflow during the 0.6s transition. */
         .hp-rotator {
           position: relative;
           display: inline-block;
-          min-width: clamp(280px, 46vw, 680px);
           height: 1.1em;
           line-height: 1;
           text-align: left;
           overflow: hidden;
           vertical-align: baseline;
+          transition: width 0.4s cubic-bezier(.16,1,.3,1);
         }
         .hp-rotator-spacer {
           visibility: hidden;
           display: inline-block;
+          font-style: italic;
+          line-height: 1;
+          white-space: nowrap;
         }
         .hp-rotator-word {
           display: inline-block;
@@ -1037,9 +1055,16 @@ export default function HomePage() {
           .hp-big-hero { padding: 64px 16px 48px; min-height: auto; }
           .hp-big-title { font-size: 34px !important; line-height: 1.08 !important; }
           /* On phones the rotating slot takes a full line so it
-             doesn't wrap mid-phrase. The headline reads as two
-             stacked lines: "Stop calling _____." / "Let homie do it." */
-          .hp-rotator { min-width: 100% !important; display: block !important; text-align: center !important; }
+             doesn't wrap mid-phrase. Headline reads as two stacked
+             lines: "Stop calling _____." / "Let homie do it." The
+             spacer sets block-level width from the current phrase;
+             the absolute word needs to center via left:50% because
+             in a full-width block, left:0 would flush it hard left. */
+          .hp-rotator { width: 100% !important; display: block !important; text-align: center !important; }
+          .hp-rotator-spacer { display: block !important; }
+          .hp-rotator-word { left: 50% !important; }
+          .hp-rotator-word-in  { transform: translate(-50%, 0)    !important; }
+          .hp-rotator-word-out { transform: translate(-50%, -100%) !important; }
           .hp-big-sub { font-size: 16px; }
           .hp-big-input-wrap { padding: 22px 20px 18px; border-radius: 24px; }
           .hp-big-textarea { font-size: 22px; min-height: 90px; }
