@@ -2067,7 +2067,12 @@ export default function GetQuotes() {
     // doesn't depend on React state that hasn't landed yet.
     try {
       const p = new URLSearchParams(window.location.search);
-      if (p.get('prefill') || p.get('start') === 'voice' || p.get('start') === 'video') {
+      if (
+        p.get('prefill') ||
+        p.get('group') ||
+        p.get('start') === 'voice' ||
+        p.get('start') === 'video'
+      ) {
         return;
       }
     } catch { /* ignore */ }
@@ -2585,14 +2590,20 @@ Write ONLY the summary — no questions, no conversational language, no greeting
     const prefill = params.get('prefill');
     const start = params.get('start');
     const categoryParam = params.get('category');
-    // Three entry points from the new homepage's big-input hero:
+    const groupParam = params.get('group');
+    // Four entry points from the new homepage's big-input hero:
     //   • ?prefill=…  — user typed (or clicked a category chip that
     //                   ships a prefilled description). Auto-submits.
+    //   • ?group=…    — user tapped one of the top-level category
+    //                   pills ("HVAC", "Plumbing", etc.). Opens the
+    //                   matching group's subcategory picker — or
+    //                   drills straight into the sole sub if the
+    //                   group has only one.
     //   • ?start=voice — user tapped "Talk to Homie". Open the inline
     //                    voice panel immediately, no chat in between.
     //   • ?start=video — user tapped "Video chat with Homie". Same,
     //                    but the video panel.
-    // Any of the three consumes the ref so we don't fire twice.
+    // Any of the four consumes the ref so we don't fire twice.
     // Don't override an in-flight chat the user might be returning to.
     if (messages.length > 0 || data.category || data.a1) return;
 
@@ -2619,6 +2630,24 @@ Write ONLY the summary — no questions, no conversational language, no greeting
       const qs = cleaned.toString();
       window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
       return;
+    }
+
+    // ── Top-level category group (from homepage pill) ────────────────
+    // Match by label against CATEGORY_TREE. handleGroupSelect handles
+    // both paths: multi-sub groups flip phase → 'subcategory' with
+    // the picker, single-sub groups drill straight into the sub's
+    // q1 flow.
+    if (groupParam) {
+      const g = CATEGORY_TREE.find(x => x.label === groupParam);
+      if (g) {
+        prefillConsumedRef.current = true;
+        handleGroupSelect(g);
+        const cleaned = new URLSearchParams(params);
+        cleaned.delete('group');
+        const qs = cleaned.toString();
+        window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+        return;
+      }
     }
 
     // ── Text prefill ─────────────────────────────────────────────────

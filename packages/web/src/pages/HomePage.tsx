@@ -30,26 +30,37 @@ function useInView(ref: React.RefObject<HTMLElement | null>, threshold = 0.15) {
    All four entry points land inside the existing quote flow with the
    right initial state; GetQuotes.tsx reads the URL params on mount. */
 
-interface QuickIssue {
-  /** Emoji icon shown in the chip. */
+/** Top-level category groups — mirrors /quote's CATEGORY_TREE. The
+ *  homepage shows these as pills below the big input; clicking one
+ *  hands off to /quote?group=<label>, where the quote page opens
+ *  the group's subcategory picker (or drills into the sole sub
+ *  when there's only one). Repair groups are the default "most
+ *  common" row; service groups hide behind a "+N more" expand
+ *  button — same pattern as the /quote intake flow. */
+interface HomeGroup {
   icon: string;
-  /** Short label the user sees on the chip. */
   label: string;
-  /** Full description shipped as ?prefill= (must be ≥12 chars so
-   *  handleDirectText in /quote doesn't drop it on the floor). */
-  prefill: string;
-  /** Category id that maps to a CATEGORY_FLOWS entry in /quote.
-   *  If omitted, /quote falls back to 'general'. */
-  category: string;
+  type: 'repair' | 'service';
 }
-
-const QUICK_ISSUES: QuickIssue[] = [
-  { icon: '\uD83D\uDCA7', label: 'Leaky faucet',    prefill: 'Leaky faucet — dripping from the base',       category: 'plumbing' },
-  { icon: '\u2744\uFE0F',  label: 'AC not cooling',  prefill: 'AC is not cooling, just blowing warm air',    category: 'hvac' },
-  { icon: '\uD83D\uDD0C', label: 'Dead outlet',     prefill: 'Outlet stopped working, nothing plugs in',    category: 'electrical' },
-  { icon: '\uD83D\uDEBD', label: 'Toilet running',  prefill: 'Toilet keeps running after every flush',      category: 'plumbing' },
-  { icon: '\uD83C\uDFE0', label: 'Roof leak',       prefill: 'Roof is leaking, water showing on ceiling',   category: 'roofing' },
-  { icon: '\uD83E\uDDCA', label: 'Fridge noise',    prefill: 'Fridge making a loud grinding noise',         category: 'appliance' },
+const HOME_CATEGORY_GROUPS: HomeGroup[] = [
+  // Repair groups
+  { icon: '\uD83D\uDD27', label: 'Plumbing',               type: 'repair'  },
+  { icon: '\u26A1',        label: 'Electrical',             type: 'repair'  },
+  { icon: '\u2744\uFE0F',  label: 'HVAC',                   type: 'repair'  },
+  { icon: '\uD83C\uDF73',  label: 'Appliance',              type: 'repair'  },
+  { icon: '\uD83C\uDFE0',  label: 'Roofing & Exterior',     type: 'repair'  },
+  { icon: '\uD83D\uDD28',  label: 'Handyman & Structural',  type: 'repair'  },
+  { icon: '\uD83D\uDEA8',  label: 'Garage Door',            type: 'repair'  },
+  { icon: '\uD83D\uDD11',  label: 'Locksmith & Security',   type: 'repair'  },
+  // Service groups (expandable)
+  { icon: '\u2728',        label: 'Cleaning',               type: 'service' },
+  { icon: '\uD83C\uDF3F',  label: 'Outdoor & Landscaping',  type: 'service' },
+  { icon: '\uD83C\uDFCA',  label: 'Pool & Spa',             type: 'service' },
+  { icon: '\uD83D\uDC1B',  label: 'Pest Control',           type: 'service' },
+  { icon: '\uD83C\uDFA8',  label: 'Painting & Flooring',    type: 'service' },
+  { icon: '\uD83C\uDFD7\uFE0F', label: 'Remodeling',         type: 'service' },
+  { icon: '\uD83D\uDE9A',  label: 'Moving & Hauling',       type: 'service' },
+  { icon: '\uD83D\uDCF8',  label: 'Photography',            type: 'service' },
 ];
 
 /** Rotating italic phrases that slot into the "Stop calling ___."
@@ -71,13 +82,13 @@ const HEADLINE_PHRASES = [
 ];
 
 function BigInputHero({
-  onSubmit, onVoice, onVideo, onPhoto, onChip,
+  onSubmit, onVoice, onVideo, onPhoto, onGroup,
 }: {
   onSubmit: (text: string) => void;
   onVoice: () => void;
   onVideo: () => void;
   onPhoto: () => void;
-  onChip: (issue: QuickIssue) => void;
+  onGroup: (group: HomeGroup) => void;
 }) {
   // Dropped the "92103." zip at the end — the quote page handles zip
   // collection in the pricing modal, so showing one here was confusing
@@ -148,6 +159,14 @@ function BigInputHero({
     if (!ready) return;
     onSubmit(text.trim());
   }
+
+  // Mirrors the /quote intake's collapsed-service-tier pattern. Repair
+  // groups (hvac, plumbing, electrical, etc.) show by default; clicking
+  // "+ 8 more…" reveals the service groups (cleaning, landscape,
+  // painting, moving, etc.).
+  const [showAllCats, setShowAllCats] = useState(false);
+  const repairGroups = HOME_CATEGORY_GROUPS.filter(g => g.type === 'repair');
+  const serviceGroups = HOME_CATEGORY_GROUPS.filter(g => g.type === 'service');
 
   return (
     <section className="hp-big-hero">
@@ -243,19 +262,63 @@ function BigInputHero({
           </div>
         </div>
 
-        {/* Quick category chips */}
-        <div className="hp-big-chips">
-          <span className="hp-big-chips-label">Or pick one:</span>
-          {QUICK_ISSUES.map(q => (
+        {/* Category pills — mirrors /quote's intake. Repair group
+            pills show by default under a "Repair · most common"
+            divider; clicking one hands off to /quote?group=<label>
+            where the subcategory picker opens for that group. The
+            service tier (Cleaning, Landscape, Painting, Moving,
+            etc.) hides behind a "+ N more …" expand pill so the
+            repair groups stay the primary focus. */}
+        <div className="hp-big-cats">
+          <div className="hp-big-cat-divider">
+            <span>Repair &middot; most common</span>
+            <span className="hp-big-cat-line" />
+          </div>
+          <div className="hp-big-cat-row">
+            {repairGroups.map(g => (
+              <button
+                key={g.label}
+                type="button"
+                className="hp-big-cat-pill"
+                onClick={() => onGroup(g)}
+              >
+                <span className="hp-big-cat-pill-ic">{g.icon}</span>
+                {g.label}
+              </button>
+            ))}
+          </div>
+
+          {showAllCats && (
+            <>
+              <div className="hp-big-cat-divider">
+                <span>Services &middot; scheduled work</span>
+                <span className="hp-big-cat-line" />
+              </div>
+              <div className="hp-big-cat-row">
+                {serviceGroups.map(g => (
+                  <button
+                    key={g.label}
+                    type="button"
+                    className="hp-big-cat-pill"
+                    onClick={() => onGroup(g)}
+                  >
+                    <span className="hp-big-cat-pill-ic">{g.icon}</span>
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {!showAllCats && (
             <button
-              key={q.label}
               type="button"
-              className="hp-big-chip"
-              onClick={() => onChip(q)}
+              className="hp-big-cat-more"
+              onClick={() => setShowAllCats(true)}
             >
-              <span>{q.icon}</span>{q.label}
+              + {serviceGroups.length} more &middot; cleaning, landscape, painting, moving&hellip;
             </button>
-          ))}
+          )}
         </div>
       </div>
     </section>
@@ -992,29 +1055,83 @@ export default function HomePage() {
         }
         .hp-big-send.ready:hover { background: #C8531E; }
 
-        /* ── Quick category chips ── */
-        .hp-big-chips {
-          display: flex; gap: 8px;
-          justify-content: center; flex-wrap: wrap;
-          margin-top: 18px;
+        /* ── Category pills (mirrors /quote's intake) ──
+           Repair-group row by default, service-group row hidden
+           behind a "+ N more" expander. Divider matches /quote's
+           DM Mono uppercase label + thin rule. */
+        .hp-big-cats {
+          margin-top: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
         }
-        .hp-big-chips-label {
-          font-size: 12px; color: #9B9490;
-          padding: 8px 0; margin-right: 4px;
+        .hp-big-cat-divider {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 6px;
         }
-        .hp-big-chip {
+        .hp-big-cat-divider > span:first-child {
+          font-size: 9.5px;
+          font-family: 'DM Mono', monospace;
+          letter-spacing: 1.4px;
+          text-transform: uppercase;
+          color: #9B9490;
+          font-weight: 700;
+        }
+        .hp-big-cat-line {
+          height: 1px;
+          flex: 1;
+          background: rgba(0,0,0,0.08);
+        }
+        .hp-big-cat-row {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+          margin-bottom: 10px;
+        }
+        .hp-big-cat-pill {
           background: #fff;
-          border: 1px solid rgba(0,0,0,0.1);
+          color: ${DARK};
+          border: 1px solid rgba(0,0,0,0.08);
           border-radius: 100px;
-          padding: 8px 14px;
-          font-size: 13px; color: ${DARK}; cursor: pointer;
-          display: inline-flex; align-items: center; gap: 6px;
+          padding: 8px 12px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
           font-family: 'DM Sans', sans-serif;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           transition: all 0.15s;
         }
-        .hp-big-chip:hover {
+        .hp-big-cat-pill:hover {
           border-color: ${ORANGE};
-          background: rgba(232,99,43,0.05);
+          background: rgba(232,99,43,0.04);
+        }
+        .hp-big-cat-pill-ic {
+          font-size: 14px;
+        }
+        /* Expand pill — dashed border to distinguish it from the
+           solid category pills; full-width so it doesn't fight the
+           row's natural justify. */
+        .hp-big-cat-more {
+          width: 100%;
+          background: transparent;
+          border: 1px dashed rgba(0,0,0,0.12);
+          border-radius: 100px;
+          padding: 10px 14px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #9B9490;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+          transition: all 0.15s;
+          margin-bottom: 4px;
+        }
+        .hp-big-cat-more:hover {
+          border-color: ${ORANGE};
+          color: ${ORANGE};
         }
 
         .hp-section { padding: 100px 32px; }
@@ -1075,7 +1192,8 @@ export default function HomePage() {
           .hp-big-input-bar { flex-direction: column; align-items: stretch; }
           .hp-big-actions { justify-content: center; }
           .hp-big-send { width: 100%; padding: 14px; }
-          .hp-big-chip { font-size: 12px; padding: 7px 12px; }
+          .hp-big-cat-pill { font-size: 12px; padding: 7px 12px; }
+          .hp-big-cat-more { font-size: 11px; padding: 9px 12px; }
           .hp-section { padding: 60px 20px; }
           .hp-section-title { font-size: 28px; }
           .hp-section-sub { font-size: 16px; }
@@ -1153,8 +1271,12 @@ export default function HomePage() {
         onVoice={() => navigate('/quote?start=voice')}
         onVideo={() => navigate('/quote?start=video')}
         onPhoto={() => navigate('/quote')}
-        onChip={(q) => {
-          const params = new URLSearchParams({ prefill: q.prefill, category: q.category });
+        onGroup={(g) => {
+          // /quote's prefill effect reads ?group=<label> and drives
+          // the subcategory picker (or drills into the sole sub
+          // when there's only one), exactly like tapping the same
+          // group pill inside /quote would.
+          const params = new URLSearchParams({ group: g.label });
           navigate(`/quote?${params.toString()}`);
         }}
       />
