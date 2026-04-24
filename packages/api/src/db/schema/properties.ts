@@ -74,6 +74,12 @@ export const properties = pgTable('properties', {
   beds: jsonb('beds').$type<BedConfig[]>(),
   pmsSource: text('pms_source'),
   pmsExternalId: text('pms_external_id'),
+  /** Per-property rental-type override. Null = inherit from
+   *  workspaces.rentalType. PMs with mixed portfolios (some Airbnbs
+   *  + some LTR apartments in one workspace) set this per-property
+   *  so each unit shows the right occupant terminology + calendar
+   *  visibility. Same enum as workspaces.rentalType. */
+  rentalType: text('rental_type'),
   details: jsonb('details').$type<PropertyDetails>(),
   notes: text('notes'),
   photoUrls: text('photo_urls').array(),

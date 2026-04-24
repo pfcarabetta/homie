@@ -140,6 +140,12 @@ async function start() {
     // Smart suggestions cache (7-day TTL, refresh on demand) on consumer dashboard
     await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS smart_suggestions_cache jsonb`);
     await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS smart_suggestions_generated_at timestamp with time zone`);
+    // Rental type — short_term (guests, STRs) vs long_term (tenants,
+    // apartments). Workspace-level default + nullable per-property
+    // override for mixed portfolios. All existing workspaces default
+    // to short_term so behavior is unchanged until a PM opts in.
+    await db.execute(sql`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS rental_type text NOT NULL DEFAULT 'short_term'`);
+    await db.execute(sql`ALTER TABLE properties ADD COLUMN IF NOT EXISTS rental_type text`);
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');

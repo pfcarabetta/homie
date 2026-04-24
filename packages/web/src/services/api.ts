@@ -737,6 +737,13 @@ export interface PmsConnection {
   updatedAt: string;
 }
 
+/** Rental-type enum — controls whether the workspace/property is
+ *  treated as a short-term rental (vacation rental with guests +
+ *  reservations + occupancy calendars) or a long-term rental
+ *  (apartment/house with tenants, no turnover). Drives every
+ *  user-facing label via the useRentalTerms hook. */
+export type RentalType = 'short_term' | 'long_term';
+
 export interface Workspace {
   id: string;
   name: string;
@@ -744,6 +751,9 @@ export interface Workspace {
   plan: string;
   role: string;
   logoUrl: string | null;
+  /** Workspace-level default rental type. Individual properties can
+   *  override via Property.rentalType; null there = inherit this. */
+  rentalType: RentalType;
   createdAt: string;
 }
 
@@ -884,6 +894,10 @@ export interface Property {
   pmsSource: string | null;
   /** External ID in the PMS (e.g. Track unit ID) */
   pmsExternalId: string | null;
+  /** Per-property rental-type override. Null = inherit the workspace's
+   *  default. Lets a PM run a mixed portfolio (Airbnbs + LTR apartments
+   *  in one workspace) without spawning a second workspace. */
+  rentalType: RentalType | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1144,7 +1158,7 @@ export const businessService = {
   getWorkspace: (id: string) => fetchAPI<WorkspaceDetail>(`/api/v1/business/${id}`),
   createWorkspace: (data: { name: string; slug?: string }) =>
     fetchAPI<Workspace>('/api/v1/business', { method: 'POST', body: JSON.stringify(data) }),
-  updateWorkspace: (id: string, data: { name?: string; slug?: string; company_address?: string | null; company_phone?: string | null; company_email?: string | null; contact_title?: string | null }) =>
+  updateWorkspace: (id: string, data: { name?: string; slug?: string; company_address?: string | null; company_phone?: string | null; company_email?: string | null; contact_title?: string | null; rental_type?: RentalType }) =>
     fetchAPI<Workspace>(`/api/v1/business/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Notifications

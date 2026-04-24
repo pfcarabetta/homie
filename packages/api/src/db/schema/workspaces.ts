@@ -61,6 +61,13 @@ export const workspaces = pgTable('workspaces', {
   currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
   /** When the free trial ends. Set on signup; cleared on Stripe activation. */
   trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
+  /** Workspace-level rental type — 'short_term' (vacation rentals / STRs
+   *  with guests + reservations + occupancy calendars) or 'long_term'
+   *  (apartments / houses with tenants + no turnover concept). Drives
+   *  label copy ("guest" vs "tenant"), calendar/occupancy visibility,
+   *  and which PMS integrations surface. Per-property overrides live
+   *  on properties.rentalType; null there means inherit from here. */
+  rentalType: text('rental_type').notNull().default('short_term'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

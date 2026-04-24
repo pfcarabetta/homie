@@ -164,16 +164,23 @@ router.get('/:workspaceId', requireWorkspace, async (req: Request, res: Response
 // ── PATCH /:workspaceId — Update workspace ───────────────────────────────────
 
 router.patch('/:workspaceId', requireWorkspace, requireWorkspaceRole('admin'), async (req: Request, res: Response) => {
-  const { name, slug, logo_url, company_address, company_phone, company_email, contact_title, plan } = req.body as {
+  const { name, slug, logo_url, company_address, company_phone, company_email, contact_title, plan, rental_type } = req.body as {
     name?: string; slug?: string; logo_url?: string | null;
     company_address?: string | null; company_phone?: string | null; company_email?: string | null;
     contact_title?: string | null;
     plan?: string;
+    rental_type?: string;
   };
   const updates: Record<string, unknown> = {};
 
   if (name !== undefined) updates.name = name.trim();
   if (slug !== undefined) updates.slug = slugify(slug);
+  // Rental type — only 'short_term' and 'long_term' are accepted. Any
+  // other value is silently rejected (not a 400) so a frontend bug
+  // can't inadvertently null out a workspace's rental type.
+  if (rental_type !== undefined && (rental_type === 'short_term' || rental_type === 'long_term')) {
+    updates.rentalType = rental_type;
+  }
   if (logo_url !== undefined) {
     // Logo upload / branding is Pro+ only — check plan before accepting the change
     const [ws] = await db.select({ plan: workspaces.plan })
@@ -233,6 +240,11 @@ router.post('/:workspaceId/properties', requireWorkspace, requireWorkspaceRole('
     beds?: { type: string; count: number }[];
     details?: Record<string, unknown>;
     notes?: string;
+    /** Optional per-property rental-type override. Null/undefined =
+     *  inherit from the workspace default. Accepted values are
+     *  'short_term' and 'long_term'; anything else is coerced to
+     *  null (inherit) so a malformed client can't poison the row. */
+    rental_type?: string | null;
   };
 
   if (!body.name || typeof body.name !== 'string') {
@@ -266,6 +278,9 @@ router.post('/:workspaceId/properties', requireWorkspace, requireWorkspaceRole('
       return;
     }
 
+    const rentalOverride = body.rental_type === 'short_term' || body.rental_type === 'long_term'
+      ? body.rental_type
+      : null;
     const [property] = await db
       .insert(properties)
       .values({
@@ -283,6 +298,7 @@ router.post('/:workspaceId/properties', requireWorkspace, requireWorkspaceRole('
         beds: body.beds ?? null,
         details: body.details ?? null,
         notes: body.notes ?? null,
+        rentalType: rentalOverride,
       })
       .returning();
 
@@ -686,6 +702,18 @@ router.patch('/:workspaceId/properties/:propertyId', requireWorkspace, requireWo
 
   for (const [bodyKey, dbKey] of Object.entries(fields)) {
     if (body[bodyKey] !== undefined) updates[dbKey] = body[bodyKey];
+  }
+
+  // rental_type is handled separately because `null` is a meaningful
+  // value here (clears the per-property override → falls back to the
+  // workspace default). The generic field loop above treats only
+  // `undefined` as "no change", so null would otherwise get stored as
+  // the literal string "null". Validate explicitly.
+  if ('rental_type' in body) {
+    const v = body.rental_type;
+    if (v === null || v === 'short_term' || v === 'long_term') {
+      updates.rentalType = v;
+    }
   }
 
   if (Object.keys(updates).length === 0) {
