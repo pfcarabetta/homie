@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { businessService, jobService, estimateService, type Property, type WorkspaceDispatch, type WorkspaceBooking, type PreferredVendor, type Reservation, type ProviderResponseItem, type CostEstimate, type CalendarSource } from '@/services/api';
+import { businessService, jobService, estimateService, type Property, type WorkspaceDispatch, type WorkspaceBooking, type PreferredVendor, type Reservation, type ProviderResponseItem, type CostEstimate, type CalendarSource, type RentalType } from '@/services/api';
 import { PropertyScanCard, ScanCaptureModal, PropertyInventoryView } from './PropertyInventory';
 import { O, G, D, W, PROPERTY_TYPES, VENDOR_CATEGORIES, MiniCalendar, cleanPrice, renderBold, timeAgo } from './constants';
 import PropertySubPage from './PropertySubPage';
@@ -17,6 +17,11 @@ const VALID_SUB_PAGES: SubPage[] = ['activity', 'jobs', 'bookings', 'calendar', 
 
 interface PropertyDetailViewProps {
   workspaceId: string;
+  /** Workspace-level rental_type default. Threaded down so the per-
+   *  property override UI can show "Use workspace default (X)" with
+   *  the actual fallback value, and so calendar/occupancy panels can
+   *  hide themselves when the effective rental type is long_term. */
+  workspaceRentalType: RentalType;
   property: Property;
   plan: string;
   onBack: () => void;
@@ -1350,7 +1355,7 @@ function CalendarSourceCard({ workspaceId, propertyId }: { workspaceId: string; 
 
 /* ── Main Component ─────────────────────────────────────────────────────── */
 
-export default function PropertyDetailView({ workspaceId, property, plan, onBack, onPropertyDeleted, initialPage }: PropertyDetailViewProps) {
+export default function PropertyDetailView({ workspaceId, workspaceRentalType, property, plan, onBack, onPropertyDeleted, initialPage }: PropertyDetailViewProps) {
   // Initial active page priority: explicit caller intent (initialPage prop) >
   // last stored page from a prior session > default 'activity'.
   const [activePage, setActivePage] = useState<SubPage>(() => {
@@ -1434,6 +1439,7 @@ export default function PropertyDetailView({ workspaceId, property, plan, onBack
       case 'property':
         return <PropertySubPage
           workspaceId={workspaceId}
+          workspaceRentalType={workspaceRentalType}
           property={currentProperty}
           plan={plan}
           onPropertyUpdated={(updated) => { setCurrentProperty(updated); }}

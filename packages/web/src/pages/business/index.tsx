@@ -392,6 +392,7 @@ export default function BusinessPortal() {
           <style>{`@media (max-width: 768px) { .bp-pdv-wrapper { margin: -16px !important; height: calc(100vh - 64px) !important; } }`}</style>
           <PropertyDetailView
             workspaceId={workspace.id}
+            workspaceRentalType={workspace.rentalType}
             property={selectedProperty}
             plan={workspace.plan}
             initialPage={selectedPropertyInitialPage}

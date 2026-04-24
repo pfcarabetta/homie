@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { businessService, type Property, type PropertyDetails, type BedConfig } from '@/services/api';
+import { businessService, type Property, type PropertyDetails, type BedConfig, type RentalType } from '@/services/api';
 import { O, G, D, PROPERTY_TYPES, BED_TYPES } from './constants';
 import { PropertyScanCard, ScanCaptureModal, PropertyInventoryView } from './PropertyInventory';
 import { getStoredNav, setStoredNav } from './nav-storage';
+import { rentalTermsFor } from '@/hooks/useRentalTerms';
 
 /* ── Shared styles ────────────────────────────────────────────────────────── */
 
@@ -196,8 +197,12 @@ function TextField({
 
 /* ── PropertyProfilePanel ─────────────────────────────────────────────────── */
 
-export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated, onDeleted, isMobile }: {
+export function PropertyProfilePanel({ workspaceId, workspaceRentalType, property, onPropertyUpdated, onDeleted, isMobile }: {
   workspaceId: string;
+  /** Workspace-level rental_type default — renders inside the "Use
+   *  workspace default" option label so the PM can see exactly which
+   *  mode they'd inherit from. */
+  workspaceRentalType: RentalType;
   property: Property;
   onPropertyUpdated: (p: Property) => void;
   onDeleted: () => void;
@@ -218,6 +223,11 @@ export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated,
   const [notes, setNotes] = useState(property.notes || '');
   const [details, setDetails] = useState<PropertyDetails>(property.details ?? {});
   const [openSections, setOpenSections] = useState<Set<string>>(() => new Set(['basic']));
+  /** 'inherit' (null in the DB) | 'short_term' | 'long_term'. 'inherit'
+   *  is the frontend representation; the saver translates it to null. */
+  const [rentalTypeOverride, setRentalTypeOverride] = useState<'inherit' | RentalType>(
+    property.rentalType ?? 'inherit',
+  );
 
   // Delete state
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -240,10 +250,14 @@ export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated,
       beds: beds.length > 0 ? beds : null,
       details: Object.keys(details).length > 0 ? details : null,
       notes: notes || null,
+      // 'inherit' serializes as null to clear the per-property override.
+      // Backend PATCH handler treats null as a valid value (vs undefined
+      // = no change), so we must send the key even when clearing.
+      rental_type: rentalTypeOverride === 'inherit' ? null : rentalTypeOverride,
     });
     if (res.error) throw new Error(res.error);
     if (res.data) onPropertyUpdated(res.data);
-  }, [workspaceId, property.id, name, address, city, state, zip, propType, unitCount, bedrooms, bathrooms, sqft, beds, details, notes, onPropertyUpdated]);
+  }, [workspaceId, property.id, name, address, city, state, zip, propType, unitCount, bedrooms, bathrooms, sqft, beds, details, notes, rentalTypeOverride, onPropertyUpdated]);
 
   const { scheduleSave, status, errorMsg } = useAutoSave(saver);
 
@@ -312,6 +326,27 @@ export function PropertyProfilePanel({ workspaceId, property, onPropertyUpdated,
           <div>
             <label style={labelStyle}>Unit count</label>
             <input type="number" min={1} value={unitCount} onChange={e => setUnitCount(+e.target.value || 1)} onBlur={commit} style={inputStyle} />
+          </div>
+        </div>
+        {/* Rental type override — 'inherit' maps to null on the backend
+            and means "fall back to the workspace default". The label
+            spells out the effective default so the PM can see what
+            inherit resolves to without flipping over to Settings. */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Rental type</label>
+          <select
+            value={rentalTypeOverride}
+            onChange={e => { setRentalTypeOverride(e.target.value as 'inherit' | RentalType); commit(); }}
+            style={{ ...inputStyle, cursor: 'pointer' }}
+          >
+            <option value="inherit">
+              Use workspace default ({rentalTermsFor(workspaceRentalType).Occupant === 'Tenant' ? 'Long-term rental' : 'Short-term rental'})
+            </option>
+            <option value="short_term">Short-term rental (guests)</option>
+            <option value="long_term">Long-term rental (tenants)</option>
+          </select>
+          <div style={{ fontSize: 11, color: 'var(--bp-subtle)', marginTop: 4, lineHeight: 1.5 }}>
+            Overrides the workspace default for this specific property. Useful for mixed portfolios (e.g. most properties are vacation rentals, but a few units are long-term leases).
           </div>
         </div>
       </Section>
@@ -771,8 +806,12 @@ export function PropertyInventoryPanel({ workspaceId, property, plan, onProperty
 type PropertyTab = 'profile' | 'equipment' | 'inventory';
 const VALID_PROPERTY_TABS: PropertyTab[] = ['profile', 'equipment', 'inventory'];
 
-export default function PropertySubPage({ workspaceId, property, plan, onPropertyUpdated, onDeleted }: {
+export default function PropertySubPage({ workspaceId, workspaceRentalType, property, plan, onPropertyUpdated, onDeleted }: {
   workspaceId: string;
+  /** Workspace-level default rental type — threaded through so the
+   *  per-property override select can spell out the effective
+   *  default ("Use workspace default (Short-term rental)"). */
+  workspaceRentalType: RentalType;
   property: Property;
   plan: string;
   onPropertyUpdated: (p: Property) => void;
@@ -831,6 +870,7 @@ export default function PropertySubPage({ workspaceId, property, plan, onPropert
       {activeTab === 'profile' && (
         <PropertyProfilePanel
           workspaceId={workspaceId}
+          workspaceRentalType={workspaceRentalType}
           property={property}
           onPropertyUpdated={onPropertyUpdated}
           onDeleted={onDeleted}
