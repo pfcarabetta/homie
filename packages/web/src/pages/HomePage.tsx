@@ -204,7 +204,7 @@ function BigInputHero({
                 handleSend();
               }
             }}
-            placeholder="My dishwasher makes a grinding noise when it drains\u2026"
+            placeholder="Describe it here, or chat with homie by video or voice."
           />
           <div className="hp-big-input-bar">
             <div className="hp-big-actions">
