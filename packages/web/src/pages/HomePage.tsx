@@ -79,7 +79,11 @@ function BigInputHero({
   onPhoto: () => void;
   onChip: (issue: QuickIssue) => void;
 }) {
-  const SAMPLE = "My kitchen faucet is dripping from the base — worse when hot water's on. 92103.";
+  // Dropped the "92103." zip at the end — the quote page handles zip
+  // collection in the pricing modal, so showing one here was confusing
+  // (users thought they had to type theirs too, and copying the
+  // sample literally sent 92103 as their zip).
+  const SAMPLE = "My kitchen faucet is dripping from the base — worse when hot water's on.";
   const [val, setVal] = useState('');
   const [focused, setFocused] = useState(false);
   const [typedIdx, setTypedIdx] = useState(0);
@@ -97,6 +101,21 @@ function BigInputHero({
     }, 55);
     return () => clearTimeout(id);
   }, [typedIdx, focused]);
+
+  /** When the user focuses the textarea, clear any auto-typed sample
+   *  so they start with a blank field instead of having to
+   *  cmd+A-delete the placeholder. Only runs when the sample is still
+   *  there (userInteractedRef stays false until they type). Once
+   *  cleared, we also flip the ref so the autotype useEffect above
+   *  doesn't re-seed the sample after they tab out without typing. */
+  function handleFocus() {
+    setFocused(true);
+    if (!userInteractedRef.current) {
+      userInteractedRef.current = true;
+      setVal('');
+      setTypedIdx(SAMPLE.length); // stop the autotype timer
+    }
+  }
 
   // Headline phrase rotator. 2.6s dwell + 0.6s exit/enter gap so the
   // word has time to read before it swaps. Timing + easing mirror
@@ -168,7 +187,7 @@ function BigInputHero({
             className="hp-big-textarea"
             value={text}
             onChange={e => handleChange(e.target.value)}
-            onFocus={() => setFocused(true)}
+            onFocus={handleFocus}
             onBlur={() => setFocused(false)}
             onKeyDown={e => {
               // Cmd/Ctrl+Enter submits from the textarea so keyboard-
