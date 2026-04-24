@@ -1103,24 +1103,66 @@ function useBusinessChatTheme(): 'light' | 'dark' {
     if (typeof window === 'undefined' || !window.matchMedia) return 'light' as const;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' as const : 'light' as const;
   };
-  const resolve = (saved: '' | 'light' | 'dark' | 'auto', os: 'light' | 'dark'): 'light' | 'dark' => {
+  /** When BusinessChat renders inside BusinessPortal (via fullWidthContent
+   *  on BusinessLayout), a parent `.bp-portal[data-theme="dark|light"]`
+   *  wrapper is already on the DOM. The portal's useThemeMode resolved
+   *  'auto' to a time-based light/dark — we want to match that exactly,
+   *  otherwise the portal chrome goes dark but the chat pane stays
+   *  light (or vice versa). Read the wrapper's data-theme directly so
+   *  there's one source of truth; fall back to bp_theme + OS for
+   *  standalone /business/chat visits where no portal wrapper exists. */
+  const readParentPortal = (): 'light' | 'dark' | null => {
+    if (typeof document === 'undefined') return null;
+    const el = document.querySelector('.bp-portal[data-theme]');
+    const t = el?.getAttribute('data-theme');
+    return t === 'dark' ? 'dark' : t === 'light' ? 'light' : null;
+  };
+  /** Standalone resolution — used when no .bp-portal wrapper is present.
+   *  Matches BusinessPortal.useThemeMode's time-based auto-resolution
+   *  (hour ≥18 or <7 → dark) so the two surfaces agree even when a user
+   *  deep-links to /business/chat without going through /business. */
+  const resolveStandalone = (saved: '' | 'light' | 'dark' | 'auto', os: 'light' | 'dark'): 'light' | 'dark' => {
     if (saved === 'dark') return 'dark';
     if (saved === 'light') return 'light';
-    return os; // 'auto' or unset — follow OS
+    if (saved === 'auto') {
+      const h = new Date().getHours();
+      return (h >= 18 || h < 7) ? 'dark' : 'light';
+    }
+    return os; // unset — follow OS
   };
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => resolve(readSaved(), readOs()));
+  const compute = (): 'light' | 'dark' => {
+    const fromParent = readParentPortal();
+    if (fromParent) return fromParent;
+    return resolveStandalone(readSaved(), readOs());
+  };
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => compute());
   useEffect(() => {
-    const recompute = () => setTheme(resolve(readSaved(), readOs()));
+    const recompute = () => setTheme(compute());
     window.addEventListener('storage', recompute);
     const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
     mq?.addEventListener('change', recompute);
-    // Also poll once in case another tab wrote to localStorage without
-    // firing a storage event (same tab won't).
+    // Re-check after mount + on an interval — covers the case where
+    // the .bp-portal wrapper mounts AFTER BusinessChat (fullWidthContent
+    // renders inside the layout on the same tick, but the hook's first
+    // compute runs before the parent div is in the DOM) and the case
+    // where another tab writes to localStorage.
+    const mountTick = setTimeout(recompute, 0);
     const interval = setInterval(recompute, 2000);
+    // Observe data-theme attribute changes on the parent portal so a
+    // toggle in the sidebar's appearance panel flips the chat instantly
+    // rather than waiting for the next poll.
+    let observer: MutationObserver | null = null;
+    const portal = document.querySelector('.bp-portal[data-theme]');
+    if (portal) {
+      observer = new MutationObserver(recompute);
+      observer.observe(portal, { attributes: true, attributeFilter: ['data-theme'] });
+    }
     return () => {
       window.removeEventListener('storage', recompute);
       mq?.removeEventListener('change', recompute);
+      clearTimeout(mountTick);
       clearInterval(interval);
+      observer?.disconnect();
     };
   }, []);
   return theme;
