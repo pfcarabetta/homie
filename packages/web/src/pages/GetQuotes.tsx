@@ -2822,9 +2822,14 @@ Write ONLY the summary — no questions, no conversational language, no greeting
         }
       `}</style>
 
-      {/* Sticky nav — homie wordmark + back + multi-session tabs + avatar */}
+      {/* Fixed nav — homie wordmark + back + multi-session tabs +
+          avatar. Using position: fixed (was sticky) so the bar stays
+          pinned to the viewport top regardless of scroll container
+          quirks. Spacer div below reserves the 60px so the demo
+          banner + chat section don't slide under the nav on first
+          render. */}
       <nav style={{
-        position: 'sticky', top: 0, zIndex: 50,
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
         background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(16px) saturate(180%)',
         padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', gap: 16,
         borderBottom: `1px solid ${BORDER}`,
@@ -2893,6 +2898,10 @@ Write ONLY the summary — no questions, no conversational language, no greeting
           <AvatarDropdown />
         </div>
       </nav>
+      {/* Spacer — mirrors the fixed nav's 60px height so the content
+          below starts at y=60 instead of y=0 (otherwise it renders
+          under the translucent nav). */}
+      <div aria-hidden="true" style={{ height: 60, flexShrink: 0 }} />
 
       {/* Demo banner */}
       {isDemo && (
