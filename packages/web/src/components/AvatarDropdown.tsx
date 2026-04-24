@@ -115,9 +115,23 @@ export default function AvatarDropdown() {
             {homeowner.first_name && <div style={{ fontSize: 12, color: '#9B9490' }}>{homeowner.email}</div>}
             <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>{homeowner.membership_tier} plan</div>
           </div>
+          {/* Hard navigation (window.location.href) rather than
+              react-router's navigate() for every dropdown item.
+              Reason: pages like /quote and /business/chat call
+              window.history.replaceState directly to write the
+              session-id URL param, which desyncs React Router's
+              internal history from the actual browser URL. Once
+              desynced, a subsequent navigate() updates the address
+              bar but doesn't unmount/re-mount the route — URL flips,
+              view doesn't. Full-page loads bypass the router
+              entirely and also tear down any long-lived streams,
+              WebSockets, and timers on the source page, which is
+              exactly what the user wants when switching to Account /
+              Business / Home IQ. Matches the existing "Sign out"
+              button's pattern. */}
           {hasWorkspaces && (
             <div style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-              <button onClick={() => { setOpen(false); navigate('/business'); }} style={{
+              <button onClick={() => { setOpen(false); window.location.href = '/business'; }} style={{
                 width: '100%', padding: '12px 16px', background: 'none', border: 'none',
                 fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
                 fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
@@ -132,7 +146,7 @@ export default function AvatarDropdown() {
                   padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.08em', textTransform: 'uppercase',
                 }}>Business</span>
               </button>
-              <button onClick={() => { setOpen(false); navigate('/business?tab=settings&focus=profile'); }} style={{
+              <button onClick={() => { setOpen(false); window.location.href = '/business?tab=settings&focus=profile'; }} style={{
                 width: '100%', padding: '12px 16px', background: 'none', border: 'none',
                 fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
                 fontFamily: "'DM Sans', sans-serif",
@@ -142,7 +156,7 @@ export default function AvatarDropdown() {
               >My Profile</button>
             </div>
           )}
-          <button onClick={() => { setOpen(false); navigate('/account'); }} style={{
+          <button onClick={() => { setOpen(false); window.location.href = '/account'; }} style={{
             width: '100%', padding: '12px 16px', background: 'none', border: 'none',
             fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
             fontFamily: "'DM Sans', sans-serif",
@@ -150,7 +164,7 @@ export default function AvatarDropdown() {
             onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
             onMouseLeave={e => e.currentTarget.style.background = 'none'}
           >My Account</button>
-          <button onClick={() => { setOpen(false); navigate('/account?tab=home'); }} style={{
+          <button onClick={() => { setOpen(false); window.location.href = '/account?tab=home'; }} style={{
             width: '100%', padding: '12px 16px', background: 'none', border: 'none',
             fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
             fontFamily: "'DM Sans', sans-serif",
@@ -158,7 +172,7 @@ export default function AvatarDropdown() {
             onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
             onMouseLeave={e => e.currentTarget.style.background = 'none'}
           >My Home IQ</button>
-          <button onClick={() => { setOpen(false); navigate('/account?tab=quotes'); }} style={{
+          <button onClick={() => { setOpen(false); window.location.href = '/account?tab=quotes'; }} style={{
             width: '100%', padding: '12px 16px', background: 'none', border: 'none',
             fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
             fontFamily: "'DM Sans', sans-serif",
@@ -166,7 +180,7 @@ export default function AvatarDropdown() {
             onMouseEnter={e => e.currentTarget.style.background = '#F9F5F2'}
             onMouseLeave={e => e.currentTarget.style.background = 'none'}
           >My Quotes</button>
-          <button onClick={() => { setOpen(false); navigate('/account?tab=bookings'); }} style={{
+          <button onClick={() => { setOpen(false); window.location.href = '/account?tab=bookings'; }} style={{
             width: '100%', padding: '12px 16px', background: 'none', border: 'none',
             fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
             fontFamily: "'DM Sans', sans-serif",
