@@ -2002,6 +2002,21 @@ export default function GetQuotes() {
     // greeting — the user is picking up where they left off.
     if (messages.length > 0) return;
 
+    // If the URL carries any of the homepage big-input hand-off params,
+    // the prefill effect below is going to drive the first turn (it
+    // calls addUser + askFollowUp). Bail out of the greeting entirely
+    // — otherwise the 400ms setTimeout fires concurrently and ends up
+    // adding "Hey! I'm Homie..." on top of the user's prefilled
+    // message, which looks like the AI ignored what they typed.
+    // The check runs against window.location.search directly so it
+    // doesn't depend on React state that hasn't landed yet.
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('prefill') || p.get('start') === 'voice' || p.get('start') === 'video') {
+        return;
+      }
+    } catch { /* ignore */ }
+
     const t = setTimeout(() => {
       addAssistant("Hey! \uD83D\uDC4B I'm Homie. Let's get you some quotes. What kind of help do you need?");
       setPhase('category');
