@@ -283,6 +283,57 @@ const TIERS = [
   { id: 'emergency', name: 'Emergency', time: '~15 min',  detail: '15 pros, all channels blitz' },
 ];
 
+/** Lightweight keyword classifier for free-text prefills (the homepage's
+ *  big input lands here without a ?category= chip, so we need a best
+ *  guess before askFollowUp tags the conversation as "Handyman help").
+ *  Ordered list — first match wins; specific-before-general so e.g.
+ *  "garage door opener" doesn't trip electrical. Returns a valid
+ *  CATEGORY_FLOWS id, or null to let callers fall back to 'general'.
+ *  The AI's follow-up + diagnosis steps still see the full conversation
+ *  and can reclassify if this misses — this just steers the first
+ *  turn away from Handyman for obvious cases like "AC not cooling". */
+function inferCategoryFromText(raw: string): string | null {
+  const text = raw.toLowerCase();
+  const PATTERNS: { cat: string; re: RegExp }[] = [
+    // Most specific first
+    { cat: 'garage_door',   re: /garage\s*door|garage\s*opener/ },
+    { cat: 'locksmith',     re: /\block(ed|out|smith)\b|lock\s*out|rekey/ },
+    { cat: 'pest_control',  re: /\bpest\b|\bant(s|\b)|\broach|\brats?\b|\bmice\b|termite|bed\s*bugs?|\bspiders?\b|\bwasps?\b|\bbees?\b/ },
+    { cat: 'appliance',     re: /washer|dryer|dishwasher|refrigerat|fridge|\boven\b|stove|microwave|garbage\s*disposal|appliance/ },
+    { cat: 'hvac',          re: /\bhvac\b|\ba[\s\-\/]?c\b|air[\s\-]?condition|furnace|thermostat|ductless|mini[\s\-]?split|\b(heat|heating|heater)\b|\bcool(ing|er)?\b|\bvents?\b|swamp\s*cooler/ },
+    { cat: 'plumbing',      re: /plumb|faucet|drip(ping)?|\bleak/ },
+    { cat: 'plumbing',      re: /toilet|drain|pipe|shower|\btub\b|water\s*heater|sewer|clog|\bsink\b|\bvalve\b|water\s*pressure/ },
+    { cat: 'electrical',    re: /electric|outlet|\bswitch\b|breaker|circuit|wiring|panel|fuse|spark|lights?\s*(out|not|flicker)|gfci|no\s*power/ },
+    { cat: 'roofing',       re: /\broof|shingle|attic\s*leak|ceiling\s*leak|storm\s*damage/ },
+    { cat: 'gutter',        re: /\bgutter/ },
+    { cat: 'painting',      re: /\bpaint(ing)?\b/ },
+    { cat: 'flooring',      re: /flooring|hardwood|laminate\s*floor|carpet\s*install|floor\s*(refinish|scratch|buckl|squeak)/ },
+    { cat: 'tile',          re: /\btile\b|grout|backsplash/ },
+    { cat: 'drywall',       re: /drywall|sheetrock/ },
+    { cat: 'tree_trimming', re: /tree\s*(trim|removal|remove|branch|dead)|stump/ },
+    { cat: 'landscaping',   re: /\blawn\b|mow|\byard\b|landscape|hedge|sprinkler|irrigation/ },
+    { cat: 'fencing',       re: /\bfenc(e|ing)\b/ },
+    { cat: 'deck_patio',    re: /\bdeck\b|\bpatio\b|pergola/ },
+    { cat: 'pool',          re: /\bpool\b|swimming\s*pool/ },
+    { cat: 'hot_tub',       re: /hot\s*tub|jacuzzi|spa\s*(repair|leak)/ },
+    { cat: 'carpet_cleaning', re: /carpet\s*(clean|stain|odor)|upholstery\s*clean/ },
+    { cat: 'pressure_washing', re: /pressure\s*wash|power\s*wash/ },
+    { cat: 'window_cleaning', re: /window\s*clean/ },
+    { cat: 'house_cleaning', re: /house\s*clean|deep\s*clean|maid|housekeep/ },
+    { cat: 'tv_mounting',   re: /tv\s*mount|mount.*tv|wall.*mount\s*tv/ },
+    { cat: 'furniture_assembly', re: /furniture\s*assembl|ikea/ },
+    { cat: 'solar',         re: /solar\s*(panel|install|inverter)/ },
+    { cat: 'ev_charger_install', re: /ev\s*charger|electric\s*vehicle.*charg/ },
+    { cat: 'chimney',       re: /chimney|fireplace.*(clean|sweep|repair)/ },
+    { cat: 'concrete',      re: /concrete|\bsidewalk\b|driveway\s*crack/ },
+    { cat: 'foundation_waterproofing', re: /foundation\s*(crack|leak|repair)|basement\s*(leak|flood|wet)|crawl\s*space.*(moisture|wet)/ },
+  ];
+  for (const { cat, re } of PATTERNS) {
+    if (re.test(text) && CATEGORY_FLOWS[cat]) return cat;
+  }
+  return null;
+}
+
 /** Normalize price for display: "$$140" → "$140", "Between 100 and 200" → "$100-$200" */
 function cleanPrice(price: string): string {
   // Strip duplicate dollar signs
@@ -2498,7 +2549,13 @@ Write ONLY the summary — no questions, no conversational language, no greeting
   const handleDirectText = useCallback((text: string) => {
     const trimmed = text.trim();
     if (trimmed.length < 12) return;
-    setData(d => ({ ...d, category: 'general', a1: trimmed }));
+    // Keyword-infer the category before falling back to 'general'
+    // (which CATEGORY_FLOWS maps to "Handyman" — surfaces the wrong
+    // label + "Handyman & Structural" group for obvious HVAC/plumbing/
+    // electrical requests). The AI's askFollowUp and diagnosis passes
+    // still see the full conversation and can reclassify.
+    const inferred = inferCategoryFromText(trimmed) ?? 'general';
+    setData(d => ({ ...d, category: inferred, a1: trimmed }));
     setPhase('waiting');
     addUser(trimmed);
     askFollowUp(trimmed, true);
@@ -2576,11 +2633,18 @@ Write ONLY the summary — no questions, no conversational language, no greeting
     const trimmedComposed = composed.trim();
     if (trimmedComposed.length >= 12) {
       // Inline the handleDirectText logic so we can honor an incoming
-      // category param. handleDirectText hardcodes 'general', which
-      // would clobber any category the homepage chip passed along.
+      // category param. Precedence:
+      //   1. Explicit ?category= from the homepage chip (authoritative)
+      //   2. Keyword-inferred from the prefill text (e.g. "AC not
+      //      cooling" → 'hvac', "leaky faucet" → 'plumbing'). Without
+      //      this fallback the chat defaults to 'general' which renders
+      //      as "Handyman" / "Handyman & Structural" — wrong vibe for
+      //      an HVAC or plumbing request.
+      //   3. 'general' (Handyman) as a last-resort fallback; the AI
+      //      can still reclassify from the full transcript later.
       const effectiveCategory = (categoryParam && CATEGORY_FLOWS[categoryParam])
         ? categoryParam
-        : 'general';
+        : (inferCategoryFromText(trimmedComposed) ?? 'general');
       setData(d => ({ ...d, category: effectiveCategory, a1: trimmedComposed }));
       setPhase('waiting');
       addUser(trimmedComposed);
