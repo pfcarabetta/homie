@@ -367,6 +367,7 @@ export default function BusinessPortal() {
             onNewDispatch={startNewDispatch}
             onLockedTab={() => setShowReportsUpgrade(true)}
             workspacePlan={workspace?.plan ?? 'trial'}
+            workspaceRentalType={workspace?.rentalType ?? 'short_term'}
             userRole={workspace?.user_role ?? 'viewer'}
             userName={userName}
             userInitials={userInitials}
@@ -381,6 +382,7 @@ export default function BusinessPortal() {
             onNewDispatch={() => { setMobileMenuOpen(false); startNewDispatch(); }}
             onLockedTab={() => setShowReportsUpgrade(true)}
             workspacePlan={workspace?.plan ?? 'trial'}
+            workspaceRentalType={workspace?.rentalType ?? 'short_term'}
             userRole={workspace?.user_role ?? 'viewer'}
             userName={userName}
             userInitials={userInitials}
@@ -439,6 +441,7 @@ export default function BusinessPortal() {
           onNewDispatch={startNewDispatch}
           onLockedTab={() => setShowReportsUpgrade(true)}
           workspacePlan={workspace?.plan ?? 'trial'}
+          workspaceRentalType={workspace?.rentalType ?? 'short_term'}
           userRole={workspace?.user_role ?? 'viewer'}
           userName={userName}
           userInitials={userInitials}
@@ -453,6 +456,7 @@ export default function BusinessPortal() {
           onNewDispatch={startNewDispatch}
           onLockedTab={() => setShowReportsUpgrade(true)}
           workspacePlan={workspace?.plan ?? 'trial'}
+          workspaceRentalType={workspace?.rentalType ?? 'short_term'}
           userRole={workspace?.user_role ?? 'viewer'}
           userName={userName}
           userInitials={userInitials}
@@ -497,6 +501,7 @@ export default function BusinessPortal() {
       {workspace && (tab === 'guest-requests' || tab === 'guest-issues' || tab === 'guest-settings' || tab === 'guest-auto-dispatch' || tab === 'guest-qr-codes') && (
         <GuestRequestsTab
           workspaceId={workspace.id}
+          workspaceRentalType={workspace.rentalType}
           plan={workspace.plan}
           onViewDispatch={(jobId) => { setFocusJobId(jobId); setTab('dispatches'); }}
           initialSubTab={tab === 'guest-settings' ? 'settings' : tab === 'guest-auto-dispatch' ? 'auto-dispatch' : tab === 'guest-qr-codes' ? 'qr-codes' : 'issues'}

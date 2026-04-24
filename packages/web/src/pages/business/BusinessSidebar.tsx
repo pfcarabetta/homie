@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Tab } from './constants';
 import BusinessPortalRoot from './BusinessPortalRoot';
+import type { RentalType } from '@/services/api';
+import { rentalTermsFor } from '@/hooks/useRentalTerms';
 
 interface NavItem {
   id: string;
@@ -26,9 +28,14 @@ interface NavChild {
   locked?: boolean;
 }
 
-function getNavItems(plan: string, role: string): NavItem[] {
+function getNavItems(plan: string, role: string, rentalType: RentalType): NavItem[] {
   const isPro = ['professional', 'business', 'enterprise'].includes(plan);
   const isAdmin = role === 'admin';
+  // "Guest Requests" vs "Tenant Requests" — rental-type-aware. The
+  // route paths (guest-issues, guest-settings, etc.) stay baked-in
+  // to avoid breaking existing printed QR codes / URL bookmarks; only
+  // the human-readable label flips.
+  const terms = rentalTermsFor(rentalType);
 
   return [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', tab: 'dashboard' },
@@ -42,7 +49,7 @@ function getNavItems(plan: string, role: string): NavItem[] {
       ],
     },
     {
-      id: 'guest-group', label: 'Guest Requests', icon: 'reported', locked: !isPro, children: [
+      id: 'guest-group', label: `${terms.Occupant} Requests`, icon: 'reported', locked: !isPro, children: [
         { id: 'guest-issues', label: 'Requests', icon: 'reported', tab: 'guest-issues' },
         { id: 'guest-auto-dispatch', label: 'Auto-Dispatch', icon: 'history', tab: 'guest-auto-dispatch' },
         { id: 'guest-settings', label: 'Settings', icon: 'settings', tab: 'guest-settings' },
@@ -99,6 +106,8 @@ interface BusinessSidebarProps {
   onNewDispatch: () => void;
   onLockedTab: () => void;
   workspacePlan: string;
+  /** Drives nav labels — "Guest Requests" vs "Tenant Requests". */
+  workspaceRentalType: RentalType;
   userRole: string;
   userName?: string;
   userInitials?: string;
@@ -108,7 +117,7 @@ interface BusinessSidebarProps {
 
 export default function BusinessSidebar({
   collapsed, setCollapsed, activeTab, onNavigate, onNewDispatch, onLockedTab,
-  workspacePlan, userRole, userName, userInitials, userTitle, onNavigateCallback,
+  workspacePlan, workspaceRentalType, userRole, userName, userInitials, userTitle, onNavigateCallback,
 }: BusinessSidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ 'dispatch-group': true });
   const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
@@ -164,7 +173,7 @@ export default function BusinessSidebar({
   }
 
   function hideTooltip() { setTooltip(null); }
-  const navItems = getNavItems(workspacePlan, userRole);
+  const navItems = getNavItems(workspacePlan, userRole, workspaceRentalType);
 
   function toggle(id: string) {
     setExpanded(p => ({ ...p, [id]: !p[id] }));

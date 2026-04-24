@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { businessService, type GuestIssue, type GuestIssueDetail, type GuestReporterSettings, type AutoDispatchRule, type PreferredVendor, type Property } from '@/services/api';
+import { businessService, type GuestIssue, type GuestIssueDetail, type GuestReporterSettings, type AutoDispatchRule, type PreferredVendor, type Property, type RentalType } from '@/services/api';
 import { O, G, D, W, VENDOR_CATEGORIES, timeAgo } from './constants';
+import { rentalTermsFor, type RentalTerms } from '@/hooks/useRentalTerms';
 
 type GuestSubTab = 'issues' | 'settings' | 'auto-dispatch' | 'qr-codes';
 
@@ -28,10 +29,15 @@ const LANGUAGES = [
   { value: 'it', label: 'Italian' },
 ];
 
-export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, initialSubTab, focusIssueId, onFocusHandled }: { workspaceId: string; plan: string; onViewDispatch?: (jobId: string) => void; initialSubTab?: GuestSubTab; focusIssueId?: string | null; onFocusHandled?: () => void }) {
+export default function GuestRequestsTab({ workspaceId, workspaceRentalType, plan, onViewDispatch, initialSubTab, focusIssueId, onFocusHandled }: { workspaceId: string; workspaceRentalType: RentalType; plan: string; onViewDispatch?: (jobId: string) => void; initialSubTab?: GuestSubTab; focusIssueId?: string | null; onFocusHandled?: () => void }) {
   const [subTab, setSubTab] = useState<GuestSubTab>(initialSubTab ?? 'issues');
   const isPro = ['professional', 'business', 'enterprise'].includes(plan);
   const isBizPlus = ['business', 'enterprise'].includes(plan);
+  // Every label below reads from `terms` — flipping the workspace's
+  // rental type from 'short_term' to 'long_term' swaps "Guest"/"guests"
+  // for "Tenant"/"tenants" across the whole tab without touching any
+  // DB columns, API paths, or internal variable names.
+  const terms = rentalTermsFor(workspaceRentalType);
 
   useEffect(() => {
     if (initialSubTab) setSubTab(initialSubTab);
@@ -46,17 +52,17 @@ export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, in
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
-        <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>Upgrade to unlock Guest Requests</div>
+        <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>Upgrade to unlock {terms.Occupant} Requests</div>
         <div style={{ fontSize: 14, color: 'var(--bp-subtle)', maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
-          Guest issue reporting, auto-dispatch rules, and QR code links are available on the <strong style={{ color: O }}>Professional</strong> plan and above.
+          {terms.Occupant} issue reporting, auto-dispatch rules, and QR code links are available on the <strong style={{ color: O }}>Professional</strong> plan and above.
         </div>
       </div>
     );
   }
 
   const SUB_TAB_TITLES: Record<GuestSubTab, string> = {
-    issues: 'Guest Requests',
-    settings: 'Guest Reporter Settings',
+    issues: `${terms.Occupant} Requests`,
+    settings: `${terms.Occupant} Reporter Settings`,
     'auto-dispatch': 'Auto-Dispatch Rules',
     'qr-codes': 'QR Codes',
   };
@@ -66,17 +72,17 @@ export default function GuestRequestsTab({ workspaceId, plan, onViewDispatch, in
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, color: D, margin: 0 }}>{SUB_TAB_TITLES[subTab]}</h3>
       </div>
-      {subTab === 'issues' && <GuestIssuesSubTab workspaceId={workspaceId} onViewDispatch={onViewDispatch} focusIssueId={focusIssueId} onFocusHandled={onFocusHandled} />}
-      {subTab === 'settings' && <GuestSettingsSubTab workspaceId={workspaceId} isBizPlus={isBizPlus} />}
-      {subTab === 'auto-dispatch' && <GuestAutoDispatchSubTab workspaceId={workspaceId} />}
-      {subTab === 'qr-codes' && <GuestQRCodesSubTab workspaceId={workspaceId} />}
+      {subTab === 'issues' && <GuestIssuesSubTab workspaceId={workspaceId} terms={terms} onViewDispatch={onViewDispatch} focusIssueId={focusIssueId} onFocusHandled={onFocusHandled} />}
+      {subTab === 'settings' && <GuestSettingsSubTab workspaceId={workspaceId} terms={terms} isBizPlus={isBizPlus} />}
+      {subTab === 'auto-dispatch' && <GuestAutoDispatchSubTab workspaceId={workspaceId} terms={terms} />}
+      {subTab === 'qr-codes' && <GuestQRCodesSubTab workspaceId={workspaceId} terms={terms} />}
     </div>
   );
 }
 
 /* ── Issues sub-tab ── */
 
-function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusHandled }: { workspaceId: string; onViewDispatch?: (jobId: string) => void; focusIssueId?: string | null; onFocusHandled?: () => void }) {
+function GuestIssuesSubTab({ workspaceId, terms, onViewDispatch, focusIssueId, onFocusHandled }: { workspaceId: string; terms: RentalTerms; onViewDispatch?: (jobId: string) => void; focusIssueId?: string | null; onFocusHandled?: () => void }) {
   const [issues, setIssues] = useState<GuestIssue[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -286,9 +292,9 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
         if (clientFiltered.length === 0) return (
           <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
-            <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No guest requests found</div>
+            <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No {terms.occupant} requests found</div>
             <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>
-              {issues.length > 0 ? 'Try adjusting your filters.' : 'Issues reported by guests will appear here.'}
+              {issues.length > 0 ? 'Try adjusting your filters.' : `Issues reported by ${terms.occupants} will appear here.`}
             </div>
           </div>
         );
@@ -440,7 +446,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
                             padding: 14,
                             marginBottom: 16,
                           }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-muted)', marginBottom: 8 }}>Guest Feedback</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-muted)', marginBottom: 8 }}>{terms.Occupant} Feedback</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <span style={{ fontSize: 20 }}>{detail.guestSatisfactionRating === 'positive' ? '\uD83D\uDC4D' : '\uD83D\uDC4E'}</span>
                               <span style={{
@@ -626,7 +632,7 @@ function GuestIssuesSubTab({ workspaceId, onViewDispatch, focusIssueId, onFocusH
 
 /* ── Settings sub-tab ── */
 
-function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; isBizPlus: boolean }) {
+function GuestSettingsSubTab({ workspaceId, terms, isBizPlus }: { workspaceId: string; terms: RentalTerms; isBizPlus: boolean }) {
   const [settings, setSettings] = useState<GuestReporterSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -666,8 +672,8 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
       <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D }}>Guest Reporter</div>
-            <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>Allow guests to report maintenance issues via a link or QR code.</div>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D }}>{terms.Occupant} Reporter</div>
+            <div style={{ fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2 }}>Allow {terms.occupants} to report maintenance issues via a link or QR code.</div>
           </div>
           <button onClick={() => setDraft(d => ({ ...d, isEnabled: !d.isEnabled }))}
             style={{ width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', background: draft.isEnabled ? G : '#D0CBC6', transition: 'background 0.2s' }}>
@@ -753,9 +759,9 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
         </div>
       </div>
 
-      {/* Guest Support Contact */}
+      {/* Support Contact */}
       <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid rgba(0,0,0,0.06)', padding: 20, marginBottom: 16 }}>
-        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>Guest Support Contact</div>
+        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, marginBottom: 16 }}>{terms.Occupant} Support Contact</div>
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>Support Email</label>
           <input value={draft.supportEmail || ''} onChange={e => setDraft(d => ({ ...d, supportEmail: e.target.value || null }))} placeholder="support@example.com" style={inputStyle} type="email" />
@@ -777,7 +783,7 @@ function GuestSettingsSubTab({ workspaceId, isBizPlus }: { workspaceId: string; 
 
 /* ── Auto-Dispatch Rules sub-tab ── */
 
-function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
+function GuestAutoDispatchSubTab({ workspaceId, terms }: { workspaceId: string; terms: RentalTerms }) {
   const [rules, setRules] = useState<AutoDispatchRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -917,7 +923,7 @@ function GuestAutoDispatchSubTab({ workspaceId }: { workspaceId: string }) {
         <div style={{ textAlign: 'center', padding: '40px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🤖</div>
           <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No auto-dispatch rules</div>
-          <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Create rules to automatically dispatch guest issues to vendors.</div>
+          <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Create rules to automatically dispatch {terms.occupant} issues to vendors.</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1010,7 +1016,7 @@ function PropertyQRCard({ workspaceId, property }: { workspaceId: string; proper
   );
 }
 
-function GuestQRCodesSubTab({ workspaceId }: { workspaceId: string }) {
+function GuestQRCodesSubTab({ workspaceId, terms }: { workspaceId: string; terms: RentalTerms }) {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1027,14 +1033,14 @@ function GuestQRCodesSubTab({ workspaceId }: { workspaceId: string }) {
     <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bp-hover)', borderRadius: 12, border: '1px dashed #E0DAD4' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>🏠</div>
       <div style={{ fontSize: 16, color: D, fontWeight: 600, marginBottom: 8 }}>No properties</div>
-      <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Add properties first to generate guest reporting links.</div>
+      <div style={{ fontSize: 14, color: 'var(--bp-subtle)' }}>Add properties first to generate {terms.occupant} reporting links.</div>
     </div>
   );
 
   return (
     <div>
       <div style={{ fontSize: 14, color: 'var(--bp-subtle)', marginBottom: 16 }}>
-        Share these QR codes with guests so they can report maintenance issues. Print or download to place in your properties.
+        Share these QR codes with {terms.occupants} so they can report maintenance issues. Print or download to place in your properties.
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
         {properties.map(p => <PropertyQRCard key={p.id} workspaceId={workspaceId} property={p} />)}
