@@ -2976,6 +2976,21 @@ export default function BusinessChat() {
           .b2b-split { grid-template-columns: 1fr !important; gap: 12px !important; }
           .b2b-split > * { min-width: 0 !important; max-width: 100% !important; }
           .b2b-chat-col { min-width: 0 !important; max-width: 100% !important; }
+          /* EXCEPTION — when outreach is active, the live dispatch view
+             is the primary thing the PM wants to see on mobile. Flip
+             the right panel back on (normally hidden below 981px via
+             its inline display:none), strip the sticky positioning
+             (useless on a single-column layout), and pull it ABOVE the
+             chat column so the spinning Homie + provider quotes land
+             at the top of the viewport. The chat transcript + scope
+             recap card stay below for context. Mirrors /quote's
+             .gq-outreach-active pattern. */
+          .b2b-outreach-active .b2b-right-panel {
+            display: flex !important;
+            position: static !important;
+            order: -1;
+            margin-bottom: 18px;
+          }
         }
         @media (max-width: 640px) {
           /* Tighten the split's horizontal padding so cards have more
@@ -3236,7 +3251,7 @@ export default function BusinessChat() {
           assurance). On narrow screens the split collapses and the right
           panel hides (the header already carries occupancy + calendar). */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-      <div className="b2b-split" style={{ margin: '0 auto', padding: '16px 16px 120px' }}>
+      <div className={`b2b-split${step === 'outreach' || step === 'results' ? ' b2b-outreach-active' : ''}`} style={{ margin: '0 auto', padding: '16px 16px 120px' }}>
       <div className="b2b-chat-col" style={{ maxWidth: 700, margin: '0 auto', minWidth: 0 }}>
 
           {/* Step: Property selection */}
