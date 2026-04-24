@@ -3128,12 +3128,20 @@ export default function BusinessChat() {
         {(() => {
           const workspaceTabs = b2bTabs.tabs.filter(t => t.workspaceId === selectedWorkspace);
           if (workspaceTabs.length === 0) return null;
-          const freshUrl = `/business/chat${selectedWorkspace ? `?workspace=${encodeURIComponent(selectedWorkspace)}` : ''}`;
+          // Route tab navigation through /business?tab=dispatch-chat so
+          // the chat renders INSIDE BusinessLayout (sidebar + top search
+          // bar preserved). The standalone /business/chat route strips
+          // the portal chrome, leaving PMs with no way back to the menu.
+          const freshUrl = (() => {
+            const params = new URLSearchParams({ tab: 'dispatch-chat' });
+            if (selectedWorkspace) params.set('workspace', selectedWorkspace);
+            return `/business?${params.toString()}`;
+          })();
           const sessionUrl = (id: string) => {
-            const params = new URLSearchParams();
+            const params = new URLSearchParams({ tab: 'dispatch-chat' });
             if (selectedWorkspace) params.set('workspace', selectedWorkspace);
             params.set('s', id);
-            return `/business/chat?${params.toString()}`;
+            return `/business?${params.toString()}`;
           };
           return (
             <div className="b2b-tabs-slot" style={{ flex: 1, minWidth: 0, display: 'flex' }}>
@@ -3184,13 +3192,13 @@ export default function BusinessChat() {
               the QuoteTabsBar above carries the new-quote affordance. */}
           {b2bTabs.tabs.filter(t => t.workspaceId === selectedWorkspace).length === 0 && (
             <button onClick={() => {
-              // Fresh session via full-page nav — mirrors consumer
-              // pattern so the mount path re-mints sessionId + clears
-              // all stale state, and the previous session (if any)
-              // persists in localStorage as a tab.
-              const params = new URLSearchParams();
+              // Fresh session via full-page nav — route through
+              // /business?tab=dispatch-chat (not /business/chat) so the
+              // BusinessLayout chrome (sidebar + search) stays on screen
+              // and the PM can navigate back to the portal home.
+              const params = new URLSearchParams({ tab: 'dispatch-chat' });
               if (selectedWorkspace) params.set('workspace', selectedWorkspace);
-              window.location.href = `/business/chat${params.toString() ? `?${params.toString()}` : ''}`;
+              window.location.href = `/business?${params.toString()}`;
             }} style={{
               background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
               padding: '5px 12px', fontSize: 13, fontWeight: 600, color: 'var(--bp-muted)',

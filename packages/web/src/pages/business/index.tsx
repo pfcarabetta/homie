@@ -183,7 +183,19 @@ export default function BusinessPortal() {
     businessService.listWorkspaces().then(res => {
       if (res.data) {
         setWorkspaces(res.data);
-        if (res.data.length > 0) setSelectedId(res.data[0].id);
+        if (res.data.length > 0) {
+          // Honor ?workspace=<id> when present so deep links from
+          // /business/chat tab navigation + external notifications land
+          // on the correct workspace instead of always the first one.
+          let initialId = res.data[0].id;
+          try {
+            const urlWorkspace = new URLSearchParams(window.location.search).get('workspace');
+            if (urlWorkspace && res.data.some(w => w.id === urlWorkspace)) {
+              initialId = urlWorkspace;
+            }
+          } catch { /* ignore */ }
+          setSelectedId(initialId);
+        }
       }
       setLoading(false);
     }).catch(() => setLoading(false));
