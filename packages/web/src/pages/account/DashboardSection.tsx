@@ -51,7 +51,6 @@ interface DashboardSectionProps {
   userFirstName?: string | null;
   onNavigate: (tab: AccountTab) => void;
   onNewQuote: () => void;
-  onDiagnostic: () => void;
   /** Optional — fires when a smart-suggestion tile's "Get a quote"
    *  button is tapped. Receives the full suggestion so the parent can
    *  navigate to /quote with prefill params instead of opening a blank
@@ -94,7 +93,7 @@ function statusColor(status: string): { bg: string; text: string } {
   }
 }
 
-export default function DashboardSection({ userFirstName, onNavigate, onNewQuote, onDiagnostic, onSuggestionAct }: DashboardSectionProps) {
+export default function DashboardSection({ userFirstName, onNavigate, onNewQuote, onSuggestionAct }: DashboardSectionProps) {
   const [jobs, setJobs] = useState<AccountJob[]>([]);
   const [bookings, setBookings] = useState<AccountBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,13 +146,16 @@ export default function DashboardSection({ userFirstName, onNavigate, onNewQuote
     })),
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 6);
 
-  // Recommended action
+  // Recommended action. For first-time users (no history) we now
+  // prompt them straight into the quote flow — the standalone DIY
+  // diagnostic at /chat was discontinued; the AI diagnostic is
+  // built into the /quote chat.
   const recommended: { label: string; sub: string; onClick: () => void } = (() => {
     if (activeQuotes.length === 0 && openBookings.length === 0 && jobs.length === 0) {
       return {
-        label: 'Try a free diagnostic',
+        label: 'Get your first quote',
         sub: 'Describe what\u2019s going on',
-        onClick: onDiagnostic,
+        onClick: onNewQuote,
       };
     }
     if (activeQuotes.length > 0) {

@@ -33,14 +33,19 @@ interface AccountSidebarProps {
 }
 
 function getNavItems(hasInspect: boolean, hasWorkspace: boolean): NavItem[] {
+  // The "Free Diagnostic" entry (was /chat) was removed — the AI
+  // diagnostic is now built into the quote flow, so we don't expose
+  // a standalone CTA. Keep the div1 divider only when at least one
+  // of the cross-product entries (Inspect / Business) actually
+  // renders; otherwise it'd sit next to the div2 divider below the
+  // last home-owner tab, stacking two rules on top of each other.
   const items: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', tab: 'dashboard' },
     { id: 'quotes', label: 'My Quotes', icon: 'quotes', tab: 'quotes' },
     { id: 'bookings', label: 'My Bookings', icon: 'bookings', tab: 'bookings' },
     { id: 'home', label: 'My Home IQ', icon: 'home', tab: 'home' },
-    { id: 'div1', label: '', icon: '', divider: true },
-    { id: 'diagnostic', label: 'Free Diagnostic', icon: 'diagnostic', href: '/chat' },
   ];
+  if (hasInspect || hasWorkspace) items.push({ id: 'div1', label: '', icon: '', divider: true });
   if (hasInspect) items.push({ id: 'inspect', label: 'Homie Inspect', icon: 'inspect', href: '/inspect-portal', external: true });
   if (hasWorkspace) items.push({ id: 'business', label: 'Homie Business', icon: 'business', href: '/business', external: true });
   items.push({ id: 'div2', label: '', icon: '', divider: true });

@@ -2365,7 +2365,6 @@ export default function Account() {
           userFirstName={homeowner?.first_name ?? null}
           onNavigate={handleNavigate}
           onNewQuote={() => navigate('/quote')}
-          onDiagnostic={() => navigate('/chat')}
           onSuggestionAct={(s) => {
             // Prefill /quote with the suggestion's description so the
             // chat opens straight into the diagnostic flow with the

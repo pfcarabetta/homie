@@ -160,121 +160,6 @@ function Step({ number, title, description, accent }: { number: number; title: s
   );
 }
 
-/* -- DIY section -- */
-function DiagnosticPreview() {
-  const [typed, setTyped] = useState('');
-  const fullText = 'My kitchen faucet is dripping from the base when I turn it on...';
-  const ref = useRef<HTMLDivElement>(null);
-  const visible = useInView(ref, 0.4);
-
-  useEffect(() => {
-    if (!visible) return;
-    let i = 0;
-    const id = setInterval(() => {
-      i++;
-      setTyped(fullText.slice(0, i));
-      if (i >= fullText.length) clearInterval(id);
-    }, 35);
-    return () => clearInterval(id);
-  }, [visible]);
-
-  return (
-    <div ref={ref} style={{
-      background: 'white', borderRadius: 16, maxWidth: 480, width: '100%',
-      boxShadow: '0 8px 40px rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.06)', overflow: 'hidden',
-    }}>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 8, background: ORANGE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ color: 'white', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 14 }}>h</span>
-        </div>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 14, color: DARK }}>homie AI</div>
-          <div style={{ fontSize: 11, color: '#9B9490' }}>Diagnosing...</div>
-        </div>
-      </div>
-      <div style={{ padding: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-          <div style={{
-            background: ORANGE, color: 'white', padding: '8px 14px', borderRadius: '14px 14px 4px 14px',
-            maxWidth: '85%', fontSize: 13, lineHeight: 1.5, minHeight: 36,
-          }}>
-            {typed}<span style={{ opacity: typed.length < fullText.length ? 1 : 0, animation: 'blink 0.8s infinite' }}>|</span>
-          </div>
-        </div>
-        {typed.length >= fullText.length && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start', animation: 'fadeIn 0.5s ease' }}>
-            <div style={{
-              background: WARM, padding: '8px 14px', borderRadius: '14px 14px 14px 4px',
-              maxWidth: '85%', fontSize: 13, lineHeight: 1.6, color: DARK,
-            }}>
-              That sounds like a worn cartridge — super common on single-handle faucets. Can you tell me the brand? Look for a logo on the handle or base.
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* -- Background scrolling mosaic (non-interactive) -- */
-const BG_ISSUES = [
-  { icon: '\uD83D\uDD27', text: 'Faucet leaking' },
-  { icon: '\u2744\uFE0F', text: 'AC not cooling' },
-  { icon: '\uD83D\uDCA1', text: 'Warm switch' },
-  { icon: '\uD83D\uDEBD', text: 'Toilet running' },
-  { icon: '\uD83D\uDD0C', text: 'Dead outlet' },
-  { icon: '\uD83C\uDFE0', text: 'Roof leak' },
-  { icon: '\uD83D\uDD28', text: 'Drywall crack' },
-  { icon: '\uD83D\uDEAA', text: 'Door stuck' },
-  { icon: '\uD83C\uDFA8', text: 'Paint peeling' },
-  { icon: '\uD83E\uDDCA', text: 'Fridge noise' },
-  { icon: '\uD83D\uDCA8', text: 'No heat' },
-  { icon: '\uD83E\uDE9F', text: 'Drafty window' },
-  { icon: '\u26A1', text: 'Breaker trips' },
-  { icon: '\uD83D\uDEB0', text: 'Slow drain' },
-  { icon: '\uD83D\uDD25', text: 'Oven broken' },
-  { icon: '\uD83E\uDEB5', text: 'Fence leaning' },
-  { icon: '\uD83D\uDCA7', text: 'Water stain' },
-  { icon: '\uD83C\uDFD7\uFE0F', text: 'Foundation' },
-  { icon: '\uD83C\uDF3F', text: 'Sprinkler' },
-  { icon: '\uD83E\uDDFA', text: 'Washer issue' },
-];
-
-function BackgroundMosaic() {
-  const columns = [[], [], [], []] as { icon: string; text: string }[][];
-  const shuffled = [...BG_ISSUES].sort(() => Math.random() - 0.5);
-  shuffled.forEach((item, i) => columns[i % 4].push(item));
-  // Duplicate for seamless loop
-  const cols = columns.map(col => [...col, ...col]);
-  const durations = [26, 32, 22, 30];
-
-  return (
-    <div style={{
-      position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8,
-      overflow: 'hidden', opacity: 0.35, pointerEvents: 'none',
-      maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
-      WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
-    }}>
-      {cols.map((col, colIdx) => (
-        <div key={colIdx} style={{
-          display: 'flex', flexDirection: 'column', gap: 8,
-          animation: `hpMosaicScroll ${durations[colIdx]}s linear infinite`,
-        }}>
-          {col.map((tile, i) => (
-            <div key={`${colIdx}-${i}`} style={{
-              background: 'white', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 12,
-              padding: '12px 6px', textAlign: 'center', flexShrink: 0,
-            }}>
-              <div style={{ fontSize: 20, marginBottom: 2 }}>{tile.icon}</div>
-              <div style={{ fontSize: 10, fontWeight: 500, color: '#2D2926', lineHeight: 1.2 }}>{tile.text}</div>
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* -- Main page -- */
 export default function HomePage() {
   const navigate = useNavigate();
@@ -285,7 +170,7 @@ export default function HomePage() {
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: 'white', overflowX: 'hidden' }}>
       <SEO
         title="AI-Powered Home Maintenance & Repair Quotes"
-        description="Stop calling around for home repair quotes. Homie's AI agent calls, texts, and emails local pros for you — and brings back quotes in minutes. Free DIY diagnostics included."
+        description="Stop calling around for home repair quotes. Homie's AI agent calls, texts, and emails local pros for you — and brings back quotes in minutes."
         canonical="/"
       />
       <style>{`
@@ -311,10 +196,6 @@ export default function HomePage() {
         .hp-steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 40px; }
         .hp-compare-table { width: 100%; border-collapse: collapse; }
         .hp-compare-table th, .hp-compare-table td { padding: 16px 20px; font-size: 14px; }
-        .hp-diy-section { display: flex; align-items: center; gap: 60px; flex-wrap: wrap; }
-        .hp-diy-text { flex: 1 1 400px; }
-        .hp-diy-preview { flex: 1 1 400px; display: flex; justify-content: center; }
-        .hp-diy-title { font-family: 'Fraunces', serif; font-size: 38px; font-weight: 700; color: ${DARK}; margin-bottom: 16px; line-height: 1.15; }
         .hp-pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
         .hp-pricing-price { font-family: 'DM Sans', sans-serif; font-size: 44px; font-weight: 700; margin-bottom: 4px; }
         .hp-cta-title { font-family: 'Fraunces', serif; font-size: 40px; font-weight: 700; color: white; margin-bottom: 16px; }
@@ -351,10 +232,6 @@ export default function HomePage() {
           .hp-steps-grid { grid-template-columns: 1fr 1fr; gap: 24px; }
           .hp-compare-table { display: none; }
           .hp-compare-cards { display: flex; flex-direction: column; gap: 12px; }
-          .hp-diy-section { flex-direction: column; gap: 32px; }
-          .hp-diy-text { flex: none; }
-          .hp-diy-preview { flex: none; width: 100%; }
-          .hp-diy-title { font-size: 28px; }
           .hp-pricing-grid { grid-template-columns: 1fr; gap: 14px; }
           .hp-pricing-grid > div { padding: 20px 18px !important; border-radius: 16px !important; }
           .hp-pricing-price { font-size: 32px !important; }
@@ -379,7 +256,6 @@ export default function HomePage() {
         <span onClick={() => navigate('/')} style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: ORANGE, cursor: 'pointer' }}>homie</span>
         <div className="hp-nav-links">
           <a href="#how" style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500 }}>How it works</a>
-          <a onClick={() => navigate('/chat')} style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500, cursor: 'pointer' }}>Free diagnostic</a>
           <a href="#pricing" style={{ textDecoration: 'none', color: '#6B6560', fontSize: 15, fontWeight: 500 }}>Pricing</a>
           <button onClick={() => navigate('/quote')} style={{
             background: ORANGE, color: 'white', border: 'none', borderRadius: 100,
@@ -392,7 +268,6 @@ export default function HomePage() {
       {menuOpen && (
         <div className="hp-mobile-menu">
           <a href="#how" onClick={() => setMenuOpen(false)}>How it works</a>
-          <a onClick={() => { setMenuOpen(false); navigate('/chat'); }} style={{ cursor: 'pointer' }}>Free diagnostic</a>
           <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
           <button onClick={() => { setMenuOpen(false); navigate('/quote'); }}>Get quotes now</button>
           <button onClick={() => { setMenuOpen(false); navigate(authService.isAuthenticated() ? '/account' : '/login'); }}>
@@ -404,9 +279,9 @@ export default function HomePage() {
       {/* HERO */}
       <section className="hp-hero" style={{ background: `linear-gradient(180deg, white 0%, ${WARM} 100%)` }}>
         <div className="hp-hero-text">
-          <div onClick={() => navigate('/chat')} style={{
+          <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(27,158,119,0.08)',
-            padding: '6px 14px', borderRadius: 100, marginBottom: 20, cursor: 'pointer',
+            padding: '6px 14px', borderRadius: 100, marginBottom: 20,
           }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: GREEN }} />
             <span style={{ fontSize: 13, fontWeight: 500, color: GREEN }}>AI agent available 24/7</span>
@@ -427,11 +302,6 @@ export default function HomePage() {
               padding: '16px 32px', fontSize: 17, fontWeight: 600, cursor: 'pointer',
               boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
             }}>Get quotes now</button>
-            <button onClick={() => navigate('/chat')} style={{
-              background: 'transparent', color: DARK, border: '2px solid rgba(0,0,0,0.12)', borderRadius: 100,
-              padding: '14px 28px', fontSize: 17, fontWeight: 500, cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>Free DIY diagnostic &#8594;</button>
           </div>
         </div>
 
@@ -497,9 +367,8 @@ export default function HomePage() {
                   { category: 'Finding pros', them: 'Post a job and wait for bids', us: 'AI agent actively calls, texts & contacts pros for you' },
                   { category: 'Provider pool', them: 'Limited to their signed-up network', us: 'Any local pro — no signup required' },
                   { category: 'Lead quality', them: 'Generic requests, high competition', us: 'Pre-qualified leads with full diagnosis & context' },
-                  { category: 'DIY support', them: 'None', us: 'Step-by-step guidance with tools & materials list' },
-                ].map((row, i) => (
-                  <tr key={i} style={{ borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                ].map((row, i, arr) => (
+                  <tr key={i} style={{ borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
                     <td style={{ fontWeight: 600, color: 'white' }}>{row.category}</td>
                     <td style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
                       <span style={{ color: '#FF6B6B', marginRight: 6 }}>&#10007;</span>{row.them}
@@ -520,7 +389,6 @@ export default function HomePage() {
               { category: 'Finding pros', them: 'Post and wait for bids', us: 'AI agent contacts pros for you' },
               { category: 'Provider pool', them: 'Their network only', us: 'Any local pro' },
               { category: 'Lead quality', them: 'Generic requests', us: 'Pre-qualified with diagnosis' },
-              { category: 'DIY support', them: 'None', us: 'Step-by-step guidance' },
             ].map((row, i) => (
               <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '16px', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <div style={{ fontWeight: 700, color: 'white', fontSize: 15, marginBottom: 10 }}>{row.category}</div>
@@ -542,55 +410,6 @@ export default function HomePage() {
               padding: '14px 32px', fontSize: 16, fontWeight: 600, cursor: 'pointer',
               boxShadow: '0 4px 24px rgba(232,99,43,0.3)',
             }}>See the difference — get quotes now</button>
-          </div>
-        </div>
-      </section>
-
-      {/* DIY DIAGNOSTIC */}
-      <section id="diy" className="hp-section" style={{ background: WARM }}>
-        <div className="hp-diy-section" style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div className="hp-diy-text">
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              background: 'rgba(232,99,43,0.08)', padding: '6px 14px', borderRadius: 100, marginBottom: 20,
-            }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: ORANGE }}>100% free</span>
-            </div>
-            <h2 className="hp-diy-title">
-              Not sure what's wrong?<br />Ask homie first.
-            </h2>
-            <p style={{ fontSize: 16, lineHeight: 1.65, color: '#6B6560', marginBottom: 24, maxWidth: 440 }}>
-              Chat with our AI diagnostic engine for free. Describe what's happening, upload a photo, and get an expert-level diagnosis with DIY steps, cost estimates, and severity assessment — in under 2 minutes.
-            </p>
-            <ul style={{ listStyle: 'none', padding: 0, marginBottom: 28 }}>
-              {[
-                'Identifies issues across plumbing, electrical, HVAC, and more',
-                'Photo analysis spots problems you might miss',
-                'Step-by-step DIY instructions with tools needed',
-                'Know if it\'s a $20 fix or a $2,000 problem',
-              ].map((item, i) => (
-                <li key={i} style={{
-                  display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10,
-                  fontSize: 14, color: '#6B6560', lineHeight: 1.5,
-                }}>
-                  <span style={{ color: GREEN, fontSize: 16, flexShrink: 0 }}>&#10003;</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button onClick={() => navigate('/chat')} style={{
-                background: 'white', color: DARK, border: `2px solid ${DARK}`, borderRadius: 100,
-                padding: '12px 24px', fontSize: 15, fontWeight: 600, cursor: 'pointer',
-              }}>Try the free diagnostic</button>
-              <span style={{ fontSize: 13, color: '#9B9490' }}>No account required</span>
-            </div>
-          </div>
-          <div className="hp-diy-preview" style={{ position: 'relative', minHeight: 500, overflow: 'hidden' }}>
-            <BackgroundMosaic />
-            <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 500 }}>
-              <DiagnosticPreview />
-            </div>
           </div>
         </div>
       </section>
@@ -682,10 +501,6 @@ export default function HomePage() {
             background: 'white', color: ORANGE, border: 'none', borderRadius: 100,
             padding: '14px 32px', fontSize: 16, fontWeight: 700, cursor: 'pointer',
           }}>Get quotes now</button>
-          <button onClick={() => navigate('/chat')} style={{
-            background: 'transparent', color: 'white', border: '2px solid rgba(255,255,255,0.4)', borderRadius: 100,
-            padding: '12px 28px', fontSize: 16, fontWeight: 500, cursor: 'pointer',
-          }}>Try free diagnostic</button>
         </div>
       </section>
 
