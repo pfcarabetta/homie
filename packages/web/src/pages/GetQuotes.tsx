@@ -560,7 +560,11 @@ function DirectInput({ onSubmit, onPhoto, onVideoClick, onVoiceClick, examples, 
           onChange={e => setText(e.target.value)}
           onFocus={() => setFocus(true)}
           onBlur={() => setFocus(false)}
-          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); }}
+          onKeyDown={e => {
+            // Enter submits; Shift+Enter inserts a newline. Matches
+            // the homepage big-input and most chat UIs.
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+          }}
           placeholder="Describe it here, or chat with Homie by video or voice below."
           disabled={disabled}
           style={{

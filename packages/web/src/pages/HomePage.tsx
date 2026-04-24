@@ -197,9 +197,11 @@ function BigInputHero({
             onFocus={handleFocus}
             onBlur={() => setFocused(false)}
             onKeyDown={e => {
-              // Cmd/Ctrl+Enter submits from the textarea so keyboard-
-              // native users can send without reaching for the button.
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              // Enter submits (chat-style); Shift+Enter inserts a
+              // newline for multi-line descriptions. Cmd/Ctrl+Enter
+              // also submits so power users' muscle memory keeps
+              // working.
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
               }
