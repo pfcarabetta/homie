@@ -290,9 +290,16 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
       return;
     }
 
-    // Get property
+    // Get property (include rental_type override)
     const [property] = await db
-      .select({ name: properties.name, state: properties.state, details: properties.details, bedrooms: properties.bedrooms, bathrooms: properties.bathrooms })
+      .select({
+        name: properties.name,
+        state: properties.state,
+        details: properties.details,
+        bedrooms: properties.bedrooms,
+        bathrooms: properties.bathrooms,
+        rentalType: properties.rentalType,
+      })
       .from(properties)
       .where(and(eq(properties.id, propertyId), eq(properties.workspaceId, workspaceId)))
       .limit(1);
@@ -302,9 +309,9 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
       return;
     }
 
-    // Get workspace
+    // Get workspace (include rental_type default)
     const [workspace] = await db
-      .select({ name: workspaces.name, logoUrl: workspaces.logoUrl })
+      .select({ name: workspaces.name, logoUrl: workspaces.logoUrl, rentalType: workspaces.rentalType })
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId))
       .limit(1);
@@ -381,6 +388,15 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
 
     const logoUrl = settings.whitelabelLogoUrl || workspace.logoUrl;
     const companyName = settings.whitelabelCompanyName || workspace.name;
+    // Resolve effective rental type: property override wins, else
+    // workspace default. The frontend GuestReporter uses this to flip
+    // terminology ("guest"/"tenant") and enforce required contact info
+    // in LTR mode (tenants are known, so we always want attribution).
+    const effectiveRentalType: 'short_term' | 'long_term' =
+      property.rentalType === 'long_term' ? 'long_term'
+      : property.rentalType === 'short_term' ? 'short_term'
+      : workspace.rentalType === 'long_term' ? 'long_term'
+      : 'short_term';
 
     res.json({
       data: {
@@ -391,6 +407,7 @@ guestPublicRouter.get('/:workspaceId/:propertyId', async (req: Request, res: Res
           details: property.details ?? null,
           bedrooms: property.bedrooms ?? null,
           bathrooms: property.bathrooms ?? null,
+          rentalType: effectiveRentalType,
           settings: {
             supportedLanguages: settings.supportedLanguages,
             defaultLanguage: settings.defaultLanguage,
@@ -734,6 +751,27 @@ guestPublicRouter.post('/:workspaceId/:propertyId/issues', async (req: Request, 
   }
 
   try {
+    // Resolve the effective rental type so we can enforce LTR-only
+    // rules (contact info required). Single round-trip pulls both
+    // columns from the JOIN.
+    const { resolvePropertyRentalType } = await import('../services/rental-type');
+    const effectiveRentalType = await resolvePropertyRentalType(propertyId);
+
+    // LTR mode: the tenant is known to the PM, so an identifiable
+    // report is required. Enforce at least one contact channel.
+    if (effectiveRentalType === 'long_term') {
+      const hasEmail = typeof guest_email === 'string' && guest_email.trim().length > 0;
+      const hasPhone = typeof guest_phone === 'string' && guest_phone.trim().length > 0;
+      if (!hasEmail && !hasPhone) {
+        res.status(400).json({
+          data: null,
+          error: 'Contact info required — please provide an email or phone so your property manager can follow up.',
+          meta: { reason: 'ltr_contact_required' },
+        });
+        return;
+      }
+    }
+
     // Get settings for this workspace
     const [settings] = await db
       .select()

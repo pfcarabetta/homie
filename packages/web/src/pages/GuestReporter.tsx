@@ -290,6 +290,10 @@ interface PropertyData {
   details: Record<string, unknown> | null;
   bedrooms: number | null;
   bathrooms: number | null;
+  /** Effective rental type resolved server-side (property override →
+   *  workspace default). Drives page terminology (guest vs tenant)
+   *  and whether email/phone are required on submit. */
+  rentalType: 'short_term' | 'long_term';
   settings: Record<string, unknown> & {
     supportEmail?: string | null;
     supportPhone?: string | null;
@@ -667,6 +671,12 @@ export default function GuestReporterPage() {
   // Guest identification (when no reservation match)
   const [guestName, setGuestName] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
+  /** Contact info — optional for STR (guest often matched via
+   *  reservation already); required for LTR (the tenant is known,
+   *  so the PM wants an identifiable report). Validated on the
+   *  identify-screen continue button + server-side in POST /issues. */
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
 
   // Categories
   const [categories, setCategories] = useState<Category[]>([]);
@@ -1037,6 +1047,13 @@ export default function GuestReporterPage() {
           photos: userPhotos,
           troubleshootLog: tAnswers,
           guestName: displayName,
+          // Pass through the identify-screen contact fields. STR usually
+          // leaves these blank and picks up reservation.guestEmail /
+          // guestPhone server-side via the reservation match; LTR requires
+          // at least one (enforced by the identify-screen continue
+          // button + the POST /issues server-side validator).
+          guestEmail: guestEmail.trim() || undefined,
+          guestPhone: guestPhone.trim() || undefined,
           confirmationCode: reservation?.matched ? reservation.reservationId : confirmationCode,
           language: lang,
         }),
@@ -1150,7 +1167,11 @@ export default function GuestReporterPage() {
               <h1 style={{ fontFamily: 'Fraunces,serif', fontSize: 25, fontWeight: 700, color: BRAND.dark, margin: '0 0 6px', lineHeight: 1.15 }}>
                 Hi {displayName}, {tx(lang, 'needHelp')}
               </h1>
-              <p style={{ fontSize: 14, color: BRAND.darkMid, lineHeight: 1.5, margin: 0 }}>{tx(lang, 'heroDesc')}</p>
+              <p style={{ fontSize: 14, color: BRAND.darkMid, lineHeight: 1.5, margin: 0 }}>
+                {propertyData?.rentalType === 'long_term'
+                  ? "Report an issue with your unit and we'll take care of it. We'll try to help you troubleshoot first — if it needs a pro, we'll dispatch one."
+                  : tx(lang, 'heroDesc')}
+              </p>
             </div>
 
             <button
@@ -1202,11 +1223,26 @@ export default function GuestReporterPage() {
           </div>
         )}
 
-        {/* IDENTIFY (no reservation match) */}
-        {screen === 'identify' && (
+        {/* IDENTIFY (no reservation match). In LTR mode the flow
+            asks for email/phone in addition to the name so the PM
+            gets an identifiable report — tenants don't have a
+            reservation to match against, so attribution has to come
+            from the contact info. Headings also swap "Your stay" →
+            "Your home" for LTR since "stay" implies a short visit. */}
+        {screen === 'identify' && (() => {
+          const isLtr = propertyData?.rentalType === 'long_term';
+          const hasContact = guestEmail.trim().length > 0 || guestPhone.trim().length > 0;
+          const canContinue = !!guestName.trim() && (!isLtr || hasContact);
+          return (
           <div style={{ padding: '28px 18px', animation: 'fadeUp 0.5s ease' }}>
-            <h2 style={{ fontFamily: 'Fraunces,serif', fontSize: 20, fontWeight: 700, color: BRAND.dark, margin: '0 0 6px' }}>{tx(lang, 'yourStay')}</h2>
-            <p style={{ fontSize: 13, color: BRAND.gray, margin: '0 0 20px' }}>{tx(lang, 'guestIdentify')}</p>
+            <h2 style={{ fontFamily: 'Fraunces,serif', fontSize: 20, fontWeight: 700, color: BRAND.dark, margin: '0 0 6px' }}>
+              {isLtr ? 'Your home' : tx(lang, 'yourStay')}
+            </h2>
+            <p style={{ fontSize: 13, color: BRAND.gray, margin: '0 0 20px' }}>
+              {isLtr
+                ? "Your property manager uses this info to follow up. Please provide a name and at least one way to reach you."
+                : tx(lang, 'guestIdentify')}
+            </p>
 
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: BRAND.darkMid, display: 'block', marginBottom: 5 }}>{tx(lang, 'enterName')}</label>
@@ -1217,34 +1253,67 @@ export default function GuestReporterPage() {
               />
             </div>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: BRAND.darkMid, display: 'block', marginBottom: 5 }}>{tx(lang, 'enterConfirmation')}</label>
-              <input
-                value={confirmationCode}
-                onChange={e => setConfirmationCode(e.target.value)}
-                style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${BRAND.grayLight}`, fontSize: 14, outline: 'none', background: BRAND.white, color: BRAND.dark, boxSizing: 'border-box' }}
-              />
-            </div>
+            {/* LTR: email + phone (at least one required). STR keeps
+                the confirmation-code field since that's how we match
+                to a reservation. */}
+            {isLtr ? (
+              <>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: BRAND.darkMid, display: 'block', marginBottom: 5 }}>
+                    Email <span style={{ color: BRAND.gray, fontWeight: 400 }}>(or phone below)</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={guestEmail}
+                    onChange={e => setGuestEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${BRAND.grayLight}`, fontSize: 14, outline: 'none', background: BRAND.white, color: BRAND.dark, boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: BRAND.darkMid, display: 'block', marginBottom: 5 }}>
+                    Phone <span style={{ color: BRAND.gray, fontWeight: 400 }}>(or email above)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={guestPhone}
+                    onChange={e => setGuestPhone(e.target.value)}
+                    placeholder="(555) 123-4567"
+                    style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${BRAND.grayLight}`, fontSize: 14, outline: 'none', background: BRAND.white, color: BRAND.dark, boxSizing: 'border-box' }}
+                  />
+                </div>
+              </>
+            ) : (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: BRAND.darkMid, display: 'block', marginBottom: 5 }}>{tx(lang, 'enterConfirmation')}</label>
+                <input
+                  value={confirmationCode}
+                  onChange={e => setConfirmationCode(e.target.value)}
+                  style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${BRAND.grayLight}`, fontSize: 14, outline: 'none', background: BRAND.white, color: BRAND.dark, boxSizing: 'border-box' }}
+                />
+              </div>
+            )}
 
             <button
               onClick={() => {
-                if (!guestName.trim()) return;
+                if (!canContinue) return;
                 fetchCategories();
                 setScreen('categories');
               }}
-              disabled={!guestName.trim()}
+              disabled={!canContinue}
               style={{
                 width: '100%', padding: '14px', borderRadius: 13, border: 'none',
-                background: guestName.trim() ? BRAND.orange : BRAND.grayLight,
-                color: guestName.trim() ? '#fff' : BRAND.gray,
-                fontSize: 15, fontWeight: 600, cursor: guestName.trim() ? 'pointer' : 'default',
+                background: canContinue ? BRAND.orange : BRAND.grayLight,
+                color: canContinue ? '#fff' : BRAND.gray,
+                fontSize: 15, fontWeight: 600, cursor: canContinue ? 'pointer' : 'default',
                 transition: 'all 0.2s',
               }}
             >
               {tx(lang, 'continueBtn')} {'\u2192'}
             </button>
           </div>
-        )}
+          );
+        })()}
 
         {/* CATEGORIES */}
         {screen === 'categories' && (
