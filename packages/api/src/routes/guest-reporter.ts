@@ -858,14 +858,19 @@ guestPublicRouter.post('/:workspaceId/:propertyId/issues', async (req: Request, 
       })
       .returning();
 
-    // Create timeline events
+    // Create timeline events. Copy swaps guest→tenant / Guest→Tenant
+    // based on the workspace/property effective rental type so the
+    // PM's feed reads correctly in LTR mode.
+    const { occupantTerm, OccupantTerm } = await import('../services/rental-type');
+    const occupant = occupantTerm(effectiveRentalType);
+    const Occupant = OccupantTerm(effectiveRentalType);
     const timelineEvents: { issueId: string; eventType: string; title: string; description: string | null; metadata: unknown }[] = [];
 
     timelineEvents.push({
       issueId: issue.id,
       eventType: 'issue_created',
       title: 'Issue reported',
-      description: `Guest reported a ${severity} severity issue`,
+      description: `${Occupant} reported a ${severity} severity issue`,
       metadata: { severity, self_resolved: self_resolved || false },
     });
 
@@ -873,8 +878,8 @@ guestPublicRouter.post('/:workspaceId/:propertyId/issues', async (req: Request, 
       timelineEvents.push({
         issueId: issue.id,
         eventType: 'self_resolved',
-        title: 'Self-resolved by guest',
-        description: 'Guest resolved the issue using troubleshooting steps',
+        title: `Self-resolved by ${occupant}`,
+        description: `${Occupant} resolved the issue using troubleshooting steps`,
         metadata: null,
       });
     } else if (autoDispatched) {
@@ -918,7 +923,7 @@ guestPublicRouter.post('/:workspaceId/:propertyId/issues', async (req: Request, 
         void recordNotification({
           workspaceId,
           type: 'guest_issue_submitted',
-          title: `Guest issue: ${guest_name || 'Guest'}`,
+          title: `${Occupant} issue: ${guest_name || Occupant}`,
           body: description.length > 120 ? description.slice(0, 117) + '...' : description,
           propertyId,
           guestIssueId: issue.id,
@@ -1448,12 +1453,21 @@ guestPmRouter.post(
         ? `\n\nTroubleshooting attempted:\n${(fullIssue.troubleshootLog as Array<{ q: string; a: string }>).map(t => `Q: ${t.q}\nA: ${t.a}`).join('\n')}`
         : '';
 
+      // Resolve effective rental type for this property so the copy
+      // baked into the dispatch (summary, consent text) reads
+      // correctly in LTR workspaces. Falls back to short_term if the
+      // property row or workspace row is missing — same defensive
+      // behavior as the hook.
+      const { resolvePropertyRentalType, OccupantTerm } = await import('../services/rental-type');
+      const rentalType = await resolvePropertyRentalType(fullIssue.propertyId);
+      const Occupant = OccupantTerm(rentalType);
+
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const diagnosis: Record<string, unknown> = {
         category: dispatchCategory,
         subcategory: dispatchCategory,
         severity: fullIssue.severity,
-        summary: `Guest issue report: ${categoryName}\n\n${fullIssue.description ?? ''}${troubleshootContext}\n\nReported by: ${fullIssue.guestName ?? 'Guest'}`,
+        summary: `${Occupant} issue report: ${categoryName}\n\n${fullIssue.description ?? ''}${troubleshootContext}\n\nReported by: ${fullIssue.guestName ?? Occupant}`,
         recommendedActions: ['Dispatch professional'],
         ...((preferredVendorIds?.length ?? 0) > 0 ? { preferredVendorIds } : preferredVendorId ? { preferredVendorIds: [preferredVendorId] } : {}),
       };
@@ -1472,7 +1486,7 @@ guestPmRouter.post(
           workspaceId,
           propertyId: fullIssue.propertyId,
           consentGiven: true,
-          consentText: 'Guest issue approved for dispatch by property manager',
+          consentText: `${Occupant} issue approved for dispatch by property manager`,
           consentIp: '',
           consentAt: now,
           expiresAt,
