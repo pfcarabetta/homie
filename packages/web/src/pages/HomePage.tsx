@@ -182,9 +182,6 @@ function BigInputHero({
           <p className="hp-big-sub">
             Homie calls, texts, and contacts local pros, and brings you back quotes and availability in minutes.
           </p>
-          <div className="hp-chip hp-chip-orange">
-            <span className="hp-chip-dot" /> Describe it in your own words
-          </div>
         </div>
 
         {/* The Big Input */}
@@ -686,7 +683,7 @@ function Explainer() {
           <div className="hp-chip hp-chip-orange" style={{ marginBottom: 16 }}>
             <span className="hp-chip-dot" /> Why homeowners love it
           </div>
-          <h2 style={{
+          <h2 className="hp-section-h2" style={{
             fontFamily: "'Fraunces', serif", fontSize: 52, fontWeight: 700,
             margin: '0 0 12px', color: DARK, letterSpacing: '-0.02em',
           }}>Why homeowners love homie</h2>
@@ -1056,6 +1053,11 @@ export default function HomePage() {
           .hp-mobile-menu button { color: ${ORANGE}; font-weight: 600; }
           .hp-big-hero { padding: 64px 16px 48px; min-height: auto; }
           .hp-big-title { font-size: 34px !important; line-height: 1.08 !important; }
+          /* Section h2's (HowItWorks "Quotes in minutes, not days"
+             and Explainer "Why homeowners love homie") — scaled down
+             from the desktop 52px to read comfortably in a phone's
+             narrow column. line-height tightens to match. */
+          .hp-section-h2 { font-size: 28px !important; line-height: 1.15 !important; }
           /* On phones the rotating slot takes a full line so it
              doesn't wrap mid-phrase. Headline reads as two stacked
              lines: "Stop calling _____." / "Let homie do it." The
@@ -1206,7 +1208,7 @@ export default function HomePage() {
             <div className="hp-chip hp-chip-orange" style={{ marginBottom: 16 }}>
               <span className="hp-chip-dot" /> How it works
             </div>
-            <h2 style={{
+            <h2 className="hp-section-h2" style={{
               fontFamily: "'Fraunces', serif", fontSize: 52, fontWeight: 700,
               margin: '0 0 12px', color: DARK, letterSpacing: '-0.02em',
             }}>Quotes in minutes, not days</h2>
