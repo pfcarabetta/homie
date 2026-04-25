@@ -31,7 +31,7 @@ function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: number }
 export default function InspectionInspectorsLanding() {
   return (
     <div style={{ ...dm, background: C.white, minHeight: "100vh" }}>
-      <SEO title="Homie Inspector Partner Program — Earn more from every inspection" description="Join the Homie inspector network. Upload your reports, earn referral revenue on every dispatch, and make your inspections more valuable. Free to join, always." canonical="/inspect/inspectors" />
+      <SEO title="Homie Inspector Partner Program — Sell our report add-on, keep up to $200 per inspection" description="Add the Homie report add-on to every inspection. You charge your client retail ($99–$299), pay Homie wholesale ($49–$99), and keep $50–$200 per report. Free to join, always." canonical="/inspect/inspectors" />
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
       {/* NAV */}
@@ -65,8 +65,8 @@ export default function InspectionInspectorsLanding() {
             </h1>
           </FadeIn>
           <FadeIn delay={0.2}>
-            <p style={{ ...dm, fontSize: "clamp(17px, 1.8vw, 21px)", color: C.darkMid, lineHeight: 1.6, maxWidth: 560, margin: "24px 0 36px" }}>
-              Your clients love your inspections. They hate what comes next — calling around for quotes on every item you found. Homie eliminates that headache, and you earn referral revenue on every dispatch. Free to join, always.
+            <p style={{ ...dm, fontSize: "clamp(17px, 1.8vw, 21px)", color: C.darkMid, lineHeight: 1.6, maxWidth: 580, margin: "24px 0 36px" }}>
+              Add the Homie report add-on to every inspection. You charge your client retail ($99–$299), pay Homie wholesale ($49–$99), and keep $50–$200 per report. Free to join — you only pay when you upload a report you've already sold.
             </p>
           </FadeIn>
           <FadeIn delay={0.3}>
@@ -77,9 +77,9 @@ export default function InspectionInspectorsLanding() {
           <FadeIn delay={0.45}>
             <div style={{ display: "flex", gap: 40, marginTop: 56, flexWrap: "wrap" }}>
               {[
-                ["$347/mo", "average referral income for partners"],
-                ["15–20%", "referral commission per dispatch"],
-                ["FREE", "report parsing — no cost to you or clients"],
+                ["Up to $200", "kept per Premium report sold"],
+                ["50–67%", "your cut on every tier"],
+                ["$1,250/mo", "typical earnings at 12 reports/mo"],
                 ["$0", "cost to join — free forever"],
               ].map(([stat, label], i) => (
                 <div key={i} style={{ display: "flex", flexDirection: "column" }}>
@@ -98,20 +98,22 @@ export default function InspectionInspectorsLanding() {
           <FadeIn>
             <div style={{ textAlign: "center", marginBottom: 56 }}>
               <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.green, letterSpacing: 1, textTransform: "uppercase" }}>How it works</span>
-              <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "12px 0 0" }}>Three ways to earn</h2>
+              <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "12px 0 0" }}>Three tiers, three ways to win</h2>
+              <p style={{ ...dm, fontSize: 16, color: C.darkMid, margin: "16px auto 0", maxWidth: 600, lineHeight: 1.55 }}>Sell the Homie report add-on at your inspection. Pick the tier that fits each client. You set the retail price, we handle everything else.</p>
             </div>
           </FadeIn>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
             {[
-              { num: "1", title: "Stand out from competitors", desc: "Include Homie Inspect with every inspection at no extra cost. Your clients get an actionable digital report with real quotes — not just a list of problems. That makes you the inspector they recommend.", color: C.green },
-              { num: "2", title: "Earn on every dispatch", desc: "When your client uses Homie to get quotes from your report, you earn 15–20% referral commission on each dispatch ($9.99/item). Clients love the convenience — your earnings compound.", color: C.orange },
-              { num: "3", title: "Get inbound leads", desc: "Homeowners searching for inspectors on Homie get matched to partners in their area. You receive qualified leads and earn a $25 bonus when they convert to a booking.", color: C.green },
+              { num: "Essential", title: "Sell at $99 · Keep $50", desc: "AI-parsed digital report with prioritized items, severity flags, and clean summaries. Perfect upsell for first-time buyers and routine inspections. You pay Homie $49 wholesale.", color: C.green, badge: "50% margin" },
+              { num: "Professional", title: "Sell at $199 · Keep $120", desc: "Everything in Essential plus contractor quote dispatch and AI Q&A on the report. The sweet spot — most inspectors sell this tier by default. You pay Homie $79 wholesale.", color: C.orange, badge: "60% margin · most popular" },
+              { num: "Premium", title: "Sell at $299 · Keep $200", desc: "Everything in Professional plus full quote concierge, multi-vendor coordination, and priority dispatching. Built for high-stakes purchases and complex properties. You pay Homie $99 wholesale.", color: C.green, badge: "67% margin" },
             ].map((s, i) => (
               <FadeIn key={i} delay={i * 0.1}>
                 <div style={{ background: C.warm, borderRadius: 20, padding: 32, height: "100%", borderTop: `3px solid ${s.color}` }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: s.color, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16, ...dm, fontSize: 18, fontWeight: 700, color: C.white }}>{s.num}</div>
+                  <div style={{ display: "inline-block", padding: "6px 12px", borderRadius: 100, background: s.color, ...dm, fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 14 }}>{s.num}</div>
                   <h3 style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, margin: "0 0 10px" }}>{s.title}</h3>
-                  <p style={{ ...dm, fontSize: 15, color: C.darkMid, lineHeight: 1.6, margin: 0 }}>{s.desc}</p>
+                  <p style={{ ...dm, fontSize: 15, color: C.darkMid, lineHeight: 1.6, margin: "0 0 12px" }}>{s.desc}</p>
+                  <div style={{ ...dm, fontSize: 12, fontWeight: 600, color: s.color, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.badge}</div>
                 </div>
               </FadeIn>
             ))}
@@ -128,11 +130,11 @@ export default function InspectionInspectorsLanding() {
                 <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "0 0 24px", lineHeight: 1.15 }}>Why inspectors love Homie</h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {[
-                    { icon: "\u2B50", title: "Stand out from competitors", desc: "Include Homie Inspect with every inspection — free for you and your clients. You deliver solutions, not just a list of problems." },
-                    { icon: "\uD83D\uDD01", title: "Earn on every dispatch", desc: "When your client uses Homie to get quotes from your report, you earn 15–20% referral commission on each dispatch." },
-                    { icon: "\uD83D\uDCB0", title: "Passive referral revenue", desc: "Your clients get actionable quotes, and you earn commission every time they dispatch an item. No selling required." },
-                    { icon: "\uD83D\uDCCA", title: "Track your earnings in real time", desc: "Your partner dashboard shows every earning, dispatch, and client action. Know exactly how much Homie is adding to your bottom line." },
-                    { icon: "\uD83E\uDD1D", title: "Free to join, always", desc: "No fees, no subscriptions. Upload reports, earn referrals, and make your clients happier. There's literally no downside." },
+                    { icon: "\uD83D\uDCB0", title: "Keep $50–$200 per report sold", desc: "You collect retail from your client. Pay us wholesale when you upload. The spread is yours — no commission splits, no holdbacks." },
+                    { icon: "\u2B50", title: "Differentiate every inspection", desc: "Hand your clients an interactive digital report with quotes, severity flags, and AI Q&A. Most inspectors hand over a static PDF — you hand over a full action plan." },
+                    { icon: "\uD83C\uDFAF", title: "Sell the right tier for each client", desc: "First-time buyer with a $400k starter? Essential. Investor reviewing 6 properties? Professional. Multi-million dollar buy? Premium. You match value to price." },
+                    { icon: "\uD83D\uDCCA", title: "Track every report and payout", desc: "Your partner dashboard shows every report uploaded, tier sold, and client engagement. Know exactly which tier converts best for your market." },
+                    { icon: "\uD83E\uDD1D", title: "Free to join, pay only when you sell", desc: "No subscriptions, no monthly fees. Wholesale costs only kick in when you upload a report — meaning you've already collected from your client." },
                   ].map((item, i) => (
                     <div key={i} style={{ display: "flex", gap: 14 }}>
                       <span style={{ fontSize: 22, flexShrink: 0 }}>{item.icon}</span>
@@ -149,24 +151,24 @@ export default function InspectionInspectorsLanding() {
               <div style={{ flex: "1 1 360px", minWidth: 300, maxWidth: 420 }}>
                 <FadeIn delay={0.15}>
                   <div style={{ background: C.white, borderRadius: 24, padding: "28px 24px", border: `1px solid ${C.grayLight}`, boxShadow: "0 8px 40px rgba(0,0,0,0.06)" }}>
-                    <div style={{ ...dm, fontSize: 12, color: C.gray, fontWeight: 500, marginBottom: 16, textTransform: "uppercase", letterSpacing: 0.5 }}>Your monthly earnings with Homie</div>
+                    <div style={{ ...dm, fontSize: 12, color: C.gray, fontWeight: 500, marginBottom: 16, textTransform: "uppercase", letterSpacing: 0.5 }}>Sample month — 12 reports sold</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       {[
-                        { label: "Inspections this month", value: "12" },
-                        { label: "Reports uploaded to Homie", value: "12" },
-                        { label: "Dispatches from your reports", value: "43" },
-                        { label: "Referral commissions (15-20%)", value: "$347" },
+                        { label: "5 × Essential @ $99 retail", value: "+$495" },
+                        { label: "5 × Professional @ $199 retail", value: "+$995" },
+                        { label: "2 × Premium @ $299 retail", value: "+$598" },
+                        { label: "Wholesale paid to Homie", value: "−$838" },
                       ].map((row, i) => (
                         <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 3 ? `1px solid ${C.warm}` : "none" }}>
                           <span style={{ ...dm, fontSize: 13, color: C.gray }}>{row.label}</span>
-                          <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.dark }}>{row.value}</span>
+                          <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: row.value.startsWith("−") ? C.gray : C.dark }}>{row.value}</span>
                         </div>
                       ))}
                     </div>
                     <div style={{ background: C.greenLight, borderRadius: 12, padding: "16px 20px", marginTop: 16, textAlign: "center" }}>
-                      <div style={{ ...dm, fontSize: 12, color: "#085041" }}>Extra monthly income</div>
-                      <div style={{ ...fr, fontSize: 36, fontWeight: 700, color: C.green }}>$347</div>
-                      <div style={{ ...dm, fontSize: 12, color: "#085041" }}>$4,164/year with zero additional work</div>
+                      <div style={{ ...dm, fontSize: 12, color: "#085041" }}>Net inspector earnings</div>
+                      <div style={{ ...fr, fontSize: 36, fontWeight: 700, color: C.green }}>$1,250</div>
+                      <div style={{ ...dm, fontSize: 12, color: "#085041" }}>$15,000/year · ~$104 per report avg</div>
                     </div>
                   </div>
                 </FadeIn>
@@ -196,7 +198,7 @@ export default function InspectionInspectorsLanding() {
         <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
           <FadeIn>
             <p style={{ ...fr, fontSize: "clamp(22px, 2.5vw, 32px)", fontWeight: 400, color: C.white, lineHeight: 1.55, margin: "0 0 28px", fontStyle: "italic" }}>
-              "I include Homie Inspect with every inspection now — it's free for me and my clients love it. The referral commissions from dispatches add up to $300-400/month without me doing anything extra. It's the easiest way I've found to stand out and earn more."
+              "I started offering the Homie report add-on at every inspection. Most clients pick Professional at $199 — I pay Homie $79 and pocket $120. That's an extra $1,200–$1,500 a month I wasn't making before, and my clients walk away with something way better than a static PDF."
             </p>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
               <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.green, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -215,8 +217,8 @@ export default function InspectionInspectorsLanding() {
       <section style={{ background: C.greenLight, padding: "96px 24px" }}>
         <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
           <FadeIn>
-            <h2 style={{ ...fr, fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, color: C.dark, margin: "0 0 16px", lineHeight: 1.1 }}>Start earning more<br />from every inspection.</h2>
-            <p style={{ ...dm, fontSize: 17, color: C.darkMid, lineHeight: 1.6, margin: "0 0 32px" }}>Join the Homie inspector network — free forever. Upload your first report and watch the earnings roll in.</p>
+            <h2 style={{ ...fr, fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, color: C.dark, margin: "0 0 16px", lineHeight: 1.1 }}>Add $50–$200<br />to every inspection.</h2>
+            <p style={{ ...dm, fontSize: 17, color: C.darkMid, lineHeight: 1.6, margin: "0 0 32px" }}>Join the Homie inspector network — free to sign up, no monthly fees. You only pay wholesale when you've already collected from your client.</p>
             <a href="/inspector/signup" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", textDecoration: "none", display: "inline-block", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }}>
               Create your free partner account
             </a>
