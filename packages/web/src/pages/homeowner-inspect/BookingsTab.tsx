@@ -223,14 +223,6 @@ export default function BookingsTab({ reports, onNavigate }: BookingsTabProps) {
                   reports={visibleReports}
                   expanded={expandedId === b.id}
                   onToggle={() => setExpandedId(expandedId === b.id ? null : b.id)}
-                  onViewReport={(reportId) => { onNavigate('reports'); setTimeout(() => {
-                    // Tabs don't accept query params from inside, so we route via URL
-                    // for the deep-linked report view. ReportsTab reads ?report on mount.
-                    const params = new URLSearchParams(window.location.search);
-                    params.set('tab', 'reports');
-                    params.set('report', reportId);
-                    window.history.replaceState({}, '', `?${params.toString()}`);
-                  }, 0); }}
                 />
               </div>
             );
@@ -248,10 +240,9 @@ interface BookingCardProps {
   reports: PortalReport[];
   expanded: boolean;
   onToggle: () => void;
-  onViewReport: (reportId: string) => void;
 }
 
-function BookingCard({ booking: b, reports, expanded, onToggle, onViewReport }: BookingCardProps) {
+function BookingCard({ booking: b, reports, expanded, onToggle }: BookingCardProps) {
   const catLabel = b.job_category
     ? b.job_category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     : 'Service';
@@ -398,20 +389,6 @@ function BookingCard({ booking: b, reports, expanded, onToggle, onViewReport }: 
               }}>{'\u2709\uFE0F'} Email</a>
             )}
           </div>
-
-          {/* Deep link back to the report */}
-          {b.inspection_report_id && (
-            <button
-              onClick={() => onViewReport(b.inspection_report_id!)}
-              style={{
-                width: '100%', padding: '10px 0', borderRadius: 100,
-                border: `1px solid ${ACCENT}`, background: 'var(--bp-card)', color: ACCENT,
-                fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              {'\uD83D\uDCCB'} View Inspection Report
-            </button>
-          )}
 
           {b.status === 'cancelled' && (
             <div style={{ marginTop: 10, textAlign: 'center', fontSize: 13, color: '#DC2626', fontWeight: 500 }}>
