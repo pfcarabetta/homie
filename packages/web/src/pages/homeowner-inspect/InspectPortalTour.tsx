@@ -275,23 +275,32 @@ export default function InspectPortalTour({ active, setActive, reports, currentT
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIndex, active]);
 
+  function finish(state: 'completed' | 'skipped') {
+    markTourSeen(state);
+    setActive(false);
+    setStepIndex(0); // reset so a re-launch starts at step 1
+  }
+
   function handleCallback(data: CallBackProps) {
     const { action, index, status, type } = data;
 
-    if (status === STATUS.FINISHED) {
-      markTourSeen('completed');
-      setActive(false);
-      return;
-    }
-    if (status === STATUS.SKIPPED || action === ACTIONS.CLOSE) {
-      markTourSeen('skipped');
-      setActive(false);
-      return;
-    }
+    // 1) Joyride already decided the tour is over.
+    if (status === STATUS.FINISHED) return finish('completed');
+    if (status === STATUS.SKIPPED) return finish('skipped');
 
+    // 2) Close (X) button — fires regardless of which step you're on.
+    if (action === ACTIONS.CLOSE) return finish('skipped');
+
+    // 3) Step transition.
     if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
       const next = action === ACTIONS.PREV ? index - 1 : index + 1;
-      setStepIndex(Math.max(0, Math.min(STEPS.length - 1, next)));
+
+      // "Done" / Next on the last step — Joyride doesn't always fire the
+      // FINISHED status when in controlled mode, so finish explicitly.
+      if (next >= STEPS.length) return finish('completed');
+      if (next < 0) return; // back from step 0 — stay put
+
+      setStepIndex(next);
     }
   }
 
