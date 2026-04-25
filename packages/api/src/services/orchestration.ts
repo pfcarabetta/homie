@@ -351,6 +351,21 @@ export async function dispatchJob(jobId: string, opts?: {
   const tier = (job.tier as JobTier) in TIER_PROVIDER_LIMITS ? (job.tier as JobTier) : 'standard';
   const limit = TIER_PROVIDER_LIMITS[tier];
 
+  // ── Per-job dedup: providers already contacted for this job ────────────
+  // Prevents re-contact when dispatchJob runs more than once for a job
+  // (webhook + manual retry, payments-success-page rehit, etc.) and when
+  // preferred vendors are pushed into the eligible list with rate_limited
+  // hardcoded to false. expandJobOutreach already does this; dispatchJob
+  // didn't, so a second call was hitting the same providers again.
+  const previousAttemptRows = await db
+    .select({ providerId: outreachAttempts.providerId })
+    .from(outreachAttempts)
+    .where(eq(outreachAttempts.jobId, jobId));
+  const alreadyContacted = new Set(previousAttemptRows.map(r => r.providerId));
+  if (alreadyContacted.size > 0) {
+    logger.info(`[orchestration] dispatchJob: ${alreadyContacted.size} providers already contacted for job ${jobId}, will exclude from this dispatch`);
+  }
+
   // Look up workspace name for outreach branding
   let workspaceName: string | undefined;
   if (job.workspaceId) {
@@ -538,6 +553,18 @@ export async function dispatchJob(jobId: string, opts?: {
       .slice(0, remainingSlots);
 
     eligible = [...eligible, ...marketplaceEligible];
+  }
+
+  // Strip out anyone already contacted for this job, regardless of which path
+  // they came in through (preferred vs marketplace). This is the canonical
+  // per-job dedup — discoverProviders' rate_limited flag is workspace-window
+  // based and the preferred-vendor path bypasses it entirely.
+  if (alreadyContacted.size > 0) {
+    const before = eligible.length;
+    eligible = eligible.filter(p => !alreadyContacted.has(p.id));
+    if (eligible.length !== before) {
+      logger.info(`[orchestration] dispatchJob: filtered out ${before - eligible.length} already-contacted providers for job ${jobId}`);
+    }
   }
 
   if (eligible.length === 0) {
@@ -743,16 +770,35 @@ export async function dispatchJob(jobId: string, opts?: {
             return;
           }
 
+          // Re-query already-contacted set: 15 minutes have passed since the
+          // up-front check, and the preferred phase itself just inserted rows
+          // into outreach_attempts. Anything else writing to outreach_attempts
+          // for this job in the meantime should also be excluded.
+          const cascadeAlreadyContactedRows = await db
+            .select({ providerId: outreachAttempts.providerId })
+            .from(outreachAttempts)
+            .where(eq(outreachAttempts.jobId, jobId));
+          const cascadeAlreadyContacted = new Set(cascadeAlreadyContactedRows.map(r => r.providerId));
+          const filteredMarketplace = marketplaceEligible.filter(p => !cascadeAlreadyContacted.has(p.id));
+          if (filteredMarketplace.length !== marketplaceEligible.length) {
+            logger.info(`[orchestration] dispatchJob: marketplace cascade — filtered out ${marketplaceEligible.length - filteredMarketplace.length} already-contacted providers for job ${jobId}`);
+          }
+
+          if (filteredMarketplace.length === 0) {
+            logger.info(`[orchestration] dispatchJob: no marketplace providers left after dedup for job ${jobId}, skipping cascade`);
+            return;
+          }
+
           const marketplaceAdapters = createAdapters();
           const marketplaceResults = await Promise.allSettled(
-            marketplaceEligible.map((provider) => sendOutreachToProvider(job, diagnosis, provider, marketplaceAdapters, false, workspaceName)),
+            filteredMarketplace.map((provider) => sendOutreachToProvider(job, diagnosis, provider, marketplaceAdapters, false, workspaceName)),
           );
           const marketplaceFailed = marketplaceResults.filter((r) => r.status === 'rejected');
           if (marketplaceFailed.length > 0) {
-            logger.error(`[orchestration] dispatchJob: ${marketplaceFailed.length}/${marketplaceEligible.length} marketplace outreach(es) failed for job ${jobId}`);
+            logger.error(`[orchestration] dispatchJob: ${marketplaceFailed.length}/${filteredMarketplace.length} marketplace outreach(es) failed for job ${jobId}`);
           }
-          await incrementOutreachCounts(marketplaceEligible.map((p) => p.id));
-          logger.info(`[orchestration] dispatchJob: marketplace cascade complete for job ${jobId}, contacted ${marketplaceEligible.length} providers`);
+          await incrementOutreachCounts(filteredMarketplace.map((p) => p.id));
+          logger.info(`[orchestration] dispatchJob: marketplace cascade complete for job ${jobId}, contacted ${filteredMarketplace.length} providers`);
         } catch (err) {
           logger.error({ err }, `[orchestration] dispatchJob: marketplace cascade failed for job ${jobId}`);
         }
