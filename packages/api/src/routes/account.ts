@@ -2300,19 +2300,31 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
       return { cents: high, sourceLabel: estimateLabel };
     }
 
-    // ── Header ──
-    doc.fontSize(24).fillColor('#E8632B').font('Helvetica-Bold').text('homie', 50, 50, { continued: true });
-    doc.fontSize(14).fillColor('#9B9490').font('Helvetica').text(' inspect', { baseline: 'alphabetic' });
-    doc.moveDown(0.3);
+    // ── Header / Logo ──
+    // Render "homie" + "inspect" wordmark with explicit baseline alignment.
+    // Don't use { continued: true } across font-size changes — PDFKit lays out
+    // continued text at the same TOP-Y as the previous run, which puts the
+    // smaller "inspect" word visually above the bigger "homie" word.
+    const headerY = 50;
+    doc.fontSize(26).fillColor('#E8632B').font('Helvetica-Bold').text('homie', 50, headerY);
+    const homieWidth = doc.widthOfString('homie');
+    // Helvetica's baseline sits at ~78% of the cap-height below the y-top.
+    // Offset = (homieFontSize - inspectFontSize) * 0.78 ≈ 12 for 26 vs 11.
+    doc.fontSize(11).fillColor('#9B9490').font('Helvetica').text('inspect', 50 + homieWidth + 5, headerY + 12);
+    // After rendering "inspect" via absolute (x,y), doc.x is left at the end
+    // of that run. Reset both x and y so subsequent flowing text() calls
+    // start at the left margin again instead of getting indented.
+    doc.x = 50;
+    doc.y = headerY + 34;
     doc.moveTo(50, doc.y).lineTo(562, doc.y).strokeColor('#E8E4E0').stroke();
-    doc.moveDown(0.6);
+    doc.moveDown(0.7);
 
     // ── Title ──
-    doc.fontSize(22).fillColor('#2D2926').font('Helvetica-Bold').text('REPAIR REQUEST');
-    doc.moveDown(0.3);
+    doc.fontSize(20).fillColor('#2D2926').font('Helvetica-Bold').text('REPAIR REQUEST');
+    doc.moveDown(0.4);
 
     // ── Property + buyer info ──
-    doc.fontSize(14).fillColor('#2D2926').font('Helvetica-Bold').text(report.propertyAddress);
+    doc.fontSize(13).fillColor('#2D2926').font('Helvetica-Bold').text(report.propertyAddress);
     doc.fontSize(11).fillColor('#6B6560').font('Helvetica').text(`${report.propertyCity}, ${report.propertyState} ${report.propertyZip}`);
     doc.moveDown(0.4);
 
@@ -2337,11 +2349,11 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
     const totalAsk = items.reduce((sum, i) => sum + resolveAsk(i).cents, 0);
 
     const summaryY = doc.y;
-    doc.roundedRect(50, summaryY, 512, 56, 6).fillAndStroke('#FEF3F2', '#F4C7C5');
-    doc.fontSize(11).fillColor('#9B6260').font('Helvetica-Bold').text('TOTAL REPAIR REQUEST', 70, summaryY + 14);
-    doc.fontSize(24).fillColor('#DC2626').font('Helvetica-Bold').text(fmt(totalAsk), 70, summaryY + 28);
+    doc.roundedRect(50, summaryY, 512, 52, 6).fillAndStroke('#FEF3F2', '#F4C7C5');
+    doc.fontSize(10).fillColor('#9B6260').font('Helvetica-Bold').text('TOTAL REPAIR REQUEST', 70, summaryY + 12);
+    doc.fontSize(22).fillColor('#DC2626').font('Helvetica-Bold').text(fmt(totalAsk), 70, summaryY + 25);
     doc.fontSize(10).fillColor('#9B6260').font('Helvetica').text(`${items.length} item${items.length !== 1 ? 's' : ''}`, 470, summaryY + 28, { width: 75, align: 'right' });
-    doc.y = summaryY + 70;
+    doc.y = summaryY + 66;
 
     // ── Severity helpers ──
     const sevColors: Record<string, string> = { safety_hazard: '#E24B4A', urgent: '#E24B4A', recommended: '#EF9F27', monitor: '#9B9490', informational: '#D3CEC9' };
@@ -2415,8 +2427,8 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
 
     // ── Total at bottom ──
     if (doc.y + 80 > 720) doc.addPage();
-    doc.moveDown(1);
-    doc.fontSize(13).fillColor('#2D2926').font('Helvetica-Bold').text('TOTAL REQUESTED:', 50, doc.y, { continued: true });
+    doc.moveDown(0.8);
+    doc.fontSize(12).fillColor('#2D2926').font('Helvetica-Bold').text('TOTAL REQUESTED:', 50, doc.y, { continued: true });
     doc.fillColor('#DC2626').text(`  ${fmt(totalAsk)}`, { align: 'left' });
     doc.moveDown(0.6);
 
