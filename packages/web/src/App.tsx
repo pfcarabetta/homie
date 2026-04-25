@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { trackPageView } from '@/services/analytics';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProviderAuthProvider } from '@/contexts/ProviderAuthContext';
 import { InspectorAuthProvider } from '@/contexts/InspectorAuthContext';
@@ -60,6 +62,15 @@ import DIYPreviewDemo from '@/pages/DIYPreviewDemo';
 import OutreachTransparencyDemo from '@/pages/OutreachTransparencyDemo';
 import QuoteTabsDemo from '@/pages/QuoteTabsDemo';
 
+/** Fires a GA `page_view` on every route change. */
+function PageViewTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    trackPageView(location.pathname + location.search);
+  }, [location.pathname, location.search]);
+  return null;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -67,6 +78,7 @@ export default function App() {
       <ProviderAuthProvider>
       <InspectorAuthProvider>
       <BrowserRouter>
+        <PageViewTracker />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/chat" element={<DiagnosticChat />} />

@@ -4,6 +4,7 @@ import { authService } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import SEO from '@/components/SEO';
 import { usePricing, centsToDisplay } from '@/hooks/usePricing';
+import { trackEvent } from '@/services/analytics';
 
 const ORANGE = '#E8632B';
 const GREEN = '#1B9E77';
@@ -150,13 +151,22 @@ function BigInputHero({
   const text = val;
   const ready = text.trim().length >= 12;
 
+  const startedTrackedRef = useRef(false);
   function handleChange(v: string) {
+    if (!userInteractedRef.current && v.length > 0) {
+      // First-keystroke event — fires once per session on the homepage textarea.
+      if (!startedTrackedRef.current) {
+        startedTrackedRef.current = true;
+        trackEvent('quote_submit_started', { source: 'homepage' });
+      }
+    }
     userInteractedRef.current = true;
     setVal(v);
   }
 
   function handleSend() {
     if (!ready) return;
+    trackEvent('quote_submit_completed', { source: 'homepage' });
     onSubmit(text.trim());
   }
 
@@ -1276,6 +1286,7 @@ export default function HomePage() {
           // the subcategory picker (or drills into the sole sub
           // when there's only one), exactly like tapping the same
           // group pill inside /quote would.
+          trackEvent('quote_submit_completed', { source: 'homepage', category: g.label });
           const params = new URLSearchParams({ group: g.label });
           navigate(`/quote?${params.toString()}`);
         }}

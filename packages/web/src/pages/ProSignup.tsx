@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { fetchAPI } from "@/services/api";
 import SEO from "@/components/SEO";
+import { trackEvent, setUserType } from "@/services/analytics";
 
 const C = {
   orange: "#E8632B", orangeDark: "#C8531E", orangeLight: "#F0997B",
@@ -90,6 +91,10 @@ function SignupForm() {
       if (res.data) {
         localStorage.setItem("homie_provider_token", res.data.token);
         setProviderName(formData.name.split(" ")[0]);
+        setUserType("pro");
+        if (!res.data.existing) {
+          trackEvent("auth_signup_completed", { user_type: "pro" });
+        }
 
         if (res.data.existing) {
           setSubmitted(true);

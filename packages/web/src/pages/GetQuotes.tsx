@@ -4,6 +4,7 @@ import SEO from '@/components/SEO';
 import { usePricing, centsToDisplay } from '@/hooks/usePricing';
 import { diagnosticService, authService, jobService, paymentService, fetchAPI, connectJobSocket, accountService, estimateService, type DiagnosisPayload, type JobStatusResponse, type ProviderResponseItem, type HomeData, type CostEstimate, type NeighborhoodStats } from '@/services/api';
 import AvatarDropdown from '@/components/AvatarDropdown';
+import { trackEvent } from '@/services/analytics';
 import EstimateCard from '@/components/EstimateCard';
 import EstimateBadge from '@/components/EstimateBadge';
 import HomieOutreachLive, { type OutreachStatus, type LogEntry } from '@/components/HomieOutreachLive';
@@ -1406,6 +1407,8 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
         return;
       }
 
+      trackEvent('quote_submit_completed', { source: 'quote_page', category });
+
       // Try Stripe payment
       try {
         const payRes = await paymentService.createCheckout(res.data.id, '', '', '/quote');
@@ -2008,10 +2011,11 @@ export default function GetQuotes() {
       // Clean URL
       window.history.replaceState({}, '', '/quote');
       try {
-        const { jobId: paidJobId } = JSON.parse(paidJob) as { jobId: string; tier: string };
+        const { jobId: paidJobId, tier: paidTier } = JSON.parse(paidJob) as { jobId: string; tier: string };
         // Verify payment with API before launching
         paymentService.getPaymentStatus(paidJobId).then(res => {
           if (res.data && (res.data.payment_status === 'authorized' || res.data.payment_status === 'paid')) {
+            trackEvent('quote_dispatch_paid', { tier: paidTier });
             // Trigger dispatch in case webhook hasn't fired yet
             void fetchAPI('/api/v1/payments/dispatch/' + paidJobId, { method: 'POST' }).catch(() => {});
             setJobId(paidJobId);

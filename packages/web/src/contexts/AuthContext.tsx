@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { authService, type AuthHomeowner, type ApiError } from '@/services/api';
+import { trackEvent, setUserType } from '@/services/analytics';
 
 interface AuthState {
   homeowner: AuthHomeowner | null;
@@ -34,6 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.data) {
         setHomeowner(res.data.homeowner);
         localStorage.setItem(HOMEOWNER_KEY, JSON.stringify(res.data.homeowner));
+        setUserType('homeowner');
+        trackEvent('auth_login_completed', { user_type: 'homeowner' });
         return null;
       }
       return res.error ?? 'Login failed';
@@ -48,6 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.data) {
         setHomeowner(res.data.homeowner);
         localStorage.setItem(HOMEOWNER_KEY, JSON.stringify(res.data.homeowner));
+        setUserType('homeowner');
+        trackEvent('auth_signup_completed', { user_type: 'homeowner' });
         return null;
       }
       return res.error ?? 'Registration failed';

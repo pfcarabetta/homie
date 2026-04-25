@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useProviderAuth } from '@/contexts/ProviderAuthContext';
 import { fetchAPI } from '@/services/api';
+import { trackEvent, setUserType } from '@/services/analytics';
 
 const O = '#E8632B', D = '#2D2926', W = '#F9F5F2';
 
@@ -48,6 +49,8 @@ export default function ProviderLogin() {
       if (res.data) {
         localStorage.setItem('homie_provider_token', res.data.token);
         localStorage.setItem('homie_provider', JSON.stringify(res.data.provider));
+        setUserType('pro');
+        trackEvent('auth_login_completed', { user_type: 'pro' });
         window.location.href = '/portal';
       }
     } catch (err) {

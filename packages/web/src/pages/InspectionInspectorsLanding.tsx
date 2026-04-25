@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import SEO from '@/components/SEO';
+import { trackEvent } from '@/services/analytics';
 
 const C = {
   orange: "#E8632B", orangeDark: "#C8531E",
@@ -45,7 +46,7 @@ export default function InspectionInspectorsLanding() {
           </div>
           <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
             <a href="/inspect" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500 }}>For homeowners</a>
-            <a href="/inspector/signup" style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "9px 22px", textDecoration: "none" }}>Join free</a>
+            <a href="/inspector/signup" onClick={() => trackEvent('inspector_landing_cta_clicked', { cta_location: 'nav_join_free' })} style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "9px 22px", textDecoration: "none" }}>Join free</a>
           </div>
         </div>
       </nav>
@@ -70,7 +71,7 @@ export default function InspectionInspectorsLanding() {
             </p>
           </FadeIn>
           <FadeIn delay={0.3}>
-            <a href="/inspector/signup" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", textDecoration: "none", display: "inline-block", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }}>
+            <a href="/inspector/signup" onClick={() => trackEvent('inspector_landing_cta_clicked', { cta_location: 'hero' })} style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", textDecoration: "none", display: "inline-block", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }}>
               Join the Homie inspector network
             </a>
           </FadeIn>
@@ -219,7 +220,7 @@ export default function InspectionInspectorsLanding() {
           <FadeIn>
             <h2 style={{ ...fr, fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, color: C.dark, margin: "0 0 16px", lineHeight: 1.1 }}>Add $50–$200<br />to every inspection.</h2>
             <p style={{ ...dm, fontSize: 17, color: C.darkMid, lineHeight: 1.6, margin: "0 0 32px" }}>Join the Homie inspector network — free to sign up, no monthly fees. You only pay wholesale when you've already collected from your client.</p>
-            <a href="/inspector/signup" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", textDecoration: "none", display: "inline-block", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }}>
+            <a href="/inspector/signup" onClick={() => trackEvent('inspector_landing_cta_clicked', { cta_location: 'final_cta' })} style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", textDecoration: "none", display: "inline-block", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }}>
               Create your free partner account
             </a>
             <p style={{ ...dm, fontSize: 13, color: C.gray, marginTop: 16 }}>Takes 2 minutes. No credit card required.</p>

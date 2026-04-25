@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import SEO from '@/components/SEO';
+import { trackEvent } from '@/services/analytics';
 
 const C = {
   orange: "#E8632B", orangeDark: "#C8531E", orangeLight: "#F0997B",
@@ -123,7 +124,7 @@ function InspectionDemo() {
                 </div>
                 <h3 style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, margin: "0 0 8px" }}>Upload inspection report</h3>
                 <p style={{ ...dm, fontSize: 14, color: C.gray, margin: "0 0 24px" }}>Homie's AI reads the report and extracts every actionable item</p>
-                <button onClick={parseReport} style={{ ...dm, fontSize: 16, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "14px 36px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = C.orangeDark} onMouseLeave={e => e.currentTarget.style.background = C.orange}>Parse sample report</button>
+                <button onClick={() => { trackEvent('inspect_landing_cta_clicked', { cta_location: 'parse_sample_demo' }); parseReport(); }} style={{ ...dm, fontSize: 16, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "14px 36px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = C.orangeDark} onMouseLeave={e => e.currentTarget.style.background = C.orange}>Parse sample report</button>
               </div>
             )}
 
@@ -259,6 +260,8 @@ export default function HomieInspectionLanding() {
 
   async function handleFileUpload(file: File) {
     if (file.size > 50 * 1024 * 1024) { alert('File too large (max 50MB)'); return; }
+    const uploadStartedAt = Date.now();
+    trackEvent('inspect_upload_started', { source: 'consumer_landing' });
     setUploading(true);
     setUploadStatus('Uploading report...');
     try {
@@ -272,10 +275,19 @@ export default function HomieInspectionLanding() {
       setUploadStatus('Processing with AI...');
       const { inspectService } = await import('@/services/inspector-api');
       const res = await inspectService.uploadReport({ report_file_data_url: dataUrl });
-      if (!res.data) { setUploadStatus(null); setUploading(false); alert('Upload failed'); return; }
+      if (!res.data) {
+        trackEvent('inspect_upload_failed', { source: 'consumer_landing', reason: 'upload_api_error' });
+        setUploadStatus(null); setUploading(false); alert('Upload failed'); return;
+      }
+
+      const reportId = res.data.reportId;
+      trackEvent('inspect_report_uploaded', {
+        source: 'consumer_landing',
+        report_id: reportId,
+        file_size_kb: Math.round(file.size / 1024),
+      });
 
       // Poll for parsing completion
-      const reportId = res.data.reportId;
       const token = res.data.token;
       setUploadStatus('Parsing inspection items...');
 
@@ -285,6 +297,11 @@ export default function HomieInspectionLanding() {
           try {
             const status = await inspectService.getUploadStatus(reportId);
             if (status.data?.parsingStatus === 'parsed' || status.data?.parsingStatus === 'review_pending') {
+              trackEvent('inspect_upload_parsed', {
+                source: 'consumer_landing',
+                report_id: reportId,
+                time_to_parse_ms: Date.now() - uploadStartedAt,
+              });
               setUploadStatus(`${status.data.itemsParsed} items found! Redirecting...`);
               // Logged-in homeowners land in the new portal (auto-linked via optionalAuth on
               // the upload endpoint). Anonymous users get the legacy public token-based view
@@ -296,6 +313,7 @@ export default function HomieInspectionLanding() {
               return;
             }
             if (status.data?.parsingStatus === 'failed') {
+              trackEvent('inspect_upload_failed', { source: 'consumer_landing', reason: 'parse_failed' });
               setUploadStatus(null); setUploading(false);
               alert(status.data.parsingError || 'Failed to parse report');
               return;
@@ -305,11 +323,13 @@ export default function HomieInspectionLanding() {
             }
           } catch { /* keep polling */ }
         }
+        trackEvent('inspect_upload_failed', { source: 'consumer_landing', reason: 'parse_timeout' });
         setUploadStatus(null); setUploading(false);
         alert('Parsing is taking longer than expected. Check back shortly.');
       };
       void poll();
     } catch (err) {
+      trackEvent('inspect_upload_failed', { source: 'consumer_landing', reason: 'unexpected_error' });
       setUploadStatus(null); setUploading(false);
       alert((err as Error).message || 'Upload failed');
     }
@@ -375,7 +395,7 @@ export default function HomieInspectionLanding() {
           </div>
           <div style={{ display: "flex", gap: 16, alignItems: "center", flexShrink: 1, minWidth: 0 }}>
             <a className="hi-nav-link" href="#how-it-works" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}>How it works</a>
-            <a className="hi-nav-link" href="/inspect/inspectors" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}>For inspectors</a>
+            <a className="hi-nav-link" href="/inspect/inspectors" onClick={() => trackEvent('inspect_landing_cta_clicked', { cta_location: 'nav_for_inspectors' })} style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}>For inspectors</a>
             <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "9px 22px", cursor: "pointer", display: "inline-block", whiteSpace: "nowrap", flexShrink: 0 }}>Get started</label>
           </div>
         </div>
@@ -601,7 +621,7 @@ export default function HomieInspectionLanding() {
             </div>
             <h2 style={{ ...fr, fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, color: C.dark, margin: "0 0 12px" }}>Are you a home inspector?</h2>
             <p style={{ ...dm, fontSize: 16, color: C.darkMid, lineHeight: 1.6, margin: "0 0 24px" }}>Earn referral revenue on every dispatch. Free to join, always.</p>
-            <a href="/inspect/inspectors" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", textDecoration: "none", display: "inline-block", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }}>Learn about the partner program →</a>
+            <a href="/inspect/inspectors" onClick={() => trackEvent('inspect_landing_cta_clicked', { cta_location: 'partner_program_primary' })} style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", textDecoration: "none", display: "inline-block", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }}>Learn about the partner program →</a>
           </FadeIn>
         </div>
       </section>
@@ -614,7 +634,7 @@ export default function HomieInspectionLanding() {
             <p style={{ ...dm, fontSize: 17, color: C.darkMid, lineHeight: 1.6, margin: "0 0 32px" }}>Upload your inspection report and get real quotes from local pros for every item {'\u2014'} in hours, not weeks.</p>
             <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
               <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)", display: "inline-block" }} onMouseEnter={e => { e.currentTarget.style.background = C.orangeDark; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.transform = "translateY(0)"; }}>Upload your report</label>
-              <a href="/inspect/inspectors" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.green, background: "transparent", border: `2px solid ${C.green}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s", textDecoration: "none", display: "inline-block" }}>I'm an inspector</a>
+              <a href="/inspect/inspectors" onClick={() => trackEvent('inspect_landing_cta_clicked', { cta_location: 'final_cta_inspector' })} style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.green, background: "transparent", border: `2px solid ${C.green}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s", textDecoration: "none", display: "inline-block" }}>I'm an inspector</a>
             </div>
             <p style={{ ...dm, fontSize: 13, color: C.gray, marginTop: 16 }}>No account required to upload. Inspector partnership is free forever.</p>
           </FadeIn>

@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import type { Tab, Tier } from './constants';
 import { TIER_LABEL, TIER_PRICE, tiersAtOrAbove } from './constants';
+import { trackEvent } from '@/services/analytics';
 
 const ACCENT = '#2563EB';
 
@@ -32,6 +34,11 @@ export default function LockedTabPlaceholder({
 }: Props) {
   const eligibleTiers = tiersAtOrAbove(requiredTier);
   const lowestPrice = TIER_PRICE[requiredTier];
+
+  // Fire paywall_shown once per mount per (tab, requiredTier).
+  useEffect(() => {
+    trackEvent('inspect_paywall_shown', { feature: tabName });
+  }, [tabName]);
 
   // Phrase the tier list naturally: 3 tiers → "any paid tier"; 2 → "Professional or Premium"; 1 → "Premium"
   const tierPhrase =
@@ -84,7 +91,7 @@ export default function LockedTabPlaceholder({
           {body}
         </p>
         <button
-          onClick={() => onNavigate('reports')}
+          onClick={() => { trackEvent('inspect_paywall_upgrade_clicked', { feature: tabName }); onNavigate('reports'); }}
           style={{
             marginTop: 24, padding: '12px 28px', borderRadius: 100, border: 'none',
             background: ACCENT, color: '#fff', cursor: 'pointer',

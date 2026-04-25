@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import SEO from "@/components/SEO";
 import { usePricing } from "@/hooks/usePricing";
+import { trackEvent } from "@/services/analytics";
 
 const COLORS = {
   orange: "#E8632B",
@@ -86,7 +87,7 @@ function Nav() {
               <a href="#features" style={navLinkStyle}>Features</a>
               <a href="#pricing" style={navLinkStyle}>Pricing</a>
               <a href="#how-it-works" style={navLinkStyle}>How it works</a>
-              <button onClick={() => navigate("/login?redirect=/business")} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "10px 24px", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => (e.target as HTMLElement).style.background = COLORS.orangeDark} onMouseLeave={e => (e.target as HTMLElement).style.background = COLORS.orange}>Get started</button>
+              <button onClick={() => { trackEvent('business_landing_cta_clicked', { cta_location: 'nav' }); navigate("/login?redirect=/business"); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "10px 24px", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => (e.target as HTMLElement).style.background = COLORS.orangeDark} onMouseLeave={e => (e.target as HTMLElement).style.background = COLORS.orange}>Get started</button>
             </div>
           )}
         </div>
@@ -96,7 +97,7 @@ function Nav() {
               {[["#features", "Features"], ["#pricing", "Pricing"], ["#how-it-works", "How it works"]].map(([href, label]) => (
                 <a key={href} href={href} onClick={() => setMenuOpen(false)} style={{ ...navLinkStyle, padding: "14px 0", borderBottom: `1px solid ${COLORS.warm}` }}>{label}</a>
               ))}
-              <button onClick={() => { setMenuOpen(false); navigate("/login?redirect=/business"); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "14px 24px", cursor: "pointer", marginTop: 16 }}>Get started</button>
+              <button onClick={() => { trackEvent('business_landing_cta_clicked', { cta_location: 'mobile_nav' }); setMenuOpen(false); navigate("/login?redirect=/business"); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "14px 24px", cursor: "pointer", marginTop: 16 }}>Get started</button>
             </div>
           </div>
         )}
@@ -129,7 +130,7 @@ function Hero() {
         </FadeIn>
         <FadeIn delay={0.3}>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-            <button onClick={() => navigate("/register?redirect=/business")} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)" }} onMouseEnter={e => { (e.target as HTMLElement).style.background = COLORS.orangeDark; (e.target as HTMLElement).style.transform = "translateY(-2px)"; }} onMouseLeave={e => { (e.target as HTMLElement).style.background = COLORS.orange; (e.target as HTMLElement).style.transform = "translateY(0)"; }}>Start free trial</button>
+            <button onClick={() => { trackEvent('business_landing_cta_clicked', { cta_location: 'hero' }); navigate("/register?redirect=/business"); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, fontWeight: 600, color: COLORS.white, background: COLORS.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)" }} onMouseEnter={e => { (e.target as HTMLElement).style.background = COLORS.orangeDark; (e.target as HTMLElement).style.transform = "translateY(-2px)"; }} onMouseLeave={e => { (e.target as HTMLElement).style.background = COLORS.orange; (e.target as HTMLElement).style.transform = "translateY(0)"; }}>Start free trial</button>
           </div>
         </FadeIn>
         <FadeIn delay={0.45}>
@@ -831,6 +832,7 @@ function OutreachEngine() {
 export default function BusinessLanding() {
   const navigate = useNavigate();
   const handleSignup = (plan?: string) => {
+    trackEvent('business_landing_cta_clicked', { cta_location: plan ? `pricing_${plan}` : 'signup_generic' });
     const planParam = plan ? `&plan=${plan}` : '';
     navigate(`/register?redirect=/business${planParam}`);
   };

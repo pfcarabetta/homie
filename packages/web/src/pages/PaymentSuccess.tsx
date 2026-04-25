@@ -1,13 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { trackEvent } from '@/services/analytics';
 
 export default function PaymentSuccess() {
   useDocumentTitle('Payment Confirmed');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get('session_id');
+  const flow = searchParams.get('flow') ?? undefined;
   const [countdown, setCountdown] = useState(5);
+
+  // Fire payment_success once on mount.
+  useEffect(() => {
+    trackEvent('payment_success', { flow });
+    // sessionId is read into a closure for future server-side fetches; keep as
+    // a noop reference here so the linter doesn't strip it.
+    void sessionId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (countdown <= 0) { navigate('/account?tab=bookings'); return; }

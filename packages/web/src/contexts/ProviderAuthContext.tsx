@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { trackEvent, setUserType } from '@/services/analytics';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const TOKEN_KEY = 'homie_provider_token';
@@ -50,6 +51,8 @@ export function ProviderAuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(TOKEN_KEY, body.data.token);
       localStorage.setItem(PROVIDER_KEY, JSON.stringify(body.data.provider));
       setProvider(body.data.provider);
+      setUserType('pro');
+      trackEvent('auth_login_completed', { user_type: 'pro' });
 
       // Clean token from URL
       const url = new URL(window.location.href);

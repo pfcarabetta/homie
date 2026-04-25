@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { inspectService, type PortalReport, type InspectReportPublic, type InspectionItem, type InspectStatusItem, type SupportingDocument, type CrossReferenceInsight } from '@/services/inspector-api';
+import { trackEvent } from '@/services/analytics';
 import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate } from './constants';
 import type { Tab } from './constants';
 import ItemDeepDive from './ItemDeepDive';
@@ -285,6 +286,8 @@ function UploadWizard({ onBack, onComplete }: { onBack: () => void; onComplete: 
 
   async function startUpload() {
     if (!fileDataUrl) return;
+    const uploadStartedAt = Date.now();
+    trackEvent('inspect_upload_started', { source: 'homeowner_portal' });
     setStep('progress');
     setParsingStatus('uploading');
     setParsingError(null);
@@ -299,6 +302,7 @@ function UploadWizard({ onBack, onComplete }: { onBack: () => void; onComplete: 
       });
 
       if (res.error || !res.data) {
+        trackEvent('inspect_upload_failed', { source: 'homeowner_portal', reason: 'upload_api_error' });
         setParsingError(res.error ?? 'Upload failed');
         setParsingStatus('failed');
         return;
@@ -307,6 +311,11 @@ function UploadWizard({ onBack, onComplete }: { onBack: () => void; onComplete: 
       const rid = res.data.reportId;
       setReportId(rid);
       setParsingStatus('processing');
+      trackEvent('inspect_report_uploaded', {
+        source: 'homeowner_portal',
+        report_id: rid,
+        file_size_kb: file ? Math.round(file.size / 1024) : undefined,
+      });
 
       // Poll for status
       pollRef.current = setInterval(async () => {
@@ -316,9 +325,15 @@ function UploadWizard({ onBack, onComplete }: { onBack: () => void; onComplete: 
             setParsingStatus(statusRes.data.parsingStatus);
             setItemsParsed(statusRes.data.itemsParsed);
             if (statusRes.data.parsingStatus === 'parsed' || statusRes.data.parsingStatus === 'review_pending' || statusRes.data.parsingStatus === 'sent_to_client') {
+              trackEvent('inspect_upload_parsed', {
+                source: 'homeowner_portal',
+                report_id: rid,
+                time_to_parse_ms: Date.now() - uploadStartedAt,
+              });
               if (pollRef.current) clearInterval(pollRef.current);
             }
             if (statusRes.data.parsingStatus === 'failed') {
+              trackEvent('inspect_upload_failed', { source: 'homeowner_portal', reason: 'parse_failed' });
               setParsingError(statusRes.data.parsingError ?? 'Parsing failed');
               if (pollRef.current) clearInterval(pollRef.current);
             }
@@ -326,6 +341,7 @@ function UploadWizard({ onBack, onComplete }: { onBack: () => void; onComplete: 
         } catch { /* ignore polling errors */ }
       }, 2000);
     } catch (err) {
+      trackEvent('inspect_upload_failed', { source: 'homeowner_portal', reason: 'unexpected_error' });
       setParsingError((err as Error).message ?? 'Upload failed');
       setParsingStatus('failed');
     }

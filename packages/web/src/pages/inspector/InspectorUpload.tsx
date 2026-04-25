@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type DragEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { inspectorService } from '@/services/inspector-api';
+import { trackEvent } from '@/services/analytics';
 
 const O = '#E8632B';
 const D = '#2D2926';
@@ -169,13 +170,19 @@ export default function InspectorUpload() {
     setDragOver(false);
     const dropped = e.dataTransfer.files[0];
     if (dropped && dropped.type === 'application/pdf') {
+      trackEvent('inspector_upload_started', {});
+      trackEvent('inspect_upload_started', { source: 'inspector_portal' });
       setFile(dropped);
     }
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0];
-    if (selected) setFile(selected);
+    if (selected) {
+      trackEvent('inspector_upload_started', {});
+      trackEvent('inspect_upload_started', { source: 'inspector_portal' });
+      setFile(selected);
+    }
   }
 
   /** Final step — convert PDF to a data URL, POST, and redirect to
@@ -205,6 +212,12 @@ export default function InspectorUpload() {
       if (res.error || !res.data) {
         throw new Error(res.error ?? 'Failed to start checkout');
       }
+      // The user reached Stripe Checkout — fire the "paid" event here.
+      // Stripe abandonment is rare, and we don't get a client-side webhook
+      // ping back. Approximation is good enough for funnel tracking; the
+      // backend payment_status is the source of truth for revenue numbers.
+      trackEvent('inspector_upload_paid', { pricing_tier: selectedTier });
+      trackEvent('inspect_upload_paid', { source: 'inspector_portal', pricing_tier: selectedTier });
       // Redirect to Stripe-hosted Checkout. On success Stripe sends
       // the user back to /inspector/reports/<id>?paid=1.
       window.location.href = res.data.checkoutUrl;
@@ -415,10 +428,10 @@ export default function InspectorUpload() {
               return (
                 <div
                   key={t.id}
-                  onClick={() => setSelectedTier(t.id)}
+                  onClick={() => { trackEvent('inspector_upload_tier_selected', { pricing_tier: t.id }); setSelectedTier(t.id); }}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedTier(t.id); } }}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trackEvent('inspector_upload_tier_selected', { pricing_tier: t.id }); setSelectedTier(t.id); } }}
                   style={{
                     border: `2px solid ${isOn ? O : '#E0DAD4'}`,
                     background: isOn ? '#FFF8F4' : '#fff',

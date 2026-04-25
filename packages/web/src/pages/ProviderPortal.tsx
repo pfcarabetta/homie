@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useProviderAuth } from '@/contexts/ProviderAuthContext';
 import { portalService, type DashboardStats, type IncomingJob, type HistoryJob, type ProviderProfile, type ProviderSettings, type ProviderBooking } from '@/services/provider-api';
+import { trackEvent } from '@/services/analytics';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
@@ -92,8 +93,12 @@ function IncomingJobsTab() {
 
   async function respond(attemptId: string, action: 'accept' | 'decline') {
     setResponding(true);
+    const job = jobs.find(j => j.attempt_id === attemptId);
     try {
       await portalService.respondToJob(attemptId, { action, quoted_price: quote ? `$${quote.replace(/^\$/, '')}` : undefined, availability: avail || undefined, message: msg || undefined });
+      if (action === 'accept') {
+        trackEvent('provider_quote_submitted', { job_id: job?.job_id });
+      }
       setJobs(j => j.filter(x => x.attempt_id !== attemptId));
       setExpanded(null);
       setQuote(''); setAvail(''); setMsg('');

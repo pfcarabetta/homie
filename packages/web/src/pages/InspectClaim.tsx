@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { inspectService } from '@/services/inspector-api';
 import { setToken } from '@/services/api';
+import { trackEvent, setUserType } from '@/services/analytics';
 
 const O = '#E8632B';
 const D = '#2D2926';
@@ -34,6 +35,8 @@ export default function InspectClaim() {
         // Persist auth — same shape that AuthContext + authService use
         setToken(res.data.token);
         localStorage.setItem(HOMEOWNER_KEY, JSON.stringify(res.data.homeowner));
+        setUserType('homeowner');
+        trackEvent('inspect_report_claimed', { token: claimToken });
         setStatus('redirecting');
         // Redirect into the new portal at the report's detail view
         const dest = res.data.reportId

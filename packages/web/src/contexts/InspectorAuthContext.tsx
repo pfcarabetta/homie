@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { inspectorService, type InspectorProfile, type InspectorSignupData } from '@/services/inspector-api';
+import { trackEvent, setUserType } from '@/services/analytics';
 
 const TOKEN_KEY = 'homie_inspector_token';
 const INSPECTOR_KEY = 'homie_inspector';
@@ -49,6 +50,8 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
         };
         localStorage.setItem(INSPECTOR_KEY, JSON.stringify(profile));
         setInspector(profile);
+        setUserType('inspector');
+        trackEvent('auth_login_completed', { user_type: 'inspector' });
         return null;
       }
       return res.error ?? 'Login failed';
@@ -62,6 +65,8 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
       const res = await inspectorService.signup(data);
       if (res.data?.token) {
         localStorage.setItem(TOKEN_KEY, res.data.token);
+        setUserType('inspector');
+        trackEvent('auth_signup_completed', { user_type: 'inspector' });
         // Signup returns minimal data — fetch full profile after saving token
         try {
           const profileRes = await inspectorService.getProfile();
