@@ -327,6 +327,60 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
         </div>
       )}
 
+      {/* Property / Report dropdown — primary filter for users juggling
+          multiple home inspections. Sits above the other filters so the
+          rest of the chips read as "within this property". */}
+      {reportOptions.length > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+          <label
+            htmlFor="hi-items-report-filter"
+            style={{
+              fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600,
+              color: 'var(--bp-text)',
+            }}
+          >
+            Property:
+          </label>
+          <select
+            id="hi-items-report-filter"
+            value={activeReportId ?? ''}
+            onChange={(e) => setActiveReportId(e.target.value || null)}
+            style={{
+              fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500,
+              padding: '8px 36px 8px 12px', borderRadius: 8,
+              border: `1px solid ${activeReportId ? ACCENT : 'var(--bp-border)'}`,
+              background: activeReportId ? `${ACCENT}08` : 'var(--bp-card)',
+              color: activeReportId ? ACCENT : 'var(--bp-text)',
+              cursor: 'pointer', minWidth: 260, maxWidth: 480,
+              appearance: 'none',
+              backgroundImage:
+                "url(\"data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%239B9490' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E\")",
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 12px center',
+            }}
+          >
+            <option value="">All properties ({fullItems.length} items)</option>
+            {reportOptions.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.address} ({r.count} item{r.count !== 1 ? 's' : ''})
+              </option>
+            ))}
+          </select>
+          {activeReportId && (
+            <button
+              onClick={() => setActiveReportId(null)}
+              style={{
+                fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+                padding: '6px 10px', borderRadius: 8, border: 'none',
+                background: '#F5F5F5', color: 'var(--bp-subtle)', cursor: 'pointer',
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Seller action filter (only when any item is in a seller-mode report) */}
       {hasSellerModeItems && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
@@ -374,30 +428,6 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
           >
             {'\uD83D\uDD17'} Cross-referenced ({xrefCount})
           </button>
-        </div>
-      )}
-
-      {/* Report filter */}
-      {reportOptions.length > 1 && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', padding: '5px 0', marginRight: 4 }}>Report:</span>
-          <button onClick={() => setActiveReportId(null)} style={{
-            fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
-            borderRadius: 20, border: `1px solid ${!activeReportId ? ACCENT : 'var(--bp-border)'}`,
-            background: !activeReportId ? `${ACCENT}10` : 'transparent',
-            color: !activeReportId ? ACCENT : 'var(--bp-subtle)', cursor: 'pointer',
-          }}>All Reports</button>
-          {reportOptions.map(r => (
-            <button key={r.id} onClick={() => setActiveReportId(activeReportId === r.id ? null : r.id)} style={{
-              fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
-              borderRadius: 20, border: `1px solid ${activeReportId === r.id ? ACCENT : 'var(--bp-border)'}`,
-              background: activeReportId === r.id ? `${ACCENT}10` : 'transparent',
-              color: activeReportId === r.id ? ACCENT : 'var(--bp-subtle)', cursor: 'pointer',
-              maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {r.address} ({r.count})
-            </button>
-          ))}
         </div>
       )}
 
