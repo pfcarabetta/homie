@@ -208,7 +208,7 @@ export default function InspectSidebar({
           const hasChildren = !!item.children;
 
           return (
-            <div key={item.id}>
+            <div key={item.id} data-tour={item.tab ? `nav-${item.tab}` : item.children ? `nav-group-${item.id}` : undefined}>
               <button onClick={() => {
                 if (hasChildren) {
                   if (collapsed) {
@@ -258,7 +258,7 @@ export default function InspectSidebar({
                   {item.children!.map(child => {
                     const childActive = child.tab === activeTab;
                     return (
-                      <button key={child.id} onClick={() => handleClick(child)} style={{
+                      <button key={child.id} data-tour={child.tab ? `nav-${child.tab}` : undefined} onClick={() => handleClick(child)} style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                         padding: '8px 12px 8px 44px', background: childActive ? '#2563EB10' : 'transparent',
                         color: childActive ? '#2563EB' : 'var(--bp-subtle)',

@@ -16,6 +16,7 @@ import NegotiationsTab from './NegotiationsTab';
 import MaintenanceTab from './MaintenanceTab';
 import DocumentsTab from './DocumentsTab';
 import SettingsTab from './SettingsTab';
+import InspectPortalTour, { hasSeenTour } from './InspectPortalTour';
 
 export default function InspectPortal() {
   useDocumentTitle('Homie Inspect');
@@ -40,6 +41,7 @@ export default function InspectPortal() {
     return localStorage.getItem('hi_sidebar_collapsed') === 'true';
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [tourActive, setTourActive] = useState(false);
 
   function handleSidebarCollapse(v: boolean) {
     setSidebarCollapsed(v);
@@ -61,6 +63,20 @@ export default function InspectPortal() {
   useEffect(() => {
     setStoredNav('tab', tab);
   }, [tab]);
+
+  // Auto-start the onboarding tour for first-time users once we have at least
+  // one parsed report (so the sidebar items the tour anchors to actually
+  // render). hasSeenTour() is localStorage-backed so this only fires once.
+  useEffect(() => {
+    if (loading) return;
+    if (hasSeenTour()) return;
+    const hasParsedReport = reports.some(r => r.parsingStatus === 'parsed');
+    if (!hasParsedReport) return;
+    // Slight delay so the sidebar paints + nav buttons mount before Joyride
+    // tries to look up the [data-tour] anchors.
+    const t = setTimeout(() => setTourActive(true), 400);
+    return () => clearTimeout(t);
+  }, [loading, reports]);
 
   function handleNavigate(newTab: Tab) {
     setTab(newTab);
@@ -119,7 +135,7 @@ export default function InspectPortal() {
       case 'documents':
         return <DocumentsTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'settings':
-        return <SettingsTab resolvedTheme={resolvedTheme} themeMode={themeMode} onThemeChange={setTheme} />;
+        return <SettingsTab resolvedTheme={resolvedTheme} themeMode={themeMode} onThemeChange={setTheme} onRelaunchTour={() => setTourActive(true)} />;
       default:
         return <DashboardTab reports={reports} loading={loading} onNavigate={handleNavigate} />;
     }
@@ -134,6 +150,13 @@ export default function InspectPortal() {
       resolvedTheme={resolvedTheme}
     >
       {renderTab()}
+      <InspectPortalTour
+        active={tourActive}
+        setActive={setTourActive}
+        reports={reports}
+        currentTab={tab}
+        onNavigate={handleNavigate}
+      />
     </InspectLayout>
   );
 }

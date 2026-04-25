@@ -1,13 +1,15 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { D } from './constants';
+import { resetTour } from './InspectPortalTour';
 
 interface SettingsTabProps {
   resolvedTheme: 'light' | 'dark';
   themeMode: 'light' | 'dark' | 'auto';
   onThemeChange: (m: 'light' | 'dark' | 'auto') => void;
+  onRelaunchTour: () => void;
 }
 
-export default function SettingsTab({ resolvedTheme, themeMode, onThemeChange }: SettingsTabProps) {
+export default function SettingsTab({ resolvedTheme, themeMode, onThemeChange, onRelaunchTour }: SettingsTabProps) {
   const { homeowner } = useAuth();
 
   return (
@@ -51,6 +53,25 @@ export default function SettingsTab({ resolvedTheme, themeMode, onThemeChange }:
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Help & onboarding */}
+      <div style={{ background: 'var(--bp-card)', borderRadius: 14, border: '1px solid var(--bp-border)', padding: 24, marginBottom: 20 }}>
+        <h3 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 6px' }}>Help</h3>
+        <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', margin: '0 0 16px' }}>
+          New here, or need a refresher? Take the guided tour to see how each tab works.
+        </p>
+        <button
+          onClick={() => { resetTour(); onRelaunchTour(); }}
+          style={{
+            padding: '9px 18px', borderRadius: 100, border: '1px solid #2563EB',
+            background: 'var(--bp-card)', color: '#2563EB',
+            fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            fontFamily: "'DM Sans',sans-serif",
+          }}
+        >
+          {'\u2728'} Take the tour
+        </button>
       </div>
 
       {/* Notifications placeholder */}
