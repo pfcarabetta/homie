@@ -263,7 +263,11 @@ export const inspectorService = {
    *  back a Stripe Checkout Session URL. The caller redirects to that
    *  URL; on Stripe success the inspector lands back on
    *  /inspector/reports/:id?paid=1 where parsing is already kicking
-   *  off (the webhook fires the parser, not the upload handler). */
+   *  off (the webhook fires the parser, not the upload handler).
+   *
+   *  pricing_tier (essential | professional | premium) is required —
+   *  it controls both the wholesale fee charged at checkout and which
+   *  features the homeowner can access in their portal. */
   createReport(payload: {
     property_address: string;
     property_city: string;
@@ -275,8 +279,15 @@ export const inspectorService = {
     inspection_date: string;
     inspection_type?: string;
     report_file_data_url: string;
+    pricing_tier: 'essential' | 'professional' | 'premium';
   }) {
-    return inspectorFetch<{ reportId: string; checkoutUrl: string; priceCents: number }>(
+    return inspectorFetch<{
+      reportId: string;
+      checkoutUrl: string;
+      priceCents: number;
+      tier: 'essential' | 'professional' | 'premium';
+      retailPriceCents: number;
+    }>(
       '/api/v1/inspector/reports',
       { method: 'POST', body: JSON.stringify(payload) },
     );

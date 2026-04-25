@@ -127,17 +127,23 @@ export async function createCheckoutSession(params: {
   });
 }
 
-/** Inspector pays Homie's wholesale fee at upload time, before the
- *  parser fires. Single-line-item flat fee, immediate capture (no
+/** Inspector pays Homie's tiered wholesale fee at upload. Single
+ *  line item with the tier-specific price; immediate capture (no
  *  authorize-then-capture dance — we want the cash on file before
  *  spending Claude tokens on parsing). The webhook for
- *  product:'inspector_upload' is what flips the report to 'paid'
- *  and kicks off parseInspectionReportAsync — see stripe-webhook.ts. */
+ *  product:'inspector_upload' flips the report to 'paid' and fires
+ *  parseInspectionReportAsync — see stripe-webhook.ts. */
 export async function createInspectorReportUploadCheckoutSession(params: {
   reportId: string;
   inspectorPartnerId: string;
   inspectorEmail: string;
   inspectorCompanyName: string | null;
+  /** essential | professional | premium — used in metadata + line-
+   *  item description so receipts and the admin dashboard can split
+   *  revenue by tier. */
+  tier: 'essential' | 'professional' | 'premium';
+  /** Tier-specific wholesale amount in cents (resolved by caller
+   *  from getInspectorTierPricing). */
   amountCents: number;
   successUrl: string;
   cancelUrl: string;
@@ -146,7 +152,13 @@ export async function createInspectorReportUploadCheckoutSession(params: {
     product: 'inspector_upload',
     report_id: params.reportId,
     inspector_partner_id: params.inspectorPartnerId,
+    tier: params.tier,
   });
+
+  const tierLabel =
+    params.tier === 'essential' ? 'Essential'
+    : params.tier === 'professional' ? 'Professional'
+    : 'Premium';
 
   return getStripe().checkout.sessions.create({
     mode: 'payment',
@@ -160,10 +172,10 @@ export async function createInspectorReportUploadCheckoutSession(params: {
         currency: 'usd',
         unit_amount: params.amountCents,
         product_data: {
-          name: 'Homie inspection report parsing',
+          name: `Homie inspection report — ${tierLabel}`,
           description: params.inspectorCompanyName
-            ? `Per-report wholesale fee · ${params.inspectorCompanyName}`
-            : 'Per-report wholesale fee',
+            ? `Wholesale tier fee · ${params.inspectorCompanyName}`
+            : 'Wholesale tier fee',
         },
       },
       quantity: 1,

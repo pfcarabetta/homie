@@ -208,6 +208,10 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
     client_name: string; client_email: string; client_phone?: string;
     inspection_date: string; inspection_type?: string;
     report_file_data_url?: string; // base64 data URL for the report file
+    /** essential | professional | premium — gates which features the
+     *  homeowner sees in their portal (dispatch / quotes / negotiation
+     *  docs / maintenance timeline). Required. */
+    pricing_tier?: string;
   };
 
   if (!body.property_address || !body.client_name || !body.client_email || !body.inspection_date) {
@@ -219,6 +223,14 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
   // and upload later" are not supported in this model.)
   if (!body.report_file_data_url) {
     res.status(400).json({ data: null, error: 'report_file_data_url is required — upload the PDF before checkout', meta: {} });
+    return;
+  }
+  // Validate the tier against the allowlist. The schema column accepts
+  // any text, but only these three values are honored by the homeowner-
+  // portal feature gates.
+  const tier = body.pricing_tier as 'essential' | 'professional' | 'premium' | undefined;
+  if (!tier || (tier !== 'essential' && tier !== 'professional' && tier !== 'premium')) {
+    res.status(400).json({ data: null, error: 'pricing_tier must be one of: essential, professional, premium', meta: {} });
     return;
   }
 
@@ -253,11 +265,12 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
       return;
     }
 
-    // Resolve current wholesale price (config-driven so admin can
-    // change it without a deploy). Stamp the price onto the row so
-    // history is immutable when the rate changes.
-    const { getInspectorReportPriceCents } = await import('../services/pricing');
-    const priceCents = await getInspectorReportPriceCents();
+    // Resolve tier-specific wholesale price (config-driven so admin
+    // can change rates without a deploy). Stamp the price onto the
+    // row so history is immutable when the rate changes.
+    const { getInspectorTierPricing } = await import('../services/pricing');
+    const tierPricing = await getInspectorTierPricing(tier);
+    const priceCents = tierPricing.wholesalePriceCents;
 
     const [report] = await db.insert(inspectionReports).values({
       inspectorPartnerId: req.inspectorId,
@@ -272,6 +285,11 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
       inspectionType: body.inspection_type || 'general',
       reportFileUrl,
       source: 'manual_upload',
+      // Stamp the tier — the homeowner portal's tab-level gates read
+      // this column directly to decide what to render (essential =
+      // items + estimates only; professional adds dispatch + quotes;
+      // premium adds negotiations + maintenance timeline).
+      pricingTier: tier,
       // Hold parser off until Stripe webhook flips this to 'processing'.
       parsingStatus: 'awaiting_payment',
       paymentStatus: 'pending',
@@ -290,6 +308,7 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
       inspectorPartnerId: req.inspectorId,
       inspectorEmail: inspector.email,
       inspectorCompanyName: inspector.companyName,
+      tier,
       amountCents: priceCents,
       successUrl,
       cancelUrl,
@@ -305,6 +324,8 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
         reportId: report.id,
         checkoutUrl: session.url,
         priceCents,
+        tier,
+        retailPriceCents: tierPricing.retailPriceCents,
       },
       error: null, meta: {},
     });

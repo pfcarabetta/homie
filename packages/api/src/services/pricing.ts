@@ -18,15 +18,44 @@ export interface BusinessPlanConfig {
   maxTeamMembers: number;
 }
 
-/** Inspector-side wholesale pricing — what an inspector pays Homie
- *  per parsed report. The inspector sells the parsed-report add-on to
- *  their own client at whatever markup they choose (off-platform, on
- *  their own invoice); they only pay this number to us. Flat per
- *  report, no volume tiers. */
-export interface InspectorPricingConfig {
-  /** Per-report wholesale fee in cents. */
-  reportPriceCents: number;
+/** Inspector-side tiered wholesale pricing. Inspector picks a tier
+ *  at upload — each unlocks a different feature set in the
+ *  homeowner-facing portal:
+ *
+ *    essential     → AI report analysis, items, severity, AI cost
+ *                    estimates, category breakdown
+ *    professional  → everything in essential PLUS dispatch quotes,
+ *                    real-time quote tracking, comparison
+ *    premium       → everything in professional PLUS negotiation
+ *                    documents (repair-request PDFs / pre-listing PDFs),
+ *                    priority dispatch, year-round maintenance timeline
+ *
+ *  Each tier carries both a wholesale (what the inspector pays Homie)
+ *  and retail (suggested price the inspector charges the homeowner on
+ *  their own invoice). Retail is purely a display value here — the
+ *  inspector bills the homeowner off-platform; we never see that
+ *  transaction. The wholesale is what flows through Stripe at
+ *  upload time. */
+export interface InspectorTierConfig {
+  wholesalePriceCents: number;
+  /** What we suggest the inspector charges their client. Display-
+   *  only — Homie never collects this. */
+  retailPriceCents: number;
 }
+export interface InspectorPricingConfig {
+  tiers: {
+    essential: InspectorTierConfig;
+    professional: InspectorTierConfig;
+    premium: InspectorTierConfig;
+  };
+}
+
+/** Allowed pricing-tier slugs. The schema column on inspection_reports
+ *  uses these exact strings; the homeowner portal's tab-level gates
+ *  check for them with `===` equality, so don't rename without
+ *  migrating both. */
+export type InspectorTier = 'essential' | 'professional' | 'premium';
+export const INSPECTOR_TIERS: readonly InspectorTier[] = ['essential', 'professional', 'premium'] as const;
 
 export interface PricingConfig {
   homeowner: Record<string, HomeownerTierConfig>;
@@ -48,11 +77,19 @@ export const DEFAULT_PRICING: PricingConfig = {
     enterprise:   { base: 0,   perProperty: 10, promoBase: null, promoLabel: null, searchesPerProperty: 5, maxProperties: 9999, maxTeamMembers: 9999 },
   },
   inspector: {
-    // Placeholder $9.99 — set the production rate by writing to the
-    // singleton pricing-config row in DB; this default only applies
-    // when the row is missing or doesn't include an `inspector` key
-    // (e.g. on first deploy before someone has touched the config).
-    reportPriceCents: 999,
+    // Tiered wholesale rates. Inspector spread (= retail − wholesale)
+    // climbs intentionally with tier so reps push the higher SKUs:
+    //   essential:    $50 spread on $99 retail (50% inspector cut)
+    //   professional: $120 spread on $199 retail (60%)
+    //   premium:      $200 spread on $299 retail (67%)
+    // Override at any time by writing to the singleton
+    // pricing_config row — defaults only apply when the DB row is
+    // missing the inspector key.
+    tiers: {
+      essential:    { wholesalePriceCents: 4900,  retailPriceCents: 9900  },
+      professional: { wholesalePriceCents: 7900,  retailPriceCents: 19900 },
+      premium:      { wholesalePriceCents: 9900,  retailPriceCents: 29900 },
+    },
   },
 };
 
@@ -70,12 +107,23 @@ export async function getPricingConfig(): Promise<PricingConfig> {
       .limit(1);
     const stored = (row?.config as Partial<PricingConfig> | null) ?? null;
     // Fill in any keys the stored singleton is missing (e.g. legacy
-    // rows from before the inspector tier landed). Stored values take
-    // precedence so prod overrides aren't silently reverted.
+    // rows from before the inspector tiers landed). Stored values
+    // take precedence so prod overrides aren't silently reverted.
+    //
+    // Inspector key has its own backwards-compat shim because an
+    // earlier ship of this feature stored `{ reportPriceCents: N }`
+    // (flat-fee shape). If the stored blob has that shape — i.e.
+    // missing `tiers` — we fall through to the tiered defaults so
+    // the upload path keeps working without a manual data fix.
+    const storedInspector = stored?.inspector as InspectorPricingConfig | { reportPriceCents?: number } | undefined;
+    const inspector: InspectorPricingConfig =
+      storedInspector && 'tiers' in storedInspector && storedInspector.tiers
+        ? storedInspector
+        : DEFAULT_PRICING.inspector;
     const config: PricingConfig = {
       homeowner: stored?.homeowner ?? DEFAULT_PRICING.homeowner,
       business: stored?.business ?? DEFAULT_PRICING.business,
-      inspector: stored?.inspector ?? DEFAULT_PRICING.inspector,
+      inspector,
     };
     _cache = { config, at: Date.now() };
     return config;
@@ -84,11 +132,13 @@ export async function getPricingConfig(): Promise<PricingConfig> {
   }
 }
 
-/** Convenience wrapper — most callers just want the per-report
- *  wholesale fee, not the whole config blob. */
-export async function getInspectorReportPriceCents(): Promise<number> {
+/** Resolve the wholesale + retail price for a single inspector tier.
+ *  Caller side validates the tier slug; we trust it here. Falls back
+ *  to professional defaults if the config row is somehow missing the
+ *  tier (defensive — schema-default seeded all three on first deploy). */
+export async function getInspectorTierPricing(tier: InspectorTier): Promise<InspectorTierConfig> {
   const config = await getPricingConfig();
-  return config.inspector.reportPriceCents;
+  return config.inspector.tiers[tier] ?? DEFAULT_PRICING.inspector.tiers[tier] ?? DEFAULT_PRICING.inspector.tiers.professional;
 }
 
 export function invalidatePricingCache(): void {
