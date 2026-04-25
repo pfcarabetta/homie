@@ -54,6 +54,10 @@ export const inspectionReports = pgTable('inspection_reports', {
   propertyCity: text('property_city').notNull(),
   propertyState: text('property_state').notNull(),
   propertyZip: text('property_zip').notNull(),
+  /** Optional friendly nickname the homeowner can set ("Dream home",
+   *  "Backup option") to disambiguate when comparing several inspections.
+   *  When null, the UI falls back to property_address. */
+  displayName: text('display_name'),
   clientName: text('client_name').notNull(),
   clientEmail: text('client_email').notNull(),
   clientPhone: text('client_phone'),

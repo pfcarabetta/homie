@@ -622,6 +622,17 @@ export const inspectService = {
     return fetchAPI<{ documents: SupportingDocumentWithReport[] }>(`/api/v1/account/documents`);
   },
 
+  /**
+   * Authenticated: set or clear the friendly nickname for a report.
+   * Pass `null` (or an empty string) to clear it — UI falls back to address.
+   */
+  renameReport(reportId: string, displayName: string | null) {
+    return fetchAPI<{ id: string; displayName: string | null }>(
+      `/api/v1/account/reports/${reportId}/rename`,
+      { method: 'PATCH', body: JSON.stringify({ display_name: displayName }) },
+    );
+  },
+
   /** Authenticated: accept a quote for an inspection item */
   bookQuote(reportId: string, itemId: string, providerId: string) {
     return fetchAPI<{ bookingId: string; status: string; providerName: string; providerPhone: string; quotedPrice: string | null; scheduled: string | null }>(
@@ -802,6 +813,8 @@ export interface PortalReport {
   propertyCity: string;
   propertyState: string;
   propertyZip: string;
+  /** Optional homeowner-chosen nickname. UI falls back to propertyAddress when null. */
+  displayName: string | null;
   inspectionDate: string;
   inspectionType: string;
   parsingStatus: string;

@@ -1240,6 +1240,7 @@ router.get('/reports', async (req: Request, res: Response) => {
       propertyCity: inspectionReports.propertyCity,
       propertyState: inspectionReports.propertyState,
       propertyZip: inspectionReports.propertyZip,
+      displayName: inspectionReports.displayName,
       inspectionDate: inspectionReports.inspectionDate,
       inspectionType: inspectionReports.inspectionType,
       parsingStatus: inspectionReports.parsingStatus,
@@ -1317,6 +1318,7 @@ router.get('/reports', async (req: Request, res: Response) => {
         propertyCity: r.propertyCity,
         propertyState: r.propertyState,
         propertyZip: r.propertyZip,
+        displayName: r.displayName ?? null,
         inspectionDate: r.inspectionDate,
         inspectionType: r.inspectionType,
         parsingStatus: r.parsingStatus,
@@ -1423,6 +1425,40 @@ router.patch('/reports/:reportId/mode', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[PATCH /account/reports/:reportId/mode]');
     res.status(500).json({ data: null, error: 'Failed to update mode', meta: {} });
+  }
+});
+
+// PATCH /api/v1/account/reports/:reportId/rename — set or clear the homeowner-
+// chosen display name (nickname) for this report.
+//   body: { display_name: string | null }
+//   - non-empty string: trimmed, capped at 80 chars, stored as displayName
+//   - null OR empty/whitespace string: clears the displayName (UI falls back
+//     to property_address)
+router.patch('/reports/:reportId/rename', async (req: Request, res: Response) => {
+  const { display_name } = req.body as { display_name?: string | null };
+  let nextValue: string | null;
+  if (display_name === null || display_name === undefined) {
+    nextValue = null;
+  } else if (typeof display_name !== 'string') {
+    res.status(400).json({ data: null, error: 'display_name must be a string or null', meta: {} });
+    return;
+  } else {
+    const trimmed = display_name.trim();
+    nextValue = trimmed.length === 0 ? null : trimmed.slice(0, 80);
+  }
+  try {
+    const [updated] = await db.update(inspectionReports)
+      .set({ displayName: nextValue, updatedAt: new Date() })
+      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .returning({ id: inspectionReports.id, displayName: inspectionReports.displayName });
+    if (!updated) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    res.json({ data: { id: updated.id, displayName: updated.displayName ?? null }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /account/reports/:reportId/rename]');
+    res.status(500).json({ data: null, error: 'Failed to rename report', meta: {} });
   }
 });
 

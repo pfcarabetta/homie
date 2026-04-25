@@ -68,6 +68,7 @@ export default function ReportsTab({ onNavigate, reports, onReportsChange }: Rep
 function ReportList({ reports, onUpload, onOpen, onReportsChange }: { reports: PortalReport[]; onUpload: () => void; onOpen: (id: string) => void; onReportsChange: () => void }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<PortalReport | null>(null);
 
   async function handleDelete(id: string) {
     setDeleting(true);
@@ -139,10 +140,13 @@ function ReportList({ reports, onUpload, onOpen, onReportsChange }: { reports: P
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 600, color: 'var(--bp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {r.propertyAddress}
+                    {r.displayName ?? r.propertyAddress}
                   </div>
                   <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {r.propertyCity}, {r.propertyState} &middot; {formatDate(r.inspectionDate || r.createdAt)}
+                    {r.displayName
+                      ? `${r.propertyAddress}, ${r.propertyCity}, ${r.propertyState}`
+                      : `${r.propertyCity}, ${r.propertyState}`}
+                    {' '}&middot; {formatDate(r.inspectionDate || r.createdAt)}
                   </div>
                 </div>
                 <div className="hi-report-meta" style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
@@ -160,6 +164,23 @@ function ReportList({ reports, onUpload, onOpen, onReportsChange }: { reports: P
                   </div>
                   <svg width={16} height={16} viewBox="0 0 20 20" fill="none" stroke="var(--bp-subtle)" strokeWidth="2" strokeLinecap="round"><path d="M8 4l6 6-6 6" /></svg>
                 </div>
+              </button>
+
+              {/* Rename button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setRenameTarget(r); }}
+                title="Rename report"
+                style={{
+                  padding: '18px 14px', background: 'none', border: 'none', borderLeft: '1px solid var(--bp-border)',
+                  cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center',
+                  opacity: 0.4, transition: 'opacity 0.15s',
+                }}
+                onMouseOver={e => (e.currentTarget.style.opacity = '1')}
+                onMouseOut={e => (e.currentTarget.style.opacity = '0.4')}
+              >
+                <svg width={16} height={16} viewBox="0 0 20 20" fill="none" stroke="var(--bp-subtle)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.5 3.5l2 2L7 15l-3 .5.5-3 10-9z" />
+                </svg>
               </button>
 
               {/* Delete button */}
@@ -181,6 +202,15 @@ function ReportList({ reports, onUpload, onOpen, onReportsChange }: { reports: P
             </div>
           ))}
         </div>
+      )}
+
+      {/* Rename modal */}
+      {renameTarget && (
+        <RenameReportModal
+          report={renameTarget}
+          onClose={() => setRenameTarget(null)}
+          onSaved={() => { setRenameTarget(null); onReportsChange(); }}
+        />
       )}
 
       {/* Delete confirmation modal */}
@@ -513,6 +543,9 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
   const [supportingDocs, setSupportingDocs] = useState<SupportingDocument[]>([]);
   const [insights, setInsights] = useState<CrossReferenceInsight[]>([]);
   const [showDocUploadModal, setShowDocUploadModal] = useState(false);
+  const [detailRenameOpen, setDetailRenameOpen] = useState(false);
+  // Read-through to portalReport so a rename refreshes here without a full reload.
+  const detailReportNickname = portalReport?.displayName ?? null;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const docsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -792,10 +825,28 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
       }}>
         <div style={{ flex: '1 1 240px', minWidth: 0 }}>
-          <h2 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {fullReport.propertyAddress}
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <h2 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+              {detailReportNickname ?? fullReport.propertyAddress}
+            </h2>
+            <button
+              onClick={() => setDetailRenameOpen(true)}
+              title="Rename report"
+              style={{
+                padding: 4, background: 'none', border: 'none', cursor: 'pointer',
+                opacity: 0.5, transition: 'opacity 0.15s', display: 'flex', alignItems: 'center', flexShrink: 0,
+                marginBottom: 4,
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.opacity = '1')}
+              onMouseOut={(e) => (e.currentTarget.style.opacity = '0.5')}
+            >
+              <svg width={14} height={14} viewBox="0 0 20 20" fill="none" stroke="var(--bp-subtle)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.5 3.5l2 2L7 15l-3 .5.5-3 10-9z" />
+              </svg>
+            </button>
+          </div>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {detailReportNickname && <>{fullReport.propertyAddress}, </>}
             {fullReport.propertyCity}, {fullReport.propertyState} {fullReport.propertyZip}
             {fullReport.inspectionDate && <> &middot; Inspected {formatDate(fullReport.inspectionDate)}</>}
           </div>
@@ -827,6 +878,15 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
           reportId={reportId}
           onClose={() => setShowDocUploadModal(false)}
           onUploaded={() => { void loadDocsAndInsights(); }}
+        />
+      )}
+
+      {/* Rename modal (detail view) */}
+      {detailRenameOpen && portalReport && (
+        <RenameReportModal
+          report={portalReport}
+          onClose={() => setDetailRenameOpen(false)}
+          onSaved={() => { setDetailRenameOpen(false); onReportsChange(); }}
         />
       )}
 
@@ -1353,6 +1413,125 @@ function InputField({ label, value, onChange, placeholder, required, style }: {
           outline: 'none', boxSizing: 'border-box',
         }}
       />
+    </div>
+  );
+}
+
+// ── Rename Report Modal ──────────────────────────────────────────────────
+//
+// Lets the homeowner set or clear a friendly nickname for the report.
+// Empty input = clear. Used from both the list view and the detail header.
+function RenameReportModal({ report, onClose, onSaved }: {
+  report: PortalReport;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [value, setValue] = useState(report.displayName ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function persist(next: string | null) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await inspectService.renameReport(report.id, next);
+      if (res.error) {
+        setError(res.error);
+        setSaving(false);
+        return;
+      }
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message ?? 'Failed to rename');
+      setSaving(false);
+    }
+  }
+
+  function handleSave() {
+    const trimmed = value.trim();
+    void persist(trimmed.length === 0 ? null : trimmed);
+  }
+
+  function handleReset() {
+    setValue('');
+    void persist(null);
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      }}
+      onClick={() => !saving && onClose()}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: 'var(--bp-card)', borderRadius: 16, padding: '28px 24px',
+        maxWidth: 440, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+      }}>
+        <h3 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 17, fontWeight: 700, color: 'var(--bp-text)', margin: '0 0 8px' }}>
+          Rename report
+        </h3>
+        <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: 'var(--bp-subtle)', margin: '0 0 16px', lineHeight: 1.55 }}>
+          Give this inspection a nickname (e.g. "Dream home", "Backup option") so it's easier to spot when you're juggling multiple properties. Leave blank to use the property address.
+        </p>
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); handleSave(); }
+            if (e.key === 'Escape') { e.preventDefault(); if (!saving) onClose(); }
+          }}
+          maxLength={80}
+          placeholder={report.propertyAddress}
+          style={{
+            width: '100%', padding: '10px 14px', borderRadius: 10,
+            border: '1px solid var(--bp-border)', background: 'var(--bp-card)',
+            color: 'var(--bp-text)', fontFamily: "'DM Sans',sans-serif", fontSize: 14,
+            outline: 'none', boxSizing: 'border-box', marginBottom: 6,
+          }}
+        />
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: 'var(--bp-subtle)', marginBottom: 14 }}>
+          {value.length}/80 characters
+        </div>
+        {error && (
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: '#DC2626', marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+          {report.displayName ? (
+            <button
+              onClick={handleReset}
+              disabled={saving}
+              style={{
+                padding: '8px 14px', borderRadius: 8, border: 'none',
+                background: 'transparent', color: 'var(--bp-subtle)',
+                fontSize: 13, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer',
+                fontFamily: "'DM Sans',sans-serif", textDecoration: 'underline',
+              }}
+            >
+              Use property address
+            </button>
+          ) : <span />}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={onClose} disabled={saving} style={{
+              padding: '8px 18px', borderRadius: 8, border: '1px solid var(--bp-border)',
+              background: 'transparent', color: 'var(--bp-text)',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+            }}>Cancel</button>
+            <button onClick={handleSave} disabled={saving} style={{
+              padding: '8px 18px', borderRadius: 8, border: 'none',
+              background: ACCENT, color: '#fff',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+              opacity: saving ? 0.7 : 1,
+            }}>{saving ? 'Saving...' : 'Save'}</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
