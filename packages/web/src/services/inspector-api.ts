@@ -629,7 +629,46 @@ export const inspectService = {
       { method: 'POST', body: JSON.stringify({ provider_id: providerId }) },
     );
   },
+
+  /**
+   * Authenticated: list all of the homeowner's bookings (consumer + inspect).
+   * The Inspect-portal Bookings tab filters this list to entries where
+   * `source === 'inspection_report'`.
+   */
+  listBookings() {
+    return fetchAPI<{ bookings: HomeownerBooking[] }>(`/api/v1/account/bookings`);
+  },
 };
+
+export interface HomeownerBooking {
+  id: string;
+  job_id: string;
+  provider: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    rating: string | null;
+    review_count: number;
+  };
+  status: string;
+  confirmed_at: string;
+  completed_at: string | null;
+  quoted_price: string | null;
+  scheduled: string | null;
+  response_message: string | null;
+  response_channel: string | null;
+  job_category: string | null;
+  job_severity: string | null;
+  job_summary: string | null;
+  /** 'inspection_report' for inspect-derived bookings, null/undefined for consumer /quote bookings */
+  source: string | null;
+  inspection_report_id: string | null;
+  service_address: string | null;
+  zip_code: string | null;
+  preferred_timing: string | null;
+  unread_messages: number;
+}
 
 // ── SSE streaming helpers for AI deep dive ────────────────────────────────
 

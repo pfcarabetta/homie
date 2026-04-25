@@ -29,6 +29,7 @@ function getNavItems(): NavItem[] {
       id: 'analysis-group', label: 'Analysis', icon: 'items', children: [
         { id: 'items', label: 'All Items', icon: 'items', tab: 'items' },
         { id: 'quotes', label: 'Quotes', icon: 'quotes', tab: 'quotes' },
+        { id: 'bookings', label: 'Bookings', icon: 'bookings', tab: 'bookings' },
       ],
     },
     { id: 'negotiations', label: 'Negotiations', icon: 'negotiations', tab: 'negotiations' },
@@ -47,6 +48,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     reports: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2h8l4 4v12a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M12 2v4h4"/><path d="M7 10h6M7 13h4"/></svg>,
     items: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M3 5h14M3 10h14M3 15h10"/><circle cx="16" cy="15" r="2.5"/></svg>,
     quotes: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M10 2v16M6 6c0-1.5 1.8-2.5 4-2.5s4 1 4 2.5-1.8 2.5-4 2.5S6 9.5 6 8"/><path d="M14 12c0 1.5-1.8 2.5-4 2.5S6 13.5 6 12"/></svg>,
+    bookings: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v3M13 2v3M7 12h3"/></svg>,
     negotiations: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17 10c0 4-3.1 7-7 7a7.3 7.3 0 01-3.5-.9L3 17l1-3.5A6.8 6.8 0 013 10c0-4 3.1-7 7-7s7 3 7 7z"/><path d="M7 9h6M7 12h4"/></svg>,
     maintenance: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>,
     documents: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 2h7l4 4v11a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M12 2v4h4"/></svg>,

@@ -11,6 +11,7 @@ import DashboardTab from './DashboardTab';
 import ReportsTab from './ReportsTab';
 import ItemsTab from './ItemsTab';
 import QuotesTab from './QuotesTab';
+import BookingsTab from './BookingsTab';
 import NegotiationsTab from './NegotiationsTab';
 import MaintenanceTab from './MaintenanceTab';
 import DocumentsTab from './DocumentsTab';
@@ -109,6 +110,8 @@ export default function InspectPortal() {
         return <ItemsTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'quotes':
         return <QuotesTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
+      case 'bookings':
+        return <BookingsTab reports={reports} onNavigate={handleNavigate} />;
       case 'negotiations':
         return <NegotiationsTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'maintenance':

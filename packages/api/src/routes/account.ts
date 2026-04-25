@@ -719,7 +719,13 @@ router.get('/bookings', async (req: Request, res: Response) => {
     res.json({
       data: {
         bookings: rows.map(({ booking: b, provider: p, response: r, job: j }) => {
-          const diag = (j?.diagnosis ?? null) as { category?: string; severity?: string; summary?: string } | null;
+          const diag = (j?.diagnosis ?? null) as {
+            category?: string;
+            severity?: string;
+            summary?: string;
+            source?: string;
+            inspectionReportId?: string;
+          } | null;
           return {
             id: b.id,
             job_id: b.jobId,
@@ -741,6 +747,14 @@ router.get('/bookings', async (req: Request, res: Response) => {
             job_category: diag?.category ?? null,
             job_severity: diag?.severity ?? null,
             job_summary: diag?.summary ?? null,
+            // New fields used by the Inspect-portal Bookings tab. `source`
+            // distinguishes inspect-derived bookings from /quote bookings;
+            // inspection_report_id lets the UI deep-link back to the report.
+            source: diag?.source ?? null,
+            inspection_report_id: diag?.inspectionReportId ?? null,
+            service_address: b.serviceAddress ?? null,
+            zip_code: j?.zipCode ?? null,
+            preferred_timing: j?.preferredTiming ?? null,
             unread_messages: unreadMap[b.id] ?? 0,
           };
         }),
