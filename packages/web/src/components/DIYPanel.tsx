@@ -18,9 +18,19 @@ import type { DIYAnalysisPayload, DIYToolSupply } from '@homie/shared';
  * inline when expanded.
  */
 
-const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
-const DIM = '#6B6560';
-const BORDER = 'rgba(0,0,0,.08)';
+// Brand colors — same in light + dark.
+const O = '#E8632B';
+const G = '#1B9E77';
+
+// Theme-adaptive tokens. The inspect portal sets these CSS variables on
+// the layout root for light/dark mode; the quote chat doesn't define them
+// so the fallbacks keep that surface working unchanged. Mirrors the
+// pattern in components/outreach-theme.ts.
+const D = 'var(--bp-text, #2D2926)';
+const DIM = 'var(--bp-subtle, #6B6560)';
+const BORDER = 'var(--bp-border, rgba(0,0,0,.08))';
+const W = 'var(--bp-bg, #F9F5F2)';
+const CARD = 'var(--bp-card, #ffffff)';
 
 interface DIYPanelProps {
   /** The AI-generated diagnosis text — fed into the DIY endpoint as context. */
@@ -130,7 +140,7 @@ export default function DIYPanel({
     <div style={flush ? {
       animation: 'fadeSlide 0.4s ease',
     } : {
-      marginLeft: indent, marginBottom: 16, background: 'white',
+      marginLeft: indent, marginBottom: 16, background: CARD,
       border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden',
       animation: 'fadeSlide 0.4s ease',
     }}>
@@ -207,7 +217,7 @@ function LoadingState() {
       {[0, 1, 2].map(i => (
         <div key={i} style={{
           height: i === 0 ? 14 : 32, borderRadius: 8,
-          background: `linear-gradient(90deg, ${W} 0%, #F0EBE7 50%, ${W} 100%)`,
+          background: `linear-gradient(90deg, ${W} 0%, var(--bp-hover, #F0EBE7) 50%, ${W} 100%)`,
           backgroundSize: '200% 100%', animation: 'diyShimmer 1.2s infinite linear',
           width: i === 0 ? '55%' : '100%',
         }} />
@@ -339,13 +349,13 @@ function FeasibleContent({ analysis, onBackToPro }: { analysis: DIYAnalysisPaylo
       )}
 
       <button onClick={onBackToPro} style={{
-        width: '100%', padding: '12px 16px', background: '#fff',
+        width: '100%', padding: '12px 16px', background: CARD,
         border: `1.5px solid ${O}`, color: O, fontWeight: 600,
         borderRadius: 10, cursor: 'pointer', fontSize: 14,
         fontFamily: "'DM Sans', sans-serif",
       }}>Didn’t work? Get pro quotes →</button>
 
-      <p style={{ fontSize: 10.5, color: '#9B9490', marginTop: 10, marginBottom: 0, lineHeight: 1.5, textAlign: 'center' }}>
+      <p style={{ fontSize: 10.5, color: DIM, marginTop: 10, marginBottom: 0, lineHeight: 1.5, textAlign: 'center' }}>
         Homie earns a small commission from qualifying Amazon purchases. It doesn’t change your price.
       </p>
     </>
@@ -360,7 +370,7 @@ function ToolRow({ tool }: { tool: DIYToolSupply }) {
       onClick={() => logAffiliateEvent('diy_affiliate_click', { query: tool.searchQuery, name: tool.name, essential: tool.essential })}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 12px', background: '#fff', border: `1px solid ${BORDER}`,
+        padding: '10px 12px', background: CARD, border: `1px solid ${BORDER}`,
         borderRadius: 10, textDecoration: 'none', color: D, transition: 'all 0.15s',
       }}
       onMouseEnter={e => {
@@ -369,7 +379,7 @@ function ToolRow({ tool }: { tool: DIYToolSupply }) {
       }}
       onMouseLeave={e => {
         e.currentTarget.style.borderColor = BORDER;
-        e.currentTarget.style.background = '#fff';
+        e.currentTarget.style.background = CARD;
       }}
     >
       <div style={{
@@ -397,7 +407,7 @@ function ToolRow({ tool }: { tool: DIYToolSupply }) {
 
 function Chip({ label, value, accent, strike }: { label: string; value: string; accent?: string; strike?: boolean }) {
   return (
-    <div style={{ background: '#fff', padding: '6px 10px', borderRadius: 8, fontSize: 12, border: `1px solid ${BORDER}` }}>
+    <div style={{ background: CARD, padding: '6px 10px', borderRadius: 8, fontSize: 12, border: `1px solid ${BORDER}` }}>
       <span style={{ color: DIM }}>{label}: </span>
       <span style={{ fontWeight: 700, color: accent || D, textDecoration: strike ? 'line-through' : 'none' }}>{value}</span>
     </div>
