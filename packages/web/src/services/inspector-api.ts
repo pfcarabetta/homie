@@ -489,6 +489,16 @@ export const inspectService = {
     return fetchAPI<{ reports: PortalReport[] }>('/api/v1/account/reports');
   },
 
+  /** Authenticated: fetch the Home IQ payload for a report. First call
+   *  triggers generation (per-category Claude assessments + hazard
+   *  lookups) and may take 5–10s; cached calls return instantly. Pass
+   *  `refresh: true` to force regeneration after the homeowner edits
+   *  items. */
+  getHomeIQ(reportId: string, opts: { refresh?: boolean } = {}) {
+    const qs = opts.refresh ? '?refresh=1' : '';
+    return fetchAPI<HomeIQData>(`/api/v1/account/reports/${reportId}/home-iq${qs}`);
+  },
+
   /** Authenticated: delete a report */
   deleteReport(reportId: string) {
     return fetchAPI<{ deleted: boolean }>(`/api/v1/account/reports/${reportId}`, { method: 'DELETE' });
@@ -822,6 +832,80 @@ export interface PortalReportItem {
   crossReferencedItemIds?: string[];
   /** Cached DIY analysis (null until the homeowner taps "Try DIY" once). */
   diyAnalysis?: import('@homie/shared').DIYAnalysisPayload | null;
+}
+
+// ── Home IQ types ────────────────────────────────────────────────────────
+// Mirror the shape returned by GET /api/v1/account/reports/:id/home-iq.
+
+export type HomeIQGrade = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Critical';
+export type HomeIQSystemKey = 'plumbing' | 'roofing' | 'hvac' | 'electrical' | 'structural' | 'appliance' | 'foundation';
+export type HomeIQInsightType = 'insurance' | 'lifespan' | 'cross-doc' | 'bundle' | 'cohort' | 'hazard' | 'recall';
+
+export interface HomeIQSystemBreakdown {
+  key: HomeIQSystemKey;
+  label: string;
+  itemCount: number;
+  costLowCents: number;
+  costHighCents: number;
+  severityCounts: { urgent: number; recommended: number; monitor: number };
+  grade: HomeIQGrade;
+  aiAssessmentShort: string;
+  aiAssessmentLong: string;
+  topFix: { title: string; cost: string; rationale: string } | null;
+  smartInsight: { type: HomeIQInsightType; label: string; text: string };
+  items: Array<{
+    id: string;
+    title: string;
+    severity: string;
+    location: string | null;
+    description: string | null;
+    costLowCents: number;
+    costHighCents: number;
+  }>;
+  lifespan: {
+    componentLabel: string;
+    age: number;
+    typicalLow: number;
+    typicalHigh: number;
+    statusLabel: string;
+    statusColor: 'green' | 'amber' | 'red';
+  } | null;
+}
+
+export interface HomeIQHazardCard {
+  primary: string;
+  sub: string;
+  level: 'low' | 'moderate' | 'high';
+  source: string;
+  detail: string;
+}
+
+export interface HomeIQData {
+  generatedAt: string;
+  property: {
+    yearBuilt: number | null;
+    sqft: number | null;
+    region: string | null;
+    decade: string | null;
+    decadeLabel: string | null;
+    zip: string;
+    address: string;
+    city: string;
+    state: string;
+  };
+  cohort: {
+    medianSqft: number;
+    avgItemsFound: number;
+    sqftDelta: number | null;
+    itemsDelta: number;
+    sourceNote: string;
+  } | null;
+  systems: HomeIQSystemBreakdown[];
+  hazards: {
+    flood: HomeIQHazardCard | null;
+    radon: HomeIQHazardCard | null;
+  };
+  warnings: string[];
 }
 
 export interface PortalReport {

@@ -12,6 +12,7 @@ export const TABS = [
   'bookings',
   'negotiations',
   'maintenance',
+  'home-iq',
   'documents',
   'settings',
 ] as const;
@@ -25,6 +26,7 @@ export const TAB_LABELS: Record<Tab, string> = {
   bookings: 'Bookings',
   negotiations: 'Negotiations',
   maintenance: 'Maintenance',
+  'home-iq': 'Home IQ',
   documents: 'Documents',
   settings: 'Settings',
 };

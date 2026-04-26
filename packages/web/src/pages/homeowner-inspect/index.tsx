@@ -14,6 +14,7 @@ import QuotesTab from './QuotesTab';
 import BookingsTab from './BookingsTab';
 import NegotiationsTab from './NegotiationsTab';
 import MaintenanceTab from './MaintenanceTab';
+import HomeIQTab from './HomeIQTab';
 import DocumentsTab from './DocumentsTab';
 import SettingsTab from './SettingsTab';
 import InspectPortalTour, { hasSeenTour } from './InspectPortalTour';
@@ -132,6 +133,8 @@ export default function InspectPortal() {
         return <NegotiationsTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'maintenance':
         return <MaintenanceTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
+      case 'home-iq':
+        return <HomeIQTab reports={reports} onNavigate={handleNavigate} />;
       case 'documents':
         return <DocumentsTab reports={reports} onNavigate={handleNavigate} onReportsChange={fetchReports} />;
       case 'settings':

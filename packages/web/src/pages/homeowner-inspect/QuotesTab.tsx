@@ -27,7 +27,15 @@ export default function QuotesTab({ reports, onNavigate, onReportsChange }: Quot
   const [fullItems, setFullItems] = useState<ItemWithContext[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  // Initial value can be seeded from sessionStorage by HomeIQTab's "Get
+  // quotes for X items" CTA — one-shot handoff that clears immediately so
+  // the filter doesn't stick across navigations.
+  const [activeCategory, setActiveCategory] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const stored = sessionStorage.getItem('hi_quotes_filter_category');
+    if (stored) sessionStorage.removeItem('hi_quotes_filter_category');
+    return stored;
+  });
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [confirmBooking, setConfirmBooking] = useState<{ item: ItemWithContext; quote: { providerId: string; providerName: string; amountCents: number; availability: string | null } } | null>(null);
   const [booking, setBooking] = useState(false);
