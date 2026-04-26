@@ -3066,6 +3066,36 @@ router.get('/reports/:reportId/insights', async (req: Request, res: Response) =>
   }
 });
 
+// GET /api/v1/account/reports/:reportId/home-iq
+// Returns the Home IQ payload for the report — cohort snapshot, per-system
+// breakdown, and hazard cards. Cached on inspection_reports.home_iq_data
+// after first generation; pass ?refresh=1 to force a fresh build (e.g.
+// after the homeowner edits items). Generation invokes Claude per-category
+// so first call is slower (typical 5–10s); cached calls return instantly.
+router.get('/reports/:reportId/home-iq', async (req: Request, res: Response) => {
+  try {
+    if (!await ownsReport(req.params.reportId, req.homeownerId)) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    const force = req.query.refresh === '1' || req.query.refresh === 'true';
+    const { getOrGenerateHomeIQ } = await import('../services/home-iq');
+    const data = await getOrGenerateHomeIQ(req.params.reportId, { force });
+    if (!data) {
+      res.status(409).json({
+        data: null,
+        error: 'Home IQ is only available for parsed reports. Wait for parsing to complete and try again.',
+        meta: {},
+      });
+      return;
+    }
+    res.json({ data, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err, reportId: req.params.reportId }, '[GET /account/reports/:reportId/home-iq]');
+    res.status(500).json({ data: null, error: 'Failed to generate Home IQ', meta: {} });
+  }
+});
+
 // GET /api/v1/account/documents — aggregate list of all of the homeowner's supporting docs
 router.get('/documents', async (req: Request, res: Response) => {
   try {

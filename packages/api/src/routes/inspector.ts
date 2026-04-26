@@ -2244,7 +2244,7 @@ Rules:
 - For photo_descriptions: describe what is physically visible in each photo related to this item. Include details about condition, damage, location, and any visible brand/model info. If a photo shows multiple issues, include the description under each relevant item.
 
 Return a JSON object with two keys:
-- "property": an object with { "address", "city", "state", "zip", "inspection_date" } extracted from the report header/cover page. Use null for any field you cannot find.
+- "property": an object with { "address", "city", "state", "zip", "inspection_date", "year_built" } extracted from the report header/cover page. The year_built is a 4-digit integer (e.g. 1987) — inspection reports almost always state this on page 1 or 2, often labeled "Year Built", "Year of Construction", or "Built". Use null for any field you cannot find.
 - "items": the array of deficiency items described above.
 
 No preamble, no markdown code fences. Return ONLY the JSON object.`;
@@ -2290,7 +2290,7 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
       source_pages?: number[];
     };
     let parsedItems: ParsedItem[];
-    let extractedProperty: { address?: string; city?: string; state?: string; zip?: string; inspection_date?: string } | null = null;
+    let extractedProperty: { address?: string; city?: string; state?: string; zip?: string; inspection_date?: string; year_built?: number | string } | null = null;
 
     try {
       const parsed = JSON.parse(jsonStr);
@@ -2341,6 +2341,16 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
       if (extractedProperty.inspection_date && report.inspectionDate === new Date().toISOString().slice(0, 10)) {
         updates.inspectionDate = extractedProperty.inspection_date;
       }
+      // Year built — accept either an int or a numeric string. Bound to a
+      // sane range so a hallucinated 19 or 20000 doesn't poison cohort math.
+      if (extractedProperty.year_built != null) {
+        const yb = typeof extractedProperty.year_built === 'number'
+          ? extractedProperty.year_built
+          : parseInt(String(extractedProperty.year_built), 10);
+        if (Number.isFinite(yb) && yb >= 1700 && yb <= new Date().getFullYear() + 1) {
+          updates.yearBuilt = yb;
+        }
+      }
       if (Object.keys(updates).length > 0) {
         updates.updatedAt = new Date();
         await db.update(inspectionReports).set(updates).where(eq(inspectionReports.id, reportId));
@@ -2385,6 +2395,38 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
     }).where(eq(inspectionReports.id, reportId));
 
     logger.info({ reportId, itemCount: parsedItems.length, hasLowConfidence }, '[inspector] Report parsed successfully');
+
+    // ── Geocode the address (best-effort) ──
+    // Populates county_fips + census_tract + lat/lon so Home IQ panels
+    // can look up FEMA flood zones, EPA radon zones, and AHS regional
+    // cohorts. Failures are non-fatal — the report is already saved as
+    // parsed, and Home IQ will just skip geo-dependent panels if these
+    // columns stay null.
+    void (async () => {
+      try {
+        const [fresh] = await db.select({
+          address: inspectionReports.propertyAddress,
+          city: inspectionReports.propertyCity,
+          state: inspectionReports.propertyState,
+          zip: inspectionReports.propertyZip,
+        }).from(inspectionReports).where(eq(inspectionReports.id, reportId)).limit(1);
+        if (!fresh) return;
+        const { geocodeAddress } = await import('../services/geocoding');
+        const geo = await geocodeAddress(fresh.address, fresh.city, fresh.state, fresh.zip);
+        if (geo) {
+          await db.update(inspectionReports).set({
+            countyFips: geo.countyFips,
+            censusTract: geo.censusTract,
+            latitude: String(geo.latitude),
+            longitude: String(geo.longitude),
+            updatedAt: new Date(),
+          }).where(eq(inspectionReports.id, reportId));
+          logger.info({ reportId, countyFips: geo.countyFips }, '[inspector] Geocoded address');
+        }
+      } catch (geoErr) {
+        logger.warn({ err: geoErr, reportId }, '[inspector] Geocoding failed (non-fatal)');
+      }
+    })();
 
     // ── Auto-email the parsed report to the homeowner ──
     // Fires unconditionally on success (review_pending OR parsed) — the

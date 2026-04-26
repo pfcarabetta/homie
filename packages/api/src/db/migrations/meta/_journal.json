@@ -302,6 +302,13 @@
       "when": 1776234620604,
       "tag": "0042_furry_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1777190000000,
+      "tag": "0043_homeiq_property_columns",
+      "breakpoints": true
     }
   ]
 }

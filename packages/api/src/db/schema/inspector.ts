@@ -54,6 +54,28 @@ export const inspectionReports = pgTable('inspection_reports', {
   propertyCity: text('property_city').notNull(),
   propertyState: text('property_state').notNull(),
   propertyZip: text('property_zip').notNull(),
+  /** Year the home was built. Extracted by the AI parser from the report's
+   *  cover/header (almost always stated). Drives Home IQ cohort comparisons
+   *  and lifespan-tracker math. Null if the AI couldn't find it. */
+  yearBuilt: integer('year_built'),
+  /** 5-digit county FIPS (state + county, e.g. "06075" = San Francisco).
+   *  Populated post-parse by the Census Geocoder. Lookup key for the EPA
+   *  radon-zone table and AHS regional cohorts. */
+  countyFips: text('county_fips'),
+  /** Full census tract GEOID (11 digits). Populated by the Census
+   *  Geocoder. Reserved for future ACS/AHS tract-level lookups; not used
+   *  in Home IQ v1 directly. */
+  censusTract: text('census_tract'),
+  /** Geocoded coordinates from the Census Geocoder. Used for FEMA flood
+   *  zone lookups and any future point-based hazard queries. */
+  latitude: numeric('latitude', { precision: 9, scale: 6 }),
+  longitude: numeric('longitude', { precision: 9, scale: 6 }),
+  /** Cached Home IQ payload. JSONB shape matches the HomeIQData type in
+   *  services/home-iq.ts — per-category breakdown, hazards, cohort data.
+   *  Generated on-demand the first time the user opens the Home IQ tab,
+   *  cached until items change (compared against home_iq_generated_at). */
+  homeIqData: jsonb('home_iq_data'),
+  homeIqGeneratedAt: timestamp('home_iq_generated_at', { withTimezone: true }),
   /** Optional friendly nickname the homeowner can set ("Dream home",
    *  "Backup option") to disambiguate when comparing several inspections.
    *  When null, the UI falls back to property_address. */
