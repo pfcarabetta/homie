@@ -76,6 +76,8 @@ export interface InspectionItem {
   sourceDocumentId?: string | null;
   /** Other inspection item IDs that cross-reference this one (bidirectional) */
   crossReferencedItemIds?: string[];
+  /** Cached DIY analysis (null until the homeowner taps "Try DIY" once). */
+  diyAnalysis?: import('@homie/shared').DIYAnalysisPayload | null;
 }
 
 export interface ValueImpact {
@@ -623,6 +625,19 @@ export const inspectService = {
   },
 
   /**
+   * Authenticated: lazy + cached DIY analysis for a single inspection item.
+   * Returns the same DIYAnalysisPayload shape the quote-chat panel uses.
+   * Server caches the result on inspection_report_items.diy_analysis so
+   * subsequent calls are instant.
+   */
+  analyzeItemDiy(reportId: string, itemId: string) {
+    return fetchAPI<import('@homie/shared').DIYAnalysisPayload>(
+      `/api/v1/account/reports/${reportId}/items/${itemId}/diy`,
+      { method: 'POST' },
+    );
+  },
+
+  /**
    * Authenticated: set or clear the friendly nickname for a report.
    * Pass `null` (or an empty string) to clear it — UI falls back to address.
    */
@@ -805,6 +820,8 @@ export interface PortalReportItem {
   sourceDocumentId?: string | null;
   /** Other inspection item IDs that cross-reference this one (bidirectional) */
   crossReferencedItemIds?: string[];
+  /** Cached DIY analysis (null until the homeowner taps "Try DIY" once). */
+  diyAnalysis?: import('@homie/shared').DIYAnalysisPayload | null;
 }
 
 export interface PortalReport {

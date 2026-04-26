@@ -26,13 +26,28 @@ export const AFFILIATE_LINK_ATTRS = {
   rel: 'sponsored noopener noreferrer' as const,
 };
 
-/** Log an affiliate click. Phase 1 is console-only so we can ship fast;
- *  swap the implementation for a real /api/v1/events endpoint later
- *  without touching call sites. */
-export function logAffiliateEvent(
-  event: 'diy_panel_shown' | 'diy_panel_expanded' | 'diy_affiliate_click' | 'diy_back_to_pro' | 'diy_fetch_failed',
-  metadata: Record<string, unknown> = {},
-): void {
+type AffiliateEvent =
+  | 'diy_panel_shown'
+  | 'diy_panel_expanded'
+  | 'diy_affiliate_click'
+  | 'diy_back_to_pro'
+  | 'diy_fetch_failed';
+
+/**
+ * Log an affiliate event. Pipes to GA4 via the analytics module so the
+ * existing GA dimensions (source, category) line up with conversion
+ * tracking on inspect-derived vs. quote-chat-derived clicks. Console
+ * fallback stays in dev for live debugging.
+ */
+export function logAffiliateEvent(event: AffiliateEvent, metadata: Record<string, unknown> = {}): void {
   // eslint-disable-next-line no-console
-  console.log('[diy-analytics]', event, metadata);
+  if (import.meta.env.DEV) console.log('[diy-analytics]', event, metadata);
+
+  // Forward to GA4. We keep the metadata shape loose at this layer so
+  // call-sites don't have to know about the GA event taxonomy.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = (typeof window !== 'undefined' ? (window as any) : null);
+  if (w?.gtag) {
+    w.gtag('event', event, metadata);
+  }
 }

@@ -1,10 +1,11 @@
 import { useState, useMemo, useCallback } from 'react';
 import { inspectService, type PortalReport, type InspectionItem } from '@/services/inspector-api';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, paidReports, reportsWithTier } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, isLikelyDiy, paidReports, reportsWithTier } from './constants';
 import type { Tab } from './constants';
 import ItemDeepDive from './ItemDeepDive';
 import PageCitation from './PageCitation';
 import LockedTabPlaceholder from './LockedTabPlaceholder';
+import DIYBadge from './DIYBadge';
 
 const ACCENT = '#2563EB';
 
@@ -51,6 +52,7 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [activeSellerAction, setActiveSellerAction] = useState<'fix_before_listing' | 'disclose' | 'ignore' | null>(null);
   const [xrefOnly, setXrefOnly] = useState(false);
+  const [diyOnly, setDiyOnly] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<string | null>(null);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -98,8 +100,24 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
     if (activeCategory) items = items.filter(i => i.category === activeCategory);
     if (activeSellerAction) items = items.filter(i => i.sellerAction === activeSellerAction);
     if (xrefOnly) items = items.filter(i => (i.crossReferencedItemIds?.length ?? 0) > 0);
+    if (diyOnly) items = items.filter(i => isLikelyDiy({
+      severity: i.severity,
+      category: i.category,
+      title: i.title,
+      costEstimateMax: i.costEstimateMax,
+    }, i.diyAnalysis?.feasible ?? null));
     return items;
-  }, [fullItems, activeReportId, activeSeverity, activeCategory, activeSellerAction, xrefOnly]);
+  }, [fullItems, activeReportId, activeSeverity, activeCategory, activeSellerAction, xrefOnly, diyOnly]);
+
+  const diyCount = useMemo(
+    () => fullItems.filter(i => isLikelyDiy({
+      severity: i.severity,
+      category: i.category,
+      title: i.title,
+      costEstimateMax: i.costEstimateMax,
+    }, i.diyAnalysis?.feasible ?? null)).length,
+    [fullItems],
+  );
 
   const xrefCount = useMemo(
     () => fullItems.filter(i => (i.crossReferencedItemIds?.length ?? 0) > 0).length,
@@ -410,10 +428,10 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
         </div>
       )}
 
-      {/* Cross-referenced filter */}
-      {xrefCount > 0 && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', padding: '5px 0', marginRight: 4 }}>Connections:</span>
+      {/* Cross-referenced + DIY filter row */}
+      {(xrefCount > 0 || diyCount > 0) && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--bp-subtle)', padding: '5px 0', marginRight: 4 }}>Filters:</span>
           <button
             onClick={() => setXrefOnly(v => !v)}
             title="Items the AI found correlations for across the inspection and supporting documents"
@@ -428,6 +446,22 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
           >
             {'\uD83D\uDD17'} Cross-referenced ({xrefCount})
           </button>
+          {diyCount > 0 && (
+            <button
+              onClick={() => setDiyOnly(v => !v)}
+              title="Items that look safe to fix yourself — open AI Deep Dive to confirm + see steps"
+              style={{
+                fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, padding: '5px 12px',
+                borderRadius: 20,
+                border: `1px solid ${diyOnly ? '#1B9E77' : 'var(--bp-border)'}`,
+                background: diyOnly ? '#E1F5EE' : 'transparent',
+                color: diyOnly ? '#1B9E77' : 'var(--bp-subtle)', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              {'🔧'} DIY-friendly ({diyCount})
+            </button>
+          )}
         </div>
       )}
 
@@ -575,6 +609,15 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
                     {item._reportMode === 'seller' && item.sellerAction && (
                       <SellerActionBadge action={item.sellerAction} />
                     )}
+                    {/* DIY badge — heuristic by default, "confirmed" when AI verdict is cached. */}
+                    {isLikelyDiy({
+                      severity: item.severity,
+                      category: item.category,
+                      title: item.title,
+                      costEstimateMax: item.costEstimateMax,
+                    }, item.diyAnalysis?.feasible ?? null) && (
+                      <DIYBadge confirmed={item.diyAnalysis?.feasible === true} compact />
+                    )}
                   </div>
 
                   {/* Title */}
@@ -685,7 +728,17 @@ export default function ItemsTab({ reports, onNavigate, onReportsChange }: Items
 
               {/* AI Deep Dive expanded content */}
               {expandedItemId === item.id && (
-                <ItemDeepDive reportId={item._reportId} itemId={item.id} itemTitle={item.title} />
+                <ItemDeepDive
+                  reportId={item._reportId}
+                  itemId={item.id}
+                  itemTitle={item.title}
+                  diyContext={{
+                    severity: item.severity,
+                    category: item.category,
+                    costEstimateMax: item.costEstimateMax,
+                    initialAnalysis: item.diyAnalysis ?? null,
+                  }}
+                />
               )}
             </div>
           );

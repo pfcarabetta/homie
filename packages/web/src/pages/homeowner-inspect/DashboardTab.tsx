@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { O, G, D, SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate, timeAgo } from './constants';
+import { O, G, D, SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate, isLikelyDiy, timeAgo } from './constants';
 import type { Tab } from './constants';
+import type { DIYAnalysisPayload } from '@homie/shared';
 
 interface DashboardTabProps {
   reports: DashboardReport[];
@@ -34,6 +35,7 @@ interface DashboardItem {
   costEstimateMax: number | null;
   dispatchStatus: string | null;
   quoteAmount: number | null;
+  diyAnalysis?: DIYAnalysisPayload | null;
 }
 
 function StatCard({ label, value, sub, color, icon }: { label: string; value: string; sub?: string; color: string; icon: string }) {
@@ -69,6 +71,21 @@ export default function DashboardTab({ reports, loading, onNavigate }: Dashboard
   const urgentItems = allItems.filter(i => i.severity === 'safety_hazard' || i.severity === 'urgent');
   const recommendedItems = allItems.filter(i => i.severity === 'recommended');
   const monitorItems = allItems.filter(i => i.severity === 'monitor' || i.severity === 'informational');
+
+  // DIY items — heuristic for the badge count, AI verdict trumps when cached.
+  // Savings only counted when the AI confirms feasibility AND a cost range
+  // is available — keeps the dashboard number truthful, not speculative.
+  const diyItems = allItems.filter(i => isLikelyDiy(
+    { severity: i.severity, category: i.category, title: i.title, costEstimateMax: i.costEstimateMax },
+    i.diyAnalysis?.feasible ?? null,
+  ));
+  const diyConfirmedSavingsCents = allItems.reduce((sum, i) => {
+    const diy = i.diyAnalysis;
+    if (!diy?.feasible || !diy.costDiyCents) return sum;
+    const proHigh = i.costEstimateMax ?? 0;
+    const supplyLow = diy.costDiyCents.min;
+    return sum + Math.max(0, proHigh - supplyLow);
+  }, 0);
 
   // Home Health Score — normalized against industry averages
   // Source: ASHI/InterNACHI data — average inspection finds ~30 items
@@ -151,6 +168,28 @@ export default function DashboardTab({ reports, loading, onNavigate }: Dashboard
           color={O}
           icon={'\uD83D\uDD27'}
         />
+        {diyItems.length > 0 && (
+          <button
+            onClick={() => onNavigate('items')}
+            title="Open the Items tab and filter to DIY-friendly to see them all"
+            style={{
+              all: 'unset', cursor: 'pointer', flex: '1 1 200px', minWidth: 180, display: 'block',
+              borderRadius: 14, transition: 'transform 0.12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+          >
+            <StatCard
+              label="DIY Opportunities"
+              value={diyConfirmedSavingsCents > 0 ? `~${formatCurrency(diyConfirmedSavingsCents / 100)}` : `${diyItems.length}`}
+              sub={diyConfirmedSavingsCents > 0
+                ? `Save across ${diyItems.length} item${diyItems.length !== 1 ? 's' : ''} you could fix yourself`
+                : `${diyItems.length} item${diyItems.length !== 1 ? 's' : ''} look DIY-friendly · open one to see`}
+              color={'#1B9E77'}
+              icon={'🔧'}
+            />
+          </button>
+        )}
       </div>
 
       {/* Two-column on desktop, stacks on mobile */}

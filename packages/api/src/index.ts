@@ -98,6 +98,7 @@ async function start() {
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS source_pages integer[]`);
     await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS report_mode text NOT NULL DEFAULT 'buyer'`);
     await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS display_name text`);
+    await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS diy_analysis jsonb`);
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS maintenance_completed_at timestamp with time zone`);
 
     // Multi-document analysis tables

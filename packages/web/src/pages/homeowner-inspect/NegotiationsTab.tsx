@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { inspectService, type PortalReport, type PortalReportItem } from '@/services/inspector-api';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, paidReports, reportsWithTier } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, isLikelyDiy, paidReports, reportsWithTier } from './constants';
 import type { Tab } from './constants';
 import PageCitation from './PageCitation';
 import { SellerActionBadge } from './ItemsTab';
 import LockedTabPlaceholder from './LockedTabPlaceholder';
+import DIYBadge from './DIYBadge';
 
 const ACCENT = '#2563EB';
 const RED = '#DC2626';
@@ -199,15 +200,29 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
     let sellerAgreed = 0;
     let creditsReceived = 0;
     let selectedCount = 0;
+    // DIY savings = (ask - DIY supply low) summed over included items the AI
+    // confirmed are feasible to DIY. We only count items with a cached
+    // diyAnalysis so the number is real, not heuristic-speculation.
+    let diySavingsCents = 0;
+    let diyEligibleCount = 0;
     for (const item of items) {
       if (item.isIncludedInRequest) {
         yourAsk += askCents(item);
         selectedCount++;
+        const diy = item.diyAnalysis;
+        if (diy?.feasible && diy.costDiyCents) {
+          const ask = askCents(item);
+          const supply = diy.costDiyCents.min;
+          if (ask > supply) {
+            diySavingsCents += ask - supply;
+            diyEligibleCount++;
+          }
+        }
       }
       sellerAgreed += item.sellerAgreedAmountCents ?? 0;
       creditsReceived += item.creditIssuedCents ?? 0;
     }
-    return { yourAsk, sellerAgreed, creditsReceived, selectedCount };
+    return { yourAsk, sellerAgreed, creditsReceived, selectedCount, diySavingsCents, diyEligibleCount };
   }, [items]);
 
   // Bulk select presets
@@ -403,6 +418,15 @@ function NegotiationView({ report, reports, activeReportId, onChangeReport, onRe
             <SummaryCard label="Your Ask" subLabel={`${totals.selectedCount} item${totals.selectedCount !== 1 ? 's' : ''}`} value={formatCurrency(totals.yourAsk / 100)} color={RED} icon={'\uD83D\uDCCB'} />
             <SummaryCard label="Seller Agreed" subLabel="Across all items" value={formatCurrency(totals.sellerAgreed / 100)} color={ACCENT} icon={'\uD83E\uDD1D'} />
             <SummaryCard label="Credits Received" subLabel="Closed concessions" value={formatCurrency(totals.creditsReceived / 100)} color={GREEN} icon={'\u2705'} />
+            {totals.diySavingsCents > 0 && (
+              <SummaryCard
+                label="DIY Savings"
+                subLabel={`${totals.diyEligibleCount} item${totals.diyEligibleCount !== 1 ? 's' : ''} you could fix yourself`}
+                value={formatCurrency(totals.diySavingsCents / 100)}
+                color={'#1B9E77'}
+                icon={'\ud83d\udd27'}
+              />
+            )}
           </>
         )}
       </div>
@@ -731,6 +755,14 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
             </span>
             {isSellerMode && item.sellerAction && (
               <SellerActionBadge action={item.sellerAction} />
+            )}
+            {isLikelyDiy({
+              severity: item.severity,
+              category: item.category,
+              title: item.title,
+              costEstimateMax: item.costEstimateMax,
+            }, item.diyAnalysis?.feasible ?? null) && (
+              <DIYBadge confirmed={item.diyAnalysis?.feasible === true} compact />
             )}
           </div>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, color: 'var(--bp-text)' }}>

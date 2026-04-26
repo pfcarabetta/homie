@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { buildStripeMetadata } from '../services/stripe';
+import { analyzeDIY } from '../services/diy';
 import { eq, desc, and, ne, isNull, inArray, sql, count, lte } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
@@ -1284,6 +1285,7 @@ router.get('/reports', async (req: Request, res: Response) => {
           maintenanceCompletedAt: inspectionReportItems.maintenanceCompletedAt,
           sourceDocumentId: inspectionReportItems.sourceDocumentId,
           crossReferencedItemIds: inspectionReportItems.crossReferencedItemIds,
+          diyAnalysis: inspectionReportItems.diyAnalysis,
         }).from(inspectionReportItems)
           .where(inArray(inspectionReportItems.reportId, reportIds))
       : [];
@@ -1363,6 +1365,7 @@ router.get('/reports', async (req: Request, res: Response) => {
             sellerActionReason: sa.reason,
             sourceDocumentId: i.sourceDocumentId,
             crossReferencedItemIds: i.crossReferencedItemIds ?? [],
+            diyAnalysis: i.diyAnalysis ?? null,
           };
         }),
       };
@@ -1459,6 +1462,79 @@ router.patch('/reports/:reportId/rename', async (req: Request, res: Response) =>
   } catch (err) {
     logger.error({ err }, '[PATCH /account/reports/:reportId/rename]');
     res.status(500).json({ data: null, error: 'Failed to rename report', meta: {} });
+  }
+});
+
+// POST /api/v1/account/reports/:reportId/items/:itemId/diy
+// Generate (or return cached) DIY analysis for a single inspection item.
+// Available on every paid tier — DIY is a free-tier hook + a savings driver
+// that shows up in negotiations, dashboard, and Amazon affiliate revenue.
+//
+// Caching: stored in inspection_report_items.diy_analysis. We trust the
+// cache; inspectors editing the item don't currently invalidate it.
+router.post('/reports/:reportId/items/:itemId/diy', async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select({ id: inspectionReports.id })
+      .from(inspectionReports)
+      .where(and(
+        eq(inspectionReports.id, req.params.reportId),
+        eq(inspectionReports.homeownerId, req.homeownerId),
+      ))
+      .limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+
+    const [item] = await db.select().from(inspectionReportItems)
+      .where(and(
+        eq(inspectionReportItems.id, req.params.itemId),
+        eq(inspectionReportItems.reportId, report.id),
+      ))
+      .limit(1);
+    if (!item) {
+      res.status(404).json({ data: null, error: 'Item not found', meta: {} });
+      return;
+    }
+
+    // Cache hit — short-circuit. The frontend type-narrows on the same
+    // DIYAnalysisPayload shape regardless of whether it's fresh or cached.
+    if (item.diyAnalysis) {
+      res.json({ data: item.diyAnalysis, error: null, meta: {} });
+      return;
+    }
+
+    // Build a diagnosis-shaped string from the item content. We mirror the
+    // /quote-chat shape so the same SAFETY_GATE prompt slots in cleanly.
+    const diagnosis = [
+      item.title,
+      item.description,
+      item.locationInProperty ? `Location: ${item.locationInProperty}` : '',
+      item.severity ? `Severity: ${item.severity}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    const result = await analyzeDIY({
+      diagnosis,
+      category: item.category,
+      userDescription: item.description,
+    });
+
+    if (!result.ok) {
+      res.status(result.status).json({ data: null, error: result.error, meta: {} });
+      return;
+    }
+
+    // Persist for next time — fire-and-forget on the write so a cache
+    // failure doesn't block the response. The next call will recompute.
+    db.update(inspectionReportItems)
+      .set({ diyAnalysis: result.payload as never, updatedAt: new Date() })
+      .where(eq(inspectionReportItems.id, item.id))
+      .catch((err) => logger.warn({ err, itemId: item.id }, '[diy/item] Failed to cache analysis'));
+
+    res.json({ data: result.payload, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/reports/:reportId/items/:itemId/diy]');
+    res.status(500).json({ data: null, error: 'DIY analysis failed', meta: {} });
   }
 });
 

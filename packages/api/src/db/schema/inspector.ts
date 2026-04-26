@@ -180,6 +180,12 @@ export const inspectionReportItems = pgTable('inspection_report_items', {
   sourceDocumentId: uuid('source_document_id'),
   /** Cross-references: other inspection item IDs this item correlates with (bidirectional) */
   crossReferencedItemIds: jsonb('cross_referenced_item_ids').$type<string[]>(),
+  /** Cached DIY analysis from services/diy.ts. Lazily populated when the
+   *  homeowner taps "Try DIY" inside the item's deep dive — same payload
+   *  shape the quote-chat panel uses. Stored here so subsequent opens
+   *  don't re-bill the AI. Trust-this-cache: invalidation only happens
+   *  on inspector edits (not currently wired). */
+  diyAnalysis: jsonb('diy_analysis'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [

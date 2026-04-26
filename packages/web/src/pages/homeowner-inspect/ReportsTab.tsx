@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { inspectService, type PortalReport, type InspectReportPublic, type InspectionItem, type InspectStatusItem, type SupportingDocument, type CrossReferenceInsight } from '@/services/inspector-api';
 import { trackEvent } from '@/services/analytics';
-import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate } from './constants';
+import { SEVERITY_COLORS, SEVERITY_LABELS, CATEGORY_ICONS, CATEGORY_LABELS, formatCurrency, formatDate, isLikelyDiy } from './constants';
 import type { Tab } from './constants';
 import ItemDeepDive from './ItemDeepDive';
+import DIYBadge from './DIYBadge';
 import PageCitation from './PageCitation';
 import ModeToggle, { type ReportMode } from './ModeToggle';
 import SupportingDocUploadModal from './SupportingDocUploadModal';
@@ -1190,6 +1191,14 @@ function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive, repo
             <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)' }}>
               {catIcon} {catLabel}
             </span>
+            {isLikelyDiy({
+              severity: item.severity,
+              category: item.category,
+              title: item.title,
+              costEstimateMax: item.costEstimateMax,
+            }, item.diyAnalysis?.feasible ?? null) && (
+              <DIYBadge confirmed={item.diyAnalysis?.feasible === true} compact />
+            )}
             {sourceDoc && (
               <span
                 title={sourceDoc.fileName}
@@ -1373,7 +1382,17 @@ function ItemCard({ item, expanded, onToggleExpand, reportId, showDeepDive, repo
 
       {/* AI Deep Dive — expanded view */}
       {expanded && reportId && (
-        <ItemDeepDive reportId={reportId} itemId={item.id} itemTitle={item.title} />
+        <ItemDeepDive
+          reportId={reportId}
+          itemId={item.id}
+          itemTitle={item.title}
+          diyContext={{
+            severity: item.severity,
+            category: item.category,
+            costEstimateMax: item.costEstimateMax,
+            initialAnalysis: item.diyAnalysis ?? null,
+          }}
+        />
       )}
     </div>
   );

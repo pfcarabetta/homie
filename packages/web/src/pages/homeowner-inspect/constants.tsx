@@ -120,6 +120,53 @@ export const CATEGORY_ICONS: Record<string, string> = {
   windows_doors: '\uD83E\uDE9F', fireplace: '\uD83D\uDD25',
 };
 
+// ── DIY Heuristic ──────────────────────────────────────────────────────────
+//
+// Cheap client-side check used for the 🔧 DIY badge in list views. NOT
+// authoritative — the AI's safety gate inside services/diy.ts has the
+// final say. Real verdict (feasible: true/false) lives on item.diyAnalysis
+// after the user opens the deep dive once.
+//
+// Tuning:
+//   - severity: never DIY a safety hazard or anything urgent
+//   - category: never DIY anything physically dangerous or permit-required
+//   - cost ceiling: above ~$400 high-end, the cost-benefit usually flips
+//   - title danger words: catch items the inspector miscategorized
+
+const DIY_DANGER_CATEGORIES = new Set([
+  'electrical', 'hvac', 'structural', 'foundation', 'roofing', 'fireplace',
+]);
+
+const DIY_DANGER_PATTERN = /\b(gas\b|chimney|panel|breaker|load.bearing|asbestos|sewer|main\s+line)/i;
+
+const DIY_COST_CEILING_CENTS = 40000; // $400
+
+interface DiyHeuristicInput {
+  severity: string;
+  category: string;
+  title: string;
+  /** High-end cost estimate in cents. */
+  costEstimateMax?: number | null;
+}
+
+/**
+ * Whether to show the 🔧 DIY badge on this item in list views. If the user
+ * has already run the actual DIY analysis (cached in `diyAnalysis`), the
+ * AI's `feasible` flag wins — pass that result via `confirmedDiyFeasible`
+ * to override.
+ */
+export function isLikelyDiy(item: DiyHeuristicInput, confirmedDiyFeasible?: boolean | null): boolean {
+  // AI verdict trumps the heuristic in either direction.
+  if (confirmedDiyFeasible === true) return true;
+  if (confirmedDiyFeasible === false) return false;
+
+  if (item.severity === 'safety_hazard' || item.severity === 'urgent') return false;
+  if (DIY_DANGER_CATEGORIES.has(item.category)) return false;
+  if ((item.costEstimateMax ?? 0) > DIY_COST_CEILING_CENTS) return false;
+  if (DIY_DANGER_PATTERN.test(item.title)) return false;
+  return true;
+}
+
 // ── Utility Functions ────────────────────────────────────────────────────────
 
 export function formatCurrency(amount: number): string {

@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { analyzeItem, chatItem, type StreamCallbacks } from '@/services/inspector-api';
+import { analyzeItem, chatItem, inspectService, type StreamCallbacks } from '@/services/inspector-api';
+import type { DIYAnalysisPayload } from '@homie/shared';
+import DIYPanel from '@/components/DIYPanel';
+import { isLikelyDiy } from './constants';
 
 const ACCENT = '#2563EB';
 
@@ -7,9 +10,19 @@ interface ItemDeepDiveProps {
   reportId: string;
   itemId: string;
   itemTitle: string;
+  /** Item context used for the DIY heuristic + the cached DIY fetcher.
+   *  Optional for backwards-compat with any caller that doesn't have it
+   *  yet — when omitted, the DIY surface just doesn't render. */
+  diyContext?: {
+    severity: string;
+    category: string;
+    costEstimateMax: number | null;
+    /** Pre-fetched DIY analysis from the API response, if cached. */
+    initialAnalysis?: DIYAnalysisPayload | null;
+  };
 }
 
-export default function ItemDeepDive({ reportId, itemId, itemTitle }: ItemDeepDiveProps) {
+export default function ItemDeepDive({ reportId, itemId, itemTitle, diyContext }: ItemDeepDiveProps) {
   const [analysis, setAnalysis] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzed, setAnalyzed] = useState(false);
@@ -19,6 +32,20 @@ export default function ItemDeepDive({ reportId, itemId, itemTitle }: ItemDeepDi
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // DIY surface state — independent of the analysis stream above so opening
+  // it doesn't re-render the chat thread. Only shown when the heuristic
+  // greenlights this item AND deep dive has finished its initial summary.
+  const [diyOpen, setDiyOpen] = useState(false);
+  const showDiy = !!diyContext && isLikelyDiy(
+    {
+      severity: diyContext.severity,
+      category: diyContext.category,
+      title: itemTitle,
+      costEstimateMax: diyContext.costEstimateMax,
+    },
+    diyContext.initialAnalysis?.feasible ?? null,
+  );
 
   // Auto-trigger analysis on mount (run once), buffer and show when complete
   const startedRef = useRef(false);
@@ -160,6 +187,43 @@ export default function ItemDeepDive({ reportId, itemId, itemTitle }: ItemDeepDi
           </div>
         )}
       </div>
+
+      {/* DIY surface — only when the heuristic greenlights it. Sits between
+          the summary and the chat input so users see the DIY option after
+          reading the AI's "What is this / Why it matters" answer. */}
+      {analyzed && showDiy && diyContext && (
+        <div style={{ marginTop: 14, borderTop: '1px solid var(--bp-border)', paddingTop: 14 }}>
+          {!diyOpen ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); setDiyOpen(true); }}
+              style={{
+                width: '100%', padding: '11px 14px', borderRadius: 10,
+                border: '1px solid #A8DDC9', background: '#E1F5EE', color: '#1B9E77',
+                fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 15 }}>{'🔧'}</span>
+              Try DIY — see steps + parts list
+            </button>
+          ) : (
+            <div onClick={(e) => e.stopPropagation()}>
+              <DIYPanel
+                diagnosis={`${itemTitle}\n\n${analysis}`}
+                category={diyContext.category}
+                source="inspect_item"
+                hideTrigger
+                flush
+                fetcher={async () => {
+                  const res = await inspectService.analyzeItemDiy(reportId, itemId);
+                  return { data: res.data ?? null, error: res.error ?? null };
+                }}
+                initialAnalysis={diyContext.initialAnalysis}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Follow-up chat input */}
       {analyzed && (

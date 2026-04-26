@@ -35,6 +35,22 @@ interface DIYPanelProps {
   /** Controls the left-margin alignment with the diagnosis card.
    *  Defaults to the 42px used by AI-message bubbles in GetQuotes. */
   indent?: number;
+  /** Optional override for the fetch step. Used by surfaces (like the
+   *  homeowner-inspect portal) that have a server-cached DIY endpoint
+   *  instead of the public /api/v1/diy/analyze route. Default: fetch
+   *  from the public DIY service. */
+  fetcher?: () => Promise<{ data?: DIYAnalysisPayload | null; error?: string | null }>;
+  /** Pre-loaded analysis. When provided, the panel skips the fetch and
+   *  renders immediately. Used when the parent already has a cached
+   *  payload on the item. */
+  initialAnalysis?: DIYAnalysisPayload | null;
+  /** Where this panel is rendered — for analytics + GA event source tag. */
+  source?: 'quote_chat' | 'inspect_item';
+  /** Hide the collapsible header — caller already provides expand UX. */
+  hideTrigger?: boolean;
+  /** Visual override: instead of a self-contained card, render flush so
+   *  the parent (e.g. ItemDeepDive) can frame it. */
+  flush?: boolean;
 }
 
 export default function DIYPanel({
@@ -43,88 +59,115 @@ export default function DIYPanel({
   userDescription,
   onBackToPro,
   indent = 42,
+  fetcher,
+  initialAnalysis = null,
+  source = 'quote_chat',
+  hideTrigger = false,
+  flush = false,
 }: DIYPanelProps) {
-  const [expanded, setExpanded] = useState(false);
+  // When the parent pre-loads the analysis, render expanded immediately.
+  const [expanded, setExpanded] = useState(initialAnalysis !== null || hideTrigger);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<DIYAnalysisPayload | null>(null);
+  const [analysis, setAnalysis] = useState<DIYAnalysisPayload | null>(initialAnalysis);
   const shownRef = useRef(false);
-  const fetchedRef = useRef(false);
+  const fetchedRef = useRef(initialAnalysis !== null);
 
   // Fire "shown" once per mount — gives product visibility into how often
   // the teaser surfaces vs. how often users actually engage.
   useEffect(() => {
     if (shownRef.current) return;
     shownRef.current = true;
-    logAffiliateEvent('diy_panel_shown', { category });
-  }, [category]);
+    logAffiliateEvent('diy_panel_shown', { category, source });
+  }, [category, source]);
+
+  async function runFetch() {
+    fetchedRef.current = true;
+    logAffiliateEvent('diy_panel_expanded', { category, source });
+    setLoading(true);
+    setError(null);
+
+    const result = fetcher
+      ? await fetcher()
+      : await diyService.analyze({
+          diagnosis,
+          category: category ?? null,
+          userDescription: userDescription ?? null,
+        });
+    setLoading(false);
+    if (result.error || !result.data) {
+      logAffiliateEvent('diy_fetch_failed', { error: result.error, source });
+      setError(result.error || 'Could not load DIY guide');
+      fetchedRef.current = false; // allow retry
+      return;
+    }
+    setAnalysis(result.data);
+  }
+
+  // hideTrigger surfaces (inspect Deep Dive) auto-fetch when no preload exists.
+  useEffect(() => {
+    if (hideTrigger && !fetchedRef.current && !loading) {
+      void runFetch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hideTrigger]);
 
   async function handleExpand() {
     const next = !expanded;
     setExpanded(next);
     if (!next) return;
     if (fetchedRef.current) return; // already loaded — just re-show
-
-    fetchedRef.current = true;
-    logAffiliateEvent('diy_panel_expanded', { category });
-    setLoading(true);
-    setError(null);
-
-    const { data, error: err } = await diyService.analyze({
-      diagnosis,
-      category: category ?? null,
-      userDescription: userDescription ?? null,
-    });
-    setLoading(false);
-    if (err || !data) {
-      logAffiliateEvent('diy_fetch_failed', { error: err });
-      setError(err || 'Could not load DIY guide');
-      fetchedRef.current = false; // allow retry
-      return;
-    }
-    setAnalysis(data);
+    await runFetch();
   }
 
   function handleBackToPro() {
-    logAffiliateEvent('diy_back_to_pro', { category, feasible: analysis?.feasible ?? null });
+    logAffiliateEvent('diy_back_to_pro', { category, feasible: analysis?.feasible ?? null, source });
     setExpanded(false);
     onBackToPro?.();
   }
 
   return (
-    <div style={{
+    <div style={flush ? {
+      animation: 'fadeSlide 0.4s ease',
+    } : {
       marginLeft: indent, marginBottom: 16, background: 'white',
       border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden',
       animation: 'fadeSlide 0.4s ease',
     }}>
-      <button
-        onClick={handleExpand}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-          padding: '12px 16px', background: 'transparent', border: 'none',
-          cursor: 'pointer', textAlign: 'left', fontFamily: "'DM Sans', sans-serif",
-        }}
-      >
-        <div style={{
-          width: 32, height: 32, borderRadius: 8, background: `${G}15`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
-        }}>{'🔧'}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
-            Or try fixing it yourself?
+      {!hideTrigger && (
+        <button
+          onClick={handleExpand}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '12px 16px', background: 'transparent', border: 'none',
+            cursor: 'pointer', textAlign: 'left', fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          <div style={{
+            width: 32, height: 32, borderRadius: 8, background: `${G}15`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+          }}>{'🔧'}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
+              Or try fixing it yourself?
+            </div>
+            <div style={{ fontSize: 12, color: DIM, marginTop: 2 }}>
+              {subtitle(analysis, loading)}
+            </div>
           </div>
-          <div style={{ fontSize: 12, color: DIM, marginTop: 2 }}>
-            {subtitle(analysis, loading)}
-          </div>
-        </div>
-        <div style={{
-          fontSize: 18, color: DIM, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-          transition: 'transform 0.2s', flexShrink: 0,
-        }}>{'▾'}</div>
-      </button>
+          <div style={{
+            fontSize: 18, color: DIM, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s', flexShrink: 0,
+          }}>{'▾'}</div>
+        </button>
+      )}
 
       {expanded && (
-        <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${BORDER}`, animation: 'fadeSlide 0.25s ease' }}>
+        <div style={{
+          padding: hideTrigger ? 0 : '0 16px 16px',
+          borderTop: hideTrigger ? 'none' : `1px solid ${BORDER}`,
+          animation: 'fadeSlide 0.25s ease',
+        }}>
           {loading && <LoadingState />}
           {error && !loading && (
             <ErrorState
@@ -132,7 +175,7 @@ export default function DIYPanel({
               onRetry={() => {
                 fetchedRef.current = false;
                 setError(null);
-                handleExpand().catch(() => {});
+                void runFetch();
               }}
             />
           )}
