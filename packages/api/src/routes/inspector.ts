@@ -301,9 +301,12 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
       expiresAt,
     }).returning();
 
-    // Build the Stripe Checkout Session.
+    // Build the Stripe Checkout Session. Land on the reports list (not
+    // the detail page) since the report is still parsing immediately
+    // after payment — the list is where the realtime status badge lives,
+    // and a "processing" modal fires keyed on the just_uploaded param.
     const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
-    const successUrl = `${APP_URL}/inspector/reports/${report.id}?paid=1`;
+    const successUrl = `${APP_URL}/inspector/reports?just_uploaded=${report.id}`;
     const cancelUrl = `${APP_URL}/inspector/reports/upload?cancelled=${report.id}`;
     const { createInspectorReportUploadCheckoutSession } = await import('../services/stripe');
     const session = await createInspectorReportUploadCheckoutSession({
@@ -2711,6 +2714,59 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
     } catch (emailErr) {
       logger.error({ err: emailErr, reportId }, '[inspector] Auto-email to homeowner failed (parser still succeeded)');
     }
+
+    // ── Notify the inspector that their report is ready ──
+    // After the inspector pays at upload time we now route them to the
+    // reports list (showing a "processing" status badge). They walk away;
+    // this email is the prompt to come back, review items, and hit "Send
+    // to Client". Best-effort — failure here is logged but doesn't unwind
+    // the parser.
+    void (async () => {
+      try {
+        const [row] = await db.select({
+          itemCount: inspectionReports.itemsParsed,
+          propertyAddress: inspectionReports.propertyAddress,
+          propertyCity: inspectionReports.propertyCity,
+          propertyState: inspectionReports.propertyState,
+          inspectorEmail: inspectorPartners.email,
+          inspectorCompanyName: inspectorPartners.companyName,
+        })
+          .from(inspectionReports)
+          .leftJoin(inspectorPartners, eq(inspectionReports.inspectorPartnerId, inspectorPartners.id))
+          .where(eq(inspectionReports.id, reportId))
+          .limit(1);
+        if (!row || !row.inspectorEmail) return;
+
+        const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+        const detailUrl = `${APP_URL}/inspector/reports/${reportId}`;
+        const status = hasLowConfidence ? 'ready (with items flagged for review)' : 'ready to send';
+        const subject = `Your inspection report is ${hasLowConfidence ? 'ready for review' : 'ready to send'}`;
+        const html = `<div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
+            <div style="background:#2D2926;padding:20px 32px;text-align:center">
+              <span style="color:#E8632B;font-size:24px;font-weight:bold;font-family:Georgia,serif">homie</span>
+              <span style="color:rgba(255,255,255,0.5);font-size:12px;margin-left:8px">inspect</span>
+            </div>
+            <div style="background:white;padding:32px">
+              <p style="color:#2D2926;font-size:18px;font-weight:600;margin:0 0 4px">Your report is ${status}</p>
+              <p style="color:#9B9490;font-size:14px;margin:0 0 24px">${row.itemCount ?? parsedItems.length} items parsed</p>
+              <div style="background:#F9F5F2;border-radius:12px;padding:20px;margin-bottom:24px">
+                <p style="color:#2D2926;font-size:15px;margin:0 0 8px"><strong>${row.propertyAddress}</strong></p>
+                <p style="color:#6B6560;font-size:14px;margin:0">${row.propertyCity}, ${row.propertyState}</p>
+              </div>
+              ${hasLowConfidence ? `<p style="color:#8B6F00;background:#FFF8E6;border:1px solid #F4D87A;border-radius:8px;padding:10px 12px;font-size:13px;margin:0 0 18px">Some items came back with low AI confidence and are pinned for review at the top of the items list.</p>` : ''}
+              <div style="text-align:center">
+                <a href="${detailUrl}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">Review &amp; send to client &rarr;</a>
+              </div>
+              <p style="color:#9B9490;font-size:12px;text-align:center;margin-top:16px">Bulk-edit severity or category if anything looks off, then hit Send to Client.</p>
+            </div>
+          </div>`;
+        const { sendEmail } = await import('../services/notifications');
+        await sendEmail(row.inspectorEmail, subject, html);
+        logger.info({ reportId, inspectorEmail: row.inspectorEmail }, '[inspector] Parse-complete notification sent');
+      } catch (notifyErr) {
+        logger.warn({ err: notifyErr, reportId }, '[inspector] Parse-complete notification failed (non-fatal)');
+      }
+    })();
   } catch (err) {
     logger.error({ err, reportId }, '[inspector] Report parsing failed');
     // ── Retry once, then auto-refund ──

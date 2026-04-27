@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { inspectorService, type InspectionReport } from '@/services/inspector-api';
 
 const O = '#E8632B';
@@ -79,11 +79,36 @@ function statusPriority(s: ParsingStatus | undefined): number {
 
 export default function InspectorReports() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [reports, setReports] = useState<InspectionReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [reminderState, setReminderState] = useState<Record<string, 'sending' | 'sent' | 'error'>>({});
   const pollTimerRef = useRef<number | null>(null);
+
+  // Stripe success_url lands here with ?just_uploaded=<reportId>. Show
+  // the "processing" modal once per landing — once dismissed (or once
+  // the param is cleared by the user), it stays dismissed.
+  const justUploadedId = searchParams.get('just_uploaded');
+  const [processingModalOpen, setProcessingModalOpen] = useState(false);
+  useEffect(() => {
+    if (justUploadedId) setProcessingModalOpen(true);
+  }, [justUploadedId]);
+
+  const justUploadedReport = useMemo(
+    () => (justUploadedId ? reports.find(r => r.id === justUploadedId) ?? null : null),
+    [justUploadedId, reports],
+  );
+
+  function dismissProcessingModal() {
+    setProcessingModalOpen(false);
+    // Strip the param from the URL so a refresh doesn't re-open the modal.
+    if (searchParams.has('just_uploaded')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('just_uploaded');
+      setSearchParams(next, { replace: true });
+    }
+  }
 
   const fetchReports = useCallback(async () => {
     try {
@@ -209,10 +234,88 @@ export default function InspectorReports() {
         </div>
       )}
 
+      {/* "Just uploaded — processing" confirmation modal. Fires once per
+          Stripe success_url landing (?just_uploaded=<reportId>). Stays
+          dismissed once the inspector clicks Got it OR refreshes. */}
+      {processingModalOpen && (
+        <ProcessingModal
+          report={justUploadedReport}
+          onClose={dismissProcessingModal}
+        />
+      )}
+
       {/* Pulse keyframe for processing dot */}
       <style>{`
         @keyframes hi-pulse { 0% { opacity: 1; } 50% { opacity: 0.35; } 100% { opacity: 1; } }
       `}</style>
+    </div>
+  );
+}
+
+// ── Just-uploaded processing modal ──────────────────────────────────────
+
+function ProcessingModal({ report, onClose }: {
+  report: InspectionReport | null;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#fff', borderRadius: 16, padding: 28, maxWidth: 460, width: '100%',
+        boxShadow: '0 24px 64px -20px rgba(0,0,0,0.25)',
+        fontFamily: "'DM Sans', sans-serif", textAlign: 'center',
+      }}>
+        {/* Spinner / pulse glyph */}
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%',
+          background: `${O}15`, border: `2px solid ${O}`,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          marginBottom: 16,
+        }}>
+          <span style={{
+            width: 14, height: 14, borderRadius: '50%', background: O,
+            animation: 'hi-pulse 1.4s ease-in-out infinite',
+          }} />
+        </div>
+
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, marginBottom: 8 }}>
+          Report uploaded — parsing in progress
+        </div>
+
+        {report && (
+          <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 14 }}>
+            <strong style={{ color: D }}>{report.propertyAddress}</strong>
+            {report.propertyCity ? `, ${report.propertyCity}` : ''}
+            {report.propertyState ? `, ${report.propertyState}` : ''}
+          </div>
+        )}
+
+        <div style={{ fontSize: 14, color: '#6B6560', lineHeight: 1.55, marginBottom: 22, textAlign: 'left' }}>
+          Our AI is parsing this report into actionable items. This usually
+          takes <strong style={{ color: D }}>2–5 minutes</strong> for a
+          typical inspection — longer for very large reports.
+          <br /><br />
+          You can leave this page. We'll email you at your inspector account
+          address as soon as it's ready to review and send to your client.
+          The status badge on this list also updates automatically.
+        </div>
+
+        <button
+          onClick={onClose}
+          style={{
+            padding: '12px 28px', background: O, color: '#fff', border: 'none',
+            borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >Got it</button>
+      </div>
     </div>
   );
 }
