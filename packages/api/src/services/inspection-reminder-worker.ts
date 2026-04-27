@@ -5,7 +5,7 @@ import { sendEmail } from './notifications';
 import logger from '../logger';
 
 /**
- * 5-day reminder sweep for parsed inspection reports the homeowner
+ * 5-day reminder sweep for sent inspection reports the homeowner
  * never opened. Fires once per report (homeownerReminderSentAt acts
  * as the idempotency flag). Suppressed when the homeowner already
  * opened the email — see the email tracking pixel route in
@@ -13,6 +13,11 @@ import logger from '../logger';
  *
  * Polls every 60 minutes — finer cadence isn't worth it; the trigger
  * is "more than 5 days have passed", which doesn't move minute-to-minute.
+ *
+ * Keys off `clientNotifiedAt` — set when the inspector clicks Send to
+ * Client in their portal. (The legacy auto-email-on-parse path stamped
+ * `homeownerEmailedAt`; that path was removed when the inspector-
+ * controlled send modal shipped.)
  */
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
@@ -24,12 +29,11 @@ export function startInspectionReminderWorker(): void {
       const cutoff = new Date(Date.now() - REMINDER_DELAY_MS);
 
       // Pull every report that:
-      //   • was emailed to the homeowner ≥ 5 days ago
+      //   • the inspector clicked Send to Client ≥ 5 days ago
+      //     (clientNotifiedAt is the source of truth for "homeowner has
+      //     received an email about this report")
       //   • homeowner has not opened (homeownerOpenedAt IS NULL)
       //   • we haven't already reminded (homeownerReminderSentAt IS NULL)
-      // Filtered against the supporting partial index on
-      // (homeowner_emailed_at) WHERE homeowner_opened_at IS NULL AND
-      // homeowner_reminder_sent_at IS NULL — see startup migration.
       const due = await db
         .select({
           id: inspectionReports.id,
@@ -41,7 +45,7 @@ export function startInspectionReminderWorker(): void {
         .from(inspectionReports)
         .where(
           and(
-            lte(inspectionReports.homeownerEmailedAt, cutoff),
+            lte(inspectionReports.clientNotifiedAt, cutoff),
             isNull(inspectionReports.homeownerOpenedAt),
             isNull(inspectionReports.homeownerReminderSentAt),
           ),

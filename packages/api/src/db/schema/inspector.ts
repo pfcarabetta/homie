@@ -145,9 +145,11 @@ export const inspectionReports = pgTable('inspection_reports', {
    *  attempt; on failure we increment + retry once; on second failure
    *  we mark parsingStatus='failed' + auto-refund. */
   parseRetryCount: integer('parse_retry_count').notNull().default(0),
-  /** When we auto-emailed the parsed report to clientEmail. Drives
-   *  the 5-day-reminder sweep — null = no email sent yet (parser
-   *  hasn't finished or no email captured), set = waiting on open. */
+  /** @deprecated Legacy field from the auto-send-on-parse pipeline.
+   *  No longer written to (the inspector-controlled Send-to-Client
+   *  modal sets `clientNotifiedAt` instead, which is what the reminder
+   *  worker now keys off). Kept on the row for back-compat with old
+   *  records and any reporting that already references it. */
   homeownerEmailedAt: timestamp('homeowner_emailed_at', { withTimezone: true }),
   /** First time the homeowner's email tracking pixel fired. Used to
    *  suppress the reminder — if they've opened, they don't need a

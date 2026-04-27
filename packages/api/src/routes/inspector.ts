@@ -2703,17 +2703,15 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
       }
     })();
 
-    // ── Auto-email the parsed report to the homeowner ──
-    // Fires unconditionally on success (review_pending OR parsed) — the
-    // inspector chose to send it when they uploaded; we don't second-
-    // guess on confidence. If the email is missing for any reason we
-    // skip silently. Wraps in try/catch so a SendGrid hiccup doesn't
-    // unwind the parser's success status.
-    try {
-      await sendParsedReportToHomeowner(reportId);
-    } catch (emailErr) {
-      logger.error({ err: emailErr, reportId }, '[inspector] Auto-email to homeowner failed (parser still succeeded)');
-    }
+    // ── No auto-email to the homeowner ──
+    // The inspector controls when (and to whom) the homeowner email
+    // goes via the Send-to-Client modal — they may want to bulk-edit
+    // parsing mistakes, add CC recipients (spouse, agent), or fix the
+    // primary client name/email before the report leaves their portal.
+    // The historic auto-send was removed once that modal landed.
+    // sendParsedReportToHomeowner() is left in place as orphan
+    // infrastructure in case we need a one-off send path later, but
+    // nothing calls it from the parse pipeline anymore.
 
     // ── Notify the inspector that their report is ready ──
     // After the inspector pays at upload time we now route them to the
