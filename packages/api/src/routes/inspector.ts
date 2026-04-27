@@ -341,6 +341,93 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
   }
 });
 
+// ── Projection helpers ────────────────────────────────────────────────
+//
+// The inspector frontend reads cleanly-named, dollar-denominated fields
+// (costEstimateMin/Max, earnings, location, photoDescriptions, etc.).
+// The DB rows expose Drizzle column names with the *Cents suffix and
+// snake-ish naming (aiCostEstimateLowCents, inspectorPhotos,
+// locationInProperty, aiConfidence-as-string). These helpers convert
+// in one place so both the list and detail endpoints serve the
+// contract the frontend type expects.
+
+function projectInspectionItem(i: typeof inspectionReportItems.$inferSelect) {
+  const lowDollars = (i.aiCostEstimateLowCents ?? 0) / 100;
+  const highDollars = (i.aiCostEstimateHighCents ?? 0) / 100;
+  const hasCost = (i.aiCostEstimateLowCents ?? 0) > 0 || (i.aiCostEstimateHighCents ?? 0) > 0;
+  // aiConfidence is `numeric` in PG → arrives as a string from Drizzle.
+  // The frontend type wants a number; coerce defensively.
+  const confidence = typeof i.aiConfidence === 'number'
+    ? i.aiConfidence
+    : (() => { const n = parseFloat(String(i.aiConfidence ?? '1')); return Number.isFinite(n) ? n : 1; })();
+  const sa = computeSellerAction(i.category, i.severity, i.aiCostEstimateLowCents ?? 0, i.aiCostEstimateHighCents ?? 0);
+  return {
+    id: i.id,
+    reportId: i.reportId,
+    title: i.title,
+    description: i.description ?? '',
+    severity: i.severity,
+    category: i.category,
+    location: i.locationInProperty,
+    photoDescriptions: i.inspectorPhotos ?? [],
+    costEstimateMin: hasCost ? lowDollars : null,
+    costEstimateMax: hasCost ? highDollars : null,
+    confidence,
+    dispatchStatus: i.dispatchStatus,
+    quoteDetails: i.quoteAmountCents != null ? {
+      providerName: i.providerName ?? '',
+      providerRating: i.providerRating != null ? parseFloat(String(i.providerRating)) : 0,
+      price: i.quoteAmountCents / 100,
+      availability: i.providerAvailability ?? '',
+    } : null,
+    valueImpact: computeValueImpact(i.category, i.severity, i.aiCostEstimateLowCents ?? 0, i.aiCostEstimateHighCents ?? 0),
+    sourcePages: i.sourcePages,
+    sellerAction: sa.action,
+    sellerActionReason: sa.reason,
+    sourceDocumentId: i.sourceDocumentId,
+    crossReferencedItemIds: i.crossReferencedItemIds ?? [],
+    inspectorAdjusted: i.inspectorAdjusted ?? false,
+  };
+}
+
+function projectInspectionReport(
+  r: typeof inspectionReports.$inferSelect,
+  opts: { itemCount: number; dispatchedCount: number; earningsCents: number },
+) {
+  return {
+    id: r.id,
+    inspectorId: r.inspectorPartnerId ?? '',
+    clientName: r.clientName,
+    clientEmail: r.clientEmail,
+    clientPhone: r.clientPhone,
+    propertyAddress: r.propertyAddress,
+    propertyCity: r.propertyCity,
+    propertyState: r.propertyState,
+    propertyZip: r.propertyZip,
+    // Drizzle returns `date` columns as strings.
+    inspectionDate: r.inspectionDate,
+    inspectionType: r.inspectionType,
+    // Legacy `status` retained for older code paths; the frontend should
+    // prefer parsingStatus going forward.
+    status: r.parsingStatus === 'sent_to_client' ? 'sent'
+      : r.parsingStatus === 'parsed' || r.parsingStatus === 'review_pending' ? 'ready'
+      : r.parsingStatus === 'failed' ? 'completed'
+      : 'processing',
+    parsingStatus: r.parsingStatus,
+    parsingError: r.parsingError,
+    pricingTier: r.pricingTier,
+    ccEmails: r.ccEmails ?? [],
+    clientNotifiedAt: r.clientNotifiedAt?.toISOString() ?? null,
+    homeownerOpenedAt: r.homeownerOpenedAt?.toISOString() ?? null,
+    homeownerReminderSentAt: r.homeownerReminderSentAt?.toISOString() ?? null,
+    clientAccessToken: r.clientAccessToken,
+    itemCount: opts.itemCount,
+    dispatchedCount: opts.dispatchedCount,
+    earnings: opts.earningsCents / 100,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
 // GET /api/v1/inspector/reports — list reports
 router.get('/reports', requireInspectorAuth, async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 20, 100);
@@ -350,9 +437,42 @@ router.get('/reports', requireInspectorAuth, async (req: Request, res: Response)
       .where(eq(inspectionReports.inspectorPartnerId, req.inspectorId))
       .orderBy(desc(inspectionReports.createdAt))
       .limit(limit).offset(offset);
+
+    // One round-trip to grab per-report counts and earnings totals so
+    // the list cards have item counts + dispatched counts + total
+    // earnings (in dollars) without N+1ing.
+    const ids = reports.map(r => r.id);
+    const itemAgg = ids.length > 0
+      ? await db.select({
+          reportId: inspectionReportItems.reportId,
+          itemCount: sql<number>`COUNT(*)`,
+          dispatchedCount: sql<number>`SUM(CASE WHEN ${inspectionReportItems.dispatchStatus} <> 'not_dispatched' AND ${inspectionReportItems.dispatchStatus} IS NOT NULL THEN 1 ELSE 0 END)`,
+        })
+          .from(inspectionReportItems)
+          .where(inArray(inspectionReportItems.reportId, ids))
+          .groupBy(inspectionReportItems.reportId)
+      : [];
+    const earningsAgg = ids.length > 0
+      ? await db.select({
+          reportId: inspectorEarnings.reportId,
+          totalCents: sql<number>`COALESCE(SUM(${inspectorEarnings.amountCents}), 0)`,
+        })
+          .from(inspectorEarnings)
+          .where(inArray(inspectorEarnings.reportId, ids))
+          .groupBy(inspectorEarnings.reportId)
+      : [];
+    const itemMap = new Map(itemAgg.map(r => [r.reportId, r]));
+    const earnMap = new Map(earningsAgg.map(r => [r.reportId, r.totalCents]));
+
+    const projected = reports.map(r => projectInspectionReport(r, {
+      itemCount: Number(itemMap.get(r.id)?.itemCount ?? 0),
+      dispatchedCount: Number(itemMap.get(r.id)?.dispatchedCount ?? 0),
+      earningsCents: Number(earnMap.get(r.id) ?? 0),
+    }));
+
     const [{ value: total }] = await db.select({ value: count() }).from(inspectionReports)
       .where(eq(inspectionReports.inspectorPartnerId, req.inspectorId));
-    res.json({ data: reports, error: null, meta: { total, limit, offset } });
+    res.json({ data: projected, error: null, meta: { total, limit, offset } });
   } catch (err) {
     logger.error({ err }, '[GET /inspector/reports]');
     res.status(500).json({ data: null, error: 'Failed to load reports', meta: {} });
@@ -371,7 +491,14 @@ router.get('/reports/:id', requireInspectorAuth, async (req: Request, res: Respo
       .orderBy(inspectionReportItems.sortOrder);
     const earnings = await db.select().from(inspectorEarnings)
       .where(eq(inspectorEarnings.reportId, report.id));
-    res.json({ data: { ...report, items, earnings }, error: null, meta: {} });
+    const earningsCents = earnings.reduce((sum, e) => sum + (e.amountCents ?? 0), 0);
+    const projectedItems = items.map(projectInspectionItem);
+    const projectedReport = projectInspectionReport(report, {
+      itemCount: items.length,
+      dispatchedCount: items.filter(i => i.dispatchStatus && i.dispatchStatus !== 'not_dispatched').length,
+      earningsCents,
+    });
+    res.json({ data: { ...projectedReport, items: projectedItems }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[GET /inspector/reports/:id]');
     res.status(500).json({ data: null, error: 'Failed to load report', meta: {} });
