@@ -2633,9 +2633,7 @@ Write ONLY the summary — no questions, no conversational language, no greeting
     // Handled BEFORE the in-flight bail. The voice/video panel is an
     // additive UI surface — opening it doesn't clobber an existing chat
     // (the panel just swaps in for the DirectInput area). And the user
-    // explicitly tapped the homepage button so we always honor it. We
-    // also reset phase to 'greeting' so the wrapping chat-area block
-    // renders the panel even if a stale snapshot left phase='diagnosis'.
+    // explicitly tapped the homepage button so we always honor it.
     if (start === 'voice' || start === 'video') {
       prefillConsumedRef.current = true;
       // If a category was passed alongside (e.g. chip → voice), pre-
@@ -2643,12 +2641,14 @@ Write ONLY the summary — no questions, no conversational language, no greeting
       if (categoryParam && CATEGORY_FLOWS[categoryParam]) {
         setData(d => ({ ...d, category: categoryParam }));
       }
-      // Force the chat into the greeting/intake phase so the wrapping
-      // gq-chat-area renders. When `data.aiDiagnosis` exists or phase ===
-      // 'diagnosis', the entire intake area returns null and the panel
-      // never mounts — clearing both here guarantees the user sees the
-      // panel they asked for.
-      setPhase('greeting');
+      // Phase MUST be 'category' for the voice/video panel to mount —
+      // the panel render is gated by `c === "category"` in the JSX
+      // (the same block as the repair-category pills + DirectInput).
+      // Two more guards: clear `aiDiagnosis` (the parent gq-chat-area
+      // returns null when set) and skip the greeting bail above this
+      // effect's sibling greeting useEffect — already handled at the
+      // top of that effect.
+      setPhase('category');
       setData(d => ({ ...d, aiDiagnosis: null }));
       // Prime iOS audio the same way the DirectInput buttons do — this
       // effect runs synchronously in response to the prior gesture
