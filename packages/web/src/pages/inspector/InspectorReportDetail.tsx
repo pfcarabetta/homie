@@ -255,6 +255,10 @@ export default function InspectorReportDetail() {
   // User-facing error message when an item-edit save fails. Previously
   // swallowed silently which made the Save button appear to do nothing.
   const [saveError, setSaveError] = useState<string | null>(null);
+  // "Saved" toast — shown briefly after a successful edit so the user
+  // gets visible feedback even when severity/category changes re-sort
+  // the card to a different position in the list.
+  const [savedToast, setSavedToast] = useState(false);
 
   async function handleSaveEdit(itemId: string) {
     if (!report) return;
@@ -278,6 +282,8 @@ export default function InspectorReportDetail() {
         items: report.items.map(i => i.id === itemId ? res.data! : i),
       });
       setEditingId(null);
+      setSavedToast(true);
+      window.setTimeout(() => setSavedToast(false), 2200);
     } catch (err) {
       setSaveError((err as Error).message ?? 'Save failed — please try again');
     }
@@ -388,7 +394,20 @@ export default function InspectorReportDetail() {
         </div>
         <div>
           <label style={labelStyle}>Category</label>
-          <input style={inputStyle} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="e.g., Plumbing, Electrical" />
+          <select style={inputStyle} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+            {/* Empty option for newly-added items where the AI hasn't
+             *  picked a category yet — forces the inspector to choose. */}
+            <option value="">— Pick a category —</option>
+            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{CATEGORY_ICONS[key] ?? ''} {label}</option>
+            ))}
+            {/* If the existing item has a category not in our allow-list
+             *  (legacy data), show it as a disabled option so the dropdown
+             *  doesn't silently drop it on first render. */}
+            {form.category && !CATEGORY_LABELS[form.category] && (
+              <option value={form.category}>{form.category} (legacy)</option>
+            )}
+          </select>
         </div>
         <div>
           <label style={labelStyle}>Location</label>
@@ -410,6 +429,24 @@ export default function InspectorReportDetail() {
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      {/* Saved confirmation toast — fixed-position so it's visible
+          regardless of scroll, and doesn't depend on which row the
+          edited card sorted to after the change. */}
+      {savedToast && (
+        <div style={{
+          position: 'fixed', top: 24, right: 24, zIndex: 200,
+          background: G, color: '#fff', padding: '10px 18px', borderRadius: 100,
+          fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700,
+          display: 'flex', alignItems: 'center', gap: 8,
+          boxShadow: '0 12px 32px -10px rgba(27,158,119,0.45)',
+          animation: 'hi-toast-in 0.18s ease-out',
+        }}>
+          <span style={{ fontSize: 14 }}>{'✓'}</span>
+          Saved
+        </div>
+      )}
+      <style>{`@keyframes hi-toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+
       {/* Back button */}
       <button
         onClick={() => navigate('/inspector/reports')}
