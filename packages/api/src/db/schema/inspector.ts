@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, timestamp, integer, numeric, date, boolean, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // ── Inspector Partners ────────────────────────────────────────────────────
 export const inspectorPartners = pgTable('inspector_partners', {
@@ -83,6 +84,19 @@ export const inspectionReports = pgTable('inspection_reports', {
   clientName: text('client_name').notNull(),
   clientEmail: text('client_email').notNull(),
   clientPhone: text('client_phone'),
+  /** Additional recipient emails added at send-to-client time (spouse,
+   *  buyer's agent, co-buyer, etc.). Capped at 5 by the route handler.
+   *  These emails are sent the same access link as the primary client,
+   *  AND when any of them creates a Homie account, that account is auto-
+   *  bound to this report (via cc_homeowner_ids) for full read/edit
+   *  access without paying. */
+  ccEmails: text('cc_emails').array().notNull().default(sql`'{}'::text[]`),
+  /** Homeowner UUIDs that gained access to this report via the cc_emails
+   *  flow. Populated by the homeowner signup hook when their email
+   *  matches an entry in cc_emails. Queried alongside homeowner_id when
+   *  loading a homeowner's report list and on per-report ownership
+   *  checks. */
+  ccHomeownerIds: uuid('cc_homeowner_ids').array().notNull().default(sql`'{}'::uuid[]`),
   inspectionDate: date('inspection_date').notNull(),
   /** general | pre_listing | new_construction | warranty_11mo | commercial | radon | mold | sewer_scope | pool_spa */
   inspectionType: text('inspection_type').notNull().default('general'),

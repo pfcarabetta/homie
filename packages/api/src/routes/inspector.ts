@@ -376,8 +376,25 @@ router.get('/reports/:id', requireInspectorAuth, async (req: Request, res: Respo
 });
 
 // POST /api/v1/inspector/reports/:id/send-to-client
+//
+// Sends the report's clientAccessToken link to the primary client and
+// any CC recipients (spouse, agent, co-buyer). The inspector can edit
+// the primary client name/email and add up to 5 CCs in the confirmation
+// modal before sending — this endpoint persists those edits on the row,
+// then fires one email per recipient.
+//
+// CC semantics: any email in cc_emails will be auto-bound to the report
+// (via cc_homeowner_ids) when that user creates a Homie account, giving
+// them full read/edit access without paying.
+//
+// Body: { client_name?, client_email?, cc_emails?: string[] }
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_CC_EMAILS = 5;
+
 router.post('/reports/:id/send-to-client', requireInspectorAuth, async (req: Request, res: Response) => {
   try {
+    const body = (req.body ?? {}) as { client_name?: string; client_email?: string; cc_emails?: string[] };
+
     const [report] = await db.select().from(inspectionReports)
       .where(and(eq(inspectionReports.id, req.params.id), eq(inspectionReports.inspectorPartnerId, req.inspectorId)))
       .limit(1);
@@ -387,23 +404,51 @@ router.post('/reports/:id/send-to-client', requireInspectorAuth, async (req: Req
       return;
     }
 
+    // Resolve final recipient values: prefer the body overrides (inspector
+    // edited them in the modal), fall back to whatever's on the row.
+    const finalClientName = (body.client_name?.trim() || report.clientName).trim();
+    const finalClientEmail = (body.client_email?.trim() || report.clientEmail).toLowerCase().trim();
+    if (!EMAIL_RE.test(finalClientEmail)) {
+      res.status(400).json({ data: null, error: 'Primary client email is not a valid email address', meta: {} });
+      return;
+    }
+
+    // Validate + dedupe CC emails: lowercase, trim, drop empties, drop
+    // anything that matches the primary, dedupe within the list, cap at 5.
+    const rawCcs = Array.isArray(body.cc_emails) ? body.cc_emails : [];
+    const seen = new Set<string>([finalClientEmail]);
+    const finalCcEmails: string[] = [];
+    for (const raw of rawCcs) {
+      if (typeof raw !== 'string') continue;
+      const e = raw.toLowerCase().trim();
+      if (!e || seen.has(e)) continue;
+      if (!EMAIL_RE.test(e)) {
+        res.status(400).json({ data: null, error: `"${raw}" is not a valid email address`, meta: {} });
+        return;
+      }
+      seen.add(e);
+      finalCcEmails.push(e);
+      if (finalCcEmails.length > MAX_CC_EMAILS) {
+        res.status(400).json({ data: null, error: `Maximum ${MAX_CC_EMAILS} CC recipients allowed`, meta: {} });
+        return;
+      }
+    }
+
     const [inspector] = await db.select({ companyName: inspectorPartners.companyName, companyLogoUrl: inspectorPartners.companyLogoUrl })
       .from(inspectorPartners).where(eq(inspectorPartners.id, req.inspectorId)).limit(1);
 
     const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
     const clientUrl = `${APP_URL}/inspect/${report.clientAccessToken}`;
+    const inspectorName = inspector?.companyName ?? 'your inspector';
 
-    // Send email to client
-    try {
-      const { sendEmail } = await import('../services/notifications');
-      const html = `<div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
+    const buildHtml = (recipientLabel: 'primary' | 'cc') => `<div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
         <div style="background:#2D2926;padding:20px 32px;text-align:center">
           <span style="color:#E8632B;font-size:24px;font-weight:bold;font-family:Georgia,serif">homie</span>
           <span style="color:rgba(255,255,255,0.5);font-size:12px;margin-left:8px">inspect</span>
         </div>
         <div style="background:white;padding:32px">
-          <p style="color:#2D2926;font-size:18px;font-weight:600;margin:0 0 4px">Your inspection report is ready</p>
-          <p style="color:#9B9490;font-size:14px;margin:0 0 24px">from ${inspector?.companyName ?? 'your inspector'}</p>
+          <p style="color:#2D2926;font-size:18px;font-weight:600;margin:0 0 4px">${recipientLabel === 'cc' ? `${finalClientName}'s inspection report is ready` : 'Your inspection report is ready'}</p>
+          <p style="color:#9B9490;font-size:14px;margin:0 0 24px">from ${inspectorName}</p>
           <div style="background:#F9F5F2;border-radius:12px;padding:20px;margin-bottom:24px">
             <p style="color:#2D2926;font-size:15px;margin:0 0 8px"><strong>${report.propertyAddress}</strong></p>
             <p style="color:#6B6560;font-size:14px;margin:0">${report.itemsParsed} items found · Inspected ${new Date(report.inspectionDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
@@ -411,24 +456,154 @@ router.post('/reports/:id/send-to-client', requireInspectorAuth, async (req: Req
           <div style="text-align:center">
             <a href="${clientUrl}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View Report & Get Quotes</a>
           </div>
-          <p style="color:#9B9490;font-size:12px;text-align:center;margin-top:16px">Get real quotes from local pros for every item — not estimates, actuals.</p>
+          <p style="color:#9B9490;font-size:12px;text-align:center;margin-top:16px">${recipientLabel === 'cc' ? `You were added as a recipient by ${finalClientName}'s inspector. Sign in with this email to access the full report.` : 'Get real quotes from local pros for every item — not estimates, actuals.'}</p>
         </div>
       </div>`;
-      await sendEmail(report.clientEmail, `Your inspection report from ${inspector?.companyName ?? 'your inspector'} is ready`, html);
-    } catch (err) {
-      logger.warn({ err }, '[inspector/send-to-client] Email send failed');
+
+    // Fire emails — one for the primary, one for each CC. Each attempt is
+    // wrapped so a single SendGrid hiccup doesn't block the others.
+    const { sendEmail } = await import('../services/notifications');
+    const subject = `Your inspection report from ${inspectorName} is ready`;
+    const sendResults: Array<{ to: string; ok: boolean }> = [];
+    for (const recipient of [{ email: finalClientEmail, label: 'primary' as const }, ...finalCcEmails.map(e => ({ email: e, label: 'cc' as const }))]) {
+      try {
+        await sendEmail(recipient.email, subject, buildHtml(recipient.label));
+        sendResults.push({ to: recipient.email, ok: true });
+      } catch (err) {
+        logger.warn({ err, to: recipient.email }, '[inspector/send-to-client] Email send failed for one recipient');
+        sendResults.push({ to: recipient.email, ok: false });
+      }
     }
 
+    // Persist edits + cc list + status. We always overwrite cc_emails to
+    // the new list (no merge with previous) so the inspector has explicit
+    // control via the modal. Existing cc_homeowner_ids stay — those are
+    // already-claimed users who shouldn't lose access if removed from the
+    // list later (revocation is a separate flow).
     await db.update(inspectionReports).set({
+      clientName: finalClientName,
+      clientEmail: finalClientEmail,
+      ccEmails: finalCcEmails,
       parsingStatus: 'sent_to_client',
       clientNotifiedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(inspectionReports.id, report.id));
 
-    res.json({ data: { sent: true, clientAccessUrl: clientUrl }, error: null, meta: {} });
+    res.json({ data: { sent: true, clientAccessUrl: clientUrl, recipients: sendResults }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[POST /inspector/reports/:id/send-to-client]');
     res.status(500).json({ data: null, error: 'Failed to send report', meta: {} });
+  }
+});
+
+// POST /api/v1/inspector/reports/:id/retry-parse
+//
+// Re-runs the parser on a report that landed in `failed` status. The
+// admin endpoint already exists at /admin/inspect/reports/:id/retry-parse;
+// this is the inspector-scoped version (ownership-checked) so partners
+// can self-service stuck reports without filing a support ticket.
+router.post('/reports/:id/retry-parse', requireInspectorAuth, async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.id), eq(inspectionReports.inspectorPartnerId, req.inspectorId)))
+      .limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    if (report.parsingStatus !== 'failed') {
+      res.status(400).json({ data: null, error: `Report is not in a failed state (current: ${report.parsingStatus})`, meta: {} });
+      return;
+    }
+
+    // Reset retry count + clear error + mark processing so the inspector
+    // UI flips back to its in-progress state immediately.
+    await db.update(inspectionReports).set({
+      parsingStatus: 'processing',
+      parsingError: null,
+      parseRetryCount: 0,
+      updatedAt: new Date(),
+    }).where(eq(inspectionReports.id, report.id));
+
+    void parseInspectionReportAsync(report.id).catch(err =>
+      logger.error({ err, reportId: report.id }, '[inspector/retry-parse] parser threw'),
+    );
+
+    res.json({ data: { retrying: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspector/reports/:id/retry-parse]');
+    res.status(500).json({ data: null, error: 'Failed to start retry', meta: {} });
+  }
+});
+
+// POST /api/v1/inspector/reports/:id/send-reminder
+//
+// Manual nudge for a sent report. Useful when the homeowner hasn't
+// opened the email after a few days and the inspector wants to follow up
+// without waiting for the 5-day auto-reminder sweep. Updates
+// homeownerReminderSentAt to suppress the auto-sweep for the same window.
+router.post('/reports/:id/send-reminder', requireInspectorAuth, async (req: Request, res: Response) => {
+  try {
+    const [report] = await db.select().from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.id), eq(inspectionReports.inspectorPartnerId, req.inspectorId)))
+      .limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    if (report.parsingStatus !== 'sent_to_client') {
+      res.status(400).json({ data: null, error: 'Report must be sent to client before reminders can be issued', meta: {} });
+      return;
+    }
+    if (report.homeownerOpenedAt) {
+      res.status(400).json({ data: null, error: 'Client already opened the report — no reminder needed', meta: {} });
+      return;
+    }
+
+    const [inspector] = await db.select({ companyName: inspectorPartners.companyName })
+      .from(inspectorPartners).where(eq(inspectorPartners.id, req.inspectorId)).limit(1);
+    const inspectorName = inspector?.companyName ?? 'your inspector';
+
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+    const clientUrl = `${APP_URL}/inspect/${report.clientAccessToken}`;
+
+    const html = `<div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:520px;margin:0 auto;padding:0;background:#F9F5F2">
+        <div style="background:#2D2926;padding:20px 32px;text-align:center">
+          <span style="color:#E8632B;font-size:24px;font-weight:bold;font-family:Georgia,serif">homie</span>
+          <span style="color:rgba(255,255,255,0.5);font-size:12px;margin-left:8px">inspect</span>
+        </div>
+        <div style="background:white;padding:32px">
+          <p style="color:#2D2926;font-size:18px;font-weight:600;margin:0 0 4px">A reminder about your inspection report</p>
+          <p style="color:#9B9490;font-size:14px;margin:0 0 24px">from ${inspectorName}</p>
+          <div style="background:#F9F5F2;border-radius:12px;padding:20px;margin-bottom:24px">
+            <p style="color:#2D2926;font-size:15px;margin:0 0 8px"><strong>${report.propertyAddress}</strong></p>
+            <p style="color:#6B6560;font-size:14px;margin:0">${report.itemsParsed} items waiting · Inspected ${new Date(report.inspectionDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+          </div>
+          <div style="text-align:center">
+            <a href="${clientUrl}" style="display:inline-block;background:#E8632B;color:white;padding:14px 36px;border-radius:100px;text-decoration:none;font-weight:600;font-size:16px">View Report &rarr;</a>
+          </div>
+          <p style="color:#9B9490;font-size:12px;text-align:center;margin-top:16px">Get real quotes from local pros for every item — not estimates, actuals.</p>
+        </div>
+      </div>`;
+
+    try {
+      const { sendEmail } = await import('../services/notifications');
+      await sendEmail(report.clientEmail, `Reminder: your inspection report from ${inspectorName} is ready`, html);
+    } catch (err) {
+      logger.warn({ err }, '[inspector/send-reminder] Email send failed');
+      res.status(500).json({ data: null, error: 'Failed to send reminder email', meta: {} });
+      return;
+    }
+
+    await db.update(inspectionReports).set({
+      homeownerReminderSentAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(inspectionReports.id, report.id));
+
+    res.json({ data: { sent: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /inspector/reports/:id/send-reminder]');
+    res.status(500).json({ data: null, error: 'Failed to send reminder', meta: {} });
   }
 });
 
@@ -494,6 +669,25 @@ router.post('/reports/:id/send-copy', requireInspectorAuth, async (req: Request,
     `.trim();
 
     await sendEmail(body.email, subject, html);
+
+    // Promote this email to a full CC recipient — when this person signs
+    // up for Homie with this email, they'll auto-bind to the report
+    // (same flow as the cc_emails set in send-to-client). Caps at 5.
+    const incomingEmail = body.email.toLowerCase().trim();
+    const existing = (report.ccEmails ?? []).map(e => e.toLowerCase().trim());
+    const primaryEmail = report.clientEmail.toLowerCase().trim();
+    if (incomingEmail !== primaryEmail && !existing.includes(incomingEmail)) {
+      const next = [...existing, incomingEmail];
+      if (next.length <= MAX_CC_EMAILS) {
+        await db.update(inspectionReports).set({
+          ccEmails: next,
+          updatedAt: new Date(),
+        }).where(eq(inspectionReports.id, report.id));
+      } else {
+        logger.warn({ reportId: report.id, ccCount: next.length }, '[inspector/send-copy] CC list at cap; not adding to cc_emails (email still sent)');
+      }
+    }
+
     logger.info({ reportId: report.id, copyEmail: body.email, requestedBy: req.inspectorId }, '[inspector] Report copy sent');
 
     res.json({ data: { sent: true, email: body.email }, error: null, meta: {} });
@@ -2120,6 +2314,16 @@ router.post('/claim/verify', async (req: Request, res: Response) => {
           .where(eq(inspectionReports.id, report.id));
       }
     }
+
+    // Auto-bind any OTHER reports this homeowner should see based on
+    // email — primary client on a different report, OR a CC recipient
+    // somewhere. Fire-and-forget; never blocks the claim flow.
+    void (async () => {
+      try {
+        const { autoBindReportsToHomeowner } = await import('../services/inspection-report-claim');
+        await autoBindReportsToHomeowner(homeowner.id, homeowner.email);
+      } catch (err) { logger.warn({ err }, '[inspect/claim/verify] report auto-bind hook failed (non-fatal)'); }
+    })();
 
     const authToken = signToken(homeowner.id);
 

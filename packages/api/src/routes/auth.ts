@@ -85,6 +85,16 @@ router.post('/register', async (req: Request, res: Response) => {
     // Send verification email (fire-and-forget)
     void sendVerificationEmail(homeowner.id, homeowner.email, verifyToken, homeowner.firstName);
 
+    // Auto-bind any inspection reports this homeowner should have access
+    // to (primary client OR cc recipient). Fire-and-forget — never blocks
+    // signup. See services/inspection-report-claim.ts.
+    void (async () => {
+      try {
+        const { autoBindReportsToHomeowner } = await import('../services/inspection-report-claim');
+        await autoBindReportsToHomeowner(homeowner.id, homeowner.email);
+      } catch (err) { logger.warn({ err }, '[auth/register] report auto-bind hook failed (non-fatal)'); }
+    })();
+
     // Send SMS opt-in confirmation if user consented and provided a phone number
     if (body.sms_opt_in && homeowner.phone) {
       try {

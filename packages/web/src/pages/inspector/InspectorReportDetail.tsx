@@ -91,16 +91,35 @@ export default function InspectorReportDetail() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 
-  const isSent = report && (report.status === 'sent' || report.status === 'active' || report.status === 'completed');
+  const isSent = report && (
+    report.parsingStatus === 'sent_to_client'
+    || report.status === 'sent' || report.status === 'active' || report.status === 'completed'
+  );
 
-  async function handleSendToClient() {
+  // Send-to-client confirmation modal state. The "Send to client" button
+  // opens this modal so the inspector can confirm the recipient name +
+  // email and add up to 5 CC recipients (spouse, agent, co-buyer) before
+  // the email goes out.
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  async function handleSendConfirmed(opts: { client_name: string; client_email: string; cc_emails: string[] }) {
     if (!report) return;
     setSending(true);
+    setSendError(null);
     try {
-      const res = await inspectorService.sendToClient(report.id);
-      if (res.data) setReport(res.data);
-    } catch {
-      // handle error silently
+      const res = await inspectorService.sendToClient(report.id, opts);
+      if (res.error) {
+        setSendError(res.error);
+        return;
+      }
+      // Re-fetch the report so status flips to sent_to_client + cc_emails
+      // and clientNotifiedAt are reflected from the server.
+      const fresh = await inspectorService.getReport(report.id);
+      if (fresh.data) setReport(fresh.data);
+      setSendModalOpen(false);
+    } catch (err) {
+      setSendError((err as Error).message ?? 'Failed to send report');
     } finally {
       setSending(false);
     }
@@ -320,7 +339,9 @@ export default function InspectorReportDetail() {
         </div>
       </div>
 
-      {/* Send to client CTA */}
+      {/* Send to client CTA — opens confirmation modal for name/email/CCs.
+          PDF download intentionally removed (per spec): inspectors keep
+          the original locally; the parsed report is the deliverable. */}
       {!isSent && (
         <div style={{
           background: '#ffffff', borderRadius: 14, border: `2px solid ${O}`, padding: 20, marginBottom: 24,
@@ -328,38 +349,30 @@ export default function InspectorReportDetail() {
         }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 600, color: D, marginBottom: 4 }}>Ready to send to client?</div>
-            <div style={{ fontSize: 13, color: '#6B6560' }}>Review items below, then send the report to your client.</div>
+            <div style={{ fontSize: 13, color: '#6B6560' }}>Review items below, then confirm the recipient and send.</div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {(report as unknown as { clientAccessToken?: string }).clientAccessToken && (
-              <a
-                href={`${import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}/api/v1/inspect/${(report as unknown as { clientAccessToken?: string }).clientAccessToken}/pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  padding: '10px 16px', background: 'transparent', color: O, border: `1px solid ${O}`,
-                  borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                  fontFamily: "'DM Sans', sans-serif", textDecoration: 'none', whiteSpace: 'nowrap',
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 2v8m0 0l-3-3m3 3l3-3M3 13h10" /></svg>
-                PDF
-              </a>
-            )}
-            <button
-              onClick={handleSendToClient}
-              disabled={sending}
-              style={{
-                padding: '10px 24px', background: O, color: '#fff', border: 'none',
-                borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer',
-                fontFamily: "'DM Sans', sans-serif", opacity: sending ? 0.7 : 1, whiteSpace: 'nowrap',
-              }}
-            >
-              {sending ? 'Sending...' : 'Send to Client'}
-            </button>
-          </div>
+          <button
+            onClick={() => { setSendError(null); setSendModalOpen(true); }}
+            disabled={sending}
+            style={{
+              padding: '10px 24px', background: O, color: '#fff', border: 'none',
+              borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer',
+              fontFamily: "'DM Sans', sans-serif", opacity: sending ? 0.7 : 1, whiteSpace: 'nowrap',
+            }}
+          >
+            Send to Client
+          </button>
         </div>
+      )}
+
+      {sendModalOpen && report && (
+        <SendToClientModal
+          report={report}
+          onClose={() => { setSendModalOpen(false); setSendError(null); }}
+          onSubmit={handleSendConfirmed}
+          sending={sending}
+          error={sendError}
+        />
       )}
 
       {/* "Send a copy" — always available once the report is parsed.
@@ -619,6 +632,208 @@ export default function InspectorReportDetail() {
           <div style={{ fontFamily: 'Fraunces, serif', fontSize: 28, fontWeight: 700, color: G }}>
             {formatCurrency(report.earnings)}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Send to Client confirmation modal ───────────────────────────────────
+//
+// Pre-fills the primary recipient name + email from the report row.
+// Inspector can edit either, plus add up to 5 CC recipients (spouse,
+// agent, co-buyer). When any CC's email is later used to create a Homie
+// account, the backend signup hook auto-binds them to this report so
+// they have full read/edit access without paying.
+
+const MAX_CC = 5;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function SendToClientModal({ report, onClose, onSubmit, sending, error }: {
+  report: InspectionReport;
+  onClose: () => void;
+  onSubmit: (opts: { client_name: string; client_email: string; cc_emails: string[] }) => void;
+  sending: boolean;
+  error: string | null;
+}) {
+  const [name, setName] = useState(report.clientName);
+  const [email, setEmail] = useState(report.clientEmail ?? '');
+  const [ccs, setCcs] = useState<string[]>(report.ccEmails ?? []);
+  const [ccDraft, setCcDraft] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  function tryAddCc(raw: string): boolean {
+    const e = raw.toLowerCase().trim().replace(/,$/, '');
+    if (!e) return false;
+    if (!EMAIL_RE.test(e)) {
+      setValidationError(`"${raw}" is not a valid email address`);
+      return false;
+    }
+    if (e === email.toLowerCase().trim()) {
+      setValidationError("That's the primary recipient — no need to CC them");
+      return false;
+    }
+    if (ccs.includes(e)) {
+      setValidationError('Already added');
+      return false;
+    }
+    if (ccs.length >= MAX_CC) {
+      setValidationError(`Maximum ${MAX_CC} CC recipients`);
+      return false;
+    }
+    setCcs([...ccs, e]);
+    setCcDraft('');
+    setValidationError(null);
+    return true;
+  }
+
+  function handleCcKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',' || (e.key === 'Tab' && ccDraft.trim())) {
+      if (ccDraft.trim()) {
+        e.preventDefault();
+        tryAddCc(ccDraft);
+      }
+    } else if (e.key === 'Backspace' && !ccDraft && ccs.length > 0) {
+      setCcs(ccs.slice(0, -1));
+    }
+  }
+
+  function handleSend() {
+    setValidationError(null);
+    // If there's text in the CC draft, try to commit it as a final chip.
+    let finalCcs = ccs;
+    if (ccDraft.trim()) {
+      const e = ccDraft.toLowerCase().trim().replace(/,$/, '');
+      if (!EMAIL_RE.test(e)) {
+        setValidationError(`"${ccDraft}" is not a valid email address`);
+        return;
+      }
+      if (e !== email.toLowerCase().trim() && !ccs.includes(e) && ccs.length < MAX_CC) {
+        finalCcs = [...ccs, e];
+      }
+    }
+    if (!EMAIL_RE.test(email.trim())) {
+      setValidationError('Primary client email is not a valid email address');
+      return;
+    }
+    if (!name.trim()) {
+      setValidationError("Client's name is required");
+      return;
+    }
+    onSubmit({ client_name: name.trim(), client_email: email.trim().toLowerCase(), cc_emails: finalCcs });
+  }
+
+  return (
+    <div
+      onClick={() => { if (!sending) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#fff', borderRadius: 16, padding: 24, maxWidth: 520, width: '100%',
+        boxShadow: '0 24px 64px -20px rgba(0,0,0,0.25)',
+      }}>
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: D, marginBottom: 6 }}>
+          Send report to client
+        </div>
+        <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 18, lineHeight: 1.5 }}>
+          {report.clientName}'s parsed report for {report.propertyAddress}. Confirm the recipient
+          details below, then add anyone else who should have access (spouse, buyer's agent,
+          co-buyer). CC recipients get full report access without paying when they create a Homie account.
+        </div>
+
+        <label style={labelStyle}>Client name *</label>
+        <input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 12 }}
+        />
+
+        <label style={labelStyle}>Client email *</label>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 12 }}
+        />
+
+        <label style={labelStyle}>
+          Also send to <span style={{ color: '#9B9490', fontWeight: 400 }}>(optional, max {MAX_CC})</span>
+        </label>
+        <div style={{
+          ...inputStyle,
+          padding: 6,
+          minHeight: 44,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 6,
+          alignItems: 'center',
+          marginBottom: 6,
+        }}>
+          {ccs.map(cc => (
+            <span key={cc} style={{
+              background: '#F5F0EB', color: D, padding: '4px 8px', borderRadius: 100,
+              fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}>
+              {cc}
+              <button
+                onClick={() => setCcs(ccs.filter(e => e !== cc))}
+                style={{ background: 'none', border: 'none', color: '#6B6560', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}
+                title="Remove"
+              >×</button>
+            </span>
+          ))}
+          <input
+            value={ccDraft}
+            onChange={e => { setCcDraft(e.target.value); setValidationError(null); }}
+            onKeyDown={handleCcKeyDown}
+            onBlur={() => { if (ccDraft.trim()) tryAddCc(ccDraft); }}
+            placeholder={ccs.length === 0 ? 'agent@example.com' : ''}
+            disabled={ccs.length >= MAX_CC}
+            style={{
+              flex: 1, minWidth: 140, border: 'none', outline: 'none', padding: '6px 4px',
+              fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: D, background: 'transparent',
+            }}
+          />
+        </div>
+        <div style={{ fontSize: 11, color: '#9B9490', marginBottom: 18 }}>
+          Press Enter or comma to add. {MAX_CC - ccs.length} {MAX_CC - ccs.length === 1 ? 'slot' : 'slots'} remaining.
+        </div>
+
+        {(validationError || error) && (
+          <div style={{
+            fontSize: 13, marginBottom: 14, padding: '10px 12px', borderRadius: 8,
+            background: '#FEF2F2', color: '#B91C1C',
+          }}>
+            {validationError || error}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            disabled={sending}
+            style={{
+              padding: '10px 18px', background: 'transparent', color: '#6B6560', border: '1px solid #E0DAD4',
+              borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: sending ? 'default' : 'pointer',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >Cancel</button>
+          <button
+            onClick={handleSend}
+            disabled={sending}
+            style={{
+              padding: '10px 22px', background: O, color: '#fff', border: 'none',
+              borderRadius: 8, fontSize: 14, fontWeight: 700,
+              cursor: sending ? 'default' : 'pointer', opacity: sending ? 0.7 : 1,
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            {sending ? 'Sending…' : ccs.length > 0 ? `Send to ${ccs.length + 1} recipients` : 'Send to client'}
+          </button>
         </div>
       </div>
     </div>

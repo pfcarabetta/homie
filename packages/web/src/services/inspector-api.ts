@@ -46,7 +46,22 @@ export interface InspectionReport {
   propertyZip: string;
   inspectionDate: string;
   inspectionType: string;
+  /** Legacy display status — use `parsingStatus` for the source-of-truth value. */
   status: 'processing' | 'ready' | 'sent' | 'active' | 'completed';
+  /** Parsing/lifecycle status straight from the DB column. */
+  parsingStatus?: 'uploading' | 'processing' | 'parsed' | 'review_pending' | 'sent_to_client' | 'failed';
+  parsingError?: string | null;
+  pricingTier?: 'essential' | 'professional' | 'premium' | null;
+  /** Additional recipient emails set in the send-to-client modal. */
+  ccEmails?: string[];
+  /** When the inspector hit "Send to Client". */
+  clientNotifiedAt?: string | null;
+  /** First time the homeowner's email tracking pixel fired (proxy for "opened"). */
+  homeownerOpenedAt?: string | null;
+  /** When the auto/manual reminder was last sent. */
+  homeownerReminderSentAt?: string | null;
+  /** Public token used in the homeowner-facing /inspect/:token URL. */
+  clientAccessToken?: string;
   items: InspectionItem[];
   itemCount: number;
   dispatchedCount: number;
@@ -314,10 +329,30 @@ export const inspectorService = {
     return inspectorFetch<InspectionReport>(`/api/v1/inspector/reports/${id}`);
   },
 
-  sendToClient(reportId: string) {
-    return inspectorFetch<InspectionReport>(`/api/v1/inspector/reports/${reportId}/send`, {
-      method: 'POST',
-    });
+  sendToClient(reportId: string, opts?: { client_name?: string; client_email?: string; cc_emails?: string[] }) {
+    return inspectorFetch<{ sent: boolean; clientAccessUrl: string; recipients: Array<{ to: string; ok: boolean }> }>(
+      `/api/v1/inspector/reports/${reportId}/send-to-client`,
+      { method: 'POST', body: JSON.stringify(opts ?? {}) },
+    );
+  },
+
+  /** Manually nudge a sent-but-unopened report. Updates
+   *  homeownerReminderSentAt and suppresses the auto-sweep for the
+   *  same window. */
+  sendReminder(reportId: string) {
+    return inspectorFetch<{ sent: boolean }>(
+      `/api/v1/inspector/reports/${reportId}/send-reminder`,
+      { method: 'POST' },
+    );
+  },
+
+  /** Retry parsing for a report stuck in `failed`. Calls the admin
+   *  retry endpoint scoped to this inspector's own report. */
+  retryParse(reportId: string) {
+    return inspectorFetch<{ retrying: boolean }>(
+      `/api/v1/inspector/reports/${reportId}/retry-parse`,
+      { method: 'POST' },
+    );
   },
 
   updateItem(reportId: string, itemId: string, data: Partial<InspectionItem>) {

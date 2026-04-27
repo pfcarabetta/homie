@@ -309,6 +309,13 @@
       "when": 1777190000000,
       "tag": "0043_homeiq_property_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1777270000000,
+      "tag": "0044_inspector_cc_emails",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { buildStripeMetadata } from '../services/stripe';
 import { analyzeDIY } from '../services/diy';
-import { eq, desc, and, ne, isNull, inArray, sql, count, lte } from 'drizzle-orm';
+import { eq, desc, and, or, ne, isNull, inArray, sql, count, lte } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners } from '../db/schema/homeowners';
@@ -1255,7 +1255,7 @@ router.get('/reports', async (req: Request, res: Response) => {
       reportFileUrl: inspectionReports.reportFileUrl,
       createdAt: inspectionReports.createdAt,
     }).from(inspectionReports)
-      .where(eq(inspectionReports.homeownerId, req.homeownerId))
+      .where(homeownerCanAccess(req.homeownerId))
       .orderBy(desc(inspectionReports.createdAt));
 
     // Fetch items for each report
@@ -1383,7 +1383,7 @@ router.delete('/reports/:reportId', async (req: Request, res: Response) => {
   try {
     const [report] = await db.select({ id: inspectionReports.id })
       .from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -1418,7 +1418,7 @@ router.patch('/reports/:reportId/mode', async (req: Request, res: Response) => {
   try {
     const [updated] = await db.update(inspectionReports)
       .set({ reportMode: mode, updatedAt: new Date() })
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .returning({ id: inspectionReports.id, reportMode: inspectionReports.reportMode });
     if (!updated) {
       res.status(404).json({ data: null, error: 'Report not found', meta: {} });
@@ -1452,7 +1452,7 @@ router.patch('/reports/:reportId/rename', async (req: Request, res: Response) =>
   try {
     const [updated] = await db.update(inspectionReports)
       .set({ displayName: nextValue, updatedAt: new Date() })
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .returning({ id: inspectionReports.id, displayName: inspectionReports.displayName });
     if (!updated) {
       res.status(404).json({ data: null, error: 'Report not found', meta: {} });
@@ -1478,7 +1478,7 @@ router.post('/reports/:reportId/items/:itemId/diy', async (req: Request, res: Re
       .from(inspectionReports)
       .where(and(
         eq(inspectionReports.id, req.params.reportId),
-        eq(inspectionReports.homeownerId, req.homeownerId),
+        homeownerCanAccess(req.homeownerId),
       ))
       .limit(1);
     if (!report) {
@@ -1549,7 +1549,7 @@ router.post('/reports/:reportId/checkout', async (req: Request, res: Response) =
 
   try {
     const [report] = await db.select().from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -1612,7 +1612,7 @@ router.post('/reports/:reportId/confirm-payment', async (req: Request, res: Resp
 
   try {
     const [report] = await db.select().from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -1668,7 +1668,7 @@ router.post('/reports/:reportId/dispatch', async (req: Request, res: Response) =
 
   try {
     const [report] = await db.select().from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -1845,7 +1845,7 @@ router.post('/reports/:reportId/items/:itemId/analyze', async (req: Request, res
       propertyCity: inspectionReports.propertyCity,
       propertyState: inspectionReports.propertyState,
     }).from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
@@ -1914,7 +1914,7 @@ router.post('/reports/:reportId/items/:itemId/chat', async (req: Request, res: R
       propertyCity: inspectionReports.propertyCity,
       propertyState: inspectionReports.propertyState,
     }).from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
@@ -1984,7 +1984,7 @@ router.post('/reports/:reportId/seed-mock-quotes', async (req: Request, res: Res
   try {
     const [report] = await db.select({ id: inspectionReports.id })
       .from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -2134,7 +2134,7 @@ router.post('/reports/:reportId/items/:itemId/book', async (req: Request, res: R
     // Validate report ownership
     const [report] = await db.select({ id: inspectionReports.id })
       .from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -2241,7 +2241,7 @@ router.patch('/reports/:reportId/items/:itemId/negotiation', async (req: Request
     // Validate report ownership
     const [report] = await db.select({ id: inspectionReports.id })
       .from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -2295,7 +2295,7 @@ router.patch('/reports/:reportId/items/:itemId/maintenance', async (req: Request
   try {
     const [report] = await db.select({ id: inspectionReports.id })
       .from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -2335,7 +2335,7 @@ router.patch('/reports/:reportId/items/:itemId/maintenance', async (req: Request
 router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Response) => {
   try {
     const [report] = await db.select().from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -2578,7 +2578,7 @@ router.get('/reports/:reportId/repair-request.pdf', async (req: Request, res: Re
 router.get('/reports/:reportId/pre-listing-plan.pdf', async (req: Request, res: Response) => {
   try {
     const [report] = await db.select().from(inspectionReports)
-      .where(and(eq(inspectionReports.id, req.params.reportId), eq(inspectionReports.homeownerId, req.homeownerId)))
+      .where(and(eq(inspectionReports.id, req.params.reportId), homeownerCanAccess(req.homeownerId)))
       .limit(1);
 
     if (!report) {
@@ -2771,9 +2771,26 @@ const VALID_DOC_TYPES = new Set([
   'chimney_inspection',
 ]);
 
+/**
+ * Returns a Drizzle WHERE expression that matches reports the given
+ * homeowner can access — either as the primary claimer (`homeowner_id`)
+ * OR as a CC recipient (their UUID is in `cc_homeowner_ids`, populated
+ * by the signup hook when their email matched a `cc_emails` entry).
+ *
+ * Use this in place of `eq(inspectionReports.homeownerId, X)` for any
+ * read OR write operation that should also be available to CC users
+ * (per the v1 design: spouse / agent / co-buyer get full access).
+ */
+function homeownerCanAccess(homeownerId: string) {
+  return or(
+    eq(inspectionReports.homeownerId, homeownerId),
+    sql`${inspectionReports.ccHomeownerIds} @> ARRAY[${homeownerId}]::uuid[]`,
+  );
+}
+
 async function ownsReport(reportId: string, homeownerId: string): Promise<boolean> {
   const [r] = await db.select({ id: inspectionReports.id }).from(inspectionReports)
-    .where(and(eq(inspectionReports.id, reportId), eq(inspectionReports.homeownerId, homeownerId)))
+    .where(and(eq(inspectionReports.id, reportId), homeownerCanAccess(homeownerId)))
     .limit(1);
   return !!r;
 }
@@ -2781,7 +2798,7 @@ async function ownsReport(reportId: string, homeownerId: string): Promise<boolea
 async function getReportToken(reportId: string, homeownerId: string): Promise<string | null> {
   const [r] = await db.select({ token: inspectionReports.clientAccessToken })
     .from(inspectionReports)
-    .where(and(eq(inspectionReports.id, reportId), eq(inspectionReports.homeownerId, homeownerId)))
+    .where(and(eq(inspectionReports.id, reportId), homeownerCanAccess(homeownerId)))
     .limit(1);
   return r?.token ?? null;
 }
@@ -3105,7 +3122,7 @@ router.get('/documents', async (req: Request, res: Response) => {
       propertyAddress: inspectionReports.propertyAddress,
       clientAccessToken: inspectionReports.clientAccessToken,
     }).from(inspectionReports)
-      .where(eq(inspectionReports.homeownerId, req.homeownerId));
+      .where(homeownerCanAccess(req.homeownerId));
 
     const reportIds = reports.map(r => r.id);
     if (reportIds.length === 0) {
