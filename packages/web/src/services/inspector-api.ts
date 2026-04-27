@@ -62,6 +62,18 @@ export interface InspectionReport {
   homeownerReminderSentAt?: string | null;
   /** Public token used in the homeowner-facing /inspect/:token URL. */
   clientAccessToken?: string;
+  /** Supporting documents (sewer scope, radon, etc.) bundled with the
+   *  upload OR added later by the homeowner. Populated on the GET
+   *  /inspector/reports/:id response so the detail page can render
+   *  per-doc status badges without a second round-trip. */
+  supportingDocuments?: Array<{
+    id: string;
+    documentType: SupportingDocumentType;
+    fileName: string;
+    parsingStatus: 'uploading' | 'processing' | 'parsed' | 'failed';
+    parsingError?: string | null;
+    createdAt: string;
+  }>;
   items: InspectionItem[];
   itemCount: number;
   dispatchedCount: number;
@@ -303,6 +315,16 @@ export const inspectorService = {
     inspection_type?: string;
     report_file_data_url: string;
     pricing_tier: 'essential' | 'professional' | 'premium';
+    /** Optional supporting documents (sewer scope, radon, mold, pest,
+     *  seller disclosure, etc.) to bundle with the upload. Up to 5,
+     *  freely included in the tier price. Each is uploaded + linked
+     *  immediately; parsing kicks off in parallel after the main
+     *  report parse succeeds. */
+    supporting_documents?: Array<{
+      document_type: SupportingDocumentType;
+      file_name: string;
+      file_data_url: string;
+    }>;
   }) {
     return inspectorFetch<{
       reportId: string;
@@ -310,6 +332,7 @@ export const inspectorService = {
       priceCents: number;
       tier: 'essential' | 'professional' | 'premium';
       retailPriceCents: number;
+      supportingDocCount: number;
     }>(
       '/api/v1/inspector/reports',
       { method: 'POST', body: JSON.stringify(payload) },

@@ -1,7 +1,34 @@
 import { useState, useEffect, useRef, type DragEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { inspectorService } from '@/services/inspector-api';
+import { inspectorService, type SupportingDocumentType } from '@/services/inspector-api';
 import { trackEvent } from '@/services/analytics';
+
+const MAX_SUPPORTING_DOCS = 5;
+
+// Display labels + categorical grouping for the supporting-doc type
+// picker. Mirrors the homeowner-side SupportingDocUploadModal so the
+// inspector's bundled docs feel consistent with what the homeowner
+// could add later from their own portal.
+const SUPPORTING_DOC_OPTIONS: Array<{ value: SupportingDocumentType; label: string }> = [
+  { value: 'pest_report',          label: 'Pest report' },
+  { value: 'seller_disclosure',    label: 'Seller disclosure' },
+  { value: 'sewer_scope',          label: 'Sewer scope' },
+  { value: 'roof_inspection',      label: 'Roof inspection' },
+  { value: 'foundation_report',    label: 'Foundation report' },
+  { value: 'hvac_inspection',      label: 'HVAC inspection' },
+  { value: 'electrical_inspection',label: 'Electrical inspection' },
+  { value: 'septic_inspection',    label: 'Septic inspection' },
+  { value: 'mold_inspection',      label: 'Mold inspection' },
+  { value: 'pool_inspection',      label: 'Pool / spa inspection' },
+  { value: 'chimney_inspection',   label: 'Chimney inspection' },
+];
+
+interface SupportingDocDraft {
+  /** Stable key for React lists — file name + index isn't unique enough. */
+  uid: string;
+  type: SupportingDocumentType | '';
+  file: File | null;
+}
 
 const O = '#E8632B';
 const D = '#2D2926';
@@ -131,6 +158,43 @@ export default function InspectorUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
+  // Supporting documents (sewer scope, radon, mold, etc.) bundled with
+  // the upload. Optional, max 5, freely included in the tier price.
+  // Defaults to a single empty draft on first expand so the inspector
+  // sees the type picker + file slot immediately rather than a bare
+  // "+ Add" button. Cleared if the inspector collapses the section.
+  const [supportingExpanded, setSupportingExpanded] = useState(false);
+  const [supportingDocs, setSupportingDocs] = useState<SupportingDocDraft[]>([]);
+
+  function addSupportingDoc() {
+    if (supportingDocs.length >= MAX_SUPPORTING_DOCS) return;
+    setSupportingDocs(d => [...d, { uid: crypto.randomUUID(), type: '', file: null }]);
+  }
+  function updateSupportingDoc(uid: string, patch: Partial<Omit<SupportingDocDraft, 'uid'>>) {
+    setSupportingDocs(d => d.map(x => x.uid === uid ? { ...x, ...patch } : x));
+  }
+  function removeSupportingDoc(uid: string) {
+    setSupportingDocs(d => d.filter(x => x.uid !== uid));
+  }
+  function toggleSupportingSection() {
+    setSupportingExpanded(prev => {
+      const next = !prev;
+      if (next && supportingDocs.length === 0) {
+        // Seed with one empty row when the inspector opens the section so
+        // they see the picker + file slot without an extra click.
+        setSupportingDocs([{ uid: crypto.randomUUID(), type: '', file: null }]);
+      } else if (!next) {
+        // Collapsing wipes drafts — keeps the submit payload predictable.
+        setSupportingDocs([]);
+      }
+      return next;
+    });
+  }
+  /** Drafts that are filled-out enough to actually submit (both type
+   *  picked and file attached). Used to gate the Continue button and
+   *  to size the payload at submit time. */
+  const validSupportingDocs = supportingDocs.filter(d => d.type && d.file);
+
   // Homeowner contact (was "client details")
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
@@ -196,6 +260,17 @@ export default function InspectorUpload() {
     setError(null);
     try {
       const dataUrl = await fileToDataUrl(file);
+      // Convert each filled-in supporting-doc draft to a data URL in
+      // parallel. Only the drafts with both a type AND a file count —
+      // empty rows are silently dropped so the inspector doesn't have
+      // to clean up before submitting.
+      const supportingPayload = await Promise.all(
+        validSupportingDocs.map(async d => ({
+          document_type: d.type as SupportingDocumentType,
+          file_name: d.file!.name,
+          file_data_url: await fileToDataUrl(d.file!),
+        })),
+      );
       const res = await inspectorService.createReport({
         property_address: propertyAddress,
         property_city: propertyCity,
@@ -208,6 +283,7 @@ export default function InspectorUpload() {
         inspection_type: inspectionType,
         report_file_data_url: dataUrl,
         pricing_tier: selectedTier,
+        supporting_documents: supportingPayload.length > 0 ? supportingPayload : undefined,
       });
       if (res.error || !res.data) {
         throw new Error(res.error ?? 'Failed to start checkout');
@@ -315,6 +391,68 @@ export default function InspectorUpload() {
                   Drop your inspection report PDF here
                 </div>
                 <div style={{ fontSize: 12, color: '#9B9490' }}>or click to browse files</div>
+              </div>
+            )}
+          </div>
+
+          {/* Supporting documents — opt-in accordion. Most uploads are
+              single-doc (just the main inspection PDF). Inspectors who
+              perform additional inspections (sewer scope, radon, mold,
+              pest, seller disclosure) on the same property can bundle
+              up to 5 here and they'll all parse + cross-reference
+              automatically after payment. Free with every tier. */}
+          <div style={{ marginTop: 20, borderTop: '1px solid #F0ECE8', paddingTop: 16 }}>
+            <button
+              onClick={toggleSupportingSection}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer',
+                fontFamily: "'DM Sans', sans-serif", color: D, textAlign: 'left',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: D }}>
+                  + Add supporting documents
+                  {validSupportingDocs.length > 0 && (
+                    <span style={{ marginLeft: 8, color: O, fontWeight: 700 }}>
+                      ({validSupportingDocs.length})
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
+                  Sewer scope, radon, mold, pest, seller disclosure&hellip; free, max {MAX_SUPPORTING_DOCS}.
+                </div>
+              </div>
+              <svg
+                width={18} height={18} viewBox="0 0 18 18" fill="none" stroke="#9B9490" strokeWidth="1.5" strokeLinecap="round"
+                style={{ transform: supportingExpanded ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s', flexShrink: 0 }}
+              >
+                <path d="M5 7l4 4 4-4" />
+              </svg>
+            </button>
+
+            {supportingExpanded && (
+              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {supportingDocs.map(doc => (
+                  <SupportingDocRow
+                    key={doc.uid}
+                    draft={doc}
+                    onChange={patch => updateSupportingDoc(doc.uid, patch)}
+                    onRemove={() => removeSupportingDoc(doc.uid)}
+                  />
+                ))}
+                {supportingDocs.length < MAX_SUPPORTING_DOCS && (
+                  <button
+                    onClick={addSupportingDoc}
+                    style={{
+                      padding: '10px 14px', background: '#fff', border: '1px dashed #E0DAD4',
+                      borderRadius: 10, color: O, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    + Add another supporting document
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -554,6 +692,88 @@ export default function InspectorUpload() {
           processing/parsed states. */}
       {/* Hidden marker so the navigate import is used (suppress lint) */}
       {false && <button onClick={() => navigate('/inspector')} hidden>noop</button>}
+    </div>
+  );
+}
+
+// ── Supporting doc row (single line: type picker + file picker + remove) ──
+
+function SupportingDocRow({ draft, onChange, onRemove }: {
+  draft: SupportingDocDraft;
+  onChange: (patch: Partial<Omit<SupportingDocDraft, 'uid'>>) => void;
+  onRemove: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (f && f.type === 'application/pdf') onChange({ file: f });
+  }
+
+  return (
+    <div style={{
+      display: 'flex', gap: 8, alignItems: 'center',
+      padding: '10px 12px', background: W, borderRadius: 10, border: '1px solid #E0DAD4',
+    }}>
+      <select
+        value={draft.type}
+        onChange={e => onChange({ type: e.target.value as SupportingDocumentType | '' })}
+        style={{
+          flex: '0 0 200px', padding: '8px 10px', fontSize: 13,
+          fontFamily: "'DM Sans', sans-serif", border: '1px solid #E0DAD4',
+          borderRadius: 8, background: '#fff', color: D, outline: 'none',
+        }}
+      >
+        <option value="">— Pick type —</option>
+        {SUPPORTING_DOC_OPTIONS.map(o => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+
+      {draft.file ? (
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            flex: 1, minWidth: 0, padding: '8px 12px', fontSize: 13,
+            fontFamily: "'DM Sans', sans-serif", border: '1px solid #E0DAD4',
+            borderRadius: 8, background: '#fff', color: D, cursor: 'pointer',
+            textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+          title={draft.file.name}
+        >
+          📎 {draft.file.name} <span style={{ color: '#9B9490', fontSize: 11 }}>({(draft.file.size / 1024 / 1024).toFixed(1)} MB)</span>
+        </button>
+      ) : (
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            flex: 1, minWidth: 0, padding: '8px 12px', fontSize: 13,
+            fontFamily: "'DM Sans', sans-serif", border: '1px dashed #E0DAD4',
+            borderRadius: 8, background: '#fff', color: '#9B9490', cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Choose PDF…
+        </button>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf"
+        onChange={pickFile}
+        style={{ display: 'none' }}
+      />
+
+      <button
+        onClick={onRemove}
+        style={{
+          padding: '8px 10px', background: 'transparent', color: '#9B9490', border: 'none',
+          borderRadius: 8, cursor: 'pointer', fontSize: 16, lineHeight: 1, flexShrink: 0,
+        }}
+        title="Remove this supporting document"
+      >
+        ×
+      </button>
     </div>
   );
 }

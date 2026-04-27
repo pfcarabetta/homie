@@ -2756,7 +2756,7 @@ router.get('/reports/:reportId/pre-listing-plan.pdf', async (req: Request, res: 
 
 // ── Supporting Documents (multi-doc analysis) ──────────────────────────────
 
-const VALID_DOC_TYPES = new Set([
+export const VALID_DOC_TYPES = new Set([
   'pest_report',
   'seller_disclosure',
   // Specialized inspections (round 2/3/4)

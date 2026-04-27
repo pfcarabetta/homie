@@ -202,6 +202,14 @@ router.put('/profile', requireInspectorAuth, async (req: Request, res: Response)
 // {report, clientAccessUrl} to {reportId, checkoutUrl}. The frontend
 // upload form follows the redirect; on Stripe success it lands back on
 // /inspector/reports/<id>.
+const MAX_SUPPORTING_DOCS = 5;
+
+interface SupportingDocPayload {
+  document_type?: string;
+  file_name?: string;
+  file_data_url?: string;
+}
+
 router.post('/reports', requireInspectorAuth, async (req: Request, res: Response) => {
   const body = req.body as {
     property_address: string; property_city: string; property_state: string; property_zip: string;
@@ -212,6 +220,12 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
      *  homeowner sees in their portal (dispatch / quotes / negotiation
      *  docs / maintenance timeline). Required. */
     pricing_tier?: string;
+    /** Optional supporting documents the inspector is bundling at upload
+     *  time (sewer scope, radon, mold, pest, seller disclosure, etc.).
+     *  Up to MAX_SUPPORTING_DOCS, freely included in the tier price.
+     *  These are uploaded + linked to the report immediately, then
+     *  parsed in parallel after the main report parse succeeds. */
+    supporting_documents?: SupportingDocPayload[];
   };
 
   if (!body.property_address || !body.client_name || !body.client_email || !body.inspection_date) {
@@ -232,6 +246,24 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
   if (!tier || (tier !== 'essential' && tier !== 'professional' && tier !== 'premium')) {
     res.status(400).json({ data: null, error: 'pricing_tier must be one of: essential, professional, premium', meta: {} });
     return;
+  }
+
+  // Validate supporting docs (optional — most uploads will have zero).
+  const supportingDocs = Array.isArray(body.supporting_documents) ? body.supporting_documents : [];
+  if (supportingDocs.length > MAX_SUPPORTING_DOCS) {
+    res.status(400).json({ data: null, error: `Maximum ${MAX_SUPPORTING_DOCS} supporting documents per upload`, meta: {} });
+    return;
+  }
+  const { VALID_DOC_TYPES } = await import('./account');
+  for (const doc of supportingDocs) {
+    if (!doc.document_type || !VALID_DOC_TYPES.has(doc.document_type)) {
+      res.status(400).json({ data: null, error: `Each supporting document needs a valid document_type (${Array.from(VALID_DOC_TYPES).join(', ')})`, meta: {} });
+      return;
+    }
+    if (!doc.file_data_url || !doc.file_name) {
+      res.status(400).json({ data: null, error: 'Each supporting document needs file_data_url + file_name', meta: {} });
+      return;
+    }
   }
 
   try {
@@ -325,6 +357,48 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
       .set({ stripeSessionId: session.id, updatedAt: new Date() })
       .where(eq(inspectionReports.id, report.id));
 
+    // ── Persist supporting documents (if any) ────────────────────────
+    // Uploaded to Cloudinary in parallel (with the data-URL fallback used
+    // by the main PDF), then inserted with parsingStatus='uploading'.
+    // The Stripe webhook → parseInspectionReportAsync flow fires
+    // parseSupportingDocAsync for each linked doc once the main report
+    // finishes parsing (so they parse in parallel after payment).
+    let supportingDocCount = 0;
+    if (supportingDocs.length > 0) {
+      try {
+        const { uploadFile } = await import('../services/image-upload');
+        const uploaded = await Promise.all(supportingDocs.map(async doc => {
+          let url: string | null = null;
+          try {
+            const r = await uploadFile(doc.file_data_url!, 'homie/inspection-supporting-docs');
+            if (r) url = r.url;
+          } catch (err) {
+            logger.warn({ err, docName: doc.file_name }, '[inspector/reports] supporting-doc Cloudinary upload failed, falling back to data URL');
+          }
+          if (!url) url = doc.file_data_url!;
+          return {
+            reportId: report.id,
+            documentType: doc.document_type!,
+            fileName: doc.file_name!,
+            documentFileUrl: url,
+            // 'uploading' so the Stripe-webhook path knows to fire parses
+            // after the main report parse succeeds. We don't go straight
+            // to 'processing' here — that would risk parsing before
+            // payment, and the inspector might cancel checkout.
+            parsingStatus: 'uploading' as const,
+          };
+        }));
+        const inserted = await db.insert(inspectionSupportingDocuments).values(uploaded).returning({ id: inspectionSupportingDocuments.id });
+        supportingDocCount = inserted.length;
+        logger.info({ reportId: report.id, supportingDocCount }, '[inspector/reports] supporting documents linked');
+      } catch (err) {
+        // Don't unwind the whole upload over a supporting-doc insert
+        // failure — the main report is the primary deliverable. Inspector
+        // can re-add docs later via the per-report supporting-doc UI.
+        logger.error({ err, reportId: report.id }, '[inspector/reports] supporting documents persist failed (main report still created)');
+      }
+    }
+
     res.status(201).json({
       data: {
         reportId: report.id,
@@ -332,6 +406,7 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
         priceCents,
         tier,
         retailPriceCents: tierPricing.retailPriceCents,
+        supportingDocCount,
       },
       error: null, meta: {},
     });
@@ -498,7 +573,27 @@ router.get('/reports/:id', requireInspectorAuth, async (req: Request, res: Respo
       dispatchedCount: items.filter(i => i.dispatchStatus && i.dispatchStatus !== 'not_dispatched').length,
       earningsCents,
     });
-    res.json({ data: { ...projectedReport, items: projectedItems }, error: null, meta: {} });
+    // Surface supporting docs so the inspector detail page can show
+    // per-doc parse status without a second round-trip.
+    const supportingDocsRaw = await db.select({
+      id: inspectionSupportingDocuments.id,
+      documentType: inspectionSupportingDocuments.documentType,
+      fileName: inspectionSupportingDocuments.fileName,
+      parsingStatus: inspectionSupportingDocuments.parsingStatus,
+      parsingError: inspectionSupportingDocuments.parsingError,
+      createdAt: inspectionSupportingDocuments.createdAt,
+    })
+      .from(inspectionSupportingDocuments)
+      .where(eq(inspectionSupportingDocuments.reportId, report.id))
+      .orderBy(inspectionSupportingDocuments.createdAt);
+    const supportingDocuments = supportingDocsRaw.map(d => ({
+      ...d,
+      createdAt: d.createdAt.toISOString(),
+    }));
+    res.json({
+      data: { ...projectedReport, items: projectedItems, supportingDocuments },
+      error: null, meta: {},
+    });
   } catch (err) {
     logger.error({ err }, '[GET /inspector/reports/:id]');
     res.status(500).json({ data: null, error: 'Failed to load report', meta: {} });
@@ -2918,6 +3013,38 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
     // sendParsedReportToHomeowner() is left in place as orphan
     // infrastructure in case we need a one-off send path later, but
     // nothing calls it from the parse pipeline anymore.
+
+    // ── Parse any linked supporting documents (best-effort, parallel) ──
+    // Inspector may have bundled sewer-scope, radon, mold, etc. at upload
+    // time; those rows were inserted with parsingStatus='uploading' so
+    // they'd parse only after Stripe payment + main report parse succeed.
+    // Cross-reference insights regenerate per-doc inside parseSupportingDocAsync.
+    void (async () => {
+      try {
+        const docs = await db.select({ id: inspectionSupportingDocuments.id })
+          .from(inspectionSupportingDocuments)
+          .where(and(
+            eq(inspectionSupportingDocuments.reportId, reportId),
+            eq(inspectionSupportingDocuments.parsingStatus, 'uploading'),
+          ));
+        if (docs.length === 0) return;
+        const { parseSupportingDocAsync } = await import('./account');
+        // Flip each to 'processing' first so the UI reflects in-flight
+        // status while parsing runs (per-doc status badges on the
+        // inspector detail page).
+        for (const d of docs) {
+          await db.update(inspectionSupportingDocuments)
+            .set({ parsingStatus: 'processing', updatedAt: new Date() })
+            .where(eq(inspectionSupportingDocuments.id, d.id));
+          void parseSupportingDocAsync(d.id).catch(err =>
+            logger.error({ err, docId: d.id, reportId }, '[inspector] supporting-doc parse failed'),
+          );
+        }
+        logger.info({ reportId, count: docs.length }, '[inspector] queued supporting-doc parses after main parse');
+      } catch (err) {
+        logger.warn({ err, reportId }, '[inspector] supporting-doc post-parse trigger failed (non-fatal)');
+      }
+    })();
 
     // ── Notify the inspector that their report is ready ──
     // After the inspector pays at upload time we now route them to the

@@ -622,6 +622,33 @@ export default function InspectorReportDetail() {
         </div>
       )}
 
+      {/* ── Supporting documents (if any) ─────────────────────────────
+          Inspector may have bundled sewer-scope, radon, mold, pest, or
+          seller-disclosure docs at upload time. Each gets parsed in
+          parallel after the main report finishes; their findings are
+          extracted into the items list with sourceDocumentId set, and
+          cross-referenced against the inspector's items via the existing
+          insight pipeline. This section just shows per-doc parse status
+          so the inspector knows when everything's ready. */}
+      {report.supportingDocuments && report.supportingDocuments.length > 0 && (
+        <div style={{
+          background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4',
+          padding: 16, marginBottom: 24,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: D, margin: 0 }}>
+              Supporting documents ({report.supportingDocuments.length})
+            </h3>
+            <span style={{ fontSize: 11, color: '#9B9490' }}>
+              Findings get added to the items list automatically once parsed
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {report.supportingDocuments.map(doc => <SupportingDocRow key={doc.id} doc={doc} />)}
+          </div>
+        </div>
+      )}
+
       {/* ── Items section ───────────────────────────────────────────────
           Mirrors the homeowner-inspect Reports tab UX so the inspector
           works in the same view their client will see — severity summary,
@@ -1398,6 +1425,83 @@ function BulkEditModal({ count, onCancel, onSubmit, busy, error }: {
           }}>{busy ? 'Updating…' : 'Apply'}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Inject the pulse keyframe at module-load (no-op if InspectorReports
+// already injected it on the same page session). Used by the in-flight
+// dot inside the supporting-doc parse-status badge.
+if (typeof document !== 'undefined' && !document.getElementById('hi-pulse-keyframe')) {
+  const s = document.createElement('style');
+  s.id = 'hi-pulse-keyframe';
+  s.textContent = `@keyframes hi-pulse { 0% { opacity: 1; } 50% { opacity: 0.35; } 100% { opacity: 1; } }`;
+  document.head.appendChild(s);
+}
+
+// ── Supporting doc row (one line per linked doc with parse status) ────
+
+const SUPPORTING_DOC_LABELS: Record<string, string> = {
+  pest_report: 'Pest report',
+  seller_disclosure: 'Seller disclosure',
+  sewer_scope: 'Sewer scope',
+  roof_inspection: 'Roof inspection',
+  foundation_report: 'Foundation report',
+  hvac_inspection: 'HVAC inspection',
+  electrical_inspection: 'Electrical inspection',
+  septic_inspection: 'Septic inspection',
+  mold_inspection: 'Mold inspection',
+  pool_inspection: 'Pool / spa inspection',
+  chimney_inspection: 'Chimney inspection',
+};
+
+function SupportingDocRow({ doc }: {
+  doc: NonNullable<InspectionReport['supportingDocuments']>[number];
+}) {
+  const label = SUPPORTING_DOC_LABELS[doc.documentType] ?? doc.documentType;
+  const status = doc.parsingStatus;
+  const isInFlight = status === 'uploading' || status === 'processing';
+  const badgeColor = status === 'parsed' ? G
+    : status === 'failed' ? '#DC2626'
+    : '#2563EB';
+  const badgeText = status === 'parsed' ? 'Parsed'
+    : status === 'failed' ? 'Failed'
+    : status === 'processing' ? 'Processing…'
+    : 'Waiting…';
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '10px 12px', background: '#F9F5F2', borderRadius: 10, border: '1px solid #E0DAD4',
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, color: D }}>
+          {label}
+        </div>
+        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: '#9B9490', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={doc.fileName}>
+          {doc.fileName}
+        </div>
+        {status === 'failed' && doc.parsingError && (
+          <div style={{ fontSize: 11, color: '#DC2626', marginTop: 2 }} title={doc.parsingError}>
+            {doc.parsingError}
+          </div>
+        )}
+      </div>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '4px 10px', borderRadius: 100,
+        background: `${badgeColor}15`, color: badgeColor,
+        fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 700,
+        whiteSpace: 'nowrap',
+      }}>
+        {isInFlight && (
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%', background: badgeColor,
+            animation: 'hi-pulse 1.4s ease-in-out infinite',
+          }} />
+        )}
+        {badgeText}
+      </span>
     </div>
   );
 }
