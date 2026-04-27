@@ -830,19 +830,78 @@ router.post('/reports/:id/send-copy', requireInspectorAuth, async (req: Request,
 // ── Item CRUD ─────────────────────────────────────────────────────────────
 
 // PUT /api/v1/inspector/reports/:id/items/:itemId — edit a parsed item
+//
+// Accepts both the frontend-friendly shape (location, costEstimateMin/Max
+// in dollars) AND the legacy DB-column shape (locationInProperty,
+// aiCostEstimateLow/HighCents in cents). Dollar-style cost fields are
+// converted to cents before persisting. Returns the projected item so the
+// frontend can drop the row in directly without re-fetching the report.
 router.put('/reports/:id/items/:itemId', requireInspectorAuth, async (req: Request, res: Response) => {
-  const body = req.body as Record<string, unknown>;
+  const body = (req.body ?? {}) as Record<string, unknown>;
   try {
-    const [item] = await db.select().from(inspectionReportItems).where(eq(inspectionReportItems.id, req.params.itemId)).limit(1);
-    if (!item) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
-    const updates: Record<string, unknown> = { inspectorAdjusted: true, updatedAt: new Date() };
-    for (const key of ['title', 'description', 'category', 'severity', 'locationInProperty', 'aiCostEstimateLowCents', 'aiCostEstimateHighCents']) {
-      const snakeKey = key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
-      if (body[key] !== undefined) updates[key] = body[key];
-      if (body[snakeKey] !== undefined) updates[key] = body[snakeKey];
+    // Ownership check — the item must belong to a report owned by this
+    // inspector. Single join keeps it cheap.
+    const [row] = await db.select({
+      itemId: inspectionReportItems.id,
+      reportInspectorId: inspectionReports.inspectorPartnerId,
+    })
+      .from(inspectionReportItems)
+      .leftJoin(inspectionReports, eq(inspectionReportItems.reportId, inspectionReports.id))
+      .where(and(
+        eq(inspectionReportItems.id, req.params.itemId),
+        eq(inspectionReportItems.reportId, req.params.id),
+      ))
+      .limit(1);
+    if (!row) { res.status(404).json({ data: null, error: 'Item not found', meta: {} }); return; }
+    if (row.reportInspectorId !== req.inspectorId) {
+      res.status(403).json({ data: null, error: 'Not authorized', meta: {} });
+      return;
     }
-    const [updated] = await db.update(inspectionReportItems).set(updates).where(eq(inspectionReportItems.id, req.params.itemId)).returning();
-    res.json({ data: updated, error: null, meta: {} });
+
+    const updates: Record<string, unknown> = { inspectorAdjusted: true, updatedAt: new Date() };
+
+    // Plain string fields — accept either the frontend's `location` or
+    // the DB's `locationInProperty`.
+    if (typeof body.title === 'string') updates.title = body.title;
+    if (typeof body.description === 'string') updates.description = body.description;
+    if (typeof body.category === 'string') updates.category = body.category;
+    if (typeof body.severity === 'string') updates.severity = body.severity;
+    if (body.location !== undefined) updates.locationInProperty = body.location === null ? null : String(body.location);
+    if (body.locationInProperty !== undefined) updates.locationInProperty = body.locationInProperty === null ? null : String(body.locationInProperty);
+    if (body.location_in_property !== undefined) updates.locationInProperty = body.location_in_property === null ? null : String(body.location_in_property);
+
+    // Cost: accept dollar-style names (costEstimateMin/Max — what the
+    // frontend sends after PR 3's projection refactor) AND the raw
+    // *Cents shapes (legacy callers / curl). Dollars convert to cents
+    // by ×100 and rounding.
+    const toCents = (v: unknown): number | undefined => {
+      if (v === null) return 0;
+      if (v === undefined) return undefined;
+      const n = typeof v === 'number' ? v : parseFloat(String(v));
+      if (!Number.isFinite(n)) return undefined;
+      return Math.round(n * 100);
+    };
+    const lowCentsFromDollars = toCents(body.costEstimateMin);
+    if (lowCentsFromDollars !== undefined) updates.aiCostEstimateLowCents = lowCentsFromDollars;
+    if (typeof body.aiCostEstimateLowCents === 'number') updates.aiCostEstimateLowCents = body.aiCostEstimateLowCents;
+    if (typeof body.ai_cost_estimate_low_cents === 'number') updates.aiCostEstimateLowCents = body.ai_cost_estimate_low_cents;
+    const highCentsFromDollars = toCents(body.costEstimateMax);
+    if (highCentsFromDollars !== undefined) updates.aiCostEstimateHighCents = highCentsFromDollars;
+    if (typeof body.aiCostEstimateHighCents === 'number') updates.aiCostEstimateHighCents = body.aiCostEstimateHighCents;
+    if (typeof body.ai_cost_estimate_high_cents === 'number') updates.aiCostEstimateHighCents = body.ai_cost_estimate_high_cents;
+
+    const [updated] = await db.update(inspectionReportItems)
+      .set(updates)
+      .where(eq(inspectionReportItems.id, req.params.itemId))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ data: null, error: 'Item not found after update', meta: {} });
+      return;
+    }
+    // Return the projected shape the frontend's InspectionItem type
+    // expects (cents → dollars, computed valueImpact, etc.) so the
+    // caller can splice the row into local state without a re-fetch.
+    res.json({ data: projectInspectionItem(updated), error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[PUT /inspector/reports/:id/items/:itemId]');
     res.status(500).json({ data: null, error: 'Failed to update item', meta: {} });

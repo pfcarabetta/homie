@@ -363,7 +363,7 @@ export const inspectorService = {
 
   updateItem(reportId: string, itemId: string, data: Partial<InspectionItem>) {
     return inspectorFetch<InspectionItem>(`/api/v1/inspector/reports/${reportId}/items/${itemId}`, {
-      method: 'PATCH',
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   },

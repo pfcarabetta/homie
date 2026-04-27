@@ -252,8 +252,13 @@ export default function InspectorReportDetail() {
     }
   }
 
+  // User-facing error message when an item-edit save fails. Previously
+  // swallowed silently which made the Save button appear to do nothing.
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   async function handleSaveEdit(itemId: string) {
     if (!report) return;
+    setSaveError(null);
     try {
       const res = await inspectorService.updateItem(report.id, itemId, {
         title: editForm.title,
@@ -264,19 +269,22 @@ export default function InspectorReportDetail() {
         costEstimateMin: editForm.costEstimateMin ? Number(editForm.costEstimateMin) : null,
         costEstimateMax: editForm.costEstimateMax ? Number(editForm.costEstimateMax) : null,
       });
-      if (res.data) {
-        setReport({
-          ...report,
-          items: report.items.map(i => i.id === itemId ? res.data! : i),
-        });
-        setEditingId(null);
+      if (res.error || !res.data) {
+        setSaveError(res.error ?? 'Save failed — please try again');
+        return;
       }
-    } catch {
-      // handle error silently
+      setReport({
+        ...report,
+        items: report.items.map(i => i.id === itemId ? res.data! : i),
+      });
+      setEditingId(null);
+    } catch (err) {
+      setSaveError((err as Error).message ?? 'Save failed — please try again');
     }
   }
 
   function startEdit(item: InspectionItem) {
+    setSaveError(null);
     setEditingId(item.id);
     setEditForm({
       title: item.title,
@@ -287,6 +295,11 @@ export default function InspectorReportDetail() {
       costEstimateMin: item.costEstimateMin?.toString() ?? '',
       costEstimateMax: item.costEstimateMax?.toString() ?? '',
     });
+  }
+
+  function cancelEdit() {
+    setSaveError(null);
+    setEditingId(null);
   }
 
   function toggleSelected(itemId: string) {
@@ -736,12 +749,13 @@ export default function InspectorReportDetail() {
                 setEditForm={setEditForm}
                 renderForm={renderItemForm}
                 onStartEdit={() => startEdit(item)}
-                onCancelEdit={() => setEditingId(null)}
+                onCancelEdit={cancelEdit}
                 onSaveEdit={() => handleSaveEdit(item.id)}
                 onDelete={() => handleDeleteItem(item.id)}
                 isSent={!!isSent}
                 selected={selectedIds.has(item.id)}
                 onToggleSelected={() => toggleSelected(item.id)}
+                saveError={isEditing ? saveError : null}
               />
             );
           });
@@ -1038,12 +1052,14 @@ interface ItemCardProps {
   isSent: boolean;
   selected: boolean;
   onToggleSelected: () => void;
+  /** Surfaced when this card is the actively-edited one and a save failed. */
+  saveError: string | null;
 }
 
 function ItemCard({
   item, isEditing, editForm, setEditForm, renderForm,
   onStartEdit, onCancelEdit, onSaveEdit, onDelete, isSent,
-  selected, onToggleSelected,
+  selected, onToggleSelected, saveError,
 }: ItemCardProps) {
   const sevColor = SEVERITY_COLORS[item.severity] ?? '#9B9490';
   const catLabel = CATEGORY_LABELS[item.category] ?? item.category;
@@ -1073,6 +1089,15 @@ function ItemCard({
       {isEditing ? (
         <>
           {renderForm(editForm, setEditForm)}
+          {saveError && (
+            <div style={{
+              marginTop: 10, padding: '8px 12px', borderRadius: 8,
+              background: '#FEF2F2', color: '#B91C1C',
+              fontFamily: "'DM Sans', sans-serif", fontSize: 13,
+            }}>
+              {saveError}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button onClick={onSaveEdit} style={{
               padding: '8px 16px', background: G, color: '#fff', border: 'none',
