@@ -238,20 +238,23 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
     const clientAccessToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
 
-    // Upload PDF to Cloudinary first; bail if upload fails so we don't
-    // create an orphan row pointing at nothing.
+    // Upload PDF to Cloudinary using `uploadFile` (resource_type: 'auto'),
+    // not `uploadImage` (resource_type: 'image' — Cloudinary rejects PDFs
+    // under that type unless the account has "PDF and ZIP delivery"
+    // enabled, which is off by default). If Cloudinary is misconfigured
+    // or the upload fails for any other reason, fall back to storing the
+    // raw data URL directly — the parser handles both transparently
+    // (see parseInspectionReportAsync) so the inspector still gets to
+    // checkout and the homeowner still gets a parsed report.
     let reportFileUrl: string | null = null;
     try {
-      const { uploadImage } = await import('../services/image-upload');
-      const result = await uploadImage(body.report_file_data_url, 'homie/inspection-reports');
+      const { uploadFile } = await import('../services/image-upload');
+      const result = await uploadFile(body.report_file_data_url, 'homie/inspection-reports');
       if (result) reportFileUrl = result.url;
     } catch (err) {
-      logger.warn({ err }, '[inspector/reports] Report file upload failed');
+      logger.warn({ err }, '[inspector/reports] Cloudinary upload failed, falling back to data URL');
     }
-    if (!reportFileUrl) {
-      res.status(500).json({ data: null, error: 'Report file upload failed — please retry', meta: {} });
-      return;
-    }
+    if (!reportFileUrl) reportFileUrl = body.report_file_data_url;
 
     // Look up the inspector for Stripe receipt email + brand on the
     // checkout description.
