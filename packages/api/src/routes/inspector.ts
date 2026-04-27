@@ -890,6 +890,20 @@ router.put('/reports/:id/items/:itemId', requireInspectorAuth, async (req: Reque
     if (typeof body.aiCostEstimateHighCents === 'number') updates.aiCostEstimateHighCents = body.aiCostEstimateHighCents;
     if (typeof body.ai_cost_estimate_high_cents === 'number') updates.aiCostEstimateHighCents = body.ai_cost_estimate_high_cents;
 
+    // Diagnostic — when an inspector reports "my edit didn't save" we
+    // can read this and see exactly what arrived in the body, what we
+    // decided to update, and what came back from the DB.
+    logger.info({
+      itemId: req.params.itemId,
+      reportId: req.params.id,
+      bodyKeys: Object.keys(body),
+      bodySeverity: body.severity,
+      bodyCategory: body.category,
+      updateKeys: Object.keys(updates),
+      updateSeverity: updates.severity,
+      updateCategory: updates.category,
+    }, '[inspector/items PUT] applying update');
+
     const [updated] = await db.update(inspectionReportItems)
       .set(updates)
       .where(eq(inspectionReportItems.id, req.params.itemId))
@@ -898,6 +912,12 @@ router.put('/reports/:id/items/:itemId', requireInspectorAuth, async (req: Reque
       res.status(404).json({ data: null, error: 'Item not found after update', meta: {} });
       return;
     }
+    logger.info({
+      itemId: req.params.itemId,
+      resultSeverity: updated.severity,
+      resultCategory: updated.category,
+    }, '[inspector/items PUT] update returned');
+
     // Return the projected shape the frontend's InspectionItem type
     // expects (cents → dollars, computed valueImpact, etc.) so the
     // caller can splice the row into local state without a re-fetch.

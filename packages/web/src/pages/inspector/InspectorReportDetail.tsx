@@ -277,10 +277,20 @@ export default function InspectorReportDetail() {
         setSaveError(res.error ?? 'Save failed — please try again');
         return;
       }
-      setReport({
-        ...report,
-        items: report.items.map(i => i.id === itemId ? res.data! : i),
-      });
+      // Refetch the full report so the displayed items array is always
+      // a faithful mirror of what's in the DB. The patch-in-place
+      // approach was sometimes producing stale-looking severity/category
+      // badges; fetching again eliminates any chance of local-state drift.
+      const refreshed = await inspectorService.getReport(report.id);
+      if (refreshed.data) {
+        setReport(refreshed.data);
+      } else {
+        // Fall back to the patch-in-place if refetch fails.
+        setReport({
+          ...report,
+          items: report.items.map(i => i.id === itemId ? res.data! : i),
+        });
+      }
       setEditingId(null);
       setSavedToast(true);
       window.setTimeout(() => setSavedToast(false), 2200);
