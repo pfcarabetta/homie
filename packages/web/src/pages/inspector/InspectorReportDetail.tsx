@@ -22,6 +22,41 @@ const SEVERITY_LABELS: Record<string, string> = {
   informational: 'Informational',
 };
 
+// Category emoji icons + display labels — kept in sync with the homeowner-
+// inspect portal's constants.tsx so the inspector view feels visually
+// equivalent to what their client will see.
+const CATEGORY_LABELS: Record<string, string> = {
+  plumbing: 'Plumbing', electrical: 'Electrical', hvac: 'HVAC', roofing: 'Roofing',
+  structural: 'Structural', general_repair: 'General', pest_control: 'Pest Control',
+  safety: 'Safety', cosmetic: 'Cosmetic', landscaping: 'Landscaping',
+  appliance: 'Appliance', insulation: 'Insulation', foundation: 'Foundation',
+  windows_doors: 'Windows & Doors', fireplace: 'Fireplace',
+};
+const CATEGORY_ICONS: Record<string, string> = {
+  plumbing: '💧', electrical: '⚡', hvac: '❄️', roofing: '🏠',
+  structural: '🏗️', general_repair: '🔧', pest_control: '🐛',
+  safety: '⚠️', cosmetic: '🎨', landscaping: '🌿',
+  appliance: '📦', insulation: '🧱', foundation: '🏛️',
+  windows_doors: '🪟', fireplace: '🔥',
+};
+
+const SEVERITY_ORDER: Array<keyof typeof SEVERITY_LABELS> = [
+  'safety_hazard', 'urgent', 'recommended', 'monitor', 'informational',
+];
+
+/** AI-confidence threshold below which an item is pinned to the top with
+ *  a "Review before sending" badge. Matches the parser's review_pending
+ *  bar — anything below 0.7 lands in review. */
+const REVIEW_CONFIDENCE_THRESHOLD = 0.7;
+
+function itemNeedsReview(item: InspectionItem & { inspectorAdjusted?: boolean }): boolean {
+  if (item.inspectorAdjusted) return false;
+  // Confidence may arrive as either number or string depending on
+  // serialization — coerce defensively.
+  const c = typeof item.confidence === 'number' ? item.confidence : parseFloat(String(item.confidence ?? '1'));
+  return Number.isFinite(c) && c < REVIEW_CONFIDENCE_THRESHOLD;
+}
+
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   processing: { bg: '#FFF3E8', text: O },
   ready: { bg: '#E8F5E9', text: G },
@@ -82,6 +117,18 @@ export default function InspectorReportDetail() {
   const [addLoading, setAddLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<AddItemForm>(emptyAddForm);
+
+  // Items page filters — mirror the homeowner-inspect Reports tab UX so
+  // the inspector sees their report through their client's lens.
+  const [severityFilter, setSeverityFilter] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [reviewOnlyFilter, setReviewOnlyFilter] = useState(false);
+
+  // Bulk-edit selection. Set so order-independent + O(1) lookups.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -240,6 +287,51 @@ export default function InspectorReportDetail() {
       costEstimateMin: item.costEstimateMin?.toString() ?? '',
       costEstimateMax: item.costEstimateMax?.toString() ?? '',
     });
+  }
+
+  function toggleSelected(itemId: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function handleBulkUpdate(updates: { severity?: string; category?: string }) {
+    if (!report || selectedIds.size === 0) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await inspectorService.bulkUpdateItems(report.id, ids, updates);
+      if (res.error) {
+        setBulkError(res.error);
+        return;
+      }
+      // Patch the in-memory items so the UI reflects the change without a full refetch.
+      setReport({
+        ...report,
+        items: report.items.map(it => {
+          if (!selectedIds.has(it.id)) return it;
+          return {
+            ...it,
+            severity: (updates.severity ?? it.severity) as InspectionItem['severity'],
+            category: updates.category ?? it.category,
+            inspectorAdjusted: true,
+          };
+        }),
+      });
+      clearSelection();
+      setBulkModalOpen(false);
+    } catch (err) {
+      setBulkError((err as Error).message ?? 'Failed to update items');
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   if (loading) {
@@ -470,114 +562,190 @@ export default function InspectorReportDetail() {
         </div>
       )}
 
-      {/* Items list */}
-      <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, marginBottom: 16 }}>
+      {/* ── Items section ───────────────────────────────────────────────
+          Mirrors the homeowner-inspect Reports tab UX so the inspector
+          works in the same view their client will see — severity summary,
+          category pills, and rich item cards. Inspector-only affordances
+          stack on top: per-card checkbox + edit/delete, sticky bulk-edit
+          toolbar, and the "Review before sending" pin for low-confidence
+          AI-flagged items. */}
+      <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, marginBottom: 12 }}>
         Items ({report.items.length})
       </h2>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {report.items.map(item => {
-          const sevColor = SEVERITY_COLORS[item.severity] ?? '#9B9490';
-          const isEditing = editingId === item.id;
-
+      {/* Severity summary — clickable pills double as severity filters */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {SEVERITY_ORDER.map(sev => {
+          const count = report.items.filter(i => i.severity === sev).length;
+          if (count === 0) return null;
+          const sevColor = SEVERITY_COLORS[sev] ?? '#9B9490';
+          const active = severityFilter === sev;
           return (
-            <div key={item.id} style={{
-              background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20,
-            }}>
-              {isEditing ? (
-                <>
-                  {renderItemForm(editForm, setEditForm)}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                    <button onClick={() => handleSaveEdit(item.id)} style={{
-                      padding: '8px 16px', background: G, color: '#fff', border: 'none',
-                      borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-                    }}>Save</button>
-                    <button onClick={() => setEditingId(null)} style={{
-                      padding: '8px 16px', background: '#F5F0EB', color: '#6B6560', border: 'none',
-                      borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-                    }}>Cancel</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                        <span style={{
-                          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 100,
-                          background: `${sevColor}18`, color: sevColor,
-                        }}>
-                          {SEVERITY_LABELS[item.severity] ?? item.severity}
-                        </span>
-                        <span style={{
-                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 100,
-                          background: '#F5F0EB', color: '#6B6560',
-                        }}>
-                          {item.category}
-                        </span>
-                        {item.location && (
-                          <span style={{ fontSize: 11, color: '#9B9490' }}>{item.location}</span>
-                        )}
-                        {/* Confidence dot */}
-                        <span style={{
-                          width: 8, height: 8, borderRadius: '50%',
-                          background: item.confidence >= 0.8 ? G : item.confidence >= 0.5 ? '#EF9F27' : '#E24B4A',
-                          display: 'inline-block', flexShrink: 0,
-                        }} title={`Confidence: ${Math.round(item.confidence * 100)}%`} />
-                      </div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: D, marginBottom: 4 }}>
-                        {item.title}
-                      </div>
-                      <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5, marginBottom: 8 }}>
-                        {item.description}
-                      </div>
-                      {(item.costEstimateMin !== null || item.costEstimateMax !== null) && (
-                        <div style={{ fontSize: 13, color: D, fontWeight: 500 }}>
-                          Est. cost: {item.costEstimateMin !== null ? formatCurrency(item.costEstimateMin) : '?'}
-                          {' - '}
-                          {item.costEstimateMax !== null ? formatCurrency(item.costEstimateMax) : '?'}
-                        </div>
-                      )}
-
-                      {/* Post-send: dispatch status */}
-                      {isSent && item.dispatchStatus && (
-                        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{
-                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 100,
-                            background: `${DISPATCH_LABELS[item.dispatchStatus]?.color ?? '#9B9490'}18`,
-                            color: DISPATCH_LABELS[item.dispatchStatus]?.color ?? '#9B9490',
-                          }}>
-                            {DISPATCH_LABELS[item.dispatchStatus]?.label ?? item.dispatchStatus}
-                          </span>
-                          {item.quoteDetails && (
-                            <span style={{ fontSize: 12, color: '#6B6560' }}>
-                              {item.quoteDetails.providerName} - {formatCurrency(item.quoteDetails.price)}
-                              {' '}({item.quoteDetails.availability})
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Edit/Delete buttons (pre-send only) */}
-                    {!isSent && (
-                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                        <button onClick={() => startEdit(item)} style={{
-                          padding: '6px 12px', background: '#F5F0EB', color: '#6B6560', border: 'none',
-                          borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-                        }}>Edit</button>
-                        <button onClick={() => handleDeleteItem(item.id)} style={{
-                          padding: '6px 12px', background: '#FFF5F5', color: '#E24B4A', border: 'none',
-                          borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-                        }}>Delete</button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+            <button
+              key={sev}
+              onClick={() => setSeverityFilter(active ? null : sev)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                borderRadius: 100, border: `1px solid ${active ? sevColor : `${sevColor}40`}`,
+                background: active ? `${sevColor}15` : '#fff', color: sevColor,
+                fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: sevColor, flexShrink: 0 }} />
+              <span>{count}</span>
+              <span style={{ color: '#6B6560', fontWeight: 500 }}>{SEVERITY_LABELS[sev]}</span>
+            </button>
           );
         })}
+        {(() => {
+          const reviewCount = report.items.filter(itemNeedsReview).length;
+          if (reviewCount === 0 || isSent) return null;
+          const active = reviewOnlyFilter;
+          return (
+            <button
+              onClick={() => setReviewOnlyFilter(!active)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                borderRadius: 100, border: `1px solid ${active ? '#D97706' : '#D9770640'}`,
+                background: active ? '#D9770615' : '#fff', color: '#D97706',
+                fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              }}
+              title="Pin low-confidence items the AI wasn't sure about"
+            >
+              <span>⚠</span>
+              <span>{reviewCount}</span>
+              <span style={{ color: '#6B6560', fontWeight: 500 }}>Needs review</span>
+            </button>
+          );
+        })()}
+      </div>
+
+      {/* Category pills */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {(() => {
+          const categoryCounts = new Map<string, number>();
+          for (const it of report.items) categoryCounts.set(it.category, (categoryCounts.get(it.category) ?? 0) + 1);
+          const sorted = Array.from(categoryCounts.entries()).sort((a, b) => b[1] - a[1]);
+          return (
+            <>
+              <button
+                onClick={() => setCategoryFilter(null)}
+                style={{
+                  padding: '6px 12px', borderRadius: 100,
+                  border: `1px solid ${!categoryFilter ? O : '#E0DAD4'}`,
+                  background: !categoryFilter ? `${O}15` : '#fff', color: !categoryFilter ? O : '#6B6560',
+                  fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                All ({report.items.length})
+              </button>
+              {sorted.map(([cat, count]) => {
+                const active = categoryFilter === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(active ? null : cat)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 100,
+                      border: `1px solid ${active ? O : '#E0DAD4'}`,
+                      background: active ? `${O}15` : '#fff', color: active ? O : '#6B6560',
+                      fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    <span>{CATEGORY_ICONS[cat] ?? '•'}</span>
+                    <span>{CATEGORY_LABELS[cat] ?? cat}</span>
+                    <span style={{ color: '#9B9490', fontWeight: 500 }}>({count})</span>
+                  </button>
+                );
+              })}
+            </>
+          );
+        })()}
+      </div>
+
+      {/* Bulk-edit toolbar (sticky once anything's selected) */}
+      {!isSent && selectedIds.size > 0 && (
+        <div style={{
+          position: 'sticky', top: 8, zIndex: 50,
+          background: O, color: '#fff', borderRadius: 12, padding: '12px 16px',
+          marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12,
+          boxShadow: '0 8px 24px -10px rgba(232,99,43,0.5)',
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>{selectedIds.size} selected</span>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={() => { setBulkError(null); setBulkModalOpen(true); }}
+            style={{
+              padding: '6px 12px', background: '#fff', color: O, border: 'none',
+              borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >Bulk edit</button>
+          <button
+            onClick={clearSelection}
+            style={{
+              padding: '6px 12px', background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)',
+              borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >Clear</button>
+        </div>
+      )}
+
+      {/* Items list — sorted: Needs Review first, then by severity rank */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {(() => {
+          const filtered = report.items.filter(it => {
+            if (severityFilter && it.severity !== severityFilter) return false;
+            if (categoryFilter && it.category !== categoryFilter) return false;
+            if (reviewOnlyFilter && !itemNeedsReview(it)) return false;
+            return true;
+          });
+          // Sort: needs-review first (ascending confidence so worst-first
+          // within that group), then severity rank (safety_hazard at top).
+          const sorted = [...filtered].sort((a, b) => {
+            const aReview = itemNeedsReview(a) && !isSent;
+            const bReview = itemNeedsReview(b) && !isSent;
+            if (aReview !== bReview) return aReview ? -1 : 1;
+            if (aReview && bReview) {
+              return (toNumberConfidence(a) - toNumberConfidence(b));
+            }
+            return SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity);
+          });
+
+          if (sorted.length === 0) {
+            return (
+              <div style={{
+                background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4',
+                padding: 32, textAlign: 'center', fontSize: 13, color: '#9B9490',
+              }}>
+                No items match the current filter.
+              </div>
+            );
+          }
+
+          return sorted.map(item => {
+            const isEditing = editingId === item.id;
+            return (
+              <ItemCard
+                key={item.id}
+                item={item}
+                isEditing={isEditing}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                renderForm={renderItemForm}
+                onStartEdit={() => startEdit(item)}
+                onCancelEdit={() => setEditingId(null)}
+                onSaveEdit={() => handleSaveEdit(item.id)}
+                onDelete={() => handleDeleteItem(item.id)}
+                isSent={!!isSent}
+                selected={selectedIds.has(item.id)}
+                onToggleSelected={() => toggleSelected(item.id)}
+              />
+            );
+          });
+        })()}
 
         {/* Add item (pre-send only) */}
         {!isSent && (
@@ -615,6 +783,16 @@ export default function InspectorReportDetail() {
           </>
         )}
       </div>
+
+      {bulkModalOpen && (
+        <BulkEditModal
+          count={selectedIds.size}
+          onCancel={() => { setBulkModalOpen(false); setBulkError(null); }}
+          onSubmit={handleBulkUpdate}
+          busy={bulkBusy}
+          error={bulkError}
+        />
+      )}
 
       {/* Earnings breakdown */}
       <div style={{
@@ -834,6 +1012,336 @@ function SendToClientModal({ report, onClose, onSubmit, sending, error }: {
           >
             {sending ? 'Sending…' : ccs.length > 0 ? `Send to ${ccs.length + 1} recipients` : 'Send to client'}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Item card (rich version mirroring homeowner-side ItemCard) ──────────
+
+function toNumberConfidence(item: InspectionItem): number {
+  const c = typeof item.confidence === 'number' ? item.confidence : parseFloat(String(item.confidence ?? '1'));
+  return Number.isFinite(c) ? c : 1;
+}
+
+interface ItemCardProps {
+  item: InspectionItem & { inspectorAdjusted?: boolean };
+  isEditing: boolean;
+  editForm: AddItemForm;
+  setEditForm: (f: AddItemForm) => void;
+  renderForm: (form: AddItemForm, setForm: (f: AddItemForm) => void) => React.ReactNode;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
+  onDelete: () => void;
+  isSent: boolean;
+  selected: boolean;
+  onToggleSelected: () => void;
+}
+
+function ItemCard({
+  item, isEditing, editForm, setEditForm, renderForm,
+  onStartEdit, onCancelEdit, onSaveEdit, onDelete, isSent,
+  selected, onToggleSelected,
+}: ItemCardProps) {
+  const sevColor = SEVERITY_COLORS[item.severity] ?? '#9B9490';
+  const catLabel = CATEGORY_LABELS[item.category] ?? item.category;
+  const catIcon = CATEGORY_ICONS[item.category] ?? '';
+  const needsReview = !isSent && itemNeedsReview(item);
+  const confidence = toNumberConfidence(item);
+  const confidenceColor = confidence >= 0.8 ? G : confidence >= 0.5 ? '#EF9F27' : '#E24B4A';
+
+  return (
+    <div style={{
+      background: '#ffffff', borderRadius: 14,
+      border: needsReview ? '1px solid #F4D87A' : selected ? `2px solid ${O}` : '1px solid #E0DAD4',
+      padding: 18, position: 'relative',
+      boxShadow: needsReview ? '0 0 0 3px #FFF8E6' : undefined,
+    }}>
+      {needsReview && (
+        <div style={{
+          position: 'absolute', top: -10, left: 14, padding: '3px 10px', borderRadius: 100,
+          background: '#FFF8E6', border: '1px solid #F4D87A',
+          fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700, color: '#8B6F00',
+          letterSpacing: '0.04em', textTransform: 'uppercase',
+        }}>
+          ⚠ Review before sending
+        </div>
+      )}
+
+      {isEditing ? (
+        <>
+          {renderForm(editForm, setEditForm)}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button onClick={onSaveEdit} style={{
+              padding: '8px 16px', background: G, color: '#fff', border: 'none',
+              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+            }}>Save</button>
+            <button onClick={onCancelEdit} style={{
+              padding: '8px 16px', background: '#F5F0EB', color: '#6B6560', border: 'none',
+              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+            }}>Cancel</button>
+          </div>
+        </>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          {!isSent && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelected}
+              onClick={e => e.stopPropagation()}
+              style={{ marginTop: 4, width: 16, height: 16, accentColor: O, cursor: 'pointer', flexShrink: 0 }}
+              aria-label="Select for bulk edit"
+            />
+          )}
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Top row: badges + cost (right-aligned) */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 6 }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{
+                  fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 700,
+                  padding: '2px 8px', borderRadius: 12,
+                  background: `${sevColor}18`, color: sevColor,
+                }}>
+                  {SEVERITY_LABELS[item.severity] ?? item.severity}
+                </span>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#6B6560', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span>{catIcon}</span>
+                  <span>{catLabel}</span>
+                </span>
+                <span
+                  title={`AI confidence: ${Math.round(confidence * 100)}%`}
+                  style={{ width: 8, height: 8, borderRadius: '50%', background: confidenceColor, display: 'inline-block', flexShrink: 0 }}
+                />
+                {item.inspectorAdjusted && (
+                  <span style={{
+                    fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700,
+                    padding: '2px 8px', borderRadius: 8, background: '#E8F5E9', color: G,
+                  }} title="You've reviewed this item">
+                    ✓ Reviewed
+                  </span>
+                )}
+                {item.sourceDocumentId && (
+                  <span style={{
+                    fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700,
+                    padding: '2px 8px', borderRadius: 8, background: '#FEF3C7', color: '#B45309',
+                  }} title="From a supporting document">
+                    📋 Supporting doc
+                  </span>
+                )}
+                {item.crossReferencedItemIds && item.crossReferencedItemIds.length > 0 && (
+                  <span style={{
+                    fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700,
+                    padding: '2px 8px', borderRadius: 8, background: '#F3E8FF', color: '#7C3AED',
+                  }}>
+                    🔗 Cross-referenced ({item.crossReferencedItemIds.length})
+                  </span>
+                )}
+              </div>
+              {(item.costEstimateMin !== null || item.costEstimateMax !== null) && (
+                <div style={{
+                  fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, color: D,
+                  whiteSpace: 'nowrap', textAlign: 'right',
+                }}>
+                  {formatCurrency(item.costEstimateMin ?? 0)} – {formatCurrency(item.costEstimateMax ?? 0)}
+                </div>
+              )}
+            </div>
+
+            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: D, marginBottom: 4 }}>
+              {item.title}
+            </div>
+
+            {item.description && (
+              <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#6B6560', margin: '0 0 8px', lineHeight: 1.5 }}>
+                {item.description}
+              </p>
+            )}
+
+            {/* Photo descriptions block */}
+            {item.photoDescriptions && item.photoDescriptions.length > 0 && (
+              <div style={{ marginTop: 8, padding: '8px 12px', background: '#F9F5F2', borderRadius: 8 }}>
+                {item.photoDescriptions.map((desc, i) => (
+                  <div key={i} style={{
+                    fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#6B6560',
+                    marginBottom: i < item.photoDescriptions.length - 1 ? 4 : 0, lineHeight: 1.5,
+                  }}>
+                    <span style={{ opacity: 0.5 }}>Photo {i + 1}:</span> {desc}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Location */}
+            {item.location && (
+              <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#9B9490', marginTop: 6 }}>
+                Location: {item.location}
+              </div>
+            )}
+
+            {/* Value-impact badges (parity with homeowner side) */}
+            {item.valueImpact && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                <span style={{
+                  fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 600,
+                  padding: '3px 10px', borderRadius: 8,
+                  background: '#8B5CF615', color: '#7C3AED',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}>
+                  <span style={{ fontSize: 12 }}>↑</span>
+                  ~{formatCurrency(item.valueImpact.roiLow)}–{formatCurrency(item.valueImpact.roiHigh)} value increase
+                </span>
+                {item.valueImpact.lenderFlagType === 'fha_va_required' && (
+                  <span style={{
+                    fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 600,
+                    padding: '3px 10px', borderRadius: 8, background: '#EF444415', color: '#DC2626',
+                  }}>
+                    FHA/VA Required
+                  </span>
+                )}
+                {item.valueImpact.lenderFlagType === 'lender_concern' && (
+                  <span style={{
+                    fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 600,
+                    padding: '3px 10px', borderRadius: 8, background: '#F59E0B15', color: '#B45309',
+                  }}>
+                    Lender Concern
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Post-send: dispatch + quote */}
+            {isSent && item.dispatchStatus && (
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{
+                  fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 600,
+                  padding: '2px 8px', borderRadius: 100,
+                  background: `${DISPATCH_LABELS[item.dispatchStatus]?.color ?? '#9B9490'}18`,
+                  color: DISPATCH_LABELS[item.dispatchStatus]?.color ?? '#9B9490',
+                }}>
+                  {DISPATCH_LABELS[item.dispatchStatus]?.label ?? item.dispatchStatus}
+                </span>
+                {item.quoteDetails && (
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#6B6560' }}>
+                    {item.quoteDetails.providerName} · {formatCurrency(item.quoteDetails.price)} ({item.quoteDetails.availability})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {!isSent && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+              <button onClick={onStartEdit} style={{
+                padding: '6px 12px', background: '#F5F0EB', color: '#6B6560', border: 'none',
+                borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              }}>Edit</button>
+              <button onClick={onDelete} style={{
+                padding: '6px 12px', background: '#FFF5F5', color: '#E24B4A', border: 'none',
+                borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              }}>Delete</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Bulk-edit modal ─────────────────────────────────────────────────────
+
+function BulkEditModal({ count, onCancel, onSubmit, busy, error }: {
+  count: number;
+  onCancel: () => void;
+  onSubmit: (updates: { severity?: string; category?: string }) => void;
+  busy: boolean;
+  error: string | null;
+}) {
+  const [severity, setSeverity] = useState<string>('');
+  const [category, setCategory] = useState<string>('');
+
+  function handleApply() {
+    const updates: { severity?: string; category?: string } = {};
+    if (severity) updates.severity = severity;
+    if (category) updates.category = category;
+    if (!updates.severity && !updates.category) return;
+    onSubmit(updates);
+  }
+
+  const canApply = !busy && (severity || category);
+
+  return (
+    <div
+      onClick={() => { if (!busy) onCancel(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#fff', borderRadius: 16, padding: 24, maxWidth: 440, width: '100%',
+        boxShadow: '0 24px 64px -20px rgba(0,0,0,0.25)',
+      }}>
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700, color: D, marginBottom: 6 }}>
+          Bulk edit {count} item{count === 1 ? '' : 's'}
+        </div>
+        <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 18, lineHeight: 1.5 }}>
+          Useful for fixing common parsing mistakes — change a batch of items'
+          severity or category in one shot. Leave a field blank to keep
+          existing values for that field.
+        </div>
+
+        <label style={labelStyle}>Severity</label>
+        <select
+          value={severity}
+          onChange={e => setSeverity(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 12 }}
+        >
+          <option value="">— Don't change —</option>
+          <option value="safety_hazard">Safety Hazard</option>
+          <option value="urgent">Urgent</option>
+          <option value="recommended">Recommended</option>
+          <option value="monitor">Monitor</option>
+          <option value="informational">Informational</option>
+        </select>
+
+        <label style={labelStyle}>Category</label>
+        <select
+          value={category}
+          onChange={e => setCategory(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 16 }}
+        >
+          <option value="">— Don't change —</option>
+          {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+            <option key={key} value={key}>{CATEGORY_ICONS[key] ?? ''} {label}</option>
+          ))}
+        </select>
+
+        {error && (
+          <div style={{
+            fontSize: 13, marginBottom: 14, padding: '10px 12px', borderRadius: 8,
+            background: '#FEF2F2', color: '#B91C1C',
+          }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} disabled={busy} style={{
+            padding: '10px 18px', background: 'transparent', color: '#6B6560', border: '1px solid #E0DAD4',
+            borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: busy ? 'default' : 'pointer',
+            fontFamily: "'DM Sans', sans-serif",
+          }}>Cancel</button>
+          <button onClick={handleApply} disabled={!canApply} style={{
+            padding: '10px 22px', background: O, color: '#fff', border: 'none',
+            borderRadius: 8, fontSize: 14, fontWeight: 700,
+            cursor: canApply ? 'pointer' : 'default', opacity: canApply ? 1 : 0.5,
+            fontFamily: "'DM Sans', sans-serif",
+          }}>{busy ? 'Updating…' : 'Apply'}</button>
         </div>
       </div>
     </div>

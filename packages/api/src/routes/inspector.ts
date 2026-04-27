@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { eq, desc, and, sql, count, isNull, lt } from 'drizzle-orm';
+import { eq, desc, and, sql, count, isNull, lt, inArray } from 'drizzle-orm';
 import logger from '../logger';
 import { db } from '../db';
 import {
@@ -716,6 +716,71 @@ router.put('/reports/:id/items/:itemId', requireInspectorAuth, async (req: Reque
   } catch (err) {
     logger.error({ err }, '[PUT /inspector/reports/:id/items/:itemId]');
     res.status(500).json({ data: null, error: 'Failed to update item', meta: {} });
+  }
+});
+
+// PATCH /api/v1/inspector/reports/:id/items
+//
+// Bulk-update items for a single report. Used by the items page bulk-edit
+// toolbar to fix common parsing mistakes (wrong category, wrong severity)
+// across many items at once. Only allowed before the report is sent —
+// once items are dispatched/quoted, downstream flows depend on the
+// severity + category values, so we lock them.
+//
+// Body: { ids: string[]; updates: { severity?, category? } }
+// Sets inspector_adjusted = true on every touched row (used by the UI to
+// dismiss the "Review before sending" badge).
+router.patch('/reports/:id/items', requireInspectorAuth, async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { ids?: string[]; updates?: { severity?: string; category?: string } };
+  if (!Array.isArray(body.ids) || body.ids.length === 0) {
+    res.status(400).json({ data: null, error: 'ids must be a non-empty array', meta: {} });
+    return;
+  }
+  if (!body.updates || typeof body.updates !== 'object') {
+    res.status(400).json({ data: null, error: 'updates is required', meta: {} });
+    return;
+  }
+  const updates: Record<string, unknown> = { inspectorAdjusted: true, updatedAt: new Date() };
+  if (typeof body.updates.severity === 'string') updates.severity = body.updates.severity;
+  if (typeof body.updates.category === 'string') updates.category = body.updates.category;
+  if (Object.keys(updates).length <= 2) {
+    res.status(400).json({ data: null, error: 'updates must include at least one of severity or category', meta: {} });
+    return;
+  }
+
+  try {
+    const [report] = await db.select({ id: inspectionReports.id, parsingStatus: inspectionReports.parsingStatus })
+      .from(inspectionReports)
+      .where(and(eq(inspectionReports.id, req.params.id), eq(inspectionReports.inspectorPartnerId, req.inspectorId)))
+      .limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Report not found', meta: {} });
+      return;
+    }
+    if (report.parsingStatus !== 'parsed' && report.parsingStatus !== 'review_pending') {
+      res.status(400).json({
+        data: null,
+        error: `Bulk edits are only allowed before sending the report (current: ${report.parsingStatus})`,
+        meta: {},
+      });
+      return;
+    }
+
+    // Scope the update to items that belong to this report so a misuse of
+    // the endpoint can't touch items in another report.
+    const updatedItems = await db.update(inspectionReportItems)
+      .set(updates)
+      .where(and(
+        inArray(inspectionReportItems.id, body.ids),
+        eq(inspectionReportItems.reportId, report.id),
+      ))
+      .returning();
+
+    logger.info({ reportId: report.id, count: updatedItems.length, fields: Object.keys(updates) }, '[inspector/items] bulk update');
+    res.json({ data: { updated: updatedItems.length, items: updatedItems }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[PATCH /inspector/reports/:id/items]');
+    res.status(500).json({ data: null, error: 'Failed to bulk update items', meta: {} });
   }
 });
 

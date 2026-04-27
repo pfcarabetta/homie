@@ -93,6 +93,12 @@ export interface InspectionItem {
   crossReferencedItemIds?: string[];
   /** Cached DIY analysis (null until the homeowner taps "Try DIY" once). */
   diyAnalysis?: import('@homie/shared').DIYAnalysisPayload | null;
+  /** True once an inspector has touched this item (single-edit OR bulk-
+   *  edit). The "Review before sending" badge keys off `confidence < 0.7
+   *  AND !inspectorAdjusted` so once the inspector confirms an item, it
+   *  drops out of the review pile even if the AI's original confidence
+   *  was low. */
+  inspectorAdjusted?: boolean;
 }
 
 export interface ValueImpact {
@@ -360,6 +366,17 @@ export const inspectorService = {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+  },
+
+  /** Bulk-edit severity / category for many items in one report. Used by
+   *  the items page bulk-edit toolbar to fix common parsing mistakes
+   *  across many items at once. Server enforces parsingStatus is
+   *  parsed/review_pending (no edits after send). */
+  bulkUpdateItems(reportId: string, ids: string[], updates: { severity?: string; category?: string }) {
+    return inspectorFetch<{ updated: number; items: InspectionItem[] }>(
+      `/api/v1/inspector/reports/${reportId}/items`,
+      { method: 'PATCH', body: JSON.stringify({ ids, updates }) },
+    );
   },
 
   addItem(reportId: string, data: Partial<InspectionItem>) {
