@@ -36,10 +36,6 @@ const NUDGE_AFTER_DAYS = 3;
 
 type ParsingStatus = NonNullable<InspectionReport['parsingStatus']>;
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-}
-
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -420,11 +416,6 @@ function ReportRow({ report, onClick, onRetry, onSendReminder, retrying, reminde
             {reminderState === 'sending' ? 'Sending…' : reminderState === 'sent' ? 'Reminder sent' : reminderState === 'error' ? 'Retry nudge' : 'Send reminder'}
           </button>
         )}
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: G }}>
-            {formatCurrency(report.earnings)}
-          </div>
-        </div>
         {isClickable && (
           <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="#9B9490" strokeWidth="1.5" strokeLinecap="round">
             <path d="M6 4l4 4-4 4" />
