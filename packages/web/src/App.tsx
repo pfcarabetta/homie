@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { trackPageView } from '@/services/analytics';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -62,10 +62,18 @@ import DIYPreviewDemo from '@/pages/DIYPreviewDemo';
 import OutreachTransparencyDemo from '@/pages/OutreachTransparencyDemo';
 import QuoteTabsDemo from '@/pages/QuoteTabsDemo';
 
-/** Fires a GA `page_view` on every route change. */
+/** Fires a GA `page_view` on every SPA route change. The initial
+ *  page_view is fired by the inline gtag snippet in index.html before
+ *  React boots — this hook skips its first mount to avoid double-counting
+ *  the landing page. */
 function PageViewTracker() {
   const location = useLocation();
+  const isFirst = useRef(true);
   useEffect(() => {
+    if (isFirst.current) {
+      isFirst.current = false;
+      return;
+    }
     trackPageView(location.pathname + location.search);
   }, [location.pathname, location.search]);
   return null;

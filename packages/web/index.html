@@ -32,6 +32,24 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Homie" />
 
+    <!-- Google tag (gtag.js) — fires in HTML head before React boots, so the
+         initial page_view is captured even if any React component throws.
+         Subsequent SPA navigations are tracked manually by PageViewTracker
+         in App.tsx (which skips its first mount to avoid double-counting). -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NT59ML48M1"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('consent', 'default', {
+        ad_storage: 'granted',
+        ad_user_data: 'granted',
+        ad_personalization: 'granted',
+        analytics_storage: 'granted',
+      });
+      gtag('config', 'G-NT59ML48M1');
+    </script>
+
     <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json">
     {
