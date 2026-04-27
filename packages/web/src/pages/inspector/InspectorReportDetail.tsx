@@ -855,24 +855,6 @@ export default function InspectorReportDetail() {
         />
       )}
 
-      {/* Earnings breakdown */}
-      <div style={{
-        background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20, marginTop: 24,
-      }}>
-        <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: D, margin: '0 0 12px' }}>
-          Earnings
-        </h3>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 13, color: '#6B6560' }}>
-              Referral commissions from {report.dispatchedCount} dispatched items
-            </div>
-          </div>
-          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 28, fontWeight: 700, color: G }}>
-            {formatCurrency(report.earnings)}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
