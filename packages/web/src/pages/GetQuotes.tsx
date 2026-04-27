@@ -2003,6 +2003,28 @@ export default function GetQuotes() {
   useEffect(() => {
     window.scrollTo(0, 0);
 
+    // ── Homepage handoff guard ────────────────────────────────────────
+    // When the URL carries an explicit handoff intent (?start=voice,
+    // ?start=video, ?prefill=, ?group=), skip ALL resume / pending /
+    // greeting handling. The user just clicked a button — they want a
+    // fresh entry, not a "Welcome back!" rehydration of a stale
+    // homie_pending_quote in sessionStorage. Without this short-circuit,
+    // the pending-quote restore below would set phase='diagnosis' and
+    // populate data.category, which then makes the prefill effect bail
+    // before opening the voice/video panel — symptom: clicking Talk to
+    // Homie / Video chat lands on /quote with nothing happening.
+    {
+      const params0 = new URLSearchParams(window.location.search);
+      if (
+        params0.get('start') === 'voice' ||
+        params0.get('start') === 'video' ||
+        params0.get('prefill') ||
+        params0.get('group')
+      ) {
+        return;
+      }
+    }
+
     // Check if returning from Stripe payment — must have ?paid=1 in URL
     const urlParams = new URLSearchParams(window.location.search);
     const paidJob = sessionStorage.getItem('homie_paid_job');
@@ -2607,11 +2629,13 @@ Write ONLY the summary — no questions, no conversational language, no greeting
     //                    voice panel immediately, no chat in between.
     //   • ?start=video — user tapped "Video chat with Homie". Same,
     //                    but the video panel.
-    // Any of the four consumes the ref so we don't fire twice.
-    // Don't override an in-flight chat the user might be returning to.
-    if (messages.length > 0 || data.category || data.a1) return;
-
     // ── Voice / video auto-start ─────────────────────────────────────
+    // Handled BEFORE the in-flight bail. The voice/video panel is an
+    // additive UI surface — opening it doesn't clobber an existing chat
+    // (the panel just swaps in for the DirectInput area). And the user
+    // explicitly tapped the homepage button so we always honor it. We
+    // also reset phase to 'greeting' so the wrapping chat-area block
+    // renders the panel even if a stale snapshot left phase='diagnosis'.
     if (start === 'voice' || start === 'video') {
       prefillConsumedRef.current = true;
       // If a category was passed alongside (e.g. chip → voice), pre-
@@ -2619,6 +2643,13 @@ Write ONLY the summary — no questions, no conversational language, no greeting
       if (categoryParam && CATEGORY_FLOWS[categoryParam]) {
         setData(d => ({ ...d, category: categoryParam }));
       }
+      // Force the chat into the greeting/intake phase so the wrapping
+      // gq-chat-area renders. When `data.aiDiagnosis` exists or phase ===
+      // 'diagnosis', the entire intake area returns null and the panel
+      // never mounts — clearing both here guarantees the user sees the
+      // panel they asked for.
+      setPhase('greeting');
+      setData(d => ({ ...d, aiDiagnosis: null }));
       // Prime iOS audio the same way the DirectInput buttons do — this
       // effect runs synchronously in response to the prior gesture
       // (the user's click on the homepage) which iOS still counts as
@@ -2635,6 +2666,11 @@ Write ONLY the summary — no questions, no conversational language, no greeting
       window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
       return;
     }
+
+    // Any of the remaining branches (group / prefill) consume the ref
+    // so we don't fire twice. Don't override an in-flight chat the user
+    // might be returning to.
+    if (messages.length > 0 || data.category || data.a1) return;
 
     // ── Top-level category group (from homepage pill) ────────────────
     // Match by label against CATEGORY_TREE. handleGroupSelect handles
