@@ -51,6 +51,20 @@ export function initAnalytics(): void {
   };
   window.gtag = gtag;
 
+  // Consent Mode v2 defaults to "denied" in some Google account
+  // configurations as of 2024 — without an explicit grant, gtag receives
+  // events but suppresses the actual /collect requests, leaving Tag
+  // Assistant reporting "No hits sent" while everything else looks healthy.
+  // Homie does not set tracking cookies tied to identifiable users at this
+  // stage, so we explicitly grant the standard analytics + ads signals
+  // before configuring the property.
+  gtag('consent', 'default', {
+    ad_storage: 'granted',
+    ad_user_data: 'granted',
+    ad_personalization: 'granted',
+    analytics_storage: 'granted',
+  });
+
   gtag('js', new Date());
   gtag('config', MEASUREMENT_ID, {
     // We fire page_view manually on route change so SPA navs are tracked.
