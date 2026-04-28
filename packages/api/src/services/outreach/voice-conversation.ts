@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../db';
 import { outreachAttempts } from '../../db/schema/outreach-attempts';
 import logger from '../../logger';
+import { extractPriceFromSpeech } from './price-extraction';
 
 interface ConversationState {
   messages: { role: 'user' | 'assistant'; content: string }[];
@@ -186,7 +187,12 @@ export async function processProviderSpeech(
     }
   } else if (conv.phase === 'quote') {
     if (hasPrice && !isQuestion) {
-      conv.quotedPrice = providerSpeech;
+      // Extract just the dollar amount(s) from the sentence so the
+      // homeowner-facing field is a clean "$150" rather than the full
+      // transcript. Falls back to the raw speech if extraction fails
+      // (the regexes leave a wide margin, but speech recognition is
+      // unpredictable — better to keep the data than drop it).
+      conv.quotedPrice = extractPriceFromSpeech(providerSpeech) ?? providerSpeech;
       conv.phase = 'availability';
     } else if (hasFreeEstimate) {
       conv.quotedPrice = 'Free estimate';
