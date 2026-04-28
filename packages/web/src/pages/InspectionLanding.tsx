@@ -636,9 +636,9 @@ function NegotiationC({ audience }: { audience: Audience }) {
 // ─── TiersB — B5: editorial 3-up with dark "popular" tier ────────────
 function TiersB() {
   const tiers = [
-    { name: 'Essential',    sub: 'Understand what\'s in your report', f: ['Item details', 'Severity ratings', 'AI cost estimates', 'Category breakdown'], pop: false },
-    { name: 'Professional', sub: 'Real numbers from real pros',       f: ['Everything in Essential', 'Dispatch + provider quotes', 'Value-impact estimates', 'Lender flags'], pop: true },
-    { name: 'Premium',      sub: 'Negotiate, plan, benchmark',        f: ['Everything in Professional', 'Negotiation documents', 'Maintenance timeline', 'Priority dispatch', 'Full Home IQ'], pop: false },
+    { name: 'Essential',    price: '$99',  sub: 'Understand what\'s in your report', f: ['Item details', 'Severity ratings', 'AI cost estimates', 'Category breakdown'], pop: false },
+    { name: 'Professional', price: '$199', sub: 'Real numbers from real pros',       f: ['Everything in Essential', 'Dispatch + provider quotes', 'Value-impact estimates', 'Lender flags'], pop: true },
+    { name: 'Premium',      price: '$299', sub: 'Negotiate, plan, benchmark',        f: ['Everything in Professional', 'Negotiation documents', 'Maintenance timeline', 'Priority dispatch', 'Full Home IQ'], pop: false },
   ];
   return (
     <section id="pricing" className="hi-tiers" style={{ background: C.white, padding: '120px 36px' }}>
@@ -658,7 +658,11 @@ function TiersB() {
                 {t.pop && <span style={{ position: 'absolute', top: 16, right: 16, ...DM, fontSize: 10, fontWeight: 700, color: C.orange, background: 'rgba(232,99,43,.18)', padding: '4px 10px', borderRadius: 100, letterSpacing: '.10em' }}>MOST POPULAR</span>}
                 <div style={{ ...MO, fontSize: 10, letterSpacing: '.18em', color: t.pop ? 'rgba(255,255,255,.5)' : C.meta, textTransform: 'uppercase' }}>Tier {String(i + 1).padStart(2, '0')}</div>
                 <h3 style={{ ...FR, fontWeight: 700, fontSize: 36, margin: '8px 0 6px', letterSpacing: '-0.015em', color: t.pop ? '#fff' : C.dark }}>{t.name}</h3>
-                <p style={{ ...FR, fontSize: 18, fontStyle: 'italic', color: t.pop ? 'rgba(255,255,255,.7)' : C.muted, margin: '0 0 28px', fontWeight: 400 }}>{t.sub}</p>
+                <p style={{ ...FR, fontSize: 18, fontStyle: 'italic', color: t.pop ? 'rgba(255,255,255,.7)' : C.muted, margin: '0 0 18px', fontWeight: 400 }}>{t.sub}</p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 24 }}>
+                  <span style={{ ...FR, fontSize: 44, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em', color: t.pop ? '#fff' : C.dark }}>{t.price}</span>
+                  <span style={{ ...DM, fontSize: 13, color: t.pop ? 'rgba(255,255,255,.6)' : C.meta }}>one-time</span>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {t.f.map(x => (
                     <div key={x} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -719,7 +723,6 @@ function TestimonialsB({ audience }: { audience: Audience }) {
 const FAQS: Array<[string, string]> = [
   ['Who\'s Homie Inspect for?', 'Homeowners and home buyers. Both pre-purchase and post-close — same product, different use.'],
   ['Does this replace my home inspector?', 'No. Inspectors find the issues; Homie translates their report into actionable items, cost estimates, and real quotes. The inspector\'s expertise is the foundation.'],
-  ['Do I pay for this?', 'Almost never. Your inspector picks a tier at upload and the cost is rolled into your inspection fee. You won\'t see a separate Homie charge.'],
   ['Is the AI accurate?', 'Every item is sourced directly from the inspector\'s findings — Homie never invents issues. Severity and cost ranges are AI-generated and confidence-rated; if confidence is low, the item is flagged for your inspector\'s review.'],
   ['What happens if parsing fails?', 'You\'ll get a notice and your inspector is alerted. Most failures are PDF formatting issues that resolve on re-upload. We don\'t bill for failed parses.'],
   ['Can I add documents later (sewer scope, radon, mold, pest, disclosure)?', 'Yes. Upload supplementals to the same property and they\'ll merge into one Home IQ profile, with cross-document references where relevant.'],
