@@ -672,6 +672,26 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
 }) {
   const [showNotes, setShowNotes] = useState(!!item.homeownerNotes);
   const [showSourceMenu, setShowSourceMenu] = useState(false);
+  // Refs for tap-outside-to-dismiss. onMouseLeave alone doesn't fire on
+  // touch devices, so the bottom-sheet UX on mobile gets stuck open
+  // without an explicit listener.
+  const sourceMenuRef = useRef<HTMLDivElement>(null);
+  const sourceToggleRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!showSourceMenu) return;
+    function dismiss(e: MouseEvent | TouchEvent) {
+      const target = e.target as Node;
+      if (sourceMenuRef.current?.contains(target)) return;
+      if (sourceToggleRef.current?.contains(target)) return;
+      setShowSourceMenu(false);
+    }
+    document.addEventListener('mousedown', dismiss);
+    document.addEventListener('touchstart', dismiss);
+    return () => {
+      document.removeEventListener('mousedown', dismiss);
+      document.removeEventListener('touchstart', dismiss);
+    };
+  }, [showSourceMenu]);
   const sevColor = SEVERITY_COLORS[item.severity] ?? '#9B9490';
   const status = (item.concessionStatus as ConcessionStatus | null) ?? 'pending';
 
@@ -722,6 +742,26 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
             flex: 1 1 90px !important;
             text-align: left !important;
             min-width: 0 !important;
+          }
+          /* Source dropdown becomes a bottom sheet on mobile. Without this
+             override, the dropdown's right:0 + minWidth:280 anchoring on
+             a ~90px column slides most of the menu off the left edge of
+             the screen. Bottom sheet sidesteps the column-width issue
+             entirely + matches the standard mobile picker pattern. */
+          .nego-source-menu {
+            position: fixed !important;
+            top: auto !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            margin-top: 0 !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            border-radius: 16px 16px 0 0 !important;
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.2) !important;
+            padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+            max-height: 60vh !important;
+            overflow-y: auto !important;
           }
         }
       `}</style>
@@ -793,6 +833,7 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
           </div>
           {/* Clickable source label */}
           <button
+            ref={sourceToggleRef}
             onClick={(e) => { e.stopPropagation(); setShowSourceMenu(!showSourceMenu); }}
             style={{
               fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 500, color: 'var(--bp-subtle)',
@@ -809,7 +850,8 @@ function NegotiationItemRow({ item, askCents, onChange, reportFileUrl, isSellerM
           {/* Source menu */}
           {showSourceMenu && (
             <div
-              onMouseLeave={() => setShowSourceMenu(false)}
+              ref={sourceMenuRef}
+              className="nego-source-menu"
               style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
                 background: 'var(--bp-card)', borderRadius: 10, border: '1px solid var(--bp-border)',
