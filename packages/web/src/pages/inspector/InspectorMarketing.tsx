@@ -16,13 +16,17 @@ export default function InspectorMarketing() {
   const { inspector } = useInspectorAuth();
   const [copied, setCopied] = useState(false);
 
-  // Prefer the slug (clean URL) and fall back to the inspector's UUID
-  // so the link always works even if the slug isn't populated yet.
-  const refValue = inspector?.partnerSlug ?? inspector?.id ?? '';
-  const partnerUrl = `${window.location.origin}/inspect?ref=${refValue}`;
+  // Two URL flavors share the same slug:
+  //   - landingUrl: the co-branded /inspect/p/:slug page (primary —
+  //     this is the actual sharable client-facing experience)
+  //   - directUrl: the raw /inspect?ref= upload page, kept around as
+  //     a backup for any pre-cobrand materials still circulating
+  const slug = inspector?.partnerSlug ?? inspector?.id ?? '';
+  const landingUrl = `${window.location.origin}/inspect/p/${slug}`;
+  const directUrl = `${window.location.origin}/inspect?ref=${slug}`;
 
   function handleCopy() {
-    void navigator.clipboard.writeText(partnerUrl);
+    void navigator.clipboard.writeText(landingUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -70,13 +74,23 @@ export default function InspectorMarketing() {
         Marketing
       </h1>
 
-      {/* Partner URL */}
+      {/* Co-branded landing URL */}
       <div style={{
         background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20, marginBottom: 24,
       }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: D, marginBottom: 8 }}>Your Partner URL</div>
-        <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12 }}>
-          Share this link with clients. When they access reports through this URL, you earn referral bonuses.
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: D }}>Your branded landing page</div>
+          <a
+            href={landingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: 12, color: O, fontWeight: 600, textDecoration: 'none' }}
+          >
+            Preview your page →
+          </a>
+        </div>
+        <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 12, lineHeight: 1.5 }}>
+          A co-branded {inspector?.companyName ?? 'your company'} × Homie page where homeowners can learn about Homie Inspect, see your retail pricing, and upload their report. Every upload from this URL credits you the retail-minus-wholesale spread.
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{
@@ -84,7 +98,7 @@ export default function InspectorMarketing() {
             fontSize: 13, color: D, fontFamily: 'monospace', overflow: 'hidden',
             textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: '1px solid #E0DAD4',
           }}>
-            {partnerUrl}
+            {landingUrl}
           </div>
           <button
             onClick={handleCopy}
@@ -97,6 +111,18 @@ export default function InspectorMarketing() {
             {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
+        <details style={{ marginTop: 14 }}>
+          <summary style={{ fontSize: 11, color: '#9B9490', cursor: 'pointer', listStyle: 'none', userSelect: 'none' }}>
+            Direct upload link (no landing page) ↓
+          </summary>
+          <div style={{
+            marginTop: 8, padding: '8px 12px', background: W, borderRadius: 6,
+            fontSize: 12, color: '#6B6560', fontFamily: 'monospace',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {directUrl}
+          </div>
+        </details>
       </div>
 
       {/* Material sections */}

@@ -283,12 +283,24 @@ export default function InspectorSettings() {
 
       {/* Partner URL */}
       <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Partner URL</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={sectionTitleStyle}>Branded landing page</div>
+          {inspector?.partnerSlug || inspector?.id ? (
+            <a
+              href={`/inspect/p/${inspector?.partnerSlug ?? inspector?.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 12, color: O, fontWeight: 600, textDecoration: 'none', fontFamily: "'DM Sans', sans-serif" }}
+            >
+              Preview your page →
+            </a>
+          ) : null}
+        </div>
         <div style={{
           padding: '10px 14px', background: W, borderRadius: 8, fontSize: 13, color: D,
           fontFamily: 'monospace', border: '1px solid #E0DAD4',
         }}>
-          {`${window.location.origin}/inspect?ref=${inspector?.partnerSlug ?? inspector?.id ?? ''}`}
+          {`${window.location.origin}/inspect/p/${inspector?.partnerSlug ?? inspector?.id ?? ''}`}
         </div>
       </div>
 
