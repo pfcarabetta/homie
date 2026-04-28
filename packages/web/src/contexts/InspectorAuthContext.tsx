@@ -11,6 +11,11 @@ interface InspectorAuthContextValue {
   login: (email: string, password: string) => Promise<string | null>;
   signup: (data: InspectorSignupData) => Promise<string | null>;
   logout: () => void;
+  /** Replace the cached inspector profile after a successful save so
+   *  the form re-renders with the saved values and survives a reload
+   *  (localStorage gets the fresh blob). Pass the response of
+   *  inspectorService.updateProfile here. */
+  setInspector: (profile: InspectorProfile) => void;
 }
 
 const InspectorAuthContext = createContext<InspectorAuthContextValue | null>(null);
@@ -119,8 +124,13 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
     setInspector(null);
   }, []);
 
+  const replaceInspector = useCallback((profile: InspectorProfile) => {
+    localStorage.setItem(INSPECTOR_KEY, JSON.stringify(profile));
+    setInspector(profile);
+  }, []);
+
   return (
-    <InspectorAuthContext.Provider value={{ inspector, isAuthenticated: inspector !== null, login, signup, logout }}>
+    <InspectorAuthContext.Provider value={{ inspector, isAuthenticated: inspector !== null, login, signup, logout, setInspector: replaceInspector }}>
       {children}
     </InspectorAuthContext.Provider>
   );

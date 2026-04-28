@@ -314,7 +314,10 @@ export const inspectorService = {
 
   updateProfile(data: Partial<InspectorProfile>) {
     return inspectorFetch<InspectorProfile>('/api/v1/inspector/profile', {
-      method: 'PATCH',
+      // Backend route is PUT — must match exactly. Sending PATCH here
+      // silently 404s and the save appears to succeed (the catch
+      // swallows the error) while nothing actually persists.
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   },

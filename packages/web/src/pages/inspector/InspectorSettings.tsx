@@ -27,9 +27,10 @@ const sectionTitleStyle: React.CSSProperties = {
 };
 
 export default function InspectorSettings() {
-  const { inspector } = useInspectorAuth();
+  const { inspector, setInspector } = useInspectorAuth();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Business info
   const [companyName, setCompanyName] = useState('');
@@ -91,6 +92,7 @@ export default function InspectorSettings() {
   async function handleSave() {
     setSaving(true);
     setSaved(false);
+    setSaveError(null);
     try {
       const dollarsToCents = (raw: string): number | null => {
         const trimmed = raw.trim();
@@ -99,7 +101,7 @@ export default function InspectorSettings() {
         if (!Number.isFinite(n) || n < 0) return null;
         return Math.round(n * 100);
       };
-      await inspectorService.updateProfile({
+      const res = await inspectorService.updateProfile({
         companyName,
         phone: phone || null,
         website: website || null,
@@ -118,10 +120,18 @@ export default function InspectorSettings() {
           earnings: notifEarnings,
         },
       });
+      if (res.error || !res.data) {
+        setSaveError(res.error ?? 'Save failed — please try again.');
+        return;
+      }
+      // Refresh the auth context with the server's view so the form
+      // re-renders with whatever the backend actually persisted (and so
+      // a reload picks up the same values from localStorage).
+      setInspector(res.data);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch {
-      // silently fail
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed — please try again.');
     } finally {
       setSaving(false);
     }
@@ -318,6 +328,9 @@ export default function InspectorSettings() {
         </button>
         {saved && (
           <span style={{ fontSize: 13, fontWeight: 600, color: G }}>Changes saved</span>
+        )}
+        {saveError && (
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#E24B4A' }}>{saveError}</span>
         )}
       </div>
     </div>
