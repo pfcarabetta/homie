@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type DragEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { inspectorService, type SupportingDocumentType } from '@/services/inspector-api';
 import { trackEvent } from '@/services/analytics';
+import { getStoredReferrer } from '@/services/referral-tracking';
 
 const MAX_SUPPORTING_DOCS = 5;
 
@@ -271,6 +272,7 @@ export default function InspectorUpload() {
           file_data_url: await fileToDataUrl(d.file!),
         })),
       );
+      const referrerPartner = getStoredReferrer();
       const res = await inspectorService.createReport({
         property_address: propertyAddress,
         property_city: propertyCity,
@@ -284,6 +286,7 @@ export default function InspectorUpload() {
         report_file_data_url: dataUrl,
         pricing_tier: selectedTier,
         supporting_documents: supportingPayload.length > 0 ? supportingPayload : undefined,
+        ...(referrerPartner ? { referrer_partner: referrerPartner } : {}),
       });
       if (res.error || !res.data) {
         throw new Error(res.error ?? 'Failed to start checkout');

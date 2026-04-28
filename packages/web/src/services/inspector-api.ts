@@ -17,6 +17,11 @@ export interface InspectorProfile {
   inspectionSoftware: string | null;
   logoUrl: string | null;
   partnerUrl: string | null;
+  /** Unique URL slug for the inspector — drives the /inspect?ref=
+   *  partner referral URLs in Marketing + Settings. Stable across the
+   *  inspector's lifetime; preferred over `id` because it shows up in
+   *  shareable links. */
+  partnerSlug: string | null;
   payoutMethod: string | null;
   notificationPreferences: Record<string, boolean>;
   /** Per-tier retail price the inspector charges their client. Null
@@ -140,9 +145,11 @@ export interface QuoteDetails {
   bundleSize?: number;
 }
 
-/** One row per paid report — the new earnings ledger is computed
- *  per report (retail − wholesale), not from a separate earnings
- *  table. */
+/** One row per earning event — computed at read time from
+ *  inspection_reports, no separate ledger table. `kind = 'resale'`
+ *  when the inspector uploaded the report and earns retail − wholesale.
+ *  `kind = 'referral'` when the inspector referred the buyer via their
+ *  partner URL and earns a percentage of the wholesale. */
 export interface Earning {
   id: string;
   reportId: string;
@@ -151,6 +158,7 @@ export interface Earning {
   pricingTier: 'essential' | 'professional' | 'premium' | null;
   wholesaleCents: number;
   estimatedEarningsCents: number;
+  kind: 'resale' | 'referral';
   createdAt: string;
 }
 
@@ -353,6 +361,11 @@ export const inspectorService = {
       file_name: string;
       file_data_url: string;
     }>;
+    /** Inspector partner referrer (slug or UUID) captured on landing
+     *  via /inspect?ref=. Triggers a partner_referral_bonus to that
+     *  partner when the wholesale clears. Self-referrals are filtered
+     *  server-side. */
+    referrer_partner?: string;
   }) {
     return inspectorFetch<{
       reportId: string;
@@ -512,8 +525,12 @@ export interface InspectStatusItem {
 }
 
 export const inspectService = {
-  /** Homeowner self-upload — no auth required */
-  uploadReport(data: { report_file_data_url: string; property_address?: string; property_city?: string; property_state?: string; property_zip?: string; client_name?: string; client_email?: string }) {
+  /** Homeowner self-upload — no auth required. `referrer_partner` is
+   *  the inspector partner slug or UUID captured on landing via
+   *  /inspect?ref= and stored in localStorage/cookie; the backend
+   *  resolves it to the inspector_partners.id and stamps the report
+   *  so a bonus credits the referrer if/when the homeowner pays. */
+  uploadReport(data: { report_file_data_url: string; property_address?: string; property_city?: string; property_state?: string; property_zip?: string; client_name?: string; client_email?: string; referrer_partner?: string }) {
     return fetchAPI<{ reportId: string; token: string; reportUrl: string; parsingStatus: string }>(
       '/api/v1/inspect/upload', { method: 'POST', body: JSON.stringify(data) },
     );

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from 
 import { useAuth } from "@/contexts/AuthContext";
 import SEO from '@/components/SEO';
 import { trackEvent } from '@/services/analytics';
+import { captureReferrerIfPresent, getStoredReferrer } from '@/services/referral-tracking';
 
 const C = {
   orange: "#E8632B", orangeDark: "#C8531E", orangeLight: "#F0997B",
@@ -197,6 +198,216 @@ function InspectionDemo() {
   );
 }
 
+/** Auto-looping hero visual: PDF being parsed (phase 0) flips to a stack
+ *  of structured item cards (phase 1) every ~4s. Distinct from the
+ *  click-driven InspectionDemo further down the page — that one is
+ *  interactive ("Parse sample report" → quote each); this one is
+ *  ambient. Uses the first 5 entries from DEMO_REPORT_ITEMS so the
+ *  cards visually match what a real parsed report shows. */
+function HeroDemo() {
+  const [phase, setPhase] = useState<0 | 1>(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setPhase(p => (p === 0 ? 1 : 0)), 4500);
+    return () => clearInterval(t);
+  }, []);
+
+  const items = DEMO_REPORT_ITEMS.slice(0, 5);
+  const sevColor = (s: string) => s === 'urgent' ? '#E24B4A' : s === 'recommended' ? '#EF9F27' : C.gray;
+  const sevBg    = (s: string) => s === 'urgent' ? '#FCEBEB' : s === 'recommended' ? '#FAEEDA' : C.warm;
+
+  return (
+    <div style={{ position: 'relative', width: '100%', maxWidth: 540, margin: '0 auto', aspectRatio: '5 / 6', minHeight: 480 }}>
+      <style>{`
+        @keyframes hero-scan {
+          0%   { transform: translateY(-8%); opacity: 0; }
+          12%  { opacity: 1; }
+          88%  { opacity: 1; }
+          100% { transform: translateY(420px); opacity: 0; }
+        }
+        @keyframes hero-mark {
+          from { background-size: 0% 100%; }
+          to   { background-size: 100% 100%; }
+        }
+        @keyframes hero-pdf-in {
+          from { opacity: 0; transform: rotate(1.5deg) scale(0.97) translateY(8px); }
+          to   { opacity: 1; transform: rotate(0) scale(1) translateY(0); }
+        }
+        @keyframes hero-pdf-out {
+          from { opacity: 1; transform: rotate(0) scale(1) translateY(0); }
+          to   { opacity: 0; transform: rotate(-2deg) scale(0.96) translateY(-12px); }
+        }
+        @keyframes hero-card-in {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes hero-chip-pulse {
+          0%, 100% { opacity: 1; }
+          50%      { opacity: 0.35; }
+        }
+        .hero-mark {
+          background-image: linear-gradient(120deg, ${C.orange}33 0%, ${C.orange}33 100%);
+          background-repeat: no-repeat;
+          background-position: 0 88%;
+          background-size: 0% 32%;
+          padding: 0 2px;
+          animation: hero-mark 0.8s ease-out forwards;
+        }
+      `}</style>
+
+      {/* Backing card — provides the elevated frame. The PDF + items both
+          live inside this card so the visual feels like one device. */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: C.white, borderRadius: 24,
+        border: `1px solid ${C.grayLight}`,
+        boxShadow: '0 24px 60px -24px rgba(45,41,38,0.18), 0 8px 24px -12px rgba(45,41,38,0.08)',
+        overflow: 'hidden',
+      }}>
+        {/* Floating chip — top-right, state-aware */}
+        <div style={{
+          position: 'absolute', top: 14, right: 14, zIndex: 5,
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '6px 12px', borderRadius: 100,
+          background: C.dark, color: C.white,
+          ...dm, fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
+        }}>
+          <span style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: phase === 0 ? '#EF9F27' : C.green,
+            animation: phase === 0 ? 'hero-chip-pulse 1.4s ease-in-out infinite' : 'none',
+          }} />
+          {phase === 0 ? '92 pages · parsing' : '34 items · ready'}
+        </div>
+
+        {/* Phase 0 — PDF mock with scan line + highlight strokes.
+            Cross-fades with the items overlay on a plain CSS transition;
+            no React keys or keyframe juggling. */}
+        <div
+          style={{
+            position: 'absolute', inset: 0,
+            opacity: phase === 0 ? 1 : 0,
+            transform: phase === 0 ? 'rotate(0) scale(1)' : 'rotate(-1.5deg) scale(0.97)',
+            transition: 'opacity 0.45s ease, transform 0.5s ease',
+            transformOrigin: 'center center',
+            pointerEvents: phase === 0 ? 'auto' : 'none',
+          }}
+        >
+          {/* Inspection-report header bar */}
+          <div style={{
+            background: C.warm, padding: '14px 22px',
+            borderBottom: `1px solid ${C.grayLight}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ ...fr, fontWeight: 700, fontSize: 14, color: C.dark, letterSpacing: 0.3 }}>
+                PROPERTY INSPECTION
+              </span>
+              <span style={{ ...dm, fontSize: 10, color: C.gray, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                · Apr 2026
+              </span>
+            </div>
+            <span style={{ ...dm, fontSize: 10, color: C.gray }}>Page 12 / 92</span>
+          </div>
+
+          {/* Document body — three short sections, each with a highlighted action phrase */}
+          <div style={{ padding: '24px 26px', position: 'relative' }}>
+            {[
+              { heading: 'Plumbing', body: 'Water heater located in the basement utility room shows corrosion at the base. Active drip observed from the drain pan.', mark: 'Recommend replacement within 12 months.' },
+              { heading: 'Electrical', body: 'Outlets in the master bath and hallway bath are not GFCI-protected.', mark: 'Replace with GFCI receptacles.' },
+              { heading: 'Roofing', body: 'Flashing around the chimney has lifted in three places.', mark: 'Re-flash before next rainy season to prevent intrusion.' },
+            ].map((sec, i) => (
+              <div key={i} style={{ marginBottom: i < 2 ? 18 : 0 }}>
+                <div style={{ ...dm, fontSize: 10, fontWeight: 700, color: C.orange, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>
+                  {sec.heading}
+                </div>
+                <div style={{ ...dm, fontSize: 12.5, color: C.darkMid, lineHeight: 1.55 }}>
+                  {sec.body}{' '}
+                  <span
+                    className="hero-mark"
+                    style={{
+                      animationDelay: `${0.6 + i * 0.7}s`,
+                      color: C.dark, fontWeight: 600,
+                    }}
+                  >
+                    {sec.mark}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {/* Scan line — sweeps top→bottom while phase 0 is active */}
+            {phase === 0 && (
+              <div style={{
+                position: 'absolute', left: 0, right: 0, top: 0,
+                height: 36,
+                background: `linear-gradient(180deg, transparent 0%, ${C.orange}10 40%, ${C.orange}40 50%, ${C.orange}10 60%, transparent 100%)`,
+                animation: 'hero-scan 3.6s ease-in-out forwards',
+                pointerEvents: 'none',
+              }} />
+            )}
+          </div>
+        </div>
+
+        {/* Phase 1 — parsed items stack. Container fades in on a small
+            delay so the PDF can begin its fade-out first; each card then
+            fades up with its own staggered delay (transition-based, not
+            keyframes — keyframes were getting overridden by inline style
+            in the previous iteration). */}
+        <div
+          style={{
+            position: 'absolute', inset: 0,
+            opacity: phase === 1 ? 1 : 0,
+            transition: phase === 1 ? 'opacity 0.4s ease 0.15s' : 'opacity 0.2s ease',
+            padding: '20px 18px',
+            display: 'flex', flexDirection: 'column', gap: 10,
+            justifyContent: 'flex-start',
+            pointerEvents: phase === 1 ? 'auto' : 'none',
+          }}
+        >
+          {items.map((item, i) => (
+            <div
+              key={item.id}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 14px', borderRadius: 12,
+                background: C.white, border: `1px solid ${C.grayLight}`,
+                boxShadow: '0 2px 8px -4px rgba(45,41,38,0.06)',
+                opacity: phase === 1 ? 1 : 0,
+                transform: phase === 1 ? 'translateY(0)' : 'translateY(8px)',
+                transition: `opacity 0.4s ease ${0.3 + i * 0.08}s, transform 0.4s ease ${0.3 + i * 0.08}s`,
+              }}
+            >
+              <span style={{
+                fontSize: 18, flexShrink: 0,
+                width: 32, height: 32, borderRadius: 8,
+                background: C.warm,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>{item.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ ...dm, fontSize: 12.5, fontWeight: 600, color: C.dark, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.title}
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ ...dm, fontSize: 9.5, fontWeight: 700, color: sevColor(item.severity), background: sevBg(item.severity), padding: '2px 7px', borderRadius: 100, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                    {item.severity}
+                  </span>
+                  <span style={{ ...dm, fontSize: 9.5, color: C.gray, background: C.warm, padding: '2px 7px', borderRadius: 100 }}>
+                    {item.category}
+                  </span>
+                  <span style={{ ...dm, fontSize: 9.5, fontWeight: 700, color: C.dark, background: C.warm, padding: '2px 7px', borderRadius: 100 }}>
+                    {item.cost}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HomieInspectionLanding() {
   const { homeowner } = useAuth();
   const [audience, setAudience] = useState("buyer");
@@ -204,6 +415,13 @@ export default function HomieInspectionLanding() {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Capture inspector partner referral on first touch so the upload
+  // (whether immediately or days later) attributes the report to the
+  // partner whose URL drove this visit. Idempotent — first-touch wins.
+  useEffect(() => {
+    captureReferrerIfPresent();
+  }, []);
 
   // Page-wide drag-and-drop: when the user drags a file over the page, show a
   // full-screen drop overlay. Drop anywhere triggers the upload. Doesn't affect
@@ -274,7 +492,11 @@ export default function HomieInspectionLanding() {
 
       setUploadStatus('Processing with AI...');
       const { inspectService } = await import('@/services/inspector-api');
-      const res = await inspectService.uploadReport({ report_file_data_url: dataUrl });
+      const referrerPartner = getStoredReferrer();
+      const res = await inspectService.uploadReport({
+        report_file_data_url: dataUrl,
+        ...(referrerPartner ? { referrer_partner: referrerPartner } : {}),
+      });
       if (!res.data) {
         trackEvent('inspect_upload_failed', { source: 'consumer_landing', reason: 'upload_api_error' });
         setUploadStatus(null); setUploading(false); alert('Upload failed'); return;
@@ -401,18 +623,31 @@ export default function HomieInspectionLanding() {
         </div>
       </nav>
 
-      {/* HERO */}
-      <section style={{ background: `linear-gradient(165deg, ${C.warm} 0%, ${C.white} 50%, ${C.greenLight} 100%)`, paddingTop: 100, paddingBottom: 80, position: "relative", overflow: "hidden" }}>
+      {/* HERO — Evolved Classic
+          Two-column grid at desktop; stacks on narrow widths. Left
+          column owns existing content (audience toggle, headline,
+          sub, CTA, meta, secondary link, stats). Right column is the
+          new auto-looping HeroDemo. Same content as before, sharper
+          visuals. */}
+      <style>{`
+        @media (max-width: 980px) {
+          .hi-hero-grid { grid-template-columns: 1fr !important; gap: 56px !important; }
+          .hi-hero-visual { order: 2; max-width: 480px; margin: 0 auto; width: 100%; }
+        }
+      `}</style>
+      <section style={{ background: `linear-gradient(165deg, ${C.warm} 0%, ${C.white} 50%, ${C.greenLight} 100%)`, paddingTop: 80, paddingBottom: 80, position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: -200, right: -200, width: 600, height: 600, borderRadius: "50%", background: C.orange, opacity: 0.03 }} />
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", position: "relative", zIndex: 1 }}>
+          <div className="hi-hero-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1fr)", gap: 64, alignItems: "center" }}>
+            <div>
           <FadeIn>
             <div style={{ display: "inline-flex", background: C.white, border: `1px solid ${C.grayLight}`, borderRadius: 100, padding: 4, marginBottom: 24 }}>
               <button onClick={() => setAudience("buyer")} style={{ ...dm, fontSize: 13, fontWeight: 600, color: audience === "buyer" ? C.white : C.gray, background: audience === "buyer" ? C.dark : "transparent", border: "none", borderRadius: 100, padding: "6px 18px", cursor: "pointer", transition: "all 0.2s" }}>Buying a home</button>
-              <button onClick={() => setAudience("seller")} style={{ ...dm, fontSize: 13, fontWeight: 600, color: audience === "seller" ? C.white : C.gray, background: audience === "seller" ? C.dark : "transparent", border: "none", borderRadius: 100, padding: "6px 18px", cursor: "pointer", transition: "all 0.2s" }}>Selling a home</button>
+              <button onClick={() => setAudience("seller")} style={{ ...dm, fontSize: 13, fontWeight: 600, color: audience === "seller" ? C.white : C.gray, background: audience === "seller" ? C.dark : "transparent", border: "none", borderRadius: 100, padding: "6px 18px", cursor: "pointer", transition: "all 0.2s" }}>I own this home</button>
             </div>
           </FadeIn>
           <FadeIn delay={0.1}>
-            <h1 style={{ ...fr, fontSize: "clamp(36px, 5vw, 64px)", fontWeight: 700, color: C.dark, lineHeight: 1.08, maxWidth: 700, margin: 0 }}>
+            <h1 style={{ ...fr, fontSize: "clamp(36px, 4.6vw, 60px)", fontWeight: 700, color: C.dark, lineHeight: 1.08, maxWidth: 600, margin: 0 }}>
               {audience === "buyer"
                 ? <>Know what it costs<br />to fix <span style={{ color: C.orange }}>before you close</span></>
                 : <>Fix it before<br />they <span style={{ color: C.orange }}>find it</span></>
@@ -420,7 +655,7 @@ export default function HomieInspectionLanding() {
             </h1>
           </FadeIn>
           <FadeIn delay={0.2}>
-            <p style={{ ...dm, fontSize: "clamp(17px, 1.8vw, 21px)", color: C.darkMid, lineHeight: 1.6, maxWidth: 560, margin: "24px 0 36px" }}>
+            <p style={{ ...dm, fontSize: "clamp(16px, 1.4vw, 19px)", color: C.darkMid, lineHeight: 1.6, maxWidth: 520, margin: "20px 0 32px" }}>
               {audience === "buyer"
                 ? "Your inspector finds the problems. Homie tells you exactly what they'll cost to fix \u2014 with real quotes from local pros, not guesswork. Negotiate with real numbers."
                 : "Get a pre-listing inspection, then let Homie quote every item and fix what matters before buyers see it. List with confidence and documentation that builds trust."
@@ -428,32 +663,46 @@ export default function HomieInspectionLanding() {
             </p>
           </FadeIn>
           <FadeIn delay={0.3}>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
               <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)", display: "inline-block" }} onMouseEnter={e => { e.currentTarget.style.background = C.orangeDark; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.transform = "translateY(0)"; }}>
-                {audience === "buyer" ? "Upload your inspection report" : "Get your pre-listing quotes"}
+                {audience === "buyer" ? "Upload your inspection" : "Get your pre-listing quotes"}
               </label>
-              <button style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.dark, background: "transparent", border: `2px solid ${C.grayLight}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.borderColor = C.orange} onMouseLeave={e => e.currentTarget.style.borderColor = C.grayLight}>
-                {audience === "buyer" ? "Find a Homie inspector" : "How it works"}
-              </button>
-            </div>
-            <div style={{ ...dm, fontSize: 13, color: C.gray, marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 14 }}>📄</span>
-              <span>or drag a PDF anywhere on this page · free AI parse (a few minutes for larger reports), no signup needed</span>
+              <div style={{ fontFamily: "'DM Mono', 'DM Sans', monospace", fontSize: 11, color: C.gray, display: "flex", alignItems: "center", gap: 6, letterSpacing: 0.4, textTransform: "uppercase", fontWeight: 600 }}>
+                <span style={{ fontSize: 13 }}>📄</span>
+                <span>PDF or HTML · parsed in 2–5 min · no signup</span>
+              </div>
+              <a
+                href="/inspect/inspectors"
+                onClick={() => trackEvent('inspect_landing_cta_clicked', { cta_location: 'hero_inspector_link' })}
+                style={{ ...dm, fontSize: 14, color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginTop: 6 }}
+                onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
+                onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
+              >
+                Are you a home inspector? See the partner program →
+              </a>
             </div>
           </FadeIn>
           <FadeIn delay={0.45}>
-            <div style={{ display: "flex", gap: 40, marginTop: 56, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 36, marginTop: 48, flexWrap: "wrap" }}>
               {(audience === "buyer"
-                ? [["$8,400", "average negotiation credit with Homie quotes"], ["2 hours", "from report to real quotes"], ["11 items", "parsed from the average inspection"]]
+                ? [["$8,400", "avg. negotiation credit"], ["2 hrs", "report → real quotes"], ["34 items", "parsed per report"]]
                 : [["23%", "faster sale with pre-addressed items"], ["$0", "surprises for your buyer"], ["100%", "documented repairs for the listing"]]
               ).map(([stat, label], i) => (
                 <div key={`${audience}-${i}`} style={{ display: "flex", flexDirection: "column" }}>
-                  <span style={{ ...fr, fontSize: 32, fontWeight: 700, color: C.orange }}>{stat}</span>
-                  <span style={{ ...dm, fontSize: 14, color: C.gray, fontWeight: 500 }}>{label}</span>
+                  <span style={{ ...fr, fontSize: 30, fontWeight: 700, color: C.orange, lineHeight: 1.1 }}>{stat}</span>
+                  <span style={{ ...dm, fontSize: 13, color: C.gray, fontWeight: 500, marginTop: 4 }}>{label}</span>
                 </div>
               ))}
             </div>
           </FadeIn>
+            </div>
+            {/* RIGHT COLUMN — auto-looping PDF ↔ items visual */}
+            <div className="hi-hero-visual">
+              <FadeIn delay={0.2}>
+                <HeroDemo />
+              </FadeIn>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -23,7 +23,8 @@ import { optionalAuth, signToken } from '../middleware/auth';
 import jwt from 'jsonwebtoken';
 import { sendEmail } from '../services/notifications';
 import { buildStripeMetadata } from '../services/stripe';
-import { getPricingConfig, estimatedEarningsCentsFor, type InspectorRetailOverrides } from '../services/pricing';
+import { getPricingConfig, estimatedEarningsCentsFor, referralBonusCentsFor, type InspectorRetailOverrides } from '../services/pricing';
+import { or } from 'drizzle-orm';
 
 /** Normalize a phone to digits-only with US country code stripped — for fuzzy matching. */
 function phoneKey(phone: string | null | undefined): string | null {
@@ -241,6 +242,12 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
      *  These are uploaded + linked to the report immediately, then
      *  parsed in parallel after the main report parse succeeds. */
     supporting_documents?: SupportingDocPayload[];
+    /** Inspector partner referrer captured from /inspect?ref=. Used
+     *  when one inspector promotes via another partner's link
+     *  (rare but supported for completeness). The Stripe webhook
+     *  drops a partner_referral_bonus row when this is set. Accepts
+     *  either the partner_slug or the partner UUID. */
+    referrer_partner?: string;
   };
 
   if (!body.property_address || !body.client_name || !body.client_email || !body.inspection_date) {
@@ -322,8 +329,16 @@ router.post('/reports', requireInspectorAuth, async (req: Request, res: Response
     const tierPricing = await getInspectorTierPricing(tier);
     const priceCents = tierPricing.wholesalePriceCents;
 
+    // Resolve the referrer slug/id to a partner row id (or null) so we
+    // never store unvalidated input. Skip self-referrals — an inspector
+    // who somehow picks up their own ref shouldn't earn a bonus on
+    // their own purchase.
+    const resolvedReferrer = await resolveReferrerPartnerId(body.referrer_partner);
+    const referrerPartnerId = resolvedReferrer && resolvedReferrer !== req.inspectorId ? resolvedReferrer : null;
+
     const [report] = await db.insert(inspectionReports).values({
       inspectorPartnerId: req.inspectorId,
+      referrerPartnerId,
       propertyAddress: body.property_address,
       propertyCity: body.property_city || '',
       propertyState: body.property_state || '',
@@ -478,6 +493,25 @@ function projectInspectionItem(i: typeof inspectionReportItems.$inferSelect) {
     crossReferencedItemIds: i.crossReferencedItemIds ?? [],
     inspectorAdjusted: i.inspectorAdjusted ?? false,
   };
+}
+
+/** Resolve a partner ref string (partner_slug OR partner UUID) to the
+ *  canonical inspector_partners.id. Returns null on bad input or
+ *  unknown ref so callers can pass through whatever the homeowner's
+ *  client sent without exploding. Strict allowlist of accepted chars
+ *  to avoid SQL/injection surface. */
+async function resolveReferrerPartnerId(raw: string | null | undefined): Promise<string | null> {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > 64) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return null;
+  // Try UUID match first; fall back to slug. Both are unique on the
+  // partners table so at most one row matches.
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+  const [partner] = isUuid
+    ? await db.select({ id: inspectorPartners.id }).from(inspectorPartners).where(eq(inspectorPartners.id, trimmed)).limit(1)
+    : await db.select({ id: inspectorPartners.id }).from(inspectorPartners).where(eq(inspectorPartners.partnerSlug, trimmed)).limit(1);
+  return partner?.id ?? null;
 }
 
 function projectInspectionReport(
@@ -1181,12 +1215,18 @@ router.get('/earnings/summary', requireInspectorAuth, async (req: Request, res: 
     const pricingConfig = await getPricingConfig();
 
     const reports = await db.select({
+      inspectorPartnerId: inspectionReports.inspectorPartnerId,
+      referrerPartnerId: inspectionReports.referrerPartnerId,
       pricingTier: inspectionReports.pricingTier,
       priceCentsPaid: inspectionReports.priceCentsPaid,
+      paymentStatus: inspectionReports.paymentStatus,
       createdAt: inspectionReports.createdAt,
     })
       .from(inspectionReports)
-      .where(eq(inspectionReports.inspectorPartnerId, req.inspectorId));
+      .where(or(
+        eq(inspectionReports.inspectorPartnerId, req.inspectorId),
+        eq(inspectionReports.referrerPartnerId, req.inspectorId),
+      )!);
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
@@ -1197,12 +1237,14 @@ router.get('/earnings/summary', requireInspectorAuth, async (req: Request, res: 
     let lifetimeCents = 0;
     let reportsThisMonth = 0;
     for (const r of reports) {
-      const cents = estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector);
+      const cents = r.inspectorPartnerId === req.inspectorId
+        ? estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector)
+        : referralBonusCentsFor(r);
       lifetimeCents += cents;
       const ts = r.createdAt.getTime();
       if (ts >= startOfMonth) {
         currentMonthCents += cents;
-        reportsThisMonth += 1;
+        if (r.inspectorPartnerId === req.inspectorId) reportsThisMonth += 1;
       } else if (ts >= startOfLastMonth) {
         lastMonthCents += cents;
       }
@@ -1301,10 +1343,10 @@ router.get('/dashboard-metrics', requireInspectorAuth, async (req: Request, res:
       ORDER BY weeks.week_start
     `);
 
-    // Estimated earnings — sum of (retail − wholesale) across this
-    // month's paid reports. Computed in JS instead of SQL because the
-    // inspector's retail override + suggested fallback live in app
-    // state, not in the DB.
+    // Estimated earnings = (retail − wholesale) on this month's reports
+    // the inspector uploaded + (referral bps × wholesale) on this
+    // month's reports they referred. Computed in JS so the retail
+    // override + ref bps live in app state, not SQL.
     const [partner] = await db.select({
       retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
       retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
@@ -1313,18 +1355,29 @@ router.get('/dashboard-metrics', requireInspectorAuth, async (req: Request, res:
     const overrides: InspectorRetailOverrides = partner ?? { retailPriceEssentialCents: null, retailPriceProfessionalCents: null, retailPricePremiumCents: null };
     const pricingConfig = await getPricingConfig();
     const monthReports = await db.select({
+      inspectorPartnerId: inspectionReports.inspectorPartnerId,
+      referrerPartnerId: inspectionReports.referrerPartnerId,
       pricingTier: inspectionReports.pricingTier,
       priceCentsPaid: inspectionReports.priceCentsPaid,
+      paymentStatus: inspectionReports.paymentStatus,
     })
       .from(inspectionReports)
       .where(and(
-        eq(inspectionReports.inspectorPartnerId, partnerId),
+        or(
+          eq(inspectionReports.inspectorPartnerId, partnerId),
+          eq(inspectionReports.referrerPartnerId, partnerId),
+        )!,
         sql`DATE_TRUNC('month', ${inspectionReports.createdAt}) = DATE_TRUNC('month', NOW())`,
       ));
-    const estimatedEarningsCents = monthReports.reduce(
-      (sum, r) => sum + estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector),
-      0,
-    );
+    const estimatedEarningsCents = monthReports.reduce((sum, r) => {
+      if (r.inspectorPartnerId === partnerId) {
+        return sum + estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector);
+      }
+      if (r.referrerPartnerId === partnerId) {
+        return sum + referralBonusCentsFor(r);
+      }
+      return sum;
+    }, 0);
 
     res.json({
       data: {
@@ -1368,28 +1421,44 @@ router.get('/earnings', requireInspectorAuth, async (req: Request, res: Response
 
     const reports = await db.select({
       id: inspectionReports.id,
+      inspectorPartnerId: inspectionReports.inspectorPartnerId,
+      referrerPartnerId: inspectionReports.referrerPartnerId,
       propertyAddress: inspectionReports.propertyAddress,
       clientName: inspectionReports.clientName,
       pricingTier: inspectionReports.pricingTier,
       priceCentsPaid: inspectionReports.priceCentsPaid,
+      paymentStatus: inspectionReports.paymentStatus,
       createdAt: inspectionReports.createdAt,
     })
       .from(inspectionReports)
-      .where(eq(inspectionReports.inspectorPartnerId, req.inspectorId))
+      .where(or(
+        eq(inspectionReports.inspectorPartnerId, req.inspectorId),
+        eq(inspectionReports.referrerPartnerId, req.inspectorId),
+      )!)
       .orderBy(desc(inspectionReports.createdAt))
       .limit(limit).offset(offset);
 
     const data = reports
-      .map(r => ({
-        id: r.id,
-        reportId: r.id,
-        propertyAddress: r.propertyAddress,
-        clientName: r.clientName,
-        pricingTier: r.pricingTier,
-        wholesaleCents: r.priceCentsPaid ?? 0,
-        estimatedEarningsCents: estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector),
-        createdAt: r.createdAt.toISOString(),
-      }))
+      .map(r => {
+        const isReferral = r.referrerPartnerId === req.inspectorId && r.inspectorPartnerId !== req.inspectorId;
+        const cents = isReferral
+          ? referralBonusCentsFor(r)
+          : estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector);
+        return {
+          id: r.id,
+          reportId: r.id,
+          propertyAddress: r.propertyAddress,
+          clientName: r.clientName,
+          pricingTier: r.pricingTier,
+          wholesaleCents: r.priceCentsPaid ?? 0,
+          estimatedEarningsCents: cents,
+          /** "resale" = inspector uploaded this report and earns the
+           *  retail margin. "referral" = inspector referred the
+           *  homeowner who drove this purchase and earns a bonus. */
+          kind: isReferral ? 'referral' as const : 'resale' as const,
+          createdAt: r.createdAt.toISOString(),
+        };
+      })
       .filter(r => r.estimatedEarningsCents > 0);
 
     res.json({ data, error: null, meta: {} });
@@ -1750,6 +1819,10 @@ router.post('/upload', optionalAuth, async (req: Request, res: Response) => {
     client_name?: string;
     client_email?: string;
     inspection_date?: string;
+    /** Inspector partner referrer captured from the /inspect?ref=
+     *  link. Accepts either the partner_slug or the partner UUID — we
+     *  resolve it to the canonical partner id for storage. */
+    referrer_partner?: string;
   };
 
   if (!body.report_file_data_url) {
@@ -1770,11 +1843,14 @@ router.post('/upload', optionalAuth, async (req: Request, res: Response) => {
     // Fall back to the raw data URL — the parser can handle it
     if (!reportFileUrl) reportFileUrl = body.report_file_data_url;
 
+    const referrerPartnerId = await resolveReferrerPartnerId(body.referrer_partner);
+
     const clientAccessToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
     const [report] = await db.insert(inspectionReports).values({
       inspectorPartnerId: null,
+      referrerPartnerId,
       propertyAddress: body.property_address || 'Address pending',
       propertyCity: body.property_city || '',
       propertyState: body.property_state || '',

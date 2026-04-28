@@ -49,6 +49,7 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
           inspectionSoftware: null,
           logoUrl: (p.companyLogoUrl as string) ?? null,
           partnerUrl: (p.partnerSlug as string) ? `/inspector/partner/${p.partnerSlug}` : null,
+          partnerSlug: (p.partnerSlug as string) ?? null,
           payoutMethod: 'stripe',
           notificationPreferences: {},
           createdAt: new Date().toISOString(),
@@ -90,7 +91,7 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
               certifications: data.certifications ?? [],
               serviceZipCodes: data.serviceZipCodes ?? [],
               inspectionSoftware: data.inspectionSoftware ?? null,
-              logoUrl: null, partnerUrl: null,
+              logoUrl: null, partnerUrl: null, partnerSlug: null,
               payoutMethod: 'stripe', notificationPreferences: {}, createdAt: new Date().toISOString(),
             };
             localStorage.setItem(INSPECTOR_KEY, JSON.stringify(minimal));
@@ -103,7 +104,7 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
             companyName: data.companyName, email: data.email, phone: data.phone,
             website: data.website ?? null, licenseNumber: data.licenseNumber ?? null,
             certifications: data.certifications ?? [], serviceZipCodes: data.serviceZipCodes ?? [],
-            inspectionSoftware: data.inspectionSoftware ?? null, logoUrl: null, partnerUrl: null,
+            inspectionSoftware: data.inspectionSoftware ?? null, logoUrl: null, partnerUrl: null, partnerSlug: null,
             payoutMethod: 'stripe', notificationPreferences: {},
             createdAt: new Date().toISOString(),
           };

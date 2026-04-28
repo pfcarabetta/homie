@@ -57,6 +57,13 @@ export type NewInspectorPartner = typeof inspectorPartners.$inferInsert;
 export const inspectionReports = pgTable('inspection_reports', {
   id: uuid('id').defaultRandom().primaryKey(),
   inspectorPartnerId: uuid('inspector_partner_id').references(() => inspectorPartners.id, { onDelete: 'cascade' }),
+  /** The partner who *referred* this purchase via their /inspect?ref=
+   *  link, captured on the homeowner's first touch (localStorage +
+   *  cookie). Distinct from inspectorPartnerId, which is the partner
+   *  who actually uploaded the report. When a paid upload event fires
+   *  (Stripe webhook), this column drives the partner_referral_bonus
+   *  earnings row in inspector_earnings. */
+  referrerPartnerId: uuid('referrer_partner_id').references(() => inspectorPartners.id, { onDelete: 'set null' }),
   /** Linked homeowner account (nullable — set when user creates account before checkout) */
   homeownerId: uuid('homeowner_id'),
   propertyAddress: text('property_address').notNull(),
@@ -172,6 +179,7 @@ export const inspectionReports = pgTable('inspection_reports', {
   index('inspection_report_inspector_idx').on(t.inspectorPartnerId),
   uniqueIndex('inspection_report_token_idx').on(t.clientAccessToken),
   index('inspection_report_status_idx').on(t.parsingStatus),
+  index('inspection_report_referrer_idx').on(t.referrerPartnerId),
 ]);
 
 export type InspectionReport = typeof inspectionReports.$inferSelect;

@@ -288,9 +288,7 @@ export default function InspectorSettings() {
           padding: '10px 14px', background: W, borderRadius: 8, fontSize: 13, color: D,
           fontFamily: 'monospace', border: '1px solid #E0DAD4',
         }}>
-          {inspector?.partnerUrl
-            ? `${window.location.origin}/inspect?ref=${inspector.partnerUrl}`
-            : `${window.location.origin}/inspect?ref=${inspector?.id ?? ''}`}
+          {`${window.location.origin}/inspect?ref=${inspector?.partnerSlug ?? inspector?.id ?? ''}`}
         </div>
       </div>
 

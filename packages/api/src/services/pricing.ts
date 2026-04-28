@@ -187,6 +187,30 @@ export function estimatedEarningsCentsFor(
   return Math.max(0, retail - report.priceCentsPaid);
 }
 
+/** Default partner referral commission, in basis points of the
+ *  wholesale price the buyer paid. 1500 bps = 15%. Override via
+ *  PARTNER_REFERRAL_BPS env var (set on Railway) so finance can tune
+ *  without a deploy. */
+export function getPartnerReferralBps(): number {
+  const raw = Number(process.env.PARTNER_REFERRAL_BPS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 1500;
+}
+
+/** Per-report partner referral bonus = bonusBps × wholesale paid.
+ *  Returns 0 unless the report was actually paid for and has a
+ *  positive wholesale. Used to credit the inspector who referred this
+ *  homeowner via their /inspect?ref= link — read at query time so
+ *  there's no separate ledger to keep in sync. */
+export function referralBonusCentsFor(
+  report: { paymentStatus: string | null; priceCentsPaid: number | null },
+  bonusBps: number = getPartnerReferralBps(),
+): number {
+  if (report.paymentStatus !== 'paid') return 0;
+  const wholesale = report.priceCentsPaid ?? 0;
+  if (wholesale <= 0) return 0;
+  return Math.round((wholesale * bonusBps) / 10000);
+}
+
 /**
  * Resolve the effective BusinessPlanConfig for a specific workspace.
  * If the workspace has customPricing overrides, those fields take

@@ -323,6 +323,13 @@
       "when": 1777370000000,
       "tag": "0045_inspector_retail_prices",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1777380000000,
+      "tag": "0046_inspection_report_referrer",
+      "breakpoints": true
     }
   ]
 }

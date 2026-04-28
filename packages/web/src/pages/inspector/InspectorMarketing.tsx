@@ -16,9 +16,10 @@ export default function InspectorMarketing() {
   const { inspector } = useInspectorAuth();
   const [copied, setCopied] = useState(false);
 
-  const partnerUrl = inspector?.partnerUrl
-    ? `${window.location.origin}/inspect?ref=${inspector.partnerUrl}`
-    : `${window.location.origin}/inspect?ref=${inspector?.id ?? ''}`;
+  // Prefer the slug (clean URL) and fall back to the inspector's UUID
+  // so the link always works even if the slug isn't populated yet.
+  const refValue = inspector?.partnerSlug ?? inspector?.id ?? '';
+  const partnerUrl = `${window.location.origin}/inspect?ref=${refValue}`;
 
   function handleCopy() {
     void navigator.clipboard.writeText(partnerUrl);

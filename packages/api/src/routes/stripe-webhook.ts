@@ -72,6 +72,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
           updatedAt: new Date(),
         }).where(eq(inspectionReports.id, reportId));
 
+        // The partner_referral_bonus is computed at read time — see
+        // referralBonusCentsFor in services/pricing.ts. It's based on
+        // referrerPartnerId + priceCentsPaid + paymentStatus='paid'
+        // (which we just set above), so it'll surface in the
+        // referrer's earnings the next time they load the page.
+
         // Fire the parser. Lazy-imported to avoid cycle with the
         // inspector route module that owns parseInspectionReportAsync.
         const { parseInspectionReportAsync } = await import('./inspector');

@@ -108,6 +108,7 @@ export default function InspectorEarnings() {
           {earnings.map(earning => {
             const tier = earning.pricingTier ?? 'essential';
             const tierLabel = TIER_LABELS[tier] ?? tier;
+            const isReferral = earning.kind === 'referral';
             return (
               <Link
                 key={earning.id}
@@ -127,12 +128,23 @@ export default function InspectorEarnings() {
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                <span style={{
-                  fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 100,
-                  background: TIER_BG[tier], color: TIER_FG[tier], whiteSpace: 'nowrap',
-                }}>
-                  {tierLabel}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, alignItems: 'flex-start' }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 100,
+                    background: TIER_BG[tier], color: TIER_FG[tier], whiteSpace: 'nowrap',
+                  }}>
+                    {tierLabel}
+                  </span>
+                  {isReferral && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 100,
+                      background: '#FFF3E8', color: O, whiteSpace: 'nowrap',
+                      letterSpacing: 0.4, textTransform: 'uppercase',
+                    }}>
+                      Referral
+                    </span>
+                  )}
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ip-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {earning.propertyAddress}
@@ -140,7 +152,7 @@ export default function InspectorEarnings() {
                   <div style={{ fontSize: 12, color: 'var(--ip-subtle)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <span>{earning.clientName}</span>
                     <span>{formatDate(earning.createdAt)}</span>
-                    <span>Wholesale {formatCents(earning.wholesaleCents)}</span>
+                    <span>{isReferral ? 'Referred' : 'Wholesale'} {formatCents(earning.wholesaleCents)}</span>
                   </div>
                 </div>
                 <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: G, flexShrink: 0 }}>
