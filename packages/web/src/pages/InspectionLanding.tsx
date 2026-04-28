@@ -162,7 +162,7 @@ function Nav({ onUpload }: { onUpload: () => void }) {
     }}>
       <HomieInspectLogo />
       <div className="hi-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-        {[['How it works','#how-it-works'],['Home IQ','#home-iq'],['FAQ','#faq']].map(([l, h]) => (
+        {[['How it works','#how-it-works'],['Pricing','#pricing'],['FAQ','#faq']].map(([l, h]) => (
           <a key={l} href={h} className="hi-nav-link" style={{ fontSize: 14, fontWeight: 500, color: C.muted, textDecoration: 'none' }}>{l}</a>
         ))}
         <a href="/inspect/inspectors" className="hi-nav-link" style={{ fontSize: 14, fontWeight: 500, color: C.muted, textDecoration: 'none' }}>For inspectors →</a>
@@ -641,7 +641,7 @@ function TiersB() {
     { name: 'Premium',      sub: 'Negotiate, plan, benchmark',        f: ['Everything in Professional', 'Negotiation documents', 'Maintenance timeline', 'Priority dispatch', 'Full Home IQ'], pop: false },
   ];
   return (
-    <section className="hi-tiers" style={{ background: C.white, padding: '120px 36px' }}>
+    <section id="pricing" className="hi-tiers" style={{ background: C.white, padding: '120px 36px' }}>
       <div style={{ maxWidth: 1240, margin: '0 auto' }}>
         <FadeIn>
           <h2 className="hi-section-headline" style={{ ...FR, fontWeight: 700, fontSize: 'clamp(34px,5vw,72px)', color: C.dark, margin: '0 0 8px', lineHeight: 1.0, letterSpacing: '-0.025em', maxWidth: 880, textWrap: 'balance' }}>
