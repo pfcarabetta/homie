@@ -524,7 +524,38 @@ export interface InspectStatusItem {
   quotes: InspectQuote[];
 }
 
+/** Public partner profile — drives the co-branded /inspect/p/:slug
+ *  landing page. Only includes fields safe to render on a public
+ *  marketing page (no email/phone). The tier prices already have the
+ *  inspector's override applied (or fall back to the suggested
+ *  default), so the page can render cleanly without doing its own
+ *  fallback math. */
+export interface PartnerProfile {
+  id: string;
+  partnerSlug: string;
+  companyName: string;
+  companyLogoUrl: string | null;
+  website: string | null;
+  licenseNumber: string | null;
+  certifications: string[];
+  serviceAreaZips: string[];
+  tiers: Array<{
+    tier: 'essential' | 'professional' | 'premium';
+    retailCents: number;
+    /** True when the inspector overrode the suggested default in
+     *  Settings — used to surface "exclusive [Inspector] pricing"
+     *  signals on the landing page where it's true. */
+    isCustomPrice: boolean;
+  }>;
+}
+
 export const inspectService = {
+  /** Public partner profile lookup by partner_slug. Used by the
+   *  /inspect/p/:slug co-branded landing page. */
+  getPartnerProfile(slug: string) {
+    return fetchAPI<PartnerProfile>(`/api/v1/inspect/partner/${encodeURIComponent(slug)}`);
+  },
+
   /** Homeowner self-upload — no auth required. `referrer_partner` is
    *  the inspector partner slug or UUID captured on landing via
    *  /inspect?ref= and stored in localStorage/cookie; the backend

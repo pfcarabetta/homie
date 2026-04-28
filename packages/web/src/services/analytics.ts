@@ -88,6 +88,11 @@ export type AnalyticsEvent =
   | { name: 'inspect_report_claimed'; props: { token?: string } }
   | { name: 'inspect_paywall_shown'; props: { feature: string } }
   | { name: 'inspect_paywall_upgrade_clicked'; props: { feature: string } }
+  // Inspect (partner co-branded landing /inspect/p/:slug)
+  | { name: 'inspect_partner_landing_viewed'; props: { partner_slug?: string } }
+  | { name: 'inspect_partner_landing_cta_clicked'; props: { partner_slug?: string; cta_location: string } }
+  | { name: 'inspect_partner_landing_pricing_clicked'; props: { partner_slug?: string; tier: PricingTier } }
+  | { name: 'inspect_partner_landing_upload_started'; props: { partner_slug?: string } }
   // Inspector
   | { name: 'inspector_landing_cta_clicked'; props: { cta_location: string } }
   | { name: 'inspector_upload_started'; props: Record<string, never> }

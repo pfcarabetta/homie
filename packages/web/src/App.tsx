@@ -21,6 +21,7 @@ import BusinessChat from '@/pages/BusinessChat';
 import BusinessLanding from '@/pages/BusinessLanding';
 import ProSignup from '@/pages/ProSignup';
 import InspectionLanding from '@/pages/InspectionLanding';
+import InspectionPartnerLanding from '@/pages/InspectionPartnerLanding';
 import InspectionInspectorsLanding from '@/pages/InspectionInspectorsLanding';
 import PaymentSuccess from '@/pages/PaymentSuccess';
 import VerifyEmail from '@/pages/VerifyEmail';
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="/inspect-portal" element={<InspectPortal />} />
           <Route path="/inspect" element={<InspectionLanding />} />
           <Route path="/inspect/inspectors" element={<InspectionInspectorsLanding />} />
+          <Route path="/inspect/p/:slug" element={<InspectionPartnerLanding />} />
           <Route path="/business/chat" element={<BusinessChat />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
           <Route path="/verify-email" element={<VerifyEmail />} />

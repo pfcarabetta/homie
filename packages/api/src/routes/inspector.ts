@@ -1722,6 +1722,84 @@ router.get('/track-open/:reportId/pixel.png', async (req: Request, res: Response
   res.status(200).send(PIXEL);
 });
 
+/**
+ * GET /api/v1/inspect/partner/:slug
+ *
+ * Public profile for an inspector partner — drives the co-branded
+ * landing page at /inspect/p/:slug. Returns only the fields safe to
+ * show on a public marketing page (no email, phone, or partner-side
+ * earnings); plus the inspector's per-tier retail prices (with the
+ * suggested defaults filled in) so the pricing block can render
+ * without a second roundtrip.
+ *
+ * Must be defined BEFORE the catch-all GET /:token route below or
+ * Express will route /partner/<slug> as a token lookup.
+ */
+router.get('/partner/:slug', async (req: Request, res: Response) => {
+  try {
+    const slug = req.params.slug;
+    if (!slug || !/^[A-Za-z0-9_-]+$/.test(slug) || slug.length > 64) {
+      res.status(400).json({ data: null, error: 'Invalid partner slug', meta: {} });
+      return;
+    }
+    const [partner] = await db
+      .select({
+        id: inspectorPartners.id,
+        partnerSlug: inspectorPartners.partnerSlug,
+        companyName: inspectorPartners.companyName,
+        companyLogoUrl: inspectorPartners.companyLogoUrl,
+        website: inspectorPartners.website,
+        licenseNumber: inspectorPartners.licenseNumber,
+        certifications: inspectorPartners.certifications,
+        serviceAreaZips: inspectorPartners.serviceAreaZips,
+        retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
+        retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
+        retailPricePremiumCents: inspectorPartners.retailPricePremiumCents,
+      })
+      .from(inspectorPartners)
+      .where(eq(inspectorPartners.partnerSlug, slug))
+      .limit(1);
+    if (!partner) {
+      res.status(404).json({ data: null, error: 'Partner not found', meta: {} });
+      return;
+    }
+
+    // Resolve effective retail per tier (override or default) so the
+    // landing page doesn't have to know about the suggested fallback.
+    const pricingConfig = await getPricingConfig();
+    const overrides: InspectorRetailOverrides = {
+      retailPriceEssentialCents: partner.retailPriceEssentialCents,
+      retailPriceProfessionalCents: partner.retailPriceProfessionalCents,
+      retailPricePremiumCents: partner.retailPricePremiumCents,
+    };
+    const { effectiveRetailCents } = await import('../services/pricing');
+    const tiers = (['essential', 'professional', 'premium'] as const).map(t => ({
+      tier: t,
+      retailCents: effectiveRetailCents(overrides, t, pricingConfig.inspector),
+      isCustomPrice: overrides[`retailPrice${t.charAt(0).toUpperCase()}${t.slice(1)}Cents` as keyof InspectorRetailOverrides] !== null,
+    }));
+
+    res.json({
+      data: {
+        id: partner.id,
+        partnerSlug: partner.partnerSlug,
+        companyName: partner.companyName,
+        companyLogoUrl: partner.companyLogoUrl,
+        website: partner.website,
+        licenseNumber: partner.licenseNumber,
+        certifications: partner.certifications ?? [],
+        serviceAreaZips: partner.serviceAreaZips ?? [],
+        tiers,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err, slug: req.params.slug }, '[GET /inspect/partner/:slug]');
+    res.status(500).json({ data: null, error: 'Failed to load partner profile', meta: {} });
+  }
+});
+
 // GET /api/v1/inspect/:token — client views their report
 router.get('/:token', async (req: Request, res: Response) => {
   try {
