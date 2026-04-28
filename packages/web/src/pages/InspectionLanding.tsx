@@ -123,7 +123,7 @@ function PrimaryCTA({ children, onClick, size = 'lg', style, disabled = false }:
       ...DM, ...sz, fontWeight: 600, color: '#fff', background: disabled ? C.meta : C.orange,
       border: 'none', borderRadius: 100, cursor: disabled ? 'not-allowed' : 'pointer',
       boxShadow: disabled ? 'none' : '0 4px 24px rgba(232,99,43,.30)',
-      transition: 'background .2s, transform .2s',
+      transition: 'background .2s, transform .2s', whiteSpace: 'nowrap',
       ...style,
     }}
     onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = C.orangeH; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
@@ -152,7 +152,7 @@ function HomieInspectLogo() {
 
 function Nav({ onUpload }: { onUpload: () => void }) {
   return (
-    <nav style={{
+    <nav className="hi-nav" style={{
       position: 'sticky', top: 0, zIndex: 50, height: 64,
       background: 'rgba(255,255,255,.92)',
       backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
@@ -161,11 +161,11 @@ function Nav({ onUpload }: { onUpload: () => void }) {
       padding: '0 32px', ...DM,
     }}>
       <HomieInspectLogo />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+      <div className="hi-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
         {[['How it works','#how-it-works'],['Home IQ','#home-iq'],['FAQ','#faq']].map(([l, h]) => (
-          <a key={l} href={h} style={{ fontSize: 14, fontWeight: 500, color: C.muted, textDecoration: 'none' }}>{l}</a>
+          <a key={l} href={h} className="hi-nav-link" style={{ fontSize: 14, fontWeight: 500, color: C.muted, textDecoration: 'none' }}>{l}</a>
         ))}
-        <a href="/inspect/inspectors" style={{ fontSize: 14, fontWeight: 500, color: C.muted, textDecoration: 'none' }}>For inspectors →</a>
+        <a href="/inspect/inspectors" className="hi-nav-link" style={{ fontSize: 14, fontWeight: 500, color: C.muted, textDecoration: 'none' }}>For inspectors →</a>
         <PrimaryCTA size="sm" onClick={onUpload}>Upload your inspection</PrimaryCTA>
       </div>
     </nav>
@@ -174,9 +174,9 @@ function Nav({ onUpload }: { onUpload: () => void }) {
 
 function HomieFooter() {
   return (
-    <footer style={{ background: C.dark, padding: '64px 24px 40px', ...DM }}>
+    <footer className="hi-footer" style={{ background: C.dark, padding: '64px 24px 40px', ...DM }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 40, marginBottom: 48 }}>
+        <div className="hi-footer-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 40, marginBottom: 48 }}>
           <div>
             <HomieInspectLogo />
             <p style={{ fontSize: 14, color: '#9B9490', lineHeight: 1.6, marginTop: 16, maxWidth: 220 }}>
@@ -219,7 +219,7 @@ function HeroPDFMorph() {
   }, []);
 
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto' }}>
+    <div className="hi-pdf-morph" style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto' }}>
       <style>{`
         @keyframes hi-pulseDot { 0%,100% { opacity:1 } 50% { opacity:.35 } }
         @keyframes hi-scanLine { 0% { top: 0 } 100% { top: 100% } }
@@ -229,7 +229,7 @@ function HeroPDFMorph() {
         background: 'linear-gradient(135deg, rgba(232,99,43,.10), rgba(27,158,119,.06))',
         filter: 'blur(28px)', opacity: 0.8,
       }}/>
-      <div style={{ position: 'relative', perspective: 1400, height: 520 }}>
+      <div className="hi-pdf-morph-stage" style={{ position: 'relative', perspective: 1400, height: 520 }}>
         {/* PDF page */}
         <div style={{
           position: 'absolute', inset: 0, background: '#fff', borderRadius: 16,
@@ -322,12 +322,12 @@ function HeroA({ headline, sub, audience, setAudience, onUpload }: {
   headline: string; sub: string; audience: Audience; setAudience: (a: Audience) => void; onUpload: () => void;
 }) {
   return (
-    <section style={{
+    <section className="hi-hero" style={{
       background: `linear-gradient(180deg, #fff 0%, ${C.warm} 80%, ${C.warm} 100%)`,
       padding: '72px 32px 96px', position: 'relative', overflow: 'hidden',
     }}>
       <div style={{ position: 'absolute', top: -180, right: -160, width: 540, height: 540, borderRadius: '50%', background: C.orange, opacity: 0.04, filter: 'blur(2px)' }}/>
-      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
+      <div className="hi-hero-grid" style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
         <div>
           <FadeIn>
             <div style={{ display: 'inline-flex', gap: 4, padding: 4, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 100, marginBottom: 24 }}>
@@ -342,7 +342,7 @@ function HeroA({ headline, sub, audience, setAudience, onUpload }: {
             </div>
           </FadeIn>
           <FadeIn delay={0.05}>
-            <h1 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(40px,5vw,64px)', lineHeight: 1.04, letterSpacing: '-0.02em', color: C.dark, margin: 0, textWrap: 'balance' }}>
+            <h1 className="hi-hero-headline" style={{ ...FR, fontWeight: 700, fontSize: 'clamp(36px,5vw,64px)', lineHeight: 1.04, letterSpacing: '-0.02em', color: C.dark, margin: 0, textWrap: 'balance' }}>
               {headline}
             </h1>
           </FadeIn>
@@ -365,7 +365,7 @@ function HeroA({ headline, sub, audience, setAudience, onUpload }: {
             </div>
           </FadeIn>
           <FadeIn delay={0.28}>
-            <div style={{ display: 'flex', gap: 32, marginTop: 48, flexWrap: 'wrap' }}>
+            <div className="hi-hero-stats" style={{ display: 'flex', gap: 32, marginTop: 48, flexWrap: 'wrap' }}>
               {(audience === 'owner' ? [
                 ['9 days', 'avg. days to first offer'],
                 ['$4,820', 'credits avoided at table'],
@@ -376,14 +376,14 @@ function HeroA({ headline, sub, audience, setAudience, onUpload }: {
                 ['34 items', 'parsed per report'],
               ]).map(([s, l]) => (
                 <div key={l}>
-                  <div style={{ ...FR, fontWeight: 700, fontSize: 30, color: C.orange, lineHeight: 1 }}>{s}</div>
+                  <div className="hi-stat-num" style={{ ...FR, fontWeight: 700, fontSize: 30, color: C.orange, lineHeight: 1 }}>{s}</div>
                   <div style={{ ...DM, fontSize: 13, color: C.meta, marginTop: 4 }}>{l}</div>
                 </div>
               ))}
             </div>
           </FadeIn>
         </div>
-        <div style={{ justifySelf: 'center', width: '100%', maxWidth: 520 }}>
+        <div className="hi-hero-visual" style={{ justifySelf: 'center', width: '100%', maxWidth: 520 }}>
           <FadeIn delay={0.2} y={20}>
             <HeroPDFMorph />
           </FadeIn>
@@ -426,27 +426,27 @@ function QuotesPreview() {
     { n: 'Coastal Repair',   s: '4.6★ · 211 jobs', p: '$385', when: 'Thu 1 PM' },
   ];
   return (
-    <div style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, boxShadow: '0 16px 40px -16px rgba(0,0,0,.12)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <div>
-          <div style={{ ...FR, fontSize: 15, fontWeight: 700, color: C.dark, letterSpacing: '-0.005em' }}>3 quotes for: Water heater drain pan</div>
-          <div style={{ ...DM, fontSize: 11, color: C.meta, marginTop: 2 }}>Dispatched 4 hrs ago · all licensed in San Diego County</div>
+    <div className="hi-quotes-preview" style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, boxShadow: '0 16px 40px -16px rgba(0,0,0,.12)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="hi-quotes-title" style={{ ...FR, fontSize: 15, fontWeight: 700, color: C.dark, letterSpacing: '-0.005em' }}>3 quotes for: Water heater drain pan</div>
+          <div className="hi-quotes-sub" style={{ ...DM, fontSize: 11, color: C.meta, marginTop: 2 }}>Dispatched 4 hrs ago · all licensed in San Diego County</div>
         </div>
-        <Pill style={{ background: 'rgba(27,158,119,.10)', color: C.green }}>● Live</Pill>
+        <Pill style={{ background: 'rgba(27,158,119,.10)', color: C.green, flexShrink: 0 }}>● Live</Pill>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {provs.map(p => (
-          <div key={p.n} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 14, alignItems: 'center', padding: '12px 14px', border: `1px solid ${p.best ? C.orange : C.line}`, borderRadius: 10, background: p.best ? 'rgba(232,99,43,.04)' : '#fff' }}>
-            <span style={{ width: 36, height: 36, borderRadius: '50%', background: C.line, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🔧</span>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div key={p.n} className="hi-quote-row" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 14, alignItems: 'center', padding: '12px 14px', border: `1px solid ${p.best ? C.orange : C.line}`, borderRadius: 10, background: p.best ? 'rgba(232,99,43,.04)' : '#fff' }}>
+            <span className="hi-quote-avatar" style={{ width: 36, height: 36, borderRadius: '50%', background: C.line, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🔧</span>
+            <div style={{ minWidth: 0 }}>
+              <div className="hi-quote-name-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ ...FR, fontSize: 14, fontWeight: 700, color: C.dark }}>{p.n}</span>
                 {p.best && <span style={{ ...MO, fontSize: 9, fontWeight: 700, color: C.orange, letterSpacing: '.12em' }}>RECOMMENDED</span>}
               </div>
               <div style={{ ...DM, fontSize: 11, color: C.meta }}>{p.s} · {p.when}</div>
             </div>
-            <div style={{ ...FR, fontSize: 18, fontWeight: 700, color: C.dark }}>{p.p}</div>
-            <button style={{ ...DM, fontSize: 12, fontWeight: 600, background: p.best ? C.orange : '#fff', color: p.best ? '#fff' : C.dark, border: p.best ? 'none' : `1px solid ${C.line}`, padding: '7px 14px', borderRadius: 8, cursor: 'pointer' }}>{p.best ? 'Book' : 'View'}</button>
+            <div className="hi-quote-price" style={{ ...FR, fontSize: 18, fontWeight: 700, color: C.dark }}>{p.p}</div>
+            <button className="hi-quote-action" style={{ ...DM, fontSize: 12, fontWeight: 600, background: p.best ? C.orange : '#fff', color: p.best ? '#fff' : C.dark, border: p.best ? 'none' : `1px solid ${C.line}`, padding: '7px 14px', borderRadius: 8, cursor: 'pointer' }}>{p.best ? 'Book' : 'View'}</button>
           </div>
         ))}
       </div>
@@ -464,16 +464,16 @@ function HomeIQPreviewC() {
     ['📦 Appliances', 70, C.green],
   ];
   return (
-    <div style={{ background: `linear-gradient(135deg, ${C.dark}, #2c2724)`, borderRadius: 14, padding: 20, color: '#fff', boxShadow: '0 16px 40px -16px rgba(0,0,0,.20)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'center' }}>
-        <div style={{ position: 'relative', aspectRatio: '1 / 1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="hi-iq-preview-wrap" style={{ background: `linear-gradient(135deg, ${C.dark}, #2c2724)`, borderRadius: 14, padding: 20, color: '#fff', boxShadow: '0 16px 40px -16px rgba(0,0,0,.20)' }}>
+      <div className="hi-iq-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'center' }}>
+        <div className="hi-iq-gauge" style={{ position: 'relative', aspectRatio: '1 / 1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <svg width="100%" height="100%" viewBox="0 0 200 200">
             <circle cx="100" cy="100" r="84" fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="14"/>
             <circle cx="100" cy="100" r="84" fill="none" stroke={C.orange} strokeWidth="14" strokeDasharray={`${(72/100) * 528} 528`} strokeLinecap="round" transform="rotate(-90 100 100)"/>
           </svg>
           <div style={{ position: 'absolute', textAlign: 'center' }}>
-            <div style={{ ...FR, fontSize: 54, fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.02em' }}>72</div>
-            <div style={{ ...MO, fontSize: 10, letterSpacing: '.16em', color: 'rgba(255,255,255,.6)', marginTop: 4 }}>HOME IQ</div>
+            <div className="hi-iq-gauge-num" style={{ ...FR, fontSize: 54, fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.02em' }}>72</div>
+            <div className="hi-iq-gauge-label" style={{ ...MO, fontSize: 10, letterSpacing: '.16em', color: 'rgba(255,255,255,.6)', marginTop: 4 }}>HOME IQ</div>
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -515,12 +515,12 @@ function ModulesC() {
       preview: <HomeIQPreviewC/> },
   ];
   return (
-    <section id="how-it-works" style={{ background: '#fff', padding: '80px 28px' }}>
+    <section id="how-it-works" className="hi-modules" style={{ background: '#fff', padding: '80px 28px' }}>
       <div style={{ maxWidth: 1340, margin: '0 auto' }}>
         <FadeIn>
           <div style={{ textAlign: 'center', marginBottom: 56 }}>
             <Eyebrow color={C.orange}>The product</Eyebrow>
-            <h2 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(36px,4.6vw,56px)', color: C.dark, margin: '14px 0 14px', lineHeight: 1.05, letterSpacing: '-0.02em', textWrap: 'balance' }}>
+            <h2 className="hi-section-headline" style={{ ...FR, fontWeight: 700, fontSize: 'clamp(32px,4.6vw,56px)', color: C.dark, margin: '14px 0 14px', lineHeight: 1.05, letterSpacing: '-0.02em', textWrap: 'balance' }}>
               Three modules. One link.
             </h2>
             <p style={{ ...DM, fontSize: 17, color: C.muted, maxWidth: 640, margin: '0 auto', textWrap: 'pretty' }}>
@@ -531,14 +531,14 @@ function ModulesC() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {mods.map((m, i) => (
             <FadeIn key={m.label} delay={i * 0.06}>
-              <div style={{ display: 'grid', gridTemplateColumns: i % 2 === 0 ? '.85fr 1.15fr' : '1.15fr .85fr', gap: 32, alignItems: 'center', background: '#fbfaf7', border: `1px solid ${C.line}`, borderRadius: 18, padding: 32, overflow: 'hidden' }}>
-                <div style={{ order: i % 2 === 0 ? 1 : 2, padding: '8px 16px' }}>
+              <div className="hi-module-card" style={{ display: 'grid', gridTemplateColumns: i % 2 === 0 ? '.85fr 1.15fr' : '1.15fr .85fr', gap: 32, alignItems: 'center', background: '#fbfaf7', border: `1px solid ${C.line}`, borderRadius: 18, padding: 32, overflow: 'hidden' }}>
+                <div className="hi-module-text" style={{ order: i % 2 === 0 ? 1 : 2, padding: '8px 16px' }}>
                   <div style={{ ...MO, fontSize: 11, letterSpacing: '.18em', color: m.color, fontWeight: 700 }}>{m.label}</div>
-                  <h3 style={{ ...FR, fontSize: 32, fontWeight: 700, color: C.dark, margin: '10px 0 12px', letterSpacing: '-0.015em', lineHeight: 1.1, textWrap: 'balance' }}>{m.title}</h3>
+                  <h3 className="hi-module-title" style={{ ...FR, fontSize: 32, fontWeight: 700, color: C.dark, margin: '10px 0 12px', letterSpacing: '-0.015em', lineHeight: 1.1, textWrap: 'balance' }}>{m.title}</h3>
                   <p style={{ ...DM, fontSize: 16, color: C.muted, margin: '0 0 18px', lineHeight: 1.6, textWrap: 'pretty' }}>{m.desc}</p>
                   <a href="#how-it-works" style={{ ...DM, fontSize: 13, fontWeight: 600, color: m.color, textDecoration: 'none', borderBottom: `2px solid ${m.color}`, paddingBottom: 1 }}>See it live →</a>
                 </div>
-                <div style={{ order: i % 2 === 0 ? 2 : 1 }}>{m.preview}</div>
+                <div className="hi-module-preview" style={{ order: i % 2 === 0 ? 2 : 1 }}>{m.preview}</div>
               </div>
             </FadeIn>
           ))}
@@ -576,11 +576,11 @@ function NegotiationC({ audience }: { audience: Audience }) {
     ['+ 10 more items',               '$9,665'],
   ];
   return (
-    <section style={{ background: C.warm, padding: '80px 28px' }}>
-      <div style={{ maxWidth: 1340, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
+    <section className="hi-negotiation" style={{ background: C.warm, padding: '80px 28px' }}>
+      <div className="hi-negotiation-grid" style={{ maxWidth: 1340, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
         <FadeIn>
           <Eyebrow color={C.orange}>{isOwner ? 'For sellers' : 'For buyers'}</Eyebrow>
-          <h2 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(32px,4vw,52px)', color: C.dark, margin: '14px 0 14px', lineHeight: 1.05, letterSpacing: '-0.02em', textWrap: 'balance' }}>
+          <h2 className="hi-section-headline" style={{ ...FR, fontWeight: 700, fontSize: 'clamp(28px,4vw,52px)', color: C.dark, margin: '14px 0 14px', lineHeight: 1.05, letterSpacing: '-0.02em', textWrap: 'balance' }}>
             {isOwner
               ? <>List with a <span style={{ color: C.orange }}>packet,</span> not a prayer.</>
               : <>Walk into negotiation with a <span style={{ color: C.orange }}>number,</span> not a hope.</>}
@@ -600,7 +600,7 @@ function NegotiationC({ audience }: { audience: Audience }) {
           </div>
         </FadeIn>
         <FadeIn delay={0.1}>
-          <div style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 14, padding: '28px 32px', boxShadow: '0 30px 60px -28px rgba(0,0,0,.12)', maxWidth: 520, marginLeft: 'auto' }}>
+          <div className="hi-negotiation-doc" style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 14, padding: '28px 32px', boxShadow: '0 30px 60px -28px rgba(0,0,0,.12)', maxWidth: 520, marginLeft: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${C.line}`, paddingBottom: 14, marginBottom: 14 }}>
               <div>
                 <div style={{ ...MO, fontSize: 10, letterSpacing: '.16em', color: C.meta }}>{isOwner ? 'PRE-LISTING PACKET · DRAFT' : 'REPAIR REQUEST · DRAFT'}</div>
@@ -633,20 +633,20 @@ function TiersB() {
     { name: 'Premium',      sub: 'Negotiate, plan, benchmark',        f: ['Everything in Professional', 'Negotiation documents', 'Maintenance timeline', 'Priority dispatch', 'Full Home IQ'], pop: false },
   ];
   return (
-    <section style={{ background: C.white, padding: '120px 36px' }}>
+    <section className="hi-tiers" style={{ background: C.white, padding: '120px 36px' }}>
       <div style={{ maxWidth: 1240, margin: '0 auto' }}>
         <FadeIn>
-          <h2 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(40px,5vw,72px)', color: C.dark, margin: '0 0 8px', lineHeight: 1.0, letterSpacing: '-0.025em', maxWidth: 880, textWrap: 'balance' }}>
+          <h2 className="hi-section-headline" style={{ ...FR, fontWeight: 700, fontSize: 'clamp(34px,5vw,72px)', color: C.dark, margin: '0 0 8px', lineHeight: 1.0, letterSpacing: '-0.025em', maxWidth: 880, textWrap: 'balance' }}>
             Unlock your <em style={{ fontStyle: 'italic', color: C.orange }}>inspection report</em>.
           </h2>
           <p style={{ ...DM, fontSize: 17, lineHeight: 1.6, color: C.muted, maxWidth: 600, margin: '0 0 56px', textWrap: 'pretty' }}>
             Three tiers, full of features to get the most out of your inspection report.
           </p>
         </FadeIn>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 0, border: `1px solid ${C.line}`, borderRadius: 16, overflow: 'hidden', background: '#fff' }}>
+        <div className="hi-tiers-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 0, border: `1px solid ${C.line}`, borderRadius: 16, overflow: 'hidden', background: '#fff' }}>
           {tiers.map((t, i) => (
             <FadeIn key={t.name} delay={i * 0.08}>
-              <div style={{ padding: 36, background: t.pop ? C.dark : '#fff', color: t.pop ? '#fff' : C.dark, borderRight: i < 2 ? `1px solid ${t.pop ? 'rgba(255,255,255,.1)' : C.line}` : 'none', position: 'relative', height: '100%' }}>
+              <div className="hi-tier" data-popular={t.pop ? 'true' : 'false'} style={{ padding: 36, background: t.pop ? C.dark : '#fff', color: t.pop ? '#fff' : C.dark, borderRight: i < 2 ? `1px solid ${t.pop ? 'rgba(255,255,255,.1)' : C.line}` : 'none', position: 'relative', height: '100%' }}>
                 {t.pop && <span style={{ position: 'absolute', top: 16, right: 16, ...DM, fontSize: 10, fontWeight: 700, color: C.orange, background: 'rgba(232,99,43,.18)', padding: '4px 10px', borderRadius: 100, letterSpacing: '.10em' }}>MOST POPULAR</span>}
                 <div style={{ ...MO, fontSize: 10, letterSpacing: '.18em', color: t.pop ? 'rgba(255,255,255,.5)' : C.meta, textTransform: 'uppercase' }}>Tier {String(i + 1).padStart(2, '0')}</div>
                 <h3 style={{ ...FR, fontWeight: 700, fontSize: 36, margin: '8px 0 6px', letterSpacing: '-0.015em', color: t.pop ? '#fff' : C.dark }}>{t.name}</h3>
@@ -686,15 +686,15 @@ function TestimonialsB({ audience }: { audience: Audience }) {
     { q: 'The Home IQ score told me which $400 fix would save my insurance rider. That alone paid for the whole thing.',                            n: 'Marcus B.', r: 'Owner · Raleigh' },
   ];
   return (
-    <section style={{ background: C.dark, padding: '120px 36px', color: '#fff' }}>
+    <section className="hi-testimonials" style={{ background: C.dark, padding: '120px 36px', color: '#fff' }}>
       <div style={{ maxWidth: 1240, margin: '0 auto' }}>
         <FadeIn delay={0.05}>
-          <blockquote style={{ ...FR, fontSize: 'clamp(28px,3.6vw,44px)', lineHeight: 1.25, fontWeight: 400, fontStyle: 'italic', color: '#fff', margin: '24px 0 36px', maxWidth: 1000, letterSpacing: '-0.005em', textWrap: 'balance' }}>
+          <blockquote className="hi-blockquote" style={{ ...FR, fontSize: 'clamp(24px,3.6vw,44px)', lineHeight: 1.25, fontWeight: 400, fontStyle: 'italic', color: '#fff', margin: '24px 0 36px', maxWidth: 1000, letterSpacing: '-0.005em', textWrap: 'balance' }}>
             {hero.body}
           </blockquote>
           <div style={{ ...DM, fontSize: 14, color: 'rgba(255,255,255,.7)' }}>{hero.cite}</div>
         </FadeIn>
-        <div style={{ marginTop: 64, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, paddingTop: 48, borderTop: '1px solid rgba(255,255,255,.10)' }}>
+        <div className="hi-testimonials-small" style={{ marginTop: 64, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, paddingTop: 48, borderTop: '1px solid rgba(255,255,255,.10)' }}>
           {small.map(Q => (
             <div key={Q.n}>
               <p style={{ ...FR, fontSize: 21, fontStyle: 'italic', lineHeight: 1.5, color: 'rgba(255,255,255,.92)', margin: '0 0 14px', fontWeight: 400, textWrap: 'pretty' }}>"{Q.q}"</p>
@@ -723,7 +723,7 @@ const FAQS: Array<[string, string]> = [
 function FAQ() {
   const [open, setOpen] = useState<number>(0);
   return (
-    <section id="faq" style={{ background: C.white, padding: '96px 32px' }}>
+    <section id="faq" className="hi-faq" style={{ background: C.white, padding: '96px 32px' }}>
       <div style={{ maxWidth: 880, margin: '0 auto' }}>
         <FadeIn>
           <div style={{ marginBottom: 48, textAlign: 'center' }}>
@@ -756,7 +756,7 @@ function FAQ() {
 function FinalCTA({ audience, onUpload }: { audience: Audience; onUpload: () => void }) {
   const isOwner = audience === 'owner';
   return (
-    <section style={{ background: `linear-gradient(180deg, ${C.warm} 0%, #fff 100%)`, padding: '96px 32px' }}>
+    <section className="hi-final-cta" style={{ background: `linear-gradient(180deg, ${C.warm} 0%, #fff 100%)`, padding: '96px 32px' }}>
       <div style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
         <FadeIn>
           <Eyebrow>Ready when you are</Eyebrow>
@@ -932,6 +932,87 @@ export default function HomieInspectionLanding() {
         canonical="/inspect"
       />
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500;1,9..144,600&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+      {/* Responsive rules. Two breakpoints — 768 (tablet/mobile) and 480
+          (small phones). Single source of truth so the inline-style
+          components above can stay focused on desktop layout. */}
+      <style>{`
+        @media (max-width: 768px) {
+          .hi-nav { padding: 0 20px !important; }
+          .hi-nav-links { gap: 12px !important; }
+          .hi-nav-link { display: none !important; }
+
+          .hi-hero { padding: 56px 20px 64px !important; }
+          .hi-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+          .hi-hero-visual { order: 2; max-width: 360px !important; margin: 0 auto !important; }
+          .hi-hero-stats { gap: 24px !important; margin-top: 32px !important; }
+          .hi-stat-num { font-size: 26px !important; }
+          .hi-pdf-morph { max-width: 360px !important; }
+          .hi-pdf-morph-stage { height: 440px !important; }
+
+          .hi-modules { padding: 56px 20px !important; }
+          .hi-module-card { grid-template-columns: minmax(0, 1fr) !important; padding: 24px !important; gap: 24px !important; }
+          .hi-module-text { padding: 0 !important; order: 1 !important; min-width: 0 !important; }
+          .hi-module-preview { order: 2 !important; min-width: 0 !important; overflow: hidden !important; }
+          .hi-module-title { font-size: 26px !important; }
+
+          .hi-negotiation { padding: 56px 20px !important; }
+          .hi-negotiation-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+          .hi-negotiation-doc { margin: 0 auto !important; padding: 22px 22px !important; }
+
+          .hi-tiers { padding: 64px 20px !important; }
+          .hi-tiers-grid { grid-template-columns: 1fr !important; }
+          .hi-tier { border-right: none !important; border-bottom: 1px solid rgba(0,0,0,.06) !important; padding: 28px !important; }
+          .hi-tier[data-popular="true"] { border-bottom-color: rgba(255,255,255,.10) !important; }
+          .hi-tier:last-child { border-bottom: none !important; }
+
+          .hi-testimonials { padding: 72px 20px !important; }
+          .hi-testimonials-small { grid-template-columns: 1fr !important; gap: 32px !important; }
+
+          .hi-faq { padding: 64px 20px !important; }
+
+          .hi-final-cta { padding: 64px 20px !important; }
+
+          .hi-footer { padding: 48px 20px 32px !important; }
+          .hi-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+
+          .hi-section-headline { font-size: clamp(28px, 6.5vw, 40px) !important; }
+
+          /* QuotesPreview — drop the action button on mobile (it's
+             decorative on the landing) and tighten the inner padding so
+             the price stops crowding the right edge. */
+          .hi-quotes-preview { padding: 14px !important; }
+          .hi-quote-row { grid-template-columns: 32px minmax(0, 1fr) auto !important; gap: 10px !important; padding: 10px 12px !important; }
+          .hi-quote-avatar { width: 32px !important; height: 32px !important; font-size: 13px !important; }
+          .hi-quote-action { display: none !important; }
+          .hi-quote-price { font-size: 15px !important; }
+          .hi-quote-name-row span:first-child { font-size: 13px !important; }
+
+          /* HomeIQ — stack gauge above system rows and shrink the score
+             so the "72" sits inside the dial instead of overflowing. */
+          .hi-iq-grid { grid-template-columns: 1fr !important; gap: 18px !important; }
+          .hi-iq-gauge { aspect-ratio: 1 / 1 !important; max-width: 200px !important; margin: 0 auto !important; }
+          .hi-iq-gauge-num { font-size: 44px !important; }
+        }
+        @media (max-width: 480px) {
+          .hi-nav { padding: 0 14px !important; }
+          .hi-nav button { padding: 9px 14px !important; font-size: 13px !important; }
+          .hi-hero { padding: 40px 16px 56px !important; }
+          .hi-hero-headline { font-size: clamp(30px, 8vw, 38px) !important; }
+          .hi-hero-stats { gap: 16px !important; }
+          .hi-stat-num { font-size: 22px !important; }
+          .hi-pdf-morph-stage { height: 380px !important; }
+          .hi-module-card { padding: 18px !important; }
+          .hi-module-title { font-size: 22px !important; }
+          .hi-tier { padding: 24px !important; }
+          .hi-blockquote { font-size: 22px !important; }
+          .hi-footer-grid { grid-template-columns: 1fr !important; }
+          .hi-quote-row { padding: 10px !important; gap: 8px !important; }
+          .hi-quote-price { font-size: 14px !important; }
+          .hi-iq-gauge-num { font-size: 38px !important; }
+          .hi-iq-gauge { max-width: 170px !important; }
+        }
+      `}</style>
 
       {/* Hidden file input */}
       <input
