@@ -19,11 +19,14 @@ interface NavItem {
   icon: string;
 }
 
+// "Leads" intentionally omitted — the lead-generation pipeline (homeowner-
+// facing "find an inspector" form) doesn't exist yet, so the page would
+// always be empty. Route + backend endpoints stay live; restore this nav
+// item once leads actually flow in.
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', path: '/inspector', icon: 'dashboard' },
   { id: 'reports', label: 'Reports', path: '/inspector/reports', icon: 'reports' },
   { id: 'upload', label: 'Upload', path: '/inspector/reports/upload', icon: 'upload' },
-  { id: 'leads', label: 'Leads', path: '/inspector/leads', icon: 'leads' },
   { id: 'earnings', label: 'Earnings', path: '/inspector/earnings', icon: 'earnings' },
   { id: 'marketing', label: 'Marketing', path: '/inspector/marketing', icon: 'marketing' },
   { id: 'settings', label: 'Settings', path: '/inspector/settings', icon: 'settings' },
