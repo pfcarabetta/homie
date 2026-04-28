@@ -1,18 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { inspectorService, type InspectionReport, type EarningsSummary } from '@/services/inspector-api';
+import { inspectorService, type InspectionReport, type DashboardMetrics } from '@/services/inspector-api';
 
 const O = '#E8632B';
 const G = '#1B9E77';
-const D = '#2D2926';
-
-const SEVERITY_COLORS: Record<string, string> = {
-  safety_hazard: '#E24B4A',
-  urgent: '#E24B4A',
-  recommended: '#EF9F27',
-  monitor: '#9B9490',
-  informational: '#D3CEC9',
-};
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   processing: { bg: '#FFF3E8', text: O },
@@ -22,17 +13,127 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   completed: { bg: '#F5F0EB', text: '#9B9490' },
 };
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+function formatCents(cents: number): string {
+  if (cents >= 1_000_000) return `$${(cents / 100_000_000).toFixed(1)}M`;
+  if (cents >= 100_000) return `$${Math.round(cents / 100_000)}k`;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(cents / 100);
 }
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function formatDelta(current: number, previous: number): { label: string; positive: boolean } | null {
+  if (previous === 0 && current === 0) return null;
+  if (previous === 0) return { label: `+${current} vs last month`, positive: true };
+  const diff = current - previous;
+  if (diff === 0) return { label: 'Same as last month', positive: true };
+  const pct = Math.round((diff / previous) * 100);
+  return { label: `${diff > 0 ? '+' : ''}${pct}% vs last month`, positive: diff > 0 };
+}
+
+interface KpiCardProps {
+  label: string;
+  value: string;
+  sub?: string | null;
+  delta?: { label: string; positive: boolean } | null;
+  color: string;
+}
+
+function KpiCard({ label, value, sub, delta, color }: KpiCardProps) {
+  return (
+    <div style={{
+      background: 'var(--ip-card)',
+      borderRadius: 14,
+      border: '1px solid var(--ip-border)',
+      padding: '18px 20px',
+      transition: 'border-color 0.15s, box-shadow 0.15s, transform 0.15s',
+    }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = color;
+        e.currentTarget.style.boxShadow = `0 4px 16px ${color}1A`;
+        e.currentTarget.style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = 'var(--ip-border)';
+        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ip-subtle)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+        {label}
+      </div>
+      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 32, fontWeight: 700, color, marginBottom: 4, lineHeight: 1.1 }}>
+        {value}
+      </div>
+      {(sub || delta) && (
+        <div style={{ fontSize: 12, color: 'var(--ip-subtle)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {delta && (
+            <span style={{ color: delta.positive ? G : '#9B9490', fontWeight: 600 }}>
+              {delta.label}
+            </span>
+          )}
+          {sub && <span>{sub}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SparklineProps {
+  data: Array<{ weekStart: string; count: number }>;
+}
+
+/** SVG bar chart of report uploads per week (last 8 weeks). Height is
+ *  fixed; bars fill the width responsively. Hover shows the exact count
+ *  via title attribute. Renders nothing if all weeks are zero. */
+function WeeklySparkline({ data }: SparklineProps) {
+  const max = Math.max(...data.map(d => d.count), 1);
+  const total = data.reduce((sum, d) => sum + d.count, 0);
+
+  return (
+    <div style={{
+      background: 'var(--ip-card)', border: '1px solid var(--ip-border)',
+      borderRadius: 14, padding: '18px 20px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ip-subtle)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+            Reports — last 8 weeks
+          </div>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 700, color: 'var(--ip-text)' }}>
+            {total} <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ip-subtle)' }}>total</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80 }}>
+        {data.map((d, i) => {
+          const heightPct = (d.count / max) * 100;
+          const isLast = i === data.length - 1;
+          return (
+            <div key={d.weekStart} title={`${d.count} report${d.count === 1 ? '' : 's'} — week of ${new Date(d.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4, height: '100%', justifyContent: 'flex-end', cursor: 'help' }}>
+              <div style={{
+                background: isLast ? O : `${O}66`,
+                borderRadius: 4,
+                height: `${Math.max(heightPct, 4)}%`,
+                transition: 'background 0.15s',
+              }} />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 10, color: 'var(--ip-subtle)' }}>
+        <span>{new Date(data[0]?.weekStart ?? Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+        <span>This week</span>
+      </div>
+    </div>
+  );
+}
+
 export default function InspectorDashboard() {
   const navigate = useNavigate();
-  const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [reports, setReports] = useState<InspectionReport[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -40,14 +141,14 @@ export default function InspectorDashboard() {
     async function load() {
       setLoading(true);
       try {
-        const [earningsRes, reportsRes] = await Promise.all([
-          inspectorService.getEarningsSummary(),
+        const [metricsRes, reportsRes] = await Promise.all([
+          inspectorService.getDashboardMetrics(),
           inspectorService.listReports(),
         ]);
-        if (earningsRes.data) setEarnings(earningsRes.data);
+        if (metricsRes.data) setMetrics(metricsRes.data);
         if (reportsRes.data) setReports(reportsRes.data.slice(0, 5));
       } catch {
-        // silently fail
+        // silently fail — empty state covers it
       } finally {
         setLoading(false);
       }
@@ -55,72 +156,73 @@ export default function InspectorDashboard() {
     void load();
   }, []);
 
-  const totalReports = reports.length;
-  const dispatchRate = reports.length > 0
-    ? Math.round((reports.filter(r => r.dispatchedCount > 0).length / reports.length) * 100)
-    : 0;
+  const reportsDelta = metrics
+    ? formatDelta(metrics.reportsThisMonth.count, metrics.reportsThisMonth.lastMonth)
+    : null;
 
-  const kpiCards = [
-    {
-      label: "This month's earnings",
-      value: formatCurrency(earnings?.currentMonth ?? 0),
-      sub: `Last month: ${formatCurrency(earnings?.lastMonth ?? 0)}`,
-      color: G,
-    },
-    {
-      label: 'Reports uploaded',
-      value: String(totalReports),
-      sub: 'Total reports',
-      color: D,
-    },
-    {
-      label: 'Client dispatch rate',
-      value: `${dispatchRate}%`,
-      sub: 'Items dispatched by clients',
-      color: O,
-    },
-  ];
+  const quoteValueLabel = metrics
+    ? metrics.totalQuoteValueThisMonth.lowCents === 0 && metrics.totalQuoteValueThisMonth.highCents === 0
+      ? '$0'
+      : `${formatCents(metrics.totalQuoteValueThisMonth.lowCents)}–${formatCents(metrics.totalQuoteValueThisMonth.highCents)}`
+    : '—';
 
   if (loading) {
     return (
       <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
-        <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 28, fontWeight: 700, color: D, margin: '0 0 24px' }}>
+        <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 28, fontWeight: 700, color: 'var(--ip-text)', margin: '0 0 24px' }}>
           Dashboard
         </h1>
-        <div style={{ color: '#9B9490', fontSize: 14 }}>Loading...</div>
+        <div style={{ color: 'var(--ip-subtle)', fontSize: 14 }}>Loading...</div>
       </div>
     );
   }
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 28, fontWeight: 700, color: D, margin: '0 0 24px' }}>
+      <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 28, fontWeight: 700, color: 'var(--ip-text)', margin: '0 0 24px' }}>
         Dashboard
       </h1>
 
-      {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 32 }}>
-        {kpiCards.map(card => (
-          <div key={card.label} style={{
-            background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 20,
-          }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#9B9490', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-              {card.label}
-            </div>
-            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 32, fontWeight: 700, color: card.color, marginBottom: 4 }}>
-              {card.value}
-            </div>
-            <div style={{ fontSize: 12, color: '#9B9490' }}>
-              {card.sub}
-            </div>
-          </div>
-        ))}
+      {/* KPI grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 24 }}>
+        <KpiCard
+          label="Reports this month"
+          value={String(metrics?.reportsThisMonth.count ?? 0)}
+          delta={reportsDelta}
+          sub={metrics ? `${metrics.reportsThisMonth.lastMonth} last month` : null}
+          color={O}
+        />
+        <KpiCard
+          label="Items extracted"
+          value={String(metrics?.itemsExtractedThisMonth ?? 0)}
+          sub="this month"
+          color="var(--ip-text)"
+        />
+        <KpiCard
+          label="Quote value generated"
+          value={quoteValueLabel}
+          sub="AI estimates this month"
+          color={G}
+        />
+        <KpiCard
+          label="Items dispatched"
+          value={String(metrics?.itemsDispatchedThisMonth ?? 0)}
+          sub="this month"
+          color="#1565C0"
+        />
       </div>
+
+      {/* Weekly trend */}
+      {metrics && metrics.weeklyReports.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <WeeklySparkline data={metrics.weeklyReports} />
+        </div>
+      )}
 
       {/* Recent Reports */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: D, margin: 0 }}>
-          Recent Reports
+        <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: 'var(--ip-text)', margin: 0 }}>
+          Recent reports
         </h2>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <button
@@ -147,10 +249,12 @@ export default function InspectorDashboard() {
 
       {reports.length === 0 ? (
         <div style={{
-          background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4', padding: 40,
-          textAlign: 'center',
+          background: 'var(--ip-card)', borderRadius: 14, border: '1px solid var(--ip-border)',
+          padding: 40, textAlign: 'center',
         }}>
-          <div style={{ fontSize: 14, color: '#9B9490', marginBottom: 16 }}>No reports yet. Upload your first inspection report to get started.</div>
+          <div style={{ fontSize: 14, color: 'var(--ip-subtle)', marginBottom: 16 }}>
+            No reports yet. Upload your first inspection report to get started.
+          </div>
           <button
             onClick={() => navigate('/inspector/reports/upload')}
             style={{
@@ -171,16 +275,23 @@ export default function InspectorDashboard() {
                 key={report.id}
                 onClick={() => navigate(`/inspector/reports/${report.id}`)}
                 style={{
-                  background: '#ffffff', borderRadius: 14, border: '1px solid #E0DAD4', padding: '16px 20px',
+                  background: 'var(--ip-card)', borderRadius: 14, border: '1px solid var(--ip-border)',
+                  padding: '16px 20px',
                   display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer',
-                  transition: 'box-shadow 0.15s',
+                  transition: 'box-shadow 0.15s, border-color 0.15s',
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+                  e.currentTarget.style.borderColor = '#D0CAC4';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = 'var(--ip-border)';
+                }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ip-text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {report.propertyAddress}
                     </span>
                     <span style={{
@@ -190,15 +301,10 @@ export default function InspectorDashboard() {
                       {report.status}
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#9B9490', display: 'flex', gap: 12 }}>
+                  <div style={{ fontSize: 12, color: 'var(--ip-subtle)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <span>{formatDate(report.inspectionDate)}</span>
                     <span>{report.clientName}</span>
                     <span>{report.itemCount} items</span>
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: G }}>
-                    {formatCurrency(report.earnings)}
                   </div>
                 </div>
               </div>

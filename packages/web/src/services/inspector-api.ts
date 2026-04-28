@@ -145,6 +145,14 @@ export interface EarningsSummary {
   lifetime: number;
 }
 
+export interface DashboardMetrics {
+  reportsThisMonth: { count: number; lastMonth: number };
+  itemsExtractedThisMonth: number;
+  totalQuoteValueThisMonth: { lowCents: number; highCents: number };
+  itemsDispatchedThisMonth: number;
+  weeklyReports: Array<{ weekStart: string; count: number }>;
+}
+
 export interface Lead {
   id: string;
   homeownerName: string;
@@ -417,6 +425,10 @@ export const inspectorService = {
 
   getEarningsSummary() {
     return inspectorFetch<EarningsSummary>('/api/v1/inspector/earnings/summary');
+  },
+
+  getDashboardMetrics() {
+    return inspectorFetch<DashboardMetrics>('/api/v1/inspector/dashboard-metrics');
   },
 
   getEarnings() {

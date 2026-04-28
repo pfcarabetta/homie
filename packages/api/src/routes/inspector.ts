@@ -1178,6 +1178,115 @@ router.get('/earnings/summary', requireInspectorAuth, async (req: Request, res: 
   }
 });
 
+/**
+ * GET /api/v1/inspector/dashboard-metrics
+ * Drives the redesigned inspector dashboard. Computes everything in one
+ * round trip so the page can render without staging multiple loading
+ * states. All values are scoped to the authenticated inspector and
+ * keyed off the report's `created_at` (= upload time).
+ */
+router.get('/dashboard-metrics', requireInspectorAuth, async (req: Request, res: Response) => {
+  try {
+    const partnerId = req.inspectorId;
+
+    // Reports this month + last month + delta
+    const [thisMonthReports] = await db
+      .select({ value: count() })
+      .from(inspectionReports)
+      .where(and(
+        eq(inspectionReports.inspectorPartnerId, partnerId),
+        sql`DATE_TRUNC('month', ${inspectionReports.createdAt}) = DATE_TRUNC('month', NOW())`,
+      ));
+    const [lastMonthReports] = await db
+      .select({ value: count() })
+      .from(inspectionReports)
+      .where(and(
+        eq(inspectionReports.inspectorPartnerId, partnerId),
+        sql`DATE_TRUNC('month', ${inspectionReports.createdAt}) = DATE_TRUNC('month', NOW() - INTERVAL '1 month')`,
+      ));
+
+    // Items extracted this month — sum of items_parsed across this month's reports
+    const [itemsExtracted] = await db
+      .select({ value: sql<number>`COALESCE(SUM(${inspectionReports.itemsParsed}), 0)` })
+      .from(inspectionReports)
+      .where(and(
+        eq(inspectionReports.inspectorPartnerId, partnerId),
+        sql`DATE_TRUNC('month', ${inspectionReports.createdAt}) = DATE_TRUNC('month', NOW())`,
+      ));
+
+    // Total quote value this month — sum of AI cost-estimate ranges across all
+    // items whose parent report was uploaded this month by this inspector.
+    const [quoteValue] = await db
+      .select({
+        lowCents: sql<number>`COALESCE(SUM(${inspectionReportItems.aiCostEstimateLowCents}), 0)`,
+        highCents: sql<number>`COALESCE(SUM(${inspectionReportItems.aiCostEstimateHighCents}), 0)`,
+      })
+      .from(inspectionReportItems)
+      .innerJoin(inspectionReports, eq(inspectionReportItems.reportId, inspectionReports.id))
+      .where(and(
+        eq(inspectionReports.inspectorPartnerId, partnerId),
+        sql`DATE_TRUNC('month', ${inspectionReports.createdAt}) = DATE_TRUNC('month', NOW())`,
+      ));
+
+    // Items dispatched this month — items with any dispatch_status beyond
+    // not_dispatched, scoped to reports uploaded this month.
+    const [dispatched] = await db
+      .select({ value: count() })
+      .from(inspectionReportItems)
+      .innerJoin(inspectionReports, eq(inspectionReportItems.reportId, inspectionReports.id))
+      .where(and(
+        eq(inspectionReports.inspectorPartnerId, partnerId),
+        sql`${inspectionReportItems.dispatchStatus} <> 'not_dispatched'`,
+        sql`DATE_TRUNC('month', ${inspectionReports.createdAt}) = DATE_TRUNC('month', NOW())`,
+      ));
+
+    // Weekly reports for last 8 weeks — for sparkline. Returns one row per
+    // week-start (Mon) including weeks with zero reports via generate_series.
+    const weeklyRows = await db.execute<{ week_start: Date; count: number }>(sql`
+      WITH weeks AS (
+        SELECT generate_series(
+          DATE_TRUNC('week', NOW() - INTERVAL '7 weeks'),
+          DATE_TRUNC('week', NOW()),
+          INTERVAL '1 week'
+        ) AS week_start
+      )
+      SELECT
+        weeks.week_start,
+        COUNT(${inspectionReports.id})::int AS count
+      FROM weeks
+      LEFT JOIN ${inspectionReports} ON
+        DATE_TRUNC('week', ${inspectionReports.createdAt}) = weeks.week_start
+        AND ${inspectionReports.inspectorPartnerId} = ${partnerId}
+      GROUP BY weeks.week_start
+      ORDER BY weeks.week_start
+    `);
+
+    res.json({
+      data: {
+        reportsThisMonth: {
+          count: thisMonthReports.value,
+          lastMonth: lastMonthReports.value,
+        },
+        itemsExtractedThisMonth: Number(itemsExtracted.value),
+        totalQuoteValueThisMonth: {
+          lowCents: Number(quoteValue.lowCents),
+          highCents: Number(quoteValue.highCents),
+        },
+        itemsDispatchedThisMonth: dispatched.value,
+        weeklyReports: weeklyRows.map(r => ({
+          weekStart: new Date(r.week_start).toISOString(),
+          count: Number(r.count),
+        })),
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /inspector/dashboard-metrics]');
+    res.status(500).json({ data: null, error: 'Failed to load dashboard metrics', meta: {} });
+  }
+});
+
 // GET /api/v1/inspector/earnings
 router.get('/earnings', requireInspectorAuth, async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
