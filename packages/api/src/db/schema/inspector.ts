@@ -32,6 +32,14 @@ export const inspectorPartners = pgTable('inspector_partners', {
   status: text('status').notNull().default('pending_verification'),
   /** standard | preferred | elite */
   tier: text('tier').notNull().default('standard'),
+  /** Per-tier retail price the inspector charges their client. Used to
+   *  compute estimated earnings (retail − wholesale) shown on the
+   *  reports list, dashboard, and Earnings page. Null = use the
+   *  suggested default from services/pricing.ts. Stored per inspector
+   *  so each one can adjust to match what their market will bear. */
+  retailPriceEssentialCents: integer('retail_price_essential_cents'),
+  retailPriceProfessionalCents: integer('retail_price_professional_cents'),
+  retailPricePremiumCents: integer('retail_price_premium_cents'),
   referredByPartnerId: uuid('referred_by_partner_id'),
   joinedAt: timestamp('joined_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

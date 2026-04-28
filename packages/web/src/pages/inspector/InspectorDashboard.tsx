@@ -186,6 +186,12 @@ export default function InspectorDashboard() {
       {/* KPI grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 24 }}>
         <KpiCard
+          label="Est. earnings"
+          value={metrics ? formatCents(metrics.estimatedEarningsThisMonthCents) : '—'}
+          sub="this month · retail − wholesale"
+          color={G}
+        />
+        <KpiCard
           label="Reports this month"
           value={String(metrics?.reportsThisMonth.count ?? 0)}
           delta={reportsDelta}
@@ -202,13 +208,13 @@ export default function InspectorDashboard() {
           label="Quote value generated"
           value={quoteValueLabel}
           sub="AI estimates this month"
-          color={G}
+          color="#1565C0"
         />
         <KpiCard
           label="Items dispatched"
           value={String(metrics?.itemsDispatchedThisMonth ?? 0)}
           sub="this month"
-          color="#1565C0"
+          color="#7C3AED"
         />
       </div>
 
@@ -307,6 +313,14 @@ export default function InspectorDashboard() {
                     <span>{report.itemCount} items</span>
                   </div>
                 </div>
+                {report.estimatedEarnings > 0 && (
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: G, lineHeight: 1.1 }}>
+                      {formatCents(report.estimatedEarnings * 100)}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--ip-subtle)', marginTop: 2 }}>est. earnings</div>
+                  </div>
+                )}
               </div>
             );
           })}

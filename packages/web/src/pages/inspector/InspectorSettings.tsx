@@ -42,6 +42,12 @@ export default function InspectorSettings() {
   // Service areas
   const [serviceZipCodes, setServiceZipCodes] = useState('');
 
+  // Retail pricing — string state (so the input can be empty without
+  // collapsing into a number). Saved as cents on submit.
+  const [retailEssential, setRetailEssential] = useState('');
+  const [retailProfessional, setRetailProfessional] = useState('');
+  const [retailPremium, setRetailPremium] = useState('');
+
   // Inspection software
   const [inspectionSoftware, setInspectionSoftware] = useState('');
 
@@ -70,6 +76,9 @@ export default function InspectorSettings() {
       setServiceZipCodes(inspector.serviceZipCodes?.join(', ') ?? '');
       setInspectionSoftware(inspector.inspectionSoftware ?? '');
       setPayoutMethod(inspector.payoutMethod ?? '');
+      setRetailEssential(inspector.retailPriceEssentialCents != null ? String(inspector.retailPriceEssentialCents / 100) : '');
+      setRetailProfessional(inspector.retailPriceProfessionalCents != null ? String(inspector.retailPriceProfessionalCents / 100) : '');
+      setRetailPremium(inspector.retailPricePremiumCents != null ? String(inspector.retailPricePremiumCents / 100) : '');
       if (inspector.notificationPreferences) {
         setNotifNewLead(inspector.notificationPreferences.newLead !== false);
         setNotifReportReady(inspector.notificationPreferences.reportReady !== false);
@@ -83,6 +92,13 @@ export default function InspectorSettings() {
     setSaving(true);
     setSaved(false);
     try {
+      const dollarsToCents = (raw: string): number | null => {
+        const trimmed = raw.trim();
+        if (trimmed === '') return null;
+        const n = Number(trimmed);
+        if (!Number.isFinite(n) || n < 0) return null;
+        return Math.round(n * 100);
+      };
       await inspectorService.updateProfile({
         companyName,
         phone: phone || null,
@@ -92,6 +108,9 @@ export default function InspectorSettings() {
         serviceZipCodes: serviceZipCodes ? serviceZipCodes.split(',').map(s => s.trim()).filter(Boolean) : [],
         inspectionSoftware: inspectionSoftware || null,
         payoutMethod: payoutMethod || null,
+        retailPriceEssentialCents: dollarsToCents(retailEssential),
+        retailPriceProfessionalCents: dollarsToCents(retailProfessional),
+        retailPricePremiumCents: dollarsToCents(retailPremium),
         notificationPreferences: {
           newLead: notifNewLead,
           reportReady: notifReportReady,
@@ -172,6 +191,43 @@ export default function InspectorSettings() {
         <input style={inputStyle} value={serviceZipCodes} onChange={e => setServiceZipCodes(e.target.value)} placeholder="10001, 10002, 10003 (comma-separated)" />
         <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>
           Enter the zip codes you service to receive relevant leads.
+        </div>
+      </div>
+
+      {/* Retail Pricing — what the inspector charges their client per
+          tier. Drives the "Estimated earnings" number on the dashboard,
+          reports list, and Earnings page. Empty input = use the
+          suggested default below. */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Your retail pricing</div>
+        <div style={{ fontSize: 13, color: '#6B6560', marginBottom: 16, lineHeight: 1.5 }}>
+          Set what you charge your clients for each report tier. Estimated earnings on each report = your retail − the Homie wholesale cost. Leave blank to use the suggested defaults.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+          {[
+            { label: 'Essential', wholesale: 49, suggested: 99, value: retailEssential, setValue: setRetailEssential },
+            { label: 'Professional', wholesale: 79, suggested: 199, value: retailProfessional, setValue: setRetailProfessional },
+            { label: 'Premium', wholesale: 99, suggested: 299, value: retailPremium, setValue: setRetailPremium },
+          ].map(tier => (
+            <div key={tier.label}>
+              <label style={labelStyle}>{tier.label}</label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9B9490', pointerEvents: 'none' }}>$</span>
+                <input
+                  style={{ ...inputStyle, paddingLeft: 28 }}
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={tier.value}
+                  onChange={e => tier.setValue(e.target.value)}
+                  placeholder={String(tier.suggested)}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: '#9B9490', marginTop: 6 }}>
+                Wholesale ${tier.wholesale} · suggested ${tier.suggested}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

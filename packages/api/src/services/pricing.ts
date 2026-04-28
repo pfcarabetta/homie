@@ -145,6 +145,48 @@ export function invalidatePricingCache(): void {
   _cache = null;
 }
 
+/** Per-inspector retail-price overrides — pulled from the
+ *  inspector_partners row. Null in any field means "use the suggested
+ *  default from pricing config for that tier". */
+export interface InspectorRetailOverrides {
+  retailPriceEssentialCents: number | null;
+  retailPriceProfessionalCents: number | null;
+  retailPricePremiumCents: number | null;
+}
+
+/** Resolve the inspector's effective retail price for a given tier,
+ *  applying their override if set, falling back to the suggested
+ *  default from pricing config. Synchronous so it can be called per
+ *  report inside a list-projection without N async hops. Caller must
+ *  pre-fetch the inspector pricing config once and pass it in. */
+export function effectiveRetailCents(
+  overrides: InspectorRetailOverrides,
+  tier: InspectorTier,
+  defaults: InspectorPricingConfig,
+): number {
+  const fallback = defaults.tiers[tier].retailPriceCents;
+  switch (tier) {
+    case 'essential':    return overrides.retailPriceEssentialCents    ?? fallback;
+    case 'professional': return overrides.retailPriceProfessionalCents ?? fallback;
+    case 'premium':      return overrides.retailPricePremiumCents      ?? fallback;
+  }
+}
+
+/** Per-report estimated earnings = (effective retail) − (wholesale
+ *  paid). Returns 0 for unpaid reports (no tier or no priceCentsPaid)
+ *  or any tier the schema doesn't recognize. Clamped at 0 so a misset
+ *  override below wholesale never displays a negative earning. */
+export function estimatedEarningsCentsFor(
+  overrides: InspectorRetailOverrides,
+  report: { pricingTier: string | null; priceCentsPaid: number | null },
+  defaults: InspectorPricingConfig,
+): number {
+  if (!report.pricingTier || typeof report.priceCentsPaid !== 'number') return 0;
+  if (report.pricingTier !== 'essential' && report.pricingTier !== 'professional' && report.pricingTier !== 'premium') return 0;
+  const retail = effectiveRetailCents(overrides, report.pricingTier, defaults);
+  return Math.max(0, retail - report.priceCentsPaid);
+}
+
 /**
  * Resolve the effective BusinessPlanConfig for a specific workspace.
  * If the workspace has customPricing overrides, those fields take

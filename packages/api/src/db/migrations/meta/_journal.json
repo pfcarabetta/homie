@@ -316,6 +316,13 @@
       "when": 1777270000000,
       "tag": "0044_inspector_cc_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1777370000000,
+      "tag": "0045_inspector_retail_prices",
+      "breakpoints": true
     }
   ]
 }

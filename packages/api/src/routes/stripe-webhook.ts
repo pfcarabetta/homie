@@ -169,19 +169,11 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
           .where(drizzleSql`${inspectionReportItems.reportId} = ${reportId} AND ${inspectionReportItems.dispatchStatus} != 'not_dispatched'`);
         await db.update(inspectionReports).set({ itemsDispatched: totalDispatched, updatedAt: new Date() }).where(eq(inspectionReports.id, reportId));
 
-        // Create referral commission for inspector
-        if (inspectorPartnerId && dispatchedCount > 0) {
-          const commissionPerItem = Math.round(999 * 0.175);
-          const now = new Date();
-          await db.insert(inspectorEarnings).values({
-            inspectorPartnerId,
-            reportId,
-            earningType: 'referral_commission',
-            amountCents: commissionPerItem * dispatchedCount,
-            description: `Referral: ${dispatchedCount} item${dispatchedCount === 1 ? '' : 's'} from ${report.propertyAddress}`,
-            periodMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
-          });
-        }
+        // Per-dispatch referral commission writes were removed when the
+        // earnings model flipped to retail-minus-wholesale per report
+        // (set in inspector Settings). Estimated earnings are computed
+        // at read time from inspection_reports + the inspector's retail
+        // overrides — see services/pricing.ts.
 
         logger.info({ reportId, dispatchedCount }, '[Stripe webhook] Inspection items dispatched');
       } catch (err) {

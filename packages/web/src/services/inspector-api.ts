@@ -19,6 +19,12 @@ export interface InspectorProfile {
   partnerUrl: string | null;
   payoutMethod: string | null;
   notificationPreferences: Record<string, boolean>;
+  /** Per-tier retail price the inspector charges their client. Null
+   *  means use the suggested default. Drives estimated-earnings math
+   *  on the dashboard, reports list, and Earnings page. */
+  retailPriceEssentialCents?: number | null;
+  retailPriceProfessionalCents?: number | null;
+  retailPricePremiumCents?: number | null;
   createdAt: string;
 }
 
@@ -77,7 +83,11 @@ export interface InspectionReport {
   items: InspectionItem[];
   itemCount: number;
   dispatchedCount: number;
-  earnings: number;
+  /** Wholesale price the inspector paid Homie for this report (cents).
+   *  Drives the estimated-earnings calc downstream. */
+  priceCentsPaid: number | null;
+  /** (inspector retail for this tier) − wholesale, in dollars. */
+  estimatedEarnings: number;
   createdAt: string;
 }
 
@@ -130,19 +140,25 @@ export interface QuoteDetails {
   bundleSize?: number;
 }
 
+/** One row per paid report — the new earnings ledger is computed
+ *  per report (retail − wholesale), not from a separate earnings
+ *  table. */
 export interface Earning {
   id: string;
-  type: 'referral_commission' | 'referral' | 'inbound_lead_bonus' | 'lead_bonus' | 'partner_referral_bonus';
-  description: string;
-  amount: number;
-  reportId: string | null;
+  reportId: string;
+  propertyAddress: string;
+  clientName: string;
+  pricingTier: 'essential' | 'professional' | 'premium' | null;
+  wholesaleCents: number;
+  estimatedEarningsCents: number;
   createdAt: string;
 }
 
 export interface EarningsSummary {
-  currentMonth: number;
-  lastMonth: number;
-  lifetime: number;
+  currentMonthCents: number;
+  lastMonthCents: number;
+  lifetimeCents: number;
+  reportsThisMonth: number;
 }
 
 export interface DashboardMetrics {
@@ -150,6 +166,7 @@ export interface DashboardMetrics {
   itemsExtractedThisMonth: number;
   totalQuoteValueThisMonth: { lowCents: number; highCents: number };
   itemsDispatchedThisMonth: number;
+  estimatedEarningsThisMonthCents: number;
   weeklyReports: Array<{ weekStart: string; count: number }>;
 }
 

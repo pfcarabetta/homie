@@ -23,6 +23,7 @@ import { optionalAuth, signToken } from '../middleware/auth';
 import jwt from 'jsonwebtoken';
 import { sendEmail } from '../services/notifications';
 import { buildStripeMetadata } from '../services/stripe';
+import { getPricingConfig, estimatedEarningsCentsFor, type InspectorRetailOverrides } from '../services/pricing';
 
 /** Normalize a phone to digits-only with US country code stripped — for fuzzy matching. */
 function phoneKey(phone: string | null | undefined): string | null {
@@ -171,6 +172,20 @@ router.put('/profile', requireInspectorAuth, async (req: Request, res: Response)
     const snakeKey = key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
     if (body[key] !== undefined) updates[key] = body[key];
     if (body[snakeKey] !== undefined) updates[key] = body[snakeKey];
+  }
+  // Retail-price overrides accept either a non-negative integer (cents)
+  // or null to clear the override and revert to the suggested default.
+  // Stored separately so the allowlist loop above doesn't accidentally
+  // accept arbitrary garbage.
+  const retailFields = ['retailPriceEssentialCents', 'retailPriceProfessionalCents', 'retailPricePremiumCents'] as const;
+  for (const key of retailFields) {
+    const snakeKey = key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
+    const raw = body[key] !== undefined ? body[key] : body[snakeKey];
+    if (raw === undefined) continue;
+    if (raw === null) { updates[key] = null; continue; }
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0 || n > 1_000_000) continue;
+    updates[key] = Math.round(n);
   }
   try {
     const [updated] = await db.update(inspectorPartners).set(updates).where(eq(inspectorPartners.id, req.inspectorId)).returning();
@@ -467,7 +482,7 @@ function projectInspectionItem(i: typeof inspectionReportItems.$inferSelect) {
 
 function projectInspectionReport(
   r: typeof inspectionReports.$inferSelect,
-  opts: { itemCount: number; dispatchedCount: number; earningsCents: number },
+  opts: { itemCount: number; dispatchedCount: number; estimatedEarningsCents: number },
 ) {
   return {
     id: r.id,
@@ -491,6 +506,7 @@ function projectInspectionReport(
     parsingStatus: r.parsingStatus,
     parsingError: r.parsingError,
     pricingTier: r.pricingTier,
+    priceCentsPaid: r.priceCentsPaid,
     ccEmails: r.ccEmails ?? [],
     clientNotifiedAt: r.clientNotifiedAt?.toISOString() ?? null,
     homeownerOpenedAt: r.homeownerOpenedAt?.toISOString() ?? null,
@@ -498,7 +514,11 @@ function projectInspectionReport(
     clientAccessToken: r.clientAccessToken,
     itemCount: opts.itemCount,
     dispatchedCount: opts.dispatchedCount,
-    earnings: opts.earningsCents / 100,
+    /** Inspector's resale margin on this report = (their retail for the
+     *  tier, set in Settings or the suggested default) minus the
+     *  wholesale they paid Homie. Dollars (not cents) so the frontend
+     *  doesn't have to convert. */
+    estimatedEarnings: opts.estimatedEarningsCents / 100,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -513,9 +533,9 @@ router.get('/reports', requireInspectorAuth, async (req: Request, res: Response)
       .orderBy(desc(inspectionReports.createdAt))
       .limit(limit).offset(offset);
 
-    // One round-trip to grab per-report counts and earnings totals so
-    // the list cards have item counts + dispatched counts + total
-    // earnings (in dollars) without N+1ing.
+    // One round-trip to grab per-report item counts. Estimated earnings
+    // are computed per row from priceCentsPaid + the inspector's retail
+    // override (with a fallback to the suggested default).
     const ids = reports.map(r => r.id);
     const itemAgg = ids.length > 0
       ? await db.select({
@@ -527,22 +547,20 @@ router.get('/reports', requireInspectorAuth, async (req: Request, res: Response)
           .where(inArray(inspectionReportItems.reportId, ids))
           .groupBy(inspectionReportItems.reportId)
       : [];
-    const earningsAgg = ids.length > 0
-      ? await db.select({
-          reportId: inspectorEarnings.reportId,
-          totalCents: sql<number>`COALESCE(SUM(${inspectorEarnings.amountCents}), 0)`,
-        })
-          .from(inspectorEarnings)
-          .where(inArray(inspectorEarnings.reportId, ids))
-          .groupBy(inspectorEarnings.reportId)
-      : [];
     const itemMap = new Map(itemAgg.map(r => [r.reportId, r]));
-    const earnMap = new Map(earningsAgg.map(r => [r.reportId, r.totalCents]));
+
+    const [partner] = await db.select({
+      retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
+      retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
+      retailPricePremiumCents: inspectorPartners.retailPricePremiumCents,
+    }).from(inspectorPartners).where(eq(inspectorPartners.id, req.inspectorId)).limit(1);
+    const overrides: InspectorRetailOverrides = partner ?? { retailPriceEssentialCents: null, retailPriceProfessionalCents: null, retailPricePremiumCents: null };
+    const pricingConfig = await getPricingConfig();
 
     const projected = reports.map(r => projectInspectionReport(r, {
       itemCount: Number(itemMap.get(r.id)?.itemCount ?? 0),
       dispatchedCount: Number(itemMap.get(r.id)?.dispatchedCount ?? 0),
-      earningsCents: Number(earnMap.get(r.id) ?? 0),
+      estimatedEarningsCents: estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector),
     }));
 
     const [{ value: total }] = await db.select({ value: count() }).from(inspectionReports)
@@ -564,14 +582,18 @@ router.get('/reports/:id', requireInspectorAuth, async (req: Request, res: Respo
     const items = await db.select().from(inspectionReportItems)
       .where(eq(inspectionReportItems.reportId, report.id))
       .orderBy(inspectionReportItems.sortOrder);
-    const earnings = await db.select().from(inspectorEarnings)
-      .where(eq(inspectorEarnings.reportId, report.id));
-    const earningsCents = earnings.reduce((sum, e) => sum + (e.amountCents ?? 0), 0);
+    const [partner] = await db.select({
+      retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
+      retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
+      retailPricePremiumCents: inspectorPartners.retailPricePremiumCents,
+    }).from(inspectorPartners).where(eq(inspectorPartners.id, req.inspectorId)).limit(1);
+    const overrides: InspectorRetailOverrides = partner ?? { retailPriceEssentialCents: null, retailPriceProfessionalCents: null, retailPricePremiumCents: null };
+    const pricingConfig = await getPricingConfig();
     const projectedItems = items.map(projectInspectionItem);
     const projectedReport = projectInspectionReport(report, {
       itemCount: items.length,
       dispatchedCount: items.filter(i => i.dispatchStatus && i.dispatchStatus !== 'not_dispatched').length,
-      earningsCents,
+      estimatedEarningsCents: estimatedEarningsCentsFor(overrides, report, pricingConfig.inspector),
     });
     // Surface supporting docs so the inspector detail page can show
     // per-doc parse status without a second round-trip.
@@ -1146,30 +1168,48 @@ router.delete('/reports/:id/items/:itemId', requireInspectorAuth, async (req: Re
 // GET /api/v1/inspector/earnings/summary
 router.get('/earnings/summary', requireInspectorAuth, async (req: Request, res: Response) => {
   try {
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-01`;
+    // Pull every paid report for this inspector and bucket into
+    // current-month / last-month / lifetime via JS. The inspector's
+    // tier-pricing override drives the calc, so we can't push it into
+    // SQL without a CASE-statement explosion.
+    const [partner] = await db.select({
+      retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
+      retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
+      retailPricePremiumCents: inspectorPartners.retailPricePremiumCents,
+    }).from(inspectorPartners).where(eq(inspectorPartners.id, req.inspectorId)).limit(1);
+    const overrides: InspectorRetailOverrides = partner ?? { retailPriceEssentialCents: null, retailPriceProfessionalCents: null, retailPricePremiumCents: null };
+    const pricingConfig = await getPricingConfig();
 
-    const [currentEarnings] = await db.select({ total: sql<number>`COALESCE(SUM(${inspectorEarnings.amountCents}), 0)` })
-      .from(inspectorEarnings)
-      .where(and(eq(inspectorEarnings.inspectorPartnerId, req.inspectorId), eq(inspectorEarnings.periodMonth, currentMonth)));
-    const [lastEarnings] = await db.select({ total: sql<number>`COALESCE(SUM(${inspectorEarnings.amountCents}), 0)` })
-      .from(inspectorEarnings)
-      .where(and(eq(inspectorEarnings.inspectorPartnerId, req.inspectorId), eq(inspectorEarnings.periodMonth, lastMonthStr)));
-    const [lifetime] = await db.select({ total: sql<number>`COALESCE(SUM(${inspectorEarnings.amountCents}), 0)` })
-      .from(inspectorEarnings)
-      .where(eq(inspectorEarnings.inspectorPartnerId, req.inspectorId));
-    const [reportCount] = await db.select({ value: count() }).from(inspectionReports)
-      .where(and(eq(inspectionReports.inspectorPartnerId, req.inspectorId), sql`DATE_TRUNC('month', ${inspectionReports.createdAt}) = DATE_TRUNC('month', NOW())`));
+    const reports = await db.select({
+      pricingTier: inspectionReports.pricingTier,
+      priceCentsPaid: inspectionReports.priceCentsPaid,
+      createdAt: inspectionReports.createdAt,
+    })
+      .from(inspectionReports)
+      .where(eq(inspectionReports.inspectorPartnerId, req.inspectorId));
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+
+    let currentMonthCents = 0;
+    let lastMonthCents = 0;
+    let lifetimeCents = 0;
+    let reportsThisMonth = 0;
+    for (const r of reports) {
+      const cents = estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector);
+      lifetimeCents += cents;
+      const ts = r.createdAt.getTime();
+      if (ts >= startOfMonth) {
+        currentMonthCents += cents;
+        reportsThisMonth += 1;
+      } else if (ts >= startOfLastMonth) {
+        lastMonthCents += cents;
+      }
+    }
 
     res.json({
-      data: {
-        currentMonthCents: currentEarnings.total,
-        lastMonthCents: lastEarnings.total,
-        lifetimeCents: lifetime.total,
-        reportsThisMonth: reportCount.value,
-      },
+      data: { currentMonthCents, lastMonthCents, lifetimeCents, reportsThisMonth },
       error: null, meta: {},
     });
   } catch (err) {
@@ -1261,6 +1301,31 @@ router.get('/dashboard-metrics', requireInspectorAuth, async (req: Request, res:
       ORDER BY weeks.week_start
     `);
 
+    // Estimated earnings — sum of (retail − wholesale) across this
+    // month's paid reports. Computed in JS instead of SQL because the
+    // inspector's retail override + suggested fallback live in app
+    // state, not in the DB.
+    const [partner] = await db.select({
+      retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
+      retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
+      retailPricePremiumCents: inspectorPartners.retailPricePremiumCents,
+    }).from(inspectorPartners).where(eq(inspectorPartners.id, partnerId)).limit(1);
+    const overrides: InspectorRetailOverrides = partner ?? { retailPriceEssentialCents: null, retailPriceProfessionalCents: null, retailPricePremiumCents: null };
+    const pricingConfig = await getPricingConfig();
+    const monthReports = await db.select({
+      pricingTier: inspectionReports.pricingTier,
+      priceCentsPaid: inspectionReports.priceCentsPaid,
+    })
+      .from(inspectionReports)
+      .where(and(
+        eq(inspectionReports.inspectorPartnerId, partnerId),
+        sql`DATE_TRUNC('month', ${inspectionReports.createdAt}) = DATE_TRUNC('month', NOW())`,
+      ));
+    const estimatedEarningsCents = monthReports.reduce(
+      (sum, r) => sum + estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector),
+      0,
+    );
+
     res.json({
       data: {
         reportsThisMonth: {
@@ -1273,6 +1338,7 @@ router.get('/dashboard-metrics', requireInspectorAuth, async (req: Request, res:
           highCents: Number(quoteValue.highCents),
         },
         itemsDispatchedThisMonth: dispatched.value,
+        estimatedEarningsThisMonthCents: estimatedEarningsCents,
         weeklyReports: weeklyRows.map(r => ({
           weekStart: new Date(r.week_start).toISOString(),
           count: Number(r.count),
@@ -1287,16 +1353,46 @@ router.get('/dashboard-metrics', requireInspectorAuth, async (req: Request, res:
   }
 });
 
-// GET /api/v1/inspector/earnings
+// GET /api/v1/inspector/earnings — per-report estimated-earnings ledger
 router.get('/earnings', requireInspectorAuth, async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
   const offset = Number(req.query.offset) || 0;
   try {
-    const earnings = await db.select().from(inspectorEarnings)
-      .where(eq(inspectorEarnings.inspectorPartnerId, req.inspectorId))
-      .orderBy(desc(inspectorEarnings.createdAt))
+    const [partner] = await db.select({
+      retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
+      retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
+      retailPricePremiumCents: inspectorPartners.retailPricePremiumCents,
+    }).from(inspectorPartners).where(eq(inspectorPartners.id, req.inspectorId)).limit(1);
+    const overrides: InspectorRetailOverrides = partner ?? { retailPriceEssentialCents: null, retailPriceProfessionalCents: null, retailPricePremiumCents: null };
+    const pricingConfig = await getPricingConfig();
+
+    const reports = await db.select({
+      id: inspectionReports.id,
+      propertyAddress: inspectionReports.propertyAddress,
+      clientName: inspectionReports.clientName,
+      pricingTier: inspectionReports.pricingTier,
+      priceCentsPaid: inspectionReports.priceCentsPaid,
+      createdAt: inspectionReports.createdAt,
+    })
+      .from(inspectionReports)
+      .where(eq(inspectionReports.inspectorPartnerId, req.inspectorId))
+      .orderBy(desc(inspectionReports.createdAt))
       .limit(limit).offset(offset);
-    res.json({ data: earnings, error: null, meta: {} });
+
+    const data = reports
+      .map(r => ({
+        id: r.id,
+        reportId: r.id,
+        propertyAddress: r.propertyAddress,
+        clientName: r.clientName,
+        pricingTier: r.pricingTier,
+        wholesaleCents: r.priceCentsPaid ?? 0,
+        estimatedEarningsCents: estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector),
+        createdAt: r.createdAt.toISOString(),
+      }))
+      .filter(r => r.estimatedEarningsCents > 0);
+
+    res.json({ data, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[GET /inspector/earnings]');
     res.status(500).json({ data: null, error: 'Failed to load earnings', meta: {} });
@@ -2438,27 +2534,11 @@ router.post('/:token/dispatch', async (req: Request, res: Response) => {
       updatedAt: new Date(),
     }).where(eq(inspectionReports.id, report.id));
 
-    // Create referral commission for the inspector
-    if (report.inspectorPartnerId && dispatched.length > 0) {
-      const commissionPerItem = Math.round(PER_ITEM_PRICE_CENTS * 0.175); // 17.5% average
-      const totalCommission = commissionPerItem * dispatched.length;
-      const now = new Date();
-      const periodMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-
-      await db.insert(inspectorEarnings).values({
-        inspectorPartnerId: report.inspectorPartnerId,
-        reportId: report.id,
-        earningType: 'referral_commission',
-        amountCents: totalCommission,
-        description: `Referral: ${dispatched.length} item${dispatched.length === 1 ? '' : 's'} dispatched from ${report.propertyAddress}`,
-        periodMonth,
-      });
-
-      // Update report earnings total
-      await db.update(inspectionReports).set({
-        inspectorEarningsCents: sql`${inspectionReports.inspectorEarningsCents} + ${totalCommission}`,
-      }).where(eq(inspectionReports.id, report.id));
-    }
+    // Per-dispatch commission writes were removed when the earnings
+    // model flipped to retail-minus-wholesale per report (set in
+    // inspector Settings). Estimated earnings are computed at read
+    // time from inspection_reports + retail overrides — see
+    // services/pricing.ts.
 
     res.json({
       data: { dispatched, totalDispatched: dispatched.length },

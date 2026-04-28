@@ -389,6 +389,14 @@ function ReportRow({ report, onClick, onRetry, onSendReminder, retrying, reminde
 
       {/* Right-side actions / earnings */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        {report.estimatedEarnings > 0 && (
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: G, lineHeight: 1.1 }}>
+              ${Math.round(report.estimatedEarnings)}
+            </div>
+            <div style={{ fontSize: 10, color: '#9B9490', marginTop: 2 }}>est.</div>
+          </div>
+        )}
         {isFailed && (
           <button
             onClick={(e) => { e.stopPropagation(); onRetry(); }}
