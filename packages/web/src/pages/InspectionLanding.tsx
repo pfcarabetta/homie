@@ -173,37 +173,45 @@ function Nav({ onUpload }: { onUpload: () => void }) {
 }
 
 function HomieFooter() {
+  // Mirrors the main / homepage footer exactly so navigating between
+  // surfaces feels like the same product. Auto-fit grid handles
+  // responsive collapse without needing per-breakpoint overrides.
   return (
-    <footer className="hi-footer" style={{ background: C.dark, padding: '64px 24px 40px', ...DM }}>
+    <footer style={{ background: C.dark, padding: '64px 24px 40px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        <div className="hi-footer-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 40, marginBottom: 48 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 40, marginBottom: 48 }}>
           <div>
-            <HomieInspectLogo />
-            <p style={{ fontSize: 14, color: '#9B9490', lineHeight: 1.6, marginTop: 16, maxWidth: 220 }}>
-              AI-powered home inspection reports. Real items, real quotes, real benchmarks.
-            </p>
+            <span style={{ ...FR, fontWeight: 700, fontSize: 24, color: C.orange }}>homie</span>
+            <p style={{ ...DM, fontSize: 14, color: '#9B9490', lineHeight: 1.6, marginTop: 12 }}>AI-powered home services for property managers, hosts, and homeowners.</p>
           </div>
-          {[
-            { h: 'Product', items: [
-              ['For homeowners', '/inspect'],
-              ['For inspectors', '/inspect/inspectors'],
-              ['Home IQ', '#home-iq'],
-              ['Sample report', '#how-it-works'],
-            ]},
-            { h: 'Company', items: [['About','/'],['Blog','/'],['Careers','/'],['Contact','/']]},
-            { h: 'Legal', items: [['Privacy','/privacy'],['Terms','/terms'],['Security','/security'],['Trust','/trust']]},
-          ].map(col => (
-            <div key={col.h}>
-              <h4 style={{ fontSize: 12, fontWeight: 700, color: '#D3CEC9', letterSpacing: '.14em', textTransform: 'uppercase', margin: '0 0 16px' }}>{col.h}</h4>
-              {col.items.map(([l, h]) => (
-                <a key={l} href={h} style={{ display: 'block', fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>{l}</a>
-              ))}
-            </div>
-          ))}
+          <div>
+            <h4 style={{ ...DM, fontSize: 13, fontWeight: 700, color: '#D3CEC9', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 16px' }}>Product</h4>
+            {[
+              { label: 'For homeowners', href: '/' },
+              { label: 'For property managers/hosts', href: '/business/landing' },
+              { label: 'Homie Inspect', href: '/inspect' },
+              { label: 'For inspectors', href: '/inspect/inspectors' },
+              { label: 'Become a Homie Pro', href: '/portal/signup' },
+            ].map(l => (
+              <a key={l.label} href={l.href} style={{ display: 'block', ...DM, fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>{l.label}</a>
+            ))}
+          </div>
+          <div>
+            <h4 style={{ ...DM, fontSize: 13, fontWeight: 700, color: '#D3CEC9', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 16px' }}>Company</h4>
+            {['About', 'Blog', 'Careers', 'Contact'].map(l => (
+              <a key={l} href="#" style={{ display: 'block', ...DM, fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>{l}</a>
+            ))}
+          </div>
+          <div>
+            <h4 style={{ ...DM, fontSize: 13, fontWeight: 700, color: '#D3CEC9', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 16px' }}>Legal</h4>
+            <a href="/privacy" style={{ display: 'block', ...DM, fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>Privacy</a>
+            <a href="/terms" style={{ display: 'block', ...DM, fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>Terms</a>
+            <a href="/security" style={{ display: 'block', ...DM, fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>Security</a>
+          </div>
         </div>
-        <div style={{ borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <span style={{ fontSize: 13, color: '#9B9490' }}>© {new Date().getFullYear()} Homie. Your home's best friend.</span>
-          <span style={{ fontSize: 13, color: '#9B9490' }}>Made with love in San Diego 🌴</span>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <span style={{ ...DM, fontSize: 13, color: '#9B9490' }}>&copy; {new Date().getFullYear()} Homie. Your home's best friend.</span>
+          <span style={{ ...DM, fontSize: 13, color: '#9B9490' }}>Made with love in San Diego 🌴</span>
         </div>
       </div>
     </footer>
@@ -973,9 +981,6 @@ export default function HomieInspectionLanding() {
 
           .hi-final-cta { padding: 64px 20px !important; }
 
-          .hi-footer { padding: 48px 20px 32px !important; }
-          .hi-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
-
           .hi-section-headline { font-size: clamp(28px, 6.5vw, 40px) !important; }
 
           /* QuotesPreview — drop the action button on mobile (it's
@@ -1006,7 +1011,6 @@ export default function HomieInspectionLanding() {
           .hi-module-title { font-size: 22px !important; }
           .hi-tier { padding: 24px !important; }
           .hi-blockquote { font-size: 22px !important; }
-          .hi-footer-grid { grid-template-columns: 1fr !important; }
           .hi-quote-row { padding: 10px !important; gap: 8px !important; }
           .hi-quote-price { font-size: 14px !important; }
           .hi-iq-gauge-num { font-size: 38px !important; }
