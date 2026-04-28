@@ -1,196 +1,623 @@
-import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import SEO from '@/components/SEO';
 import { trackEvent } from '@/services/analytics';
 import { captureReferrerIfPresent, getStoredReferrer } from '@/services/referral-tracking';
 
+/**
+ * Homie Inspect — landing page (Direction D · Combined).
+ *
+ * Composition follows the design handoff exactly:
+ *   Nav → HeroA (PDF→items morph) → ModulesC (Items / Quotes / Home IQ)
+ *       → NegotiationC (audience-aware doc card) → TiersB (editorial 3-up)
+ *       → TestimonialsB (audience-aware) → FAQ → FinalCTA → Footer
+ *
+ * Audience toggle in the hero pivots buyer/owner copy across HeroA,
+ * NegotiationC, TestimonialsB, and FinalCTA. Sections without buyer/
+ * seller bias (Modules, Tiers, FAQ) read identically.
+ */
+
+// ─── Tokens ──────────────────────────────────────────────────────────
 const C = {
-  orange: "#E8632B", orangeDark: "#C8531E", orangeLight: "#F0997B",
-  green: "#1B9E77", greenLight: "#E1F5EE",
-  dark: "#2D2926", darkMid: "#4A4543",
-  gray: "#9B9490", grayLight: "#D3CEC9",
-  warm: "#F9F5F2", white: "#FFFFFF",
+  orange: '#E8632B', orangeH: '#C8531E', orangeSoft: 'rgba(232,99,43,.08)',
+  green: '#1B9E77', greenH: '#168A68', greenSoft: 'rgba(27,158,119,.10)',
+  greenLight: '#E1F5EE',
+  red: '#DC2626', amber: '#D97706', monitor: '#9B9490',
+  redSoft: 'rgba(220,38,38,.10)', amberSoft: 'rgba(217,119,6,.10)',
+  dark: '#2D2926', darkMid: '#4A4543',
+  muted: '#6B6560', meta: '#9B9490', faint: '#C4BFBB', line: '#E9E3DD',
+  warm: '#F9F5F2', white: '#FFFFFF',
+  inspectBlue: '#2563EB',
 };
+const FR: CSSProperties = { fontFamily: '"Fraunces", ui-serif, Georgia, serif' };
+const DM: CSSProperties = { fontFamily: '"DM Sans", system-ui, sans-serif' };
+const MO: CSSProperties = { fontFamily: '"DM Mono", ui-monospace, Menlo, monospace' };
 
-const dm: CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
-const fr: CSSProperties = { fontFamily: "Fraunces, serif" };
-
-function useInView(t = 0.15): [React.RefObject<HTMLDivElement>, boolean] {
-  const ref = useRef<HTMLDivElement>(null!);
+// ─── Hooks ──────────────────────────────────────────────────────────
+function useInView(threshold = 0.12): [React.RefObject<HTMLDivElement>, boolean] {
+  const ref = useRef<HTMLDivElement>(null);
   const [v, setV] = useState(false);
   useEffect(() => {
     const el = ref.current; if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setV(true); obs.disconnect(); } }, { threshold: t });
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setV(true); obs.disconnect(); } }, { threshold });
     obs.observe(el); return () => obs.disconnect();
-  }, [t]);
+  }, [threshold]);
   return [ref, v];
 }
 
-function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
+function FadeIn({ children, delay = 0, y = 14 }: { children: ReactNode; delay?: number; y?: number }) {
   const [ref, v] = useInView();
-  return <div ref={ref} style={{ opacity: v ? 1 : 0, transform: v ? "translateY(0)" : "translateY(20px)", transition: `opacity 0.6s ease ${delay}s, transform 0.6s ease ${delay}s` }}>{children}</div>;
+  return (
+    <div ref={ref} style={{
+      opacity: v ? 1 : 0, transform: v ? 'translateY(0)' : `translateY(${y}px)`,
+      transition: `opacity .55s cubic-bezier(.2,.6,.2,1) ${delay}s, transform .55s cubic-bezier(.2,.6,.2,1) ${delay}s`,
+    }}>{children}</div>
+  );
 }
 
-interface ReportItem {
-  id: number; title: string; category: string; severity: string; cost: string; icon: string;
-}
-interface QuoteInfo {
-  provider: string; rating: number; price: string; time: string;
-}
-
-// Static data outside component to avoid closure/re-render issues
-const DEMO_REPORT_ITEMS: ReportItem[] = [
-  { id: 1, title: "Missing GFCI outlets in bathrooms", category: "Electrical", severity: "urgent", cost: "$150\u2013$280", icon: "\u26A1" },
-  { id: 2, title: "Water heater approaching end of life", category: "Plumbing", severity: "recommended", cost: "$1,200\u2013$1,800", icon: "\uD83D\uDD25" },
-  { id: 3, title: "Roof flashing lifted near chimney", category: "Roofing", severity: "urgent", cost: "$300\u2013$600", icon: "\uD83C\uDFE0" },
-  { id: 4, title: "Slow drain in master bathroom", category: "Plumbing", severity: "recommended", cost: "$125\u2013$250", icon: "\uD83D\uDCA7" },
-  { id: 5, title: "HVAC filter heavily soiled", category: "HVAC", severity: "recommended", cost: "$65\u2013$120", icon: "\u2744\uFE0F" },
-  { id: 6, title: "Cracked caulking around tub surround", category: "General", severity: "monitor", cost: "$80\u2013$150", icon: "\uD83D\uDD27" },
-];
-
-const DEMO_QUOTE_DATA: Record<number, QuoteInfo> = {
-  1: { provider: "Coastal Electric", rating: 4.8, price: "$195", time: "Wednesday AM" },
-  3: { provider: "SD Roofing Pros", rating: 4.7, price: "$425", time: "Friday PM" },
-  4: { provider: "Rodriguez Plumbing", rating: 4.9, price: "$175", time: "Tomorrow 9\u201311 AM" },
+// ─── Demo data ───────────────────────────────────────────────────────
+const CATEGORIES: Record<string, { icon: string }> = {
+  Plumbing:   { icon: '💧' },
+  Electrical: { icon: '⚡' },
+  HVAC:       { icon: '❄️' },
+  Roofing:    { icon: '🏠' },
+  Structural: { icon: '🏗️' },
+  Appliances: { icon: '📦' },
+  Foundation: { icon: '🏛️' },
 };
 
-function InspectionDemo() {
-  const [step, setStep] = useState(0);
-  const [items, setItems] = useState<ReportItem[]>([]);
-  const [dispatching, setDispatching] = useState<number | null>(null);
-  const [quotes, setQuotes] = useState<Record<number, QuoteInfo>>({});
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+interface SampleItem { id: number; title: string; cat: string; sev: string; loc: string; cost: string; }
+const SAMPLE_ITEMS: SampleItem[] = [
+  { id: 1, title: 'Water heater drain pan rusted, active drip', cat: 'Plumbing',   sev: 'recommended', loc: 'Basement utility room', cost: '$250–$400' },
+  { id: 2, title: 'Missing GFCI outlets in two bathrooms',      cat: 'Electrical', sev: 'urgent',      loc: 'Bath 1 & 2',            cost: '$180–$320' },
+  { id: 3, title: 'Roof flashing lifted near chimney',          cat: 'Roofing',    sev: 'urgent',      loc: 'NE elevation',          cost: '$300–$600' },
+  { id: 4, title: 'HVAC condensate line clogged, slow drain',   cat: 'HVAC',       sev: 'recommended', loc: 'Attic air handler',     cost: '$140–$220' },
+  { id: 5, title: 'Cracked grout in primary shower surround',   cat: 'Plumbing',   sev: 'monitor',     loc: 'Primary bath',          cost: '$120–$180' },
+  { id: 6, title: 'Garbage disposal hum, no rotation',          cat: 'Appliances', sev: 'recommended', loc: 'Kitchen sink',          cost: '$160–$280' },
+  { id: 7, title: 'Foundation hairline crack, vertical',        cat: 'Foundation', sev: 'monitor',     loc: 'SW corner',             cost: '$0–$400' },
+];
 
+const sevPalette = (sev: string): { fg: string; bg: string; label: string } => {
+  if (sev === 'urgent')      return { fg: C.red,     bg: C.redSoft,                 label: 'Urgent' };
+  if (sev === 'recommended') return { fg: C.amber,   bg: C.amberSoft,               label: 'Recommended' };
+  return                            { fg: C.monitor, bg: 'rgba(155,148,144,.16)',   label: 'Monitor' };
+};
+
+const CARD: CSSProperties = {
+  background: C.white,
+  border: '1px solid rgba(0,0,0,.06)',
+  borderRadius: 14,
+  boxShadow: '0 12px 40px -20px rgba(0,0,0,.08)',
+};
+
+// ─── Atoms ───────────────────────────────────────────────────────────
+type PillTone = 'neutral' | 'orange' | 'green' | 'blue' | 'dark' | 'amber' | 'red';
+const PILL_TONES: Record<PillTone, { bg: string; fg: string }> = {
+  neutral: { bg: 'rgba(0,0,0,.05)', fg: C.muted },
+  orange:  { bg: C.orangeSoft, fg: C.orange },
+  green:   { bg: C.greenSoft, fg: C.green },
+  blue:    { bg: 'rgba(37,99,235,.10)', fg: C.inspectBlue },
+  dark:    { bg: C.dark, fg: '#fff' },
+  amber:   { bg: C.amberSoft, fg: C.amber },
+  red:     { bg: C.redSoft, fg: C.red },
+};
+function Pill({ children, tone = 'neutral', style }: { children: ReactNode; tone?: PillTone; style?: CSSProperties }) {
+  const t = PILL_TONES[tone];
+  return (
+    <span style={{
+      ...DM, fontSize: 11, fontWeight: 600, letterSpacing: '.02em',
+      background: t.bg, color: t.fg, padding: '4px 10px', borderRadius: 100,
+      display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', ...style,
+    }}>{children}</span>
+  );
+}
+
+function Eyebrow({ children, color = C.orange }: { children: ReactNode; color?: string }) {
+  return <span style={{ ...MO, fontSize: 11, fontWeight: 500, letterSpacing: '.18em', textTransform: 'uppercase', color }}>{children}</span>;
+}
+
+function PrimaryCTA({ children, onClick, size = 'lg', style, disabled = false }: { children: ReactNode; onClick?: () => void; size?: 'lg' | 'sm'; style?: CSSProperties; disabled?: boolean }) {
+  const sz = size === 'lg' ? { padding: '15px 28px', fontSize: 16 } : { padding: '11px 22px', fontSize: 14 };
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      ...DM, ...sz, fontWeight: 600, color: '#fff', background: disabled ? C.meta : C.orange,
+      border: 'none', borderRadius: 100, cursor: disabled ? 'not-allowed' : 'pointer',
+      boxShadow: disabled ? 'none' : '0 4px 24px rgba(232,99,43,.30)',
+      transition: 'background .2s, transform .2s',
+      ...style,
+    }}
+    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = C.orangeH; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+    onMouseLeave={e => { if (!disabled) { e.currentTarget.style.background = C.orange; e.currentTarget.style.transform = 'translateY(0)'; } }}
+    >{children}</button>
+  );
+}
+
+function SevDot({ sev, size = 8 }: { sev: string; size?: number }) {
+  const p = sevPalette(sev);
+  return <span style={{ display: 'inline-block', width: size, height: size, borderRadius: '50%', background: p.fg }} />;
+}
+
+// ─── Brand bits ──────────────────────────────────────────────────────
+function HomieInspectLogo() {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, lineHeight: 1 }}>
+      <span style={{ ...FR, fontWeight: 700, fontSize: 26, color: C.orange }}>homie</span>
+      <span style={{
+        ...DM, fontSize: 10, fontWeight: 700, letterSpacing: '.14em',
+        color: '#fff', background: C.inspectBlue, padding: '4px 8px', borderRadius: 100,
+      }}>INSPECT</span>
+    </span>
+  );
+}
+
+function Nav({ onUpload }: { onUpload: () => void }) {
+  return (
+    <nav style={{
+      position: 'sticky', top: 0, zIndex: 50, height: 64,
+      background: 'rgba(255,255,255,.92)',
+      backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+      borderBottom: '1px solid rgba(0,0,0,.05)',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 32px', ...DM,
+    }}>
+      <HomieInspectLogo />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+        {[['How it works','#how-it-works'],['Home IQ','#home-iq'],['FAQ','#faq']].map(([l, h]) => (
+          <a key={l} href={h} style={{ fontSize: 14, fontWeight: 500, color: C.muted, textDecoration: 'none' }}>{l}</a>
+        ))}
+        <a href="/inspect/inspectors" style={{ fontSize: 14, fontWeight: 500, color: C.muted, textDecoration: 'none' }}>For inspectors →</a>
+        <PrimaryCTA size="sm" onClick={onUpload}>Upload your inspection</PrimaryCTA>
+      </div>
+    </nav>
+  );
+}
+
+function HomieFooter() {
+  return (
+    <footer style={{ background: C.dark, padding: '64px 24px 40px', ...DM }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 40, marginBottom: 48 }}>
+          <div>
+            <HomieInspectLogo />
+            <p style={{ fontSize: 14, color: '#9B9490', lineHeight: 1.6, marginTop: 16, maxWidth: 220 }}>
+              AI-powered home inspection reports. Real items, real quotes, real benchmarks.
+            </p>
+          </div>
+          {[
+            { h: 'Product', items: [
+              ['For homeowners', '/inspect'],
+              ['For inspectors', '/inspect/inspectors'],
+              ['Home IQ', '#home-iq'],
+              ['Sample report', '#how-it-works'],
+            ]},
+            { h: 'Company', items: [['About','/'],['Blog','/'],['Careers','/'],['Contact','/']]},
+            { h: 'Legal', items: [['Privacy','/privacy'],['Terms','/terms'],['Security','/security'],['Trust','/trust']]},
+          ].map(col => (
+            <div key={col.h}>
+              <h4 style={{ fontSize: 12, fontWeight: 700, color: '#D3CEC9', letterSpacing: '.14em', textTransform: 'uppercase', margin: '0 0 16px' }}>{col.h}</h4>
+              {col.items.map(([l, h]) => (
+                <a key={l} href={h} style={{ display: 'block', fontSize: 14, color: '#9B9490', textDecoration: 'none', marginBottom: 10 }}>{l}</a>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <span style={{ fontSize: 13, color: '#9B9490' }}>© {new Date().getFullYear()} Homie. Your home's best friend.</span>
+          <span style={{ fontSize: 13, color: '#9B9490' }}>Made with love in San Diego 🌴</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+// ─── Hero — PDF→items morph viz ──────────────────────────────────────
+function HeroPDFMorph() {
+  const [phase, setPhase] = useState<0 | 1>(0);
   useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (initialTimerRef.current) clearTimeout(initialTimerRef.current);
-    };
+    const a = setInterval(() => setPhase(p => p === 0 ? 1 : 0), 4200);
+    return () => clearInterval(a);
   }, []);
 
-  const parseReport = () => {
-    setStep(1);
-    setItems([]);
-    let i = 0;
-    const addNext = () => {
-      if (i >= DEMO_REPORT_ITEMS.length) { setStep(2); return; }
-      const item = DEMO_REPORT_ITEMS[i];
-      setItems(prev => [...prev, item]);
-      i++;
-      timerRef.current = setTimeout(addNext, 400);
-    };
-    initialTimerRef.current = setTimeout(addNext, 600);
-  };
-
-  const getQuote = (id: number) => {
-    setDispatching(id);
-    setTimeout(() => {
-      setDispatching(null);
-      const q = DEMO_QUOTE_DATA[id];
-      if (q) setQuotes(prev => ({ ...prev, [id]: q }));
-    }, 2000);
-  };
-
-  const reset = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (initialTimerRef.current) clearTimeout(initialTimerRef.current);
-    setStep(0); setItems([]); setDispatching(null); setQuotes({});
-  };
-
-  const sevColor = (s: string) => s === "urgent" ? "#E24B4A" : s === "recommended" ? "#EF9F27" : C.gray;
-  const sevBg = (s: string) => s === "urgent" ? "#FCEBEB" : s === "recommended" ? "#FAEEDA" : C.warm;
-
   return (
-    <section style={{ background: C.white, padding: "96px 24px" }}>
-      {/* Keyframes at section level so they persist across step changes */}
+    <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto' }}>
       <style>{`
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes hi-pulseDot { 0%,100% { opacity:1 } 50% { opacity:.35 } }
+        @keyframes hi-scanLine { 0% { top: 0 } 100% { top: 100% } }
       `}</style>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <div style={{
+        position: 'absolute', inset: -16, borderRadius: 24,
+        background: 'linear-gradient(135deg, rgba(232,99,43,.10), rgba(27,158,119,.06))',
+        filter: 'blur(28px)', opacity: 0.8,
+      }}/>
+      <div style={{ position: 'relative', perspective: 1400, height: 520 }}>
+        {/* PDF page */}
+        <div style={{
+          position: 'absolute', inset: 0, background: '#fff', borderRadius: 16,
+          boxShadow: '0 30px 80px -28px rgba(0,0,0,.18), 0 1px 0 rgba(0,0,0,.04)',
+          padding: '28px 26px', overflow: 'hidden',
+          transformOrigin: 'center left',
+          transform: phase === 0 ? 'rotateY(0deg) translateX(0)' : 'rotateY(-22deg) translateX(-22px)',
+          opacity: phase === 0 ? 1 : 0.35,
+          transition: 'all .9s cubic-bezier(.2,.6,.2,1)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${C.line}`, paddingBottom: 10, marginBottom: 14 }}>
+            <span style={{ ...MO, fontSize: 10, color: C.meta, letterSpacing: '.16em' }}>PROPERTY INSPECTION REPORT</span>
+            <span style={{ ...MO, fontSize: 10, color: C.meta }}>p. 47 / 92</span>
+          </div>
+          <div style={{ ...DM, fontSize: 11, color: C.dark, lineHeight: 1.65, position: 'relative' }}>
+            <div style={{ ...FR, fontSize: 14, fontWeight: 700, marginBottom: 6 }}>4.3 — Plumbing — Water Heater</div>
+            {[
+              'The water heater (Bradford White, 50-gal, mfg. 2011) is located in the basement utility room. Drain pan exhibits significant rust along the front edge with what appears to be active drip activity from the temperature/pressure relief discharge tube.',
+              'Recommend service by a licensed plumber to evaluate the T&P valve and verify drain pan integrity. Replacement of the drain pan and assessment of the unit\'s remaining service life is advised.',
+              'Section 4.4 — Plumbing — Fixtures: cracked grout observed in primary shower surround at lower courses; recommend re-grouting to prevent moisture intrusion behind the tile.',
+            ].map((t, i) => (
+              <p key={i} style={{ margin: '0 0 8px', color: i === 1 ? C.muted : C.dark }}>{t}</p>
+            ))}
+            {phase === 0 && (
+              <div style={{
+                position: 'absolute', left: 0, right: 0, height: 2,
+                background: `linear-gradient(90deg, transparent, ${C.orange}, transparent)`,
+                animation: 'hi-scanLine 2.4s ease-in-out infinite',
+                opacity: 0.55,
+              }}/>
+            )}
+            <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: phase === 0 ? 0.9 : 0, transition: 'opacity .5s' }}>
+              <rect x="22" y="78" width="380" height="14" rx="3" fill={C.orange} fillOpacity="0.10"/>
+              <rect x="22" y="146" width="320" height="14" rx="3" fill={C.amber} fillOpacity="0.10"/>
+            </svg>
+          </div>
+        </div>
+
+        {/* Parsed item card stack */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          opacity: phase === 1 ? 1 : 0,
+          transform: phase === 1 ? 'translateX(0)' : 'translateX(28px)',
+          transition: 'all .9s cubic-bezier(.2,.6,.2,1)',
+          display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, padding: '0 6px',
+        }}>
+          {SAMPLE_ITEMS.slice(0, 5).map((it, i) => {
+            const p = sevPalette(it.sev);
+            return (
+              <div key={it.id} style={{
+                ...CARD, padding: '12px 14px', display: 'grid',
+                gridTemplateColumns: '22px 1fr auto', gap: 12, alignItems: 'center',
+                transform: phase === 1 ? 'translateY(0)' : 'translateY(8px)',
+                opacity: phase === 1 ? 1 : 0,
+                transition: `all .6s cubic-bezier(.2,.6,.2,1) ${0.15 + i * 0.08}s`,
+              }}>
+                <span style={{ fontSize: 16 }}>{CATEGORIES[it.cat]?.icon}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...DM, fontSize: 12.5, fontWeight: 600, color: C.dark, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                    <Pill style={{ background: p.bg, color: p.fg }}><SevDot sev={it.sev}/> {p.label}</Pill>
+                    <Pill>{it.cat}</Pill>
+                  </div>
+                </div>
+                <span style={{ ...FR, fontWeight: 700, fontSize: 13, color: C.dark }}>{it.cost}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Floating count chip */}
+        <div style={{
+          position: 'absolute', top: -14, right: -14,
+          background: C.dark, color: '#fff', padding: '8px 14px',
+          borderRadius: 100, ...DM, fontSize: 12, fontWeight: 600,
+          boxShadow: '0 12px 30px -8px rgba(0,0,0,.25)',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: C.green, animation: 'hi-pulseDot 1.4s infinite' }}/>
+          {phase === 0 ? '92 pages · parsing' : '34 items · ready'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HeroA — A1 from the design ──────────────────────────────────────
+type Audience = 'buyer' | 'owner';
+function HeroA({ headline, sub, audience, setAudience, onUpload }: {
+  headline: string; sub: string; audience: Audience; setAudience: (a: Audience) => void; onUpload: () => void;
+}) {
+  return (
+    <section style={{
+      background: `linear-gradient(180deg, #fff 0%, ${C.warm} 80%, ${C.warm} 100%)`,
+      padding: '72px 32px 96px', position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ position: 'absolute', top: -180, right: -160, width: 540, height: 540, borderRadius: '50%', background: C.orange, opacity: 0.04, filter: 'blur(2px)' }}/>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
+        <div>
+          <FadeIn>
+            <div style={{ display: 'inline-flex', gap: 4, padding: 4, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 100, marginBottom: 24 }}>
+              {(['buyer','owner'] as Audience[]).map(a => (
+                <button key={a} onClick={() => setAudience(a)} style={{
+                  ...DM, fontSize: 12, fontWeight: 600, padding: '6px 14px', border: 'none', borderRadius: 100, cursor: 'pointer',
+                  background: audience === a ? C.dark : 'transparent',
+                  color: audience === a ? '#fff' : C.muted,
+                  transition: 'all .2s',
+                }}>{a === 'buyer' ? 'Buying a home' : 'I own this home'}</button>
+              ))}
+            </div>
+          </FadeIn>
+          <FadeIn delay={0.05}>
+            <h1 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(40px,5vw,64px)', lineHeight: 1.04, letterSpacing: '-0.02em', color: C.dark, margin: 0, textWrap: 'balance' }}>
+              {headline}
+            </h1>
+          </FadeIn>
+          <FadeIn delay={0.12}>
+            <p style={{ ...DM, fontSize: 19, lineHeight: 1.55, color: C.muted, maxWidth: 520, margin: '20px 0 32px', textWrap: 'pretty' }}>
+              {sub}
+            </p>
+          </FadeIn>
+          <FadeIn delay={0.18}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <PrimaryCTA onClick={onUpload}>Upload your inspection</PrimaryCTA>
+              <span style={{ ...DM, fontSize: 13, color: C.meta, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 14 }}>📄</span> PDF or HTML · parsed in 2–5 min · no signup
+              </span>
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <a href="/inspect/inspectors" onClick={() => trackEvent('inspect_landing_cta_clicked', { cta_location: 'hero_inspector_link' })} style={{ ...DM, fontSize: 13, color: C.muted, textDecoration: 'none' }}>
+                Are you a home inspector? <span style={{ color: C.inspectBlue, fontWeight: 600 }}>See the partner program →</span>
+              </a>
+            </div>
+          </FadeIn>
+          <FadeIn delay={0.28}>
+            <div style={{ display: 'flex', gap: 32, marginTop: 48, flexWrap: 'wrap' }}>
+              {(audience === 'owner' ? [
+                ['9 days', 'avg. days to first offer'],
+                ['$4,820', 'credits avoided at table'],
+                ['34 items', 'parsed per report'],
+              ] : [
+                ['$8,400', 'avg. negotiation credit'],
+                ['2 hrs', 'report → real quotes'],
+                ['34 items', 'parsed per report'],
+              ]).map(([s, l]) => (
+                <div key={l}>
+                  <div style={{ ...FR, fontWeight: 700, fontSize: 30, color: C.orange, lineHeight: 1 }}>{s}</div>
+                  <div style={{ ...DM, fontSize: 13, color: C.meta, marginTop: 4 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          </FadeIn>
+        </div>
+        <div style={{ justifySelf: 'center', width: '100%', maxWidth: 520 }}>
+          <FadeIn delay={0.2} y={20}>
+            <HeroPDFMorph />
+          </FadeIn>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── ModulesC — C3: three product modules ────────────────────────────
+function ItemsPreview() {
+  return (
+    <div style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 16px 40px -16px rgba(0,0,0,.12)' }}>
+      <div style={{ padding: '10px 14px', background: '#fbfaf7', borderBottom: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ ...DM, fontSize: 11, fontWeight: 600, color: C.dark }}>34 items · sorted by severity</span>
+        <span style={{ ...DM, fontSize: 11, color: C.meta }}>4 urgent · 12 recommended</span>
+      </div>
+      {SAMPLE_ITEMS.slice(0, 6).map((it, i) => {
+        const p = sevPalette(it.sev);
+        return (
+          <div key={it.id} style={{ display: 'grid', gridTemplateColumns: '8px 1fr auto auto', gap: 12, alignItems: 'center', padding: '10px 14px', borderBottom: i < 5 ? `1px solid ${C.line}` : 'none' }}>
+            <span style={{ width: 4, height: 28, borderRadius: 2, background: p.fg }}/>
+            <div>
+              <div style={{ ...FR, fontSize: 13, fontWeight: 600, color: C.dark, letterSpacing: '-0.005em' }}>{it.title}</div>
+              <div style={{ ...DM, fontSize: 10, color: C.meta }}>{it.cat} · {it.loc}</div>
+            </div>
+            <span style={{ ...DM, fontSize: 9, fontWeight: 600, color: p.fg, background: p.bg, padding: '2px 7px', borderRadius: 100 }}>{p.label}</span>
+            <span style={{ ...FR, fontSize: 12, fontWeight: 600, color: C.dark, minWidth: 70, textAlign: 'right' }}>{it.cost}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function QuotesPreview() {
+  const provs = [
+    { n: 'Atlas Plumbing',   s: '4.8★ · 142 jobs', p: '$295', when: 'Tomorrow 9–11 AM', best: true },
+    { n: 'Bayside Plumbers', s: '4.7★ · 89 jobs',  p: '$340', when: 'Wed 10 AM' },
+    { n: 'Coastal Repair',   s: '4.6★ · 211 jobs', p: '$385', when: 'Thu 1 PM' },
+  ];
+  return (
+    <div style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, boxShadow: '0 16px 40px -16px rgba(0,0,0,.12)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div>
+          <div style={{ ...FR, fontSize: 15, fontWeight: 700, color: C.dark, letterSpacing: '-0.005em' }}>3 quotes for: Water heater drain pan</div>
+          <div style={{ ...DM, fontSize: 11, color: C.meta, marginTop: 2 }}>Dispatched 4 hrs ago · all licensed in San Diego County</div>
+        </div>
+        <Pill style={{ background: 'rgba(27,158,119,.10)', color: C.green }}>● Live</Pill>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {provs.map(p => (
+          <div key={p.n} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 14, alignItems: 'center', padding: '12px 14px', border: `1px solid ${p.best ? C.orange : C.line}`, borderRadius: 10, background: p.best ? 'rgba(232,99,43,.04)' : '#fff' }}>
+            <span style={{ width: 36, height: 36, borderRadius: '50%', background: C.line, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🔧</span>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ ...FR, fontSize: 14, fontWeight: 700, color: C.dark }}>{p.n}</span>
+                {p.best && <span style={{ ...MO, fontSize: 9, fontWeight: 700, color: C.orange, letterSpacing: '.12em' }}>RECOMMENDED</span>}
+              </div>
+              <div style={{ ...DM, fontSize: 11, color: C.meta }}>{p.s} · {p.when}</div>
+            </div>
+            <div style={{ ...FR, fontSize: 18, fontWeight: 700, color: C.dark }}>{p.p}</div>
+            <button style={{ ...DM, fontSize: 12, fontWeight: 600, background: p.best ? C.orange : '#fff', color: p.best ? '#fff' : C.dark, border: p.best ? 'none' : `1px solid ${C.line}`, padding: '7px 14px', borderRadius: 8, cursor: 'pointer' }}>{p.best ? 'Book' : 'View'}</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HomeIQPreviewC() {
+  const rows: Array<[string, number, string]> = [
+    ['💧 Plumbing',   62, C.amber],
+    ['🏠 Roofing',    78, C.green],
+    ['❄️ HVAC',       88, C.green],
+    ['⚡ Electrical', 58, C.amber],
+    ['🏗️ Structural', 82, C.green],
+    ['📦 Appliances', 70, C.green],
+  ];
+  return (
+    <div style={{ background: `linear-gradient(135deg, ${C.dark}, #2c2724)`, borderRadius: 14, padding: 20, color: '#fff', boxShadow: '0 16px 40px -16px rgba(0,0,0,.20)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'center' }}>
+        <div style={{ position: 'relative', aspectRatio: '1 / 1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="100%" height="100%" viewBox="0 0 200 200">
+            <circle cx="100" cy="100" r="84" fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="14"/>
+            <circle cx="100" cy="100" r="84" fill="none" stroke={C.orange} strokeWidth="14" strokeDasharray={`${(72/100) * 528} 528`} strokeLinecap="round" transform="rotate(-90 100 100)"/>
+          </svg>
+          <div style={{ position: 'absolute', textAlign: 'center' }}>
+            <div style={{ ...FR, fontSize: 54, fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.02em' }}>72</div>
+            <div style={{ ...MO, fontSize: 10, letterSpacing: '.16em', color: 'rgba(255,255,255,.6)', marginTop: 4 }}>HOME IQ</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {rows.map(([n, v, col]) => (
+            <div key={n} style={{ display: 'grid', gridTemplateColumns: '1fr 60px 26px', gap: 8, alignItems: 'center' }}>
+              <span style={{ ...DM, fontSize: 11, color: 'rgba(255,255,255,.85)' }}>{n}</span>
+              <div style={{ height: 5, background: 'rgba(255,255,255,.08)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ width: `${v}%`, height: '100%', background: col, borderRadius: 3 }}/>
+              </div>
+              <span style={{ ...MO, fontSize: 10, color: 'rgba(255,255,255,.6)', textAlign: 'right' }}>{v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.10)', display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ ...DM, fontSize: 11, color: 'rgba(255,255,255,.65)' }}>Better than 64% of 1965-built homes in 92103</span>
+        <span style={{ ...DM, fontSize: 11, color: C.orange, fontWeight: 600 }}>+8 with one fix →</span>
+      </div>
+    </div>
+  );
+}
+
+function ModulesC() {
+  const mods = [
+    { label: '01 · Items',
+      title: 'Every finding becomes a line item',
+      desc: 'A 92-page narrative becomes 34 actionable items — each tagged with severity, category, location, and cost range.',
+      color: C.orange,
+      preview: <ItemsPreview/> },
+    { label: '02 · Quotes',
+      title: 'Real prices from real local pros',
+      desc: 'Tap any item and Homie\'s AI dispatches local providers. Quotes arrive in hours — not weeks of phone tag.',
+      color: C.inspectBlue,
+      preview: <QuotesPreview/> },
+    { label: '03 · Home IQ',
+      title: 'A score for every home, system, and component',
+      desc: 'Public datasets benchmark your home against millions of others. See your weakest system and the one fix that lifts it most.',
+      color: C.green,
+      preview: <HomeIQPreviewC/> },
+  ];
+  return (
+    <section id="how-it-works" style={{ background: '#fff', padding: '80px 28px' }}>
+      <div style={{ maxWidth: 1340, margin: '0 auto' }}>
         <FadeIn>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.green, letterSpacing: 1, textTransform: "uppercase" }}>See it in action</span>
-            <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "12px 0 8px" }}>From inspection report to real quotes</h2>
-            <p style={{ ...dm, fontSize: 16, color: C.gray }}>Click through the demo below</p>
+          <div style={{ textAlign: 'center', marginBottom: 56 }}>
+            <Eyebrow color={C.orange}>The product</Eyebrow>
+            <h2 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(36px,4.6vw,56px)', color: C.dark, margin: '14px 0 14px', lineHeight: 1.05, letterSpacing: '-0.02em', textWrap: 'balance' }}>
+              Three modules. One link.
+            </h2>
+            <p style={{ ...DM, fontSize: 17, color: C.muted, maxWidth: 640, margin: '0 auto', textWrap: 'pretty' }}>
+              Everything we do feeds one URL your inspector sends you within 5 minutes.
+            </p>
           </div>
         </FadeIn>
-        <FadeIn delay={0.15}>
-          <div style={{ maxWidth: 520, margin: "0 auto" }}>
-            {step === 0 && (
-              <div style={{ background: C.warm, borderRadius: 24, padding: "48px 32px", textAlign: "center" }}>
-                <div style={{ width: 72, height: 72, borderRadius: 16, background: C.white, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>
-                  {"\uD83D\uDCCB"}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {mods.map((m, i) => (
+            <FadeIn key={m.label} delay={i * 0.06}>
+              <div style={{ display: 'grid', gridTemplateColumns: i % 2 === 0 ? '.85fr 1.15fr' : '1.15fr .85fr', gap: 32, alignItems: 'center', background: '#fbfaf7', border: `1px solid ${C.line}`, borderRadius: 18, padding: 32, overflow: 'hidden' }}>
+                <div style={{ order: i % 2 === 0 ? 1 : 2, padding: '8px 16px' }}>
+                  <div style={{ ...MO, fontSize: 11, letterSpacing: '.18em', color: m.color, fontWeight: 700 }}>{m.label}</div>
+                  <h3 style={{ ...FR, fontSize: 32, fontWeight: 700, color: C.dark, margin: '10px 0 12px', letterSpacing: '-0.015em', lineHeight: 1.1, textWrap: 'balance' }}>{m.title}</h3>
+                  <p style={{ ...DM, fontSize: 16, color: C.muted, margin: '0 0 18px', lineHeight: 1.6, textWrap: 'pretty' }}>{m.desc}</p>
+                  <a href="#how-it-works" style={{ ...DM, fontSize: 13, fontWeight: 600, color: m.color, textDecoration: 'none', borderBottom: `2px solid ${m.color}`, paddingBottom: 1 }}>See it live →</a>
                 </div>
-                <h3 style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, margin: "0 0 8px" }}>Upload inspection report</h3>
-                <p style={{ ...dm, fontSize: 14, color: C.gray, margin: "0 0 24px" }}>Homie's AI reads the report and extracts every actionable item</p>
-                <button onClick={() => { trackEvent('inspect_landing_cta_clicked', { cta_location: 'parse_sample_demo' }); parseReport(); }} style={{ ...dm, fontSize: 16, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "14px 36px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = C.orangeDark} onMouseLeave={e => e.currentTarget.style.background = C.orange}>Parse sample report</button>
+                <div style={{ order: i % 2 === 0 ? 2 : 1 }}>{m.preview}</div>
               </div>
-            )}
+            </FadeIn>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-            {step >= 1 && (
-              <div style={{ background: C.white, borderRadius: 24, border: `1px solid ${C.grayLight}`, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.06)" }}>
-                <div style={{ background: C.warm, padding: "16px 24px", borderBottom: `1px solid ${C.grayLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ ...fr, fontWeight: 700, fontSize: 18, color: C.orange }}>homie</span>
-                    <span style={{ ...dm, fontSize: 11, color: C.gray }}>inspection report</span>
-                  </div>
-                  <span style={{ ...dm, fontSize: 12, color: C.gray }}>{items.length} items found</span>
-                </div>
-                <div style={{ padding: "16px 20px" }}>
-                  {step === 1 && items.length < DEMO_REPORT_ITEMS.length && (
-                    <div style={{ textAlign: "center", padding: 12, ...dm, fontSize: 13, color: C.orange, fontWeight: 500 }}>
-                      <span style={{ animation: "pulse 1.5s ease-in-out infinite", display: "inline-block" }}>Parsing inspection report...</span>
-                    </div>
-                  )}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {items.map((item, i) => (
-                      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, border: `1px solid ${C.grayLight}`, background: quotes[item.id] ? C.greenLight : C.white, animation: "fadeUp 0.3s ease", transition: "background 0.3s" }}>
-                        <span style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.dark }}>{item.title}</div>
-                          <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-                            <span style={{ ...dm, fontSize: 10, fontWeight: 600, color: sevColor(item.severity), background: sevBg(item.severity), padding: "2px 8px", borderRadius: 100 }}>{item.severity}</span>
-                            <span style={{ ...dm, fontSize: 10, color: C.gray, background: C.warm, padding: "2px 8px", borderRadius: 100 }}>{item.category}</span>
-                            <span style={{ ...dm, fontSize: 10, fontWeight: 600, color: C.dark, background: C.warm, padding: "2px 8px", borderRadius: 100 }}>{item.cost}</span>
-                          </div>
-                          {quotes[item.id] && (
-                            <div style={{ marginTop: 6, padding: "6px 10px", background: C.white, borderRadius: 8, border: `1px solid #9FE1CB` }}>
-                              <div style={{ ...dm, fontSize: 11, color: "#085041" }}>
-                                <span style={{ fontWeight: 600 }}>{quotes[item.id].provider}</span> \u2022 {"\u2B50"} {quotes[item.id].rating} \u2022 <span style={{ fontWeight: 700 }}>{quotes[item.id].price}</span> \u2022 {quotes[item.id].time}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        {step === 2 && !quotes[item.id] && (
-                          <button onClick={() => getQuote(item.id)} disabled={dispatching !== null} style={{ ...dm, fontSize: 11, fontWeight: 600, color: dispatching === item.id ? C.gray : C.orange, background: dispatching === item.id ? C.warm : "transparent", border: dispatching === item.id ? "none" : `1px solid ${C.orange}`, borderRadius: 100, padding: "6px 14px", cursor: dispatching !== null ? "not-allowed" : "pointer", whiteSpace: "nowrap", flexShrink: 0, transition: "all 0.2s" }}>
-                            {dispatching === item.id ? "Finding..." : "Get quote"}
-                          </button>
-                        )}
-                        {quotes[item.id] && (
-                          <span style={{ ...dm, fontSize: 11, color: C.green, fontWeight: 600, flexShrink: 0 }}>{"\u2713"} Quoted</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {step === 2 && Object.keys(quotes).length > 0 && (
-                    <div style={{ marginTop: 16, padding: "14px 16px", background: C.warm, borderRadius: 12, textAlign: "center" }}>
-                      <div style={{ ...dm, fontSize: 13, color: C.gray }}>Quotes received so far</div>
-                      <div style={{ ...fr, fontSize: 28, fontWeight: 700, color: C.dark, marginTop: 4 }}>
-                        ${Object.values(quotes).reduce((sum, q) => sum + parseInt(q.price.replace("$", "").replace(",", "")), 0).toLocaleString()}
-                      </div>
-                      <div style={{ ...dm, fontSize: 12, color: C.green, fontWeight: 500, marginTop: 4 }}>Use this number in your negotiation</div>
-                    </div>
-                  )}
-                  {step === 2 && (
-                    <div style={{ textAlign: "center", marginTop: 12 }}>
-                      <button onClick={reset} style={{ ...dm, fontSize: 12, color: C.orange, background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}>Restart demo</button>
-                    </div>
-                  )}
-                </div>
+// ─── NegotiationC — C4: audience-aware doc card ──────────────────────
+function NegotiationC({ audience }: { audience: Audience }) {
+  const isOwner = audience === 'owner';
+  const bullets: Array<[string, string]> = isOwner ? [
+    ['📎', '14 line items, with status: Fixed / Credited / As-is'],
+    ['🧾', '9 fixed at $4,820 — receipts attached'],
+    ['💵', '5 credited at $4,380 — quoted by your pros'],
+    ['🔁', 'Update and re-export anytime as offers come in'],
+  ] : [
+    ['📎', '14 line items, each with quoted price'],
+    ['💵', '$11,200 total credit requested'],
+    ['📄', 'Auto-formatted to match buyer/seller addendum'],
+    ['🔁', 'Edit and re-export anytime'],
+  ];
+  const docRows: Array<[string, string]> = isOwner ? [
+    ['Water heater drain pan rusted', 'Fixed · $295'],
+    ['GFCI in two bathrooms',         'Fixed · $180'],
+    ['Re-flash chimney saddle',       'Credit · $840'],
+    ['Garbage disposal replacement',  'Fixed · $220'],
+    ['+ 10 more items',               '$8,265'],
+  ] : [
+    ['Water heater drain pan rusted', '$295'],
+    ['GFCI in two bathrooms',         '$180'],
+    ['Re-flash chimney saddle',       '$840'],
+    ['Garbage disposal replacement',  '$220'],
+    ['+ 10 more items',               '$9,665'],
+  ];
+  return (
+    <section style={{ background: C.warm, padding: '80px 28px' }}>
+      <div style={{ maxWidth: 1340, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
+        <FadeIn>
+          <Eyebrow color={C.orange}>{isOwner ? 'For sellers' : 'For buyers'}</Eyebrow>
+          <h2 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(32px,4vw,52px)', color: C.dark, margin: '14px 0 14px', lineHeight: 1.05, letterSpacing: '-0.02em', textWrap: 'balance' }}>
+            {isOwner
+              ? <>List with a <span style={{ color: C.orange }}>packet,</span> not a prayer.</>
+              : <>Walk into negotiation with a <span style={{ color: C.orange }}>number,</span> not a hope.</>}
+          </h2>
+          <p style={{ ...DM, fontSize: 16, color: C.muted, lineHeight: 1.6, marginBottom: 24, textWrap: 'pretty' }}>
+            {isOwner
+              ? 'Decide what to fix, what to credit, and what to disclose as-is. Homie generates a buyer-ready disclosure packet with line-item quotes and receipts attached, so questions land as math, not as surprises.'
+              : 'Pick the items, pick the format (price reduction, repair credit, escrow holdback). Homie generates a polished repair-request package with line-item quotes attached.'}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 440 }}>
+            {bullets.map(([i, t]) => (
+              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#fff', border: `1px solid ${C.line}`, borderRadius: 10 }}>
+                <span style={{ fontSize: 18 }}>{i}</span>
+                <span style={{ ...DM, fontSize: 14, color: C.dark }}>{t}</span>
               </div>
-            )}
+            ))}
+          </div>
+        </FadeIn>
+        <FadeIn delay={0.1}>
+          <div style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 14, padding: '28px 32px', boxShadow: '0 30px 60px -28px rgba(0,0,0,.12)', maxWidth: 520, marginLeft: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${C.line}`, paddingBottom: 14, marginBottom: 14 }}>
+              <div>
+                <div style={{ ...MO, fontSize: 10, letterSpacing: '.16em', color: C.meta }}>{isOwner ? 'PRE-LISTING PACKET · DRAFT' : 'REPAIR REQUEST · DRAFT'}</div>
+                <div style={{ ...FR, fontSize: 18, fontWeight: 700, color: C.dark, marginTop: 4 }}>4825 Maple Ave</div>
+              </div>
+              <Pill style={{ background: 'rgba(27,158,119,.10)', color: C.green }}>● Ready</Pill>
+            </div>
+            {docRows.map(([n, p], i, a) => (
+              <div key={n} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < a.length - 1 ? `1px solid ${C.line}` : 'none', ...DM, fontSize: 13, color: i === a.length - 1 ? C.meta : C.dark, fontStyle: i === a.length - 1 ? 'italic' : 'normal' }}>
+                <span>{n}</span>
+                <span style={{ ...FR, fontWeight: 600 }}>{p}</span>
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0 0', marginTop: 8, borderTop: `2px solid ${C.dark}` }}>
+              <span style={{ ...FR, fontSize: 16, fontWeight: 700, color: C.dark }}>{isOwner ? 'Total prep + credits' : 'Total credit requested'}</span>
+              <span style={{ ...FR, fontSize: 22, fontWeight: 700, color: C.orange }}>{isOwner ? '$9,200' : '$11,200'}</span>
+            </div>
           </div>
         </FadeIn>
       </div>
@@ -198,271 +625,211 @@ function InspectionDemo() {
   );
 }
 
-/** Auto-looping hero visual: PDF being parsed (phase 0) flips to a stack
- *  of structured item cards (phase 1) every ~4s. Distinct from the
- *  click-driven InspectionDemo further down the page — that one is
- *  interactive ("Parse sample report" → quote each); this one is
- *  ambient. Uses the first 5 entries from DEMO_REPORT_ITEMS so the
- *  cards visually match what a real parsed report shows. */
-function HeroDemo() {
-  const [phase, setPhase] = useState<0 | 1>(0);
-
-  useEffect(() => {
-    const t = setInterval(() => setPhase(p => (p === 0 ? 1 : 0)), 4500);
-    return () => clearInterval(t);
-  }, []);
-
-  const items = DEMO_REPORT_ITEMS.slice(0, 5);
-  const sevColor = (s: string) => s === 'urgent' ? '#E24B4A' : s === 'recommended' ? '#EF9F27' : C.gray;
-  const sevBg    = (s: string) => s === 'urgent' ? '#FCEBEB' : s === 'recommended' ? '#FAEEDA' : C.warm;
-
+// ─── TiersB — B5: editorial 3-up with dark "popular" tier ────────────
+function TiersB() {
+  const tiers = [
+    { name: 'Essential',    sub: 'Understand what\'s in your report', f: ['Item details', 'Severity ratings', 'AI cost estimates', 'Category breakdown'], pop: false },
+    { name: 'Professional', sub: 'Real numbers from real pros',       f: ['Everything in Essential', 'Dispatch + provider quotes', 'Value-impact estimates', 'Lender flags'], pop: true },
+    { name: 'Premium',      sub: 'Negotiate, plan, benchmark',        f: ['Everything in Professional', 'Negotiation documents', 'Maintenance timeline', 'Priority dispatch', 'Full Home IQ'], pop: false },
+  ];
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: 540, margin: '0 auto', aspectRatio: '5 / 6', minHeight: 480 }}>
-      <style>{`
-        @keyframes hero-scan {
-          0%   { transform: translateY(-8%); opacity: 0; }
-          12%  { opacity: 1; }
-          88%  { opacity: 1; }
-          100% { transform: translateY(420px); opacity: 0; }
-        }
-        @keyframes hero-mark {
-          from { background-size: 0% 100%; }
-          to   { background-size: 100% 100%; }
-        }
-        @keyframes hero-pdf-in {
-          from { opacity: 0; transform: rotate(1.5deg) scale(0.97) translateY(8px); }
-          to   { opacity: 1; transform: rotate(0) scale(1) translateY(0); }
-        }
-        @keyframes hero-pdf-out {
-          from { opacity: 1; transform: rotate(0) scale(1) translateY(0); }
-          to   { opacity: 0; transform: rotate(-2deg) scale(0.96) translateY(-12px); }
-        }
-        @keyframes hero-card-in {
-          from { opacity: 0; transform: translateY(14px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes hero-chip-pulse {
-          0%, 100% { opacity: 1; }
-          50%      { opacity: 0.35; }
-        }
-        .hero-mark {
-          background-image: linear-gradient(120deg, ${C.orange}33 0%, ${C.orange}33 100%);
-          background-repeat: no-repeat;
-          background-position: 0 88%;
-          background-size: 0% 32%;
-          padding: 0 2px;
-          animation: hero-mark 0.8s ease-out forwards;
-        }
-      `}</style>
-
-      {/* Backing card — provides the elevated frame. The PDF + items both
-          live inside this card so the visual feels like one device. */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: C.white, borderRadius: 24,
-        border: `1px solid ${C.grayLight}`,
-        boxShadow: '0 24px 60px -24px rgba(45,41,38,0.18), 0 8px 24px -12px rgba(45,41,38,0.08)',
-        overflow: 'hidden',
-      }}>
-        {/* Floating chip — top-right, state-aware */}
-        <div style={{
-          position: 'absolute', top: 14, right: 14, zIndex: 5,
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '6px 12px', borderRadius: 100,
-          background: C.dark, color: C.white,
-          ...dm, fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
-        }}>
-          <span style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: phase === 0 ? '#EF9F27' : C.green,
-            animation: phase === 0 ? 'hero-chip-pulse 1.4s ease-in-out infinite' : 'none',
-          }} />
-          {phase === 0 ? '92 pages · parsing' : '34 items · ready'}
-        </div>
-
-        {/* Phase 0 — PDF mock with scan line + highlight strokes.
-            Cross-fades with the items overlay on a plain CSS transition;
-            no React keys or keyframe juggling. */}
-        <div
-          style={{
-            position: 'absolute', inset: 0,
-            opacity: phase === 0 ? 1 : 0,
-            transform: phase === 0 ? 'rotate(0) scale(1)' : 'rotate(-1.5deg) scale(0.97)',
-            transition: 'opacity 0.45s ease, transform 0.5s ease',
-            transformOrigin: 'center center',
-            pointerEvents: phase === 0 ? 'auto' : 'none',
-          }}
-        >
-          {/* Inspection-report header bar */}
-          <div style={{
-            background: C.warm, padding: '14px 22px',
-            borderBottom: `1px solid ${C.grayLight}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span style={{ ...fr, fontWeight: 700, fontSize: 14, color: C.dark, letterSpacing: 0.3 }}>
-                PROPERTY INSPECTION
-              </span>
-              <span style={{ ...dm, fontSize: 10, color: C.gray, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                · Apr 2026
-              </span>
-            </div>
-            <span style={{ ...dm, fontSize: 10, color: C.gray }}>Page 12 / 92</span>
-          </div>
-
-          {/* Document body — three short sections, each with a highlighted action phrase */}
-          <div style={{ padding: '24px 26px', position: 'relative' }}>
-            {[
-              { heading: 'Plumbing', body: 'Water heater located in the basement utility room shows corrosion at the base. Active drip observed from the drain pan.', mark: 'Recommend replacement within 12 months.' },
-              { heading: 'Electrical', body: 'Outlets in the master bath and hallway bath are not GFCI-protected.', mark: 'Replace with GFCI receptacles.' },
-              { heading: 'Roofing', body: 'Flashing around the chimney has lifted in three places.', mark: 'Re-flash before next rainy season to prevent intrusion.' },
-            ].map((sec, i) => (
-              <div key={i} style={{ marginBottom: i < 2 ? 18 : 0 }}>
-                <div style={{ ...dm, fontSize: 10, fontWeight: 700, color: C.orange, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>
-                  {sec.heading}
-                </div>
-                <div style={{ ...dm, fontSize: 12.5, color: C.darkMid, lineHeight: 1.55 }}>
-                  {sec.body}{' '}
-                  <span
-                    className="hero-mark"
-                    style={{
-                      animationDelay: `${0.6 + i * 0.7}s`,
-                      color: C.dark, fontWeight: 600,
-                    }}
-                  >
-                    {sec.mark}
-                  </span>
+    <section style={{ background: C.white, padding: '120px 36px' }}>
+      <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+        <FadeIn>
+          <h2 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(40px,5vw,72px)', color: C.dark, margin: '0 0 8px', lineHeight: 1.0, letterSpacing: '-0.025em', maxWidth: 880, textWrap: 'balance' }}>
+            Unlock your <em style={{ fontStyle: 'italic', color: C.orange }}>inspection report</em>.
+          </h2>
+          <p style={{ ...DM, fontSize: 17, lineHeight: 1.6, color: C.muted, maxWidth: 600, margin: '0 0 56px', textWrap: 'pretty' }}>
+            Three tiers, full of features to get the most out of your inspection report.
+          </p>
+        </FadeIn>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 0, border: `1px solid ${C.line}`, borderRadius: 16, overflow: 'hidden', background: '#fff' }}>
+          {tiers.map((t, i) => (
+            <FadeIn key={t.name} delay={i * 0.08}>
+              <div style={{ padding: 36, background: t.pop ? C.dark : '#fff', color: t.pop ? '#fff' : C.dark, borderRight: i < 2 ? `1px solid ${t.pop ? 'rgba(255,255,255,.1)' : C.line}` : 'none', position: 'relative', height: '100%' }}>
+                {t.pop && <span style={{ position: 'absolute', top: 16, right: 16, ...DM, fontSize: 10, fontWeight: 700, color: C.orange, background: 'rgba(232,99,43,.18)', padding: '4px 10px', borderRadius: 100, letterSpacing: '.10em' }}>MOST POPULAR</span>}
+                <div style={{ ...MO, fontSize: 10, letterSpacing: '.18em', color: t.pop ? 'rgba(255,255,255,.5)' : C.meta, textTransform: 'uppercase' }}>Tier {String(i + 1).padStart(2, '0')}</div>
+                <h3 style={{ ...FR, fontWeight: 700, fontSize: 36, margin: '8px 0 6px', letterSpacing: '-0.015em', color: t.pop ? '#fff' : C.dark }}>{t.name}</h3>
+                <p style={{ ...FR, fontSize: 18, fontStyle: 'italic', color: t.pop ? 'rgba(255,255,255,.7)' : C.muted, margin: '0 0 28px', fontWeight: 400 }}>{t.sub}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {t.f.map(x => (
+                    <div key={x} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <span style={{ color: t.pop ? '#7fe5c5' : C.green, fontWeight: 700, fontSize: 14 }}>✓</span>
+                      <span style={{ ...DM, fontSize: 14, color: t.pop ? 'rgba(255,255,255,.9)' : C.dark }}>{x}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-
-            {/* Scan line — sweeps top→bottom while phase 0 is active */}
-            {phase === 0 && (
-              <div style={{
-                position: 'absolute', left: 0, right: 0, top: 0,
-                height: 36,
-                background: `linear-gradient(180deg, transparent 0%, ${C.orange}10 40%, ${C.orange}40 50%, ${C.orange}10 60%, transparent 100%)`,
-                animation: 'hero-scan 3.6s ease-in-out forwards',
-                pointerEvents: 'none',
-              }} />
-            )}
-          </div>
+            </FadeIn>
+          ))}
         </div>
+      </div>
+    </section>
+  );
+}
 
-        {/* Phase 1 — parsed items stack. Container fades in on a small
-            delay so the PDF can begin its fade-out first; each card then
-            fades up with its own staggered delay (transition-based, not
-            keyframes — keyframes were getting overridden by inline style
-            in the previous iteration). */}
-        <div
-          style={{
-            position: 'absolute', inset: 0,
-            opacity: phase === 1 ? 1 : 0,
-            transition: phase === 1 ? 'opacity 0.4s ease 0.15s' : 'opacity 0.2s ease',
-            padding: '20px 18px',
-            display: 'flex', flexDirection: 'column', gap: 10,
-            justifyContent: 'flex-start',
-            pointerEvents: phase === 1 ? 'auto' : 'none',
-          }}
-        >
-          {items.map((item, i) => (
-            <div
-              key={item.id}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '12px 14px', borderRadius: 12,
-                background: C.white, border: `1px solid ${C.grayLight}`,
-                boxShadow: '0 2px 8px -4px rgba(45,41,38,0.06)',
-                opacity: phase === 1 ? 1 : 0,
-                transform: phase === 1 ? 'translateY(0)' : 'translateY(8px)',
-                transition: `opacity 0.4s ease ${0.3 + i * 0.08}s, transform 0.4s ease ${0.3 + i * 0.08}s`,
-              }}
-            >
-              <span style={{
-                fontSize: 18, flexShrink: 0,
-                width: 32, height: 32, borderRadius: 8,
-                background: C.warm,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>{item.icon}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ ...dm, fontSize: 12.5, fontWeight: 600, color: C.dark, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.title}
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ ...dm, fontSize: 9.5, fontWeight: 700, color: sevColor(item.severity), background: sevBg(item.severity), padding: '2px 7px', borderRadius: 100, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                    {item.severity}
-                  </span>
-                  <span style={{ ...dm, fontSize: 9.5, color: C.gray, background: C.warm, padding: '2px 7px', borderRadius: 100 }}>
-                    {item.category}
-                  </span>
-                  <span style={{ ...dm, fontSize: 9.5, fontWeight: 700, color: C.dark, background: C.warm, padding: '2px 7px', borderRadius: 100 }}>
-                    {item.cost}
-                  </span>
-                </div>
+// ─── TestimonialsB — B7: audience-aware editorial blockquote ─────────
+function TestimonialsB({ audience }: { audience: Audience }) {
+  const isOwner = audience === 'owner';
+  const hero = isOwner ? {
+    body: <>"We pre-listed with Homie's packet attached. Three offers in nine days, and not one repair-request reduction at the table. The buyer's agent told us they couldn't find anything to push back on — every line had a <span style={{ color: C.orange, fontWeight: 600, fontStyle: 'normal' }}>quote and a receipt</span> already."</>,
+    cite: '— Priya R., seller, Austin',
+  } : {
+    body: <>"Our inspection found 14 items. By dinner I had quotes for everything. We negotiated an <span style={{ color: C.orange, fontWeight: 600, fontStyle: 'normal' }}>$11,200 credit</span> with quotes attached. Our agent had never seen a buyer come to the table that prepared."</>,
+    cite: '— David T., first-time buyer, San Diego',
+  };
+  const small = isOwner ? [
+    { q: 'My listing agent stopped calling them "surprises" and started calling them "line items." That shifted the whole tone of every showing.', n: 'Marcus B.', r: 'Seller · Raleigh' },
+    { q: 'I priced the credits I didn\'t want to fix. The buyer accepted the math because the quotes were right there.',                            n: 'Dana K.',  r: 'Seller · Portland' },
+  ] : [
+    { q: 'I sold a house in three weeks because every "what about this?" was already answered with a fix and a receipt.',                            n: 'Priya R.', r: 'Seller · Austin' },
+    { q: 'The Home IQ score told me which $400 fix would save my insurance rider. That alone paid for the whole thing.',                            n: 'Marcus B.', r: 'Owner · Raleigh' },
+  ];
+  return (
+    <section style={{ background: C.dark, padding: '120px 36px', color: '#fff' }}>
+      <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+        <FadeIn delay={0.05}>
+          <blockquote style={{ ...FR, fontSize: 'clamp(28px,3.6vw,44px)', lineHeight: 1.25, fontWeight: 400, fontStyle: 'italic', color: '#fff', margin: '24px 0 36px', maxWidth: 1000, letterSpacing: '-0.005em', textWrap: 'balance' }}>
+            {hero.body}
+          </blockquote>
+          <div style={{ ...DM, fontSize: 14, color: 'rgba(255,255,255,.7)' }}>{hero.cite}</div>
+        </FadeIn>
+        <div style={{ marginTop: 64, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, paddingTop: 48, borderTop: '1px solid rgba(255,255,255,.10)' }}>
+          {small.map(Q => (
+            <div key={Q.n}>
+              <p style={{ ...FR, fontSize: 21, fontStyle: 'italic', lineHeight: 1.5, color: 'rgba(255,255,255,.92)', margin: '0 0 14px', fontWeight: 400, textWrap: 'pretty' }}>"{Q.q}"</p>
+              <div style={{ ...DM, fontSize: 13, color: 'rgba(255,255,255,.6)' }}>— {Q.n}, {Q.r}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── FAQ — A8 ────────────────────────────────────────────────────────
+const FAQS: Array<[string, string]> = [
+  ['Who\'s Homie Inspect for?', 'Homeowners and home buyers. Both pre-purchase and post-close — same product, different use.'],
+  ['Does this replace my home inspector?', 'No. Inspectors find the issues; Homie translates their report into actionable items, cost estimates, and real quotes. The inspector\'s expertise is the foundation.'],
+  ['Do I pay for this?', 'Almost never. Your inspector picks a tier at upload and the cost is rolled into your inspection fee. You won\'t see a separate Homie charge.'],
+  ['Is the AI accurate?', 'Every item is sourced directly from the inspector\'s findings — Homie never invents issues. Severity and cost ranges are AI-generated and confidence-rated; if confidence is low, the item is flagged for your inspector\'s review.'],
+  ['What happens if parsing fails?', 'You\'ll get a notice and your inspector is alerted. Most failures are PDF formatting issues that resolve on re-upload. We don\'t bill for failed parses.'],
+  ['Can I add documents later (sewer scope, radon, mold, pest, disclosure)?', 'Yes. Upload supplementals to the same property and they\'ll merge into one Home IQ profile, with cross-document references where relevant.'],
+  ['Is my data private?', 'Your report and address are visible only to you and people you invite. Public-data benchmarks are computed from anonymous inputs — your address never leaves your account.'],
+  ['Can my agent, spouse, or co-buyer access the report too?', 'Yes — invite by email from the share menu. They get view-only by default, with optional comment access.'],
+  ['How do I find my report if I lost the email link?', 'Your inspector can re-send. Or sign in with the email you provided at inspection — your reports show up in your dashboard.'],
+];
+
+function FAQ() {
+  const [open, setOpen] = useState<number>(0);
+  return (
+    <section id="faq" style={{ background: C.white, padding: '96px 32px' }}>
+      <div style={{ maxWidth: 880, margin: '0 auto' }}>
+        <FadeIn>
+          <div style={{ marginBottom: 48, textAlign: 'center' }}>
+            <Eyebrow>FAQ</Eyebrow>
+            <h2 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(30px,3.6vw,42px)', color: C.dark, margin: '12px 0 0', letterSpacing: '-0.01em' }}>Plainspoken answers.</h2>
+          </div>
+        </FadeIn>
+        <div style={{ borderTop: `1px solid ${C.line}` }}>
+          {FAQS.map(([q, a], i) => (
+            <div key={q} style={{ borderBottom: `1px solid ${C.line}` }}>
+              <button onClick={() => setOpen(open === i ? -1 : i)} style={{
+                width: '100%', textAlign: 'left', padding: '22px 0', background: 'none', border: 'none', cursor: 'pointer',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, ...DM,
+              }}>
+                <span style={{ ...FR, fontSize: 19, fontWeight: 600, color: C.dark, letterSpacing: '-0.005em' }}>{q}</span>
+                <span style={{ ...DM, fontSize: 22, color: open === i ? C.orange : C.meta, transition: 'transform .25s', transform: open === i ? 'rotate(45deg)' : 'rotate(0)' }}>+</span>
+              </button>
+              <div style={{ maxHeight: open === i ? 200 : 0, overflow: 'hidden', transition: 'max-height .35s ease' }}>
+                <p style={{ ...DM, fontSize: 15, color: C.muted, lineHeight: 1.65, margin: '0 0 24px', maxWidth: 720, textWrap: 'pretty' }}>{a}</p>
               </div>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
+// ─── FinalCTA — A9: audience-aware, warm gradient ────────────────────
+function FinalCTA({ audience, onUpload }: { audience: Audience; onUpload: () => void }) {
+  const isOwner = audience === 'owner';
+  return (
+    <section style={{ background: `linear-gradient(180deg, ${C.warm} 0%, #fff 100%)`, padding: '96px 32px' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
+        <FadeIn>
+          <Eyebrow>Ready when you are</Eyebrow>
+          <h2 style={{ ...FR, fontWeight: 700, fontSize: 'clamp(36px,4.4vw,52px)', color: C.dark, margin: '14px 0 18px', lineHeight: 1.05, letterSpacing: '-0.02em', textWrap: 'balance' }}>
+            {isOwner ? 'Your home is more than a listing. Make the offer real.' : 'Your inspection is more than a PDF. Make it count.'}
+          </h2>
+          <p style={{ ...DM, fontSize: 18, color: C.muted, lineHeight: 1.55, margin: '0 0 32px', maxWidth: 560, marginInline: 'auto', textWrap: 'pretty' }}>
+            {isOwner
+              ? 'Order a pre-listing inspection or upload one you already have. Homie parses, prices, and packets it for buyers.'
+              : 'Upload your report and Homie does the rest — parse, price, dispatch, and benchmark.'}
+          </p>
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+            <PrimaryCTA onClick={onUpload}>{isOwner ? 'Order a pre-listing inspection' : 'Upload your inspection'}</PrimaryCTA>
+          </div>
+          <p style={{ ...DM, fontSize: 13, color: C.meta, marginTop: 18, fontStyle: 'italic' }}>
+            {isOwner
+              ? 'Already have one in hand? Upload it — we\'ll convert it into a buyer-ready packet in minutes.'
+              : 'Already received an inspection? Find your link in the email from your inspector.'}
+          </p>
+        </FadeIn>
+      </div>
+    </section>
+  );
+}
+
+// ─── Page ────────────────────────────────────────────────────────────
+const HEADLINES: Record<Audience, { headline: string; sub: string }> = {
+  buyer: {
+    headline: 'Your home inspection isn\'t a PDF. It\'s a plan.',
+    sub: 'Your inspector finds the problems. Homie tells you exactly what they\'ll cost to fix — with real quotes from local pros, not guesswork. Negotiate with real numbers.',
+  },
+  owner: {
+    headline: 'Your inspection isn\'t a disclosure. It\'s a deal closer.',
+    sub: 'Pre-list, your inspection is the strongest signal you can offer. Homie turns every finding into a fix-it-or-credit-it line — with quotes already attached — so buyers stop asking "what about this?"',
+  },
+};
+
 export default function HomieInspectionLanding() {
   const { homeowner } = useAuth();
-  const [audience, setAudience] = useState("buyer");
+  const [audience, setAudience] = useState<Audience>('buyer');
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Capture inspector partner referral on first touch so the upload
-  // (whether immediately or days later) attributes the report to the
-  // partner whose URL drove this visit. Idempotent — first-touch wins.
-  useEffect(() => {
-    captureReferrerIfPresent();
-  }, []);
+  // Capture inspector partner referrer on first touch.
+  useEffect(() => { captureReferrerIfPresent(); }, []);
 
-  // Page-wide drag-and-drop: when the user drags a file over the page, show a
-  // full-screen drop overlay. Drop anywhere triggers the upload. Doesn't affect
-  // mobile / non-drag users — the existing CTA button still works as before.
+  // Page-wide drag-and-drop overlay.
   useEffect(() => {
-    let dragCounter = 0; // robustness vs. dragenter/leave firing on children
-
-    function isFileDrag(e: DragEvent): boolean {
+    let dragCounter = 0;
+    const isFileDrag = (e: DragEvent): boolean => {
       const types = e.dataTransfer?.types;
       if (!types) return false;
       return Array.from(types).includes('Files');
-    }
-
-    function onDragEnter(e: DragEvent) {
+    };
+    const onDragEnter = (e: DragEvent) => {
       if (!isFileDrag(e)) return;
-      e.preventDefault();
-      dragCounter++;
+      e.preventDefault(); dragCounter++;
       if (dragCounter === 1) setDragActive(true);
-    }
-    function onDragOver(e: DragEvent) {
+    };
+    const onDragOver = (e: DragEvent) => { if (isFileDrag(e)) e.preventDefault(); };
+    const onDragLeave = (e: DragEvent) => {
       if (!isFileDrag(e)) return;
-      e.preventDefault();
-    }
-    function onDragLeave(e: DragEvent) {
+      e.preventDefault(); dragCounter--;
+      if (dragCounter <= 0) { dragCounter = 0; setDragActive(false); }
+    };
+    const onDrop = (e: DragEvent) => {
       if (!isFileDrag(e)) return;
-      e.preventDefault();
-      dragCounter--;
-      if (dragCounter <= 0) {
-        dragCounter = 0;
-        setDragActive(false);
-      }
-    }
-    function onDrop(e: DragEvent) {
-      if (!isFileDrag(e)) return;
-      e.preventDefault();
-      dragCounter = 0;
-      setDragActive(false);
+      e.preventDefault(); dragCounter = 0; setDragActive(false);
       const file = e.dataTransfer?.files[0];
       if (file) void handleFileUpload(file);
-    }
-
+    };
     window.addEventListener('dragenter', onDragEnter);
     window.addEventListener('dragover', onDragOver);
     window.addEventListener('dragleave', onDragLeave);
@@ -475,6 +842,12 @@ export default function HomieInspectionLanding() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function triggerUpload() {
+    if (uploading) return;
+    trackEvent('inspect_landing_cta_clicked', { cta_location: 'upload_button' });
+    fileInputRef.current?.click();
+  }
 
   async function handleFileUpload(file: File) {
     if (file.size > 50 * 1024 * 1024) { alert('File too large (max 50MB)'); return; }
@@ -489,7 +862,6 @@ export default function HomieInspectionLanding() {
         reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsDataURL(file);
       });
-
       setUploadStatus('Processing with AI...');
       const { inspectService } = await import('@/services/inspector-api');
       const referrerPartner = getStoredReferrer();
@@ -501,20 +873,16 @@ export default function HomieInspectionLanding() {
         trackEvent('inspect_upload_failed', { source: 'consumer_landing', reason: 'upload_api_error' });
         setUploadStatus(null); setUploading(false); alert('Upload failed'); return;
       }
-
       const reportId = res.data.reportId;
+      const token = res.data.token;
       trackEvent('inspect_report_uploaded', {
         source: 'consumer_landing',
         report_id: reportId,
         file_size_kb: Math.round(file.size / 1024),
       });
-
-      // Poll for parsing completion
-      const token = res.data.token;
       setUploadStatus('Parsing inspection items...');
-
       const poll = async () => {
-        for (let i = 0; i < 60; i++) { // max 5 minutes
+        for (let i = 0; i < 60; i++) {
           await new Promise(r => setTimeout(r, 5000));
           try {
             const status = await inspectService.getUploadStatus(reportId);
@@ -525,9 +893,6 @@ export default function HomieInspectionLanding() {
                 time_to_parse_ms: Date.now() - uploadStartedAt,
               });
               setUploadStatus(`${status.data.itemsParsed} items found! Redirecting...`);
-              // Logged-in homeowners land in the new portal (auto-linked via optionalAuth on
-              // the upload endpoint). Anonymous users get the legacy public token-based view
-              // since they don't have an account to authenticate against the portal.
               const destination = homeowner
                 ? `/inspect-portal?tab=reports&report=${reportId}`
                 : `/inspect/${token}`;
@@ -557,378 +922,63 @@ export default function HomieInspectionLanding() {
     }
   }
 
+  const copy = HEADLINES[audience];
+
   return (
-    <div style={{ ...dm, background: C.white, minHeight: "100vh" }}>
-      {/* Hidden file input for upload */}
+    <div style={{ ...DM, background: C.white, minHeight: '100vh' }}>
+      <SEO
+        title="Homie Inspect — Real items, real quotes, from any inspection report"
+        description="Upload your home inspection PDF and Homie's AI turns it into actionable items with real cost estimates, local provider quotes, and a Home IQ benchmark."
+        canonical="/inspect"
+      />
+      <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500;1,9..144,600&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+      {/* Hidden file input */}
       <input
-        id="inspect-file-upload"
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf,.html"
-        style={{ position: 'fixed', top: -9999, left: -9999, opacity: 0 }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; }}
+        ref={fileInputRef} type="file" accept="application/pdf,text/html"
+        style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) void handleFileUpload(f); }}
       />
 
-      {/* Drag-active overlay — appears when user drags a file over the page */}
-      {dragActive && !uploading && (
+      <Nav onUpload={triggerUpload} />
+      <HeroA headline={copy.headline} sub={copy.sub} audience={audience} setAudience={setAudience} onUpload={triggerUpload} />
+      <ModulesC />
+      <NegotiationC audience={audience} />
+      <TiersB />
+      <TestimonialsB audience={audience} />
+      <FAQ />
+      <FinalCTA audience={audience} onUpload={triggerUpload} />
+      <HomieFooter />
+
+      {/* Drag-active overlay */}
+      {dragActive && (
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 10000,
-          background: 'rgba(20, 18, 16, 0.85)', backdropFilter: 'blur(4px)',
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(45,41,38,.85)', backdropFilter: 'blur(8px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          pointerEvents: 'none',
+          ...DM, color: '#fff', textAlign: 'center', pointerEvents: 'none',
         }}>
-          <div style={{
-            background: C.white, border: `3px dashed ${C.orange}`, borderRadius: 24,
-            padding: '60px 80px', textAlign: 'center', maxWidth: 520,
-            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-          }}>
-            <div style={{ fontSize: 56, marginBottom: 16 }}>📥</div>
-            <div style={{ ...fr, fontSize: 28, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
-              Drop your inspection report
-            </div>
-            <div style={{ ...dm, fontSize: 15, color: C.gray }}>
-              PDF or HTML, up to 50 MB. We'll parse it instantly.
-            </div>
+          <div>
+            <div style={{ fontSize: 80, marginBottom: 16 }}>📄</div>
+            <div style={{ ...FR, fontSize: 36, fontWeight: 700, marginBottom: 8 }}>Drop to upload</div>
+            <div style={{ ...DM, fontSize: 16, opacity: 0.7 }}>Your report parses in 2–5 minutes</div>
           </div>
         </div>
       )}
 
-      {/* Upload progress overlay */}
-      {uploading && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,41,38,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: C.white, borderRadius: 20, padding: '48px 56px', textAlign: 'center', maxWidth: 420 }}>
-            <div style={{ width: 48, height: 48, border: `4px solid ${C.warm}`, borderTopColor: C.orange, borderRadius: '50%', margin: '0 auto 24px', animation: 'homie-spin 0.8s linear infinite' }} />
-            <p style={{ ...dm, fontSize: 18, fontWeight: 600, color: C.dark, margin: '0 0 8px' }}>{uploadStatus ?? 'Processing...'}</p>
-            <p style={{ ...dm, fontSize: 14, color: C.gray, margin: 0 }}>This can take a few minutes depending on the size of your report. You can leave this page open.</p>
-          </div>
-          <style>{`@keyframes homie-spin { to { transform: rotate(360deg); } }`}</style>
+      {/* Upload-status toast */}
+      {uploadStatus && (
+        <div style={{
+          position: 'fixed', bottom: 32, right: 32, zIndex: 99,
+          background: C.dark, color: '#fff', padding: '14px 20px', borderRadius: 100,
+          boxShadow: '0 16px 40px -12px rgba(0,0,0,.35)',
+          ...DM, fontSize: 14, fontWeight: 600,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.green, animation: 'hi-pulseDot 1.4s infinite' }}/>
+          {uploadStatus}
         </div>
       )}
-      <SEO title="Homie Inspect — Real quotes from your inspection report" description="Upload your home inspection report. Homie's AI parses every item and gets you real quotes from local pros — not estimates, actuals. Negotiate with real numbers." canonical="/inspect" />
-      <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
-      {/* NAV */}
-      <style>{`@media (max-width: 540px) { .hi-nav-link { display: none !important; } }`}</style>
-      <nav style={{ padding: "0 16px", borderBottom: `1px solid ${C.warm}` }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexShrink: 0 }}>
-            <span style={{ ...fr, fontWeight: 700, fontSize: 26, color: C.orange }}>homie</span>
-            <span style={{ ...dm, fontSize: 13, color: C.gray, fontWeight: 500 }}>inspect</span>
-          </div>
-          <div style={{ display: "flex", gap: 16, alignItems: "center", flexShrink: 1, minWidth: 0 }}>
-            <a className="hi-nav-link" href="#how-it-works" style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}>How it works</a>
-            <a className="hi-nav-link" href="/inspect/inspectors" onClick={() => trackEvent('inspect_landing_cta_clicked', { cta_location: 'nav_for_inspectors' })} style={{ ...dm, fontSize: 14, color: C.darkMid, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}>For inspectors</a>
-            <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "9px 22px", cursor: "pointer", display: "inline-block", whiteSpace: "nowrap", flexShrink: 0 }}>Get started</label>
-          </div>
-        </div>
-      </nav>
-
-      {/* HERO — Evolved Classic
-          Two-column grid at desktop; stacks on narrow widths. Left
-          column owns existing content (audience toggle, headline,
-          sub, CTA, meta, secondary link, stats). Right column is the
-          new auto-looping HeroDemo. Same content as before, sharper
-          visuals. */}
-      <style>{`
-        @media (max-width: 980px) {
-          .hi-hero-grid { grid-template-columns: 1fr !important; gap: 56px !important; }
-          .hi-hero-visual { order: 2; max-width: 480px; margin: 0 auto; width: 100%; }
-        }
-      `}</style>
-      <section style={{ background: `linear-gradient(165deg, ${C.warm} 0%, ${C.white} 50%, ${C.greenLight} 100%)`, paddingTop: 80, paddingBottom: 80, position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: -200, right: -200, width: 600, height: 600, borderRadius: "50%", background: C.orange, opacity: 0.03 }} />
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", position: "relative", zIndex: 1 }}>
-          <div className="hi-hero-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1fr)", gap: 64, alignItems: "center" }}>
-            <div>
-          <FadeIn>
-            <div style={{ display: "inline-flex", background: C.white, border: `1px solid ${C.grayLight}`, borderRadius: 100, padding: 4, marginBottom: 24 }}>
-              <button onClick={() => setAudience("buyer")} style={{ ...dm, fontSize: 13, fontWeight: 600, color: audience === "buyer" ? C.white : C.gray, background: audience === "buyer" ? C.dark : "transparent", border: "none", borderRadius: 100, padding: "6px 18px", cursor: "pointer", transition: "all 0.2s" }}>Buying a home</button>
-              <button onClick={() => setAudience("seller")} style={{ ...dm, fontSize: 13, fontWeight: 600, color: audience === "seller" ? C.white : C.gray, background: audience === "seller" ? C.dark : "transparent", border: "none", borderRadius: 100, padding: "6px 18px", cursor: "pointer", transition: "all 0.2s" }}>I own this home</button>
-            </div>
-          </FadeIn>
-          <FadeIn delay={0.1}>
-            <h1 style={{ ...fr, fontSize: "clamp(36px, 4.6vw, 60px)", fontWeight: 700, color: C.dark, lineHeight: 1.08, maxWidth: 600, margin: 0 }}>
-              {audience === "buyer"
-                ? <>Know what it costs<br />to fix <span style={{ color: C.orange }}>before you close</span></>
-                : <>Fix it before<br />they <span style={{ color: C.orange }}>find it</span></>
-              }
-            </h1>
-          </FadeIn>
-          <FadeIn delay={0.2}>
-            <p style={{ ...dm, fontSize: "clamp(16px, 1.4vw, 19px)", color: C.darkMid, lineHeight: 1.6, maxWidth: 520, margin: "20px 0 32px" }}>
-              {audience === "buyer"
-                ? "Your inspector finds the problems. Homie tells you exactly what they'll cost to fix \u2014 with real quotes from local pros, not guesswork. Negotiate with real numbers."
-                : "Get a pre-listing inspection, then let Homie quote every item and fix what matters before buyers see it. List with confidence and documentation that builds trust."
-              }
-            </p>
-          </FadeIn>
-          <FadeIn delay={0.3}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
-              <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)", display: "inline-block" }} onMouseEnter={e => { e.currentTarget.style.background = C.orangeDark; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.transform = "translateY(0)"; }}>
-                {audience === "buyer" ? "Upload your inspection" : "Get your pre-listing quotes"}
-              </label>
-              <div style={{ fontFamily: "'DM Mono', 'DM Sans', monospace", fontSize: 11, color: C.gray, display: "flex", alignItems: "center", gap: 6, letterSpacing: 0.4, textTransform: "uppercase", fontWeight: 600 }}>
-                <span style={{ fontSize: 13 }}>📄</span>
-                <span>PDF or HTML · parsed in 2–5 min · no signup</span>
-              </div>
-              <a
-                href="/inspect/inspectors"
-                onClick={() => trackEvent('inspect_landing_cta_clicked', { cta_location: 'hero_inspector_link' })}
-                style={{ ...dm, fontSize: 14, color: '#2563EB', textDecoration: 'none', fontWeight: 600, marginTop: 6 }}
-                onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
-                onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
-              >
-                Are you a home inspector? See the partner program →
-              </a>
-            </div>
-          </FadeIn>
-          <FadeIn delay={0.45}>
-            <div style={{ display: "flex", gap: 36, marginTop: 48, flexWrap: "wrap" }}>
-              {(audience === "buyer"
-                ? [["$8,400", "avg. negotiation credit"], ["2 hrs", "report → real quotes"], ["34 items", "parsed per report"]]
-                : [["23%", "faster sale with pre-addressed items"], ["$0", "surprises for your buyer"], ["100%", "documented repairs for the listing"]]
-              ).map(([stat, label], i) => (
-                <div key={`${audience}-${i}`} style={{ display: "flex", flexDirection: "column" }}>
-                  <span style={{ ...fr, fontSize: 30, fontWeight: 700, color: C.orange, lineHeight: 1.1 }}>{stat}</span>
-                  <span style={{ ...dm, fontSize: 13, color: C.gray, fontWeight: 500, marginTop: 4 }}>{label}</span>
-                </div>
-              ))}
-            </div>
-          </FadeIn>
-            </div>
-            {/* RIGHT COLUMN — auto-looping PDF ↔ items visual */}
-            <div className="hi-hero-visual">
-              <FadeIn delay={0.2}>
-                <HeroDemo />
-              </FadeIn>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section id="how-it-works" style={{ background: C.warm, padding: "96px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <FadeIn>
-            <div style={{ textAlign: "center", marginBottom: 56 }}>
-              <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.orange, letterSpacing: 1, textTransform: "uppercase" }}>How it works</span>
-              <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "12px 0 0" }}>Three steps to real numbers</h2>
-            </div>
-          </FadeIn>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
-            {[
-              { num: "1", title: "Your inspector uploads the report", desc: "After the inspection, your Homie-partnered inspector uploads their report. Any format works \u2014 Spectora, HomeGauge, PDF, or photos.", color: C.orange },
-              { num: "2", title: "Homie parses every item", desc: "The AI reads the full report and extracts every actionable item. Each gets categorized by trade, rated by urgency, and estimated with a cost range based on local market data.", color: C.green },
-              { num: "3", title: "You get real quotes", desc: "Tap any item to dispatch Homie\u2019s AI agent, which calls, texts, and contacts local pros on your behalf. Real quotes from real providers arrive in minutes \u2014 not estimates, actuals.", color: C.orange },
-            ].map((s, i) => (
-              <FadeIn key={i} delay={i * 0.1}>
-                <div style={{ background: C.white, borderRadius: 20, padding: 32, height: "100%", borderTop: `3px solid ${s.color}` }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: s.color, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16, ...dm, fontSize: 18, fontWeight: 700, color: C.white }}>{s.num}</div>
-                  <h3 style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, margin: "0 0 10px" }}>{s.title}</h3>
-                  <p style={{ ...dm, fontSize: 15, color: C.darkMid, lineHeight: 1.6, margin: 0 }}>{s.desc}</p>
-                </div>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* INTERACTIVE DEMO */}
-      <InspectionDemo />
-
-      {/* VALUE PROPS - BUYER vs SELLER */}
-      <section style={{ background: C.warm, padding: "96px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <FadeIn>
-            <div style={{ textAlign: "center", marginBottom: 56 }}>
-              <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "0 0 8px" }}>
-                {audience === "buyer" ? "Negotiate with confidence" : "List with confidence"}
-              </h2>
-              <p style={{ ...dm, fontSize: 16, color: C.gray }}>
-                {audience === "buyer" ? "Stop guessing what repairs will cost" : "Address issues before buyers find them"}
-              </p>
-            </div>
-          </FadeIn>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}>
-            {(audience === "buyer" ? [
-              { title: "Real quotes, not estimates", desc: "Your inspector says \u201Croof flashing needs repair.\u201D Great \u2014 but what does that cost? $200? $2,000? Homie gets you actual quotes from local roofers so you negotiate with real numbers, not hopes.", color: C.orange },
-              { title: "Every item, one dashboard", desc: "11 inspection items across 6 trades. Instead of calling 6 different contractors yourself, Homie dispatches all of them simultaneously. Your punch list becomes a quote list in hours.", color: C.green },
-              { title: "Leverage in negotiation", desc: "\u201CThe inspection found $8,400 in needed repairs \u2014 here are the quotes.\u201D That specificity changes the conversation. Sellers take documented numbers seriously because they can\u2019t argue with invoices.", color: C.orange },
-              { title: "Know before you close", desc: "Discover the true cost of ownership before you sign. Some inspection items are $150 fixes. Some are $5,000 replacements. Knowing the difference before closing protects your investment.", color: C.green },
-            ] : [
-              { title: "Fix before they find it", desc: "A pre-listing inspection with Homie quotes means you can fix the $200 issues that would scare buyers and disclose the rest with full documentation. No surprises, no renegotiations.", color: C.orange },
-              { title: "Homie-verified listing", desc: "Include a \u201CHomie Inspection Report\u201D in your listing packet showing every item found, what was fixed (with receipts), and what was disclosed. Buyers trust documented transparency.", color: C.green },
-              { title: "Faster close", desc: "Properties with pre-addressed inspection items sell faster because the buyer\u2019s inspection triggers fewer surprises. Fewer surprises means fewer renegotiations and fewer deals falling through.", color: C.orange },
-              { title: "Competitive quotes", desc: "When you need to fix something before listing, Homie gets you multiple quotes in minutes instead of you calling around for a week. Time matters when you\u2019re preparing to list.", color: C.green },
-            ]).map((f, i) => (
-              <FadeIn key={`${audience}-${i}`} delay={i * 0.08}>
-                <div style={{ background: C.white, borderRadius: 20, padding: 32, height: "100%", borderTop: `3px solid ${f.color}`, transition: "transform 0.2s, box-shadow 0.2s" }} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 40px rgba(0,0,0,0.06)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-                  <h3 style={{ ...fr, fontSize: 20, fontWeight: 700, color: C.dark, margin: "0 0 10px" }}>{f.title}</h3>
-                  <p style={{ ...dm, fontSize: 14, color: C.darkMid, lineHeight: 1.65, margin: 0 }}>{f.desc}</p>
-                </div>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* PRICING */}
-      <section style={{ background: C.white, padding: "96px 24px" }}>
-        <div style={{ maxWidth: 800, margin: "0 auto" }}>
-          <FadeIn>
-            <div style={{ textAlign: "center", marginBottom: 48 }}>
-              <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.orange, letterSpacing: 1, textTransform: "uppercase" }}>Pricing</span>
-              <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "12px 0 8px" }}>Less than your inspector charges for the inspection</h2>
-              <p style={{ ...dm, fontSize: 16, color: C.gray }}>And it could save you thousands in negotiation</p>
-            </div>
-          </FadeIn>
-          <FadeIn delay={0.1}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
-              {[
-                {
-                  name: "Essential",
-                  tagline: "Understand what's in your report",
-                  price: 99,
-                  features: ["AI report analysis", "Item details & severity", "Cost estimates", "Category breakdown"],
-                  popular: false,
-                },
-                {
-                  name: "Professional",
-                  tagline: "Get real quotes from local pros",
-                  price: 199,
-                  features: ["Everything in Essential", "Dispatch to providers", "Quote comparison", "Real-time quote tracking"],
-                  popular: true,
-                },
-                {
-                  name: "Premium",
-                  tagline: "Negotiate and plan with confidence",
-                  price: 299,
-                  features: ["Everything in Professional", "Negotiation documents", "Priority dispatch", "Maintenance timeline"],
-                  popular: false,
-                },
-              ].map(tier => (
-                <div key={tier.name} style={{
-                  background: tier.popular ? C.white : C.warm, borderRadius: 24, padding: 28,
-                  border: tier.popular ? `2px solid ${C.orange}` : `1px solid ${C.grayLight}`,
-                  position: "relative",
-                }}>
-                  {tier.popular && (
-                    <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: C.orange, color: C.white, ...dm, fontSize: 12, fontWeight: 700, padding: "5px 16px", borderRadius: 100 }}>
-                      Most popular
-                    </div>
-                  )}
-                  <h3 style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, margin: "0 0 4px" }}>{tier.name}</h3>
-                  <p style={{ ...dm, fontSize: 13, color: C.gray, margin: "0 0 18px", minHeight: 20 }}>{tier.tagline}</p>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 18 }}>
-                    <span style={{ ...fr, fontSize: 40, fontWeight: 700, color: C.dark }}>${tier.price}</span>
-                    <span style={{ ...dm, fontSize: 14, color: C.gray }}>/report</span>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {tier.features.map(f => (
-                      <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ color: C.green, fontSize: 12, fontWeight: 700 }}>{"\u2713"}</span>
-                        <span style={{ ...dm, fontSize: 13, color: C.darkMid }}>{f}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p style={{ ...dm, fontSize: 13, color: C.gray, textAlign: "center", marginTop: 28 }}>
-              One-time per report. Free to upload and parse {"\u2014"} pay only when you're ready to unlock quotes.
-            </p>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* TESTIMONIAL */}
-      <section style={{ background: C.dark, padding: "80px 24px" }}>
-        <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
-          <FadeIn>
-            <p style={{ ...fr, fontSize: "clamp(22px, 2.5vw, 32px)", fontWeight: 400, color: C.white, lineHeight: 1.55, margin: "0 0 28px", fontStyle: "italic" }}>
-              "Our inspection found 14 items. I uploaded the report to Homie and had quotes for everything by dinner. We negotiated an $11,200 credit with actual invoices attached. Our agent said she'd never seen a buyer come to the table that prepared."
-            </p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.orange, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ ...dm, fontSize: 16, fontWeight: 700, color: C.white }}>DT</span>
-              </div>
-              <div style={{ textAlign: "left" }}>
-                <div style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.white }}>David T.</div>
-                <div style={{ ...dm, fontSize: 12, color: C.gray }}>First-time buyer, San Diego</div>
-              </div>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* INSPECTOR CTA BANNER (links to dedicated page) */}
-      <section style={{ background: `linear-gradient(165deg, ${C.white} 0%, ${C.warm} 100%)`, padding: "64px 24px" }}>
-        <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
-          <FadeIn>
-            <div style={{ display: "inline-block", background: C.greenLight, borderRadius: 100, padding: "6px 14px", marginBottom: 16 }}>
-              <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.green }}>Inspector partner program</span>
-            </div>
-            <h2 style={{ ...fr, fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, color: C.dark, margin: "0 0 12px" }}>Are you a home inspector?</h2>
-            <p style={{ ...dm, fontSize: 16, color: C.darkMid, lineHeight: 1.6, margin: "0 0 24px" }}>Earn referral revenue on every dispatch. Free to join, always.</p>
-            <a href="/inspect/inspectors" onClick={() => trackEvent('inspect_landing_cta_clicked', { cta_location: 'partner_program_primary' })} style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", textDecoration: "none", display: "inline-block", boxShadow: "0 4px 24px rgba(27,158,119,0.25)" }}>Learn about the partner program →</a>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section style={{ background: C.warm, padding: "96px 24px" }}>
-        <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
-          <FadeIn>
-            <h2 style={{ ...fr, fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, color: C.dark, margin: "0 0 16px", lineHeight: 1.1 }}>Stop guessing.<br />Start negotiating.</h2>
-            <p style={{ ...dm, fontSize: 17, color: C.darkMid, lineHeight: 1.6, margin: "0 0 32px" }}>Upload your inspection report and get real quotes from local pros for every item {'\u2014'} in hours, not weeks.</p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-              <label htmlFor="inspect-file-upload" style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.white, background: C.orange, border: "none", borderRadius: 100, padding: "16px 36px", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 4px 24px rgba(232,99,43,0.25)", display: "inline-block" }} onMouseEnter={e => { e.currentTarget.style.background = C.orangeDark; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.transform = "translateY(0)"; }}>Upload your report</label>
-              <a href="/inspect/inspectors" onClick={() => trackEvent('inspect_landing_cta_clicked', { cta_location: 'final_cta_inspector' })} style={{ ...dm, fontSize: 17, fontWeight: 600, color: C.green, background: "transparent", border: `2px solid ${C.green}`, borderRadius: 100, padding: "14px 32px", cursor: "pointer", transition: "all 0.2s", textDecoration: "none", display: "inline-block" }}>I'm an inspector</a>
-            </div>
-            <p style={{ ...dm, fontSize: 13, color: C.gray, marginTop: 16 }}>No account required to upload. Inspector partnership is free forever.</p>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer style={{ background: C.dark, padding: "64px 24px 40px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 40, marginBottom: 48 }}>
-            <div>
-              <span style={{ ...fr, fontWeight: 700, fontSize: 24, color: C.orange }}>homie</span>
-              <p style={{ ...dm, fontSize: 14, color: "#9B9490", lineHeight: 1.6, marginTop: 12 }}>AI-powered home services for property managers, hosts, and homeowners.</p>
-            </div>
-            <div>
-              <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: "#D3CEC9", letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Product</h4>
-              {[
-                { label: "For homeowners", href: "/" },
-                { label: "For property managers/hosts", href: "/business/landing" },
-                { label: "Homie Inspect", href: "/inspect" },
-                { label: "For inspectors", href: "/inspect/inspectors" },
-                { label: "Become a Homie Pro", href: "/portal/signup" },
-              ].map(l => (
-                <a key={l.label} href={l.href} style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>{l.label}</a>
-              ))}
-            </div>
-            <div>
-              <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: "#D3CEC9", letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Company</h4>
-              {["About", "Blog", "Careers", "Contact"].map(l => (
-                <a key={l} href="#" style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>{l}</a>
-              ))}
-            </div>
-            <div>
-              <h4 style={{ ...dm, fontSize: 13, fontWeight: 700, color: "#D3CEC9", letterSpacing: 1, textTransform: "uppercase", margin: "0 0 16px" }}>Legal</h4>
-              <a href="/privacy" style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>Privacy</a>
-              <a href="/terms" style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>Terms</a>
-              <a href="/security" style={{ display: "block", ...dm, fontSize: 14, color: "#9B9490", textDecoration: "none", marginBottom: 10 }}>Security</a>
-            </div>
-          </div>
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <span style={{ ...dm, fontSize: 13, color: "#9B9490" }}>&copy; {new Date().getFullYear()} Homie. Your home's best friend.</span>
-            <span style={{ ...dm, fontSize: 13, color: "#9B9490" }}>Made with love in San Diego 🌴</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
