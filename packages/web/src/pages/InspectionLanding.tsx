@@ -892,21 +892,32 @@ export default function HomieInspectionLanding() {
         file_size_kb: Math.round(file.size / 1024),
       });
       setUploadStatus('Parsing inspection items...');
+      // Poll cadence + ceiling intentionally match the homeowner-portal
+      // UploadWizard. Original: 5s × 60 = 5 min hard cap, then a scary
+      // alert. Claude can legitimately take longer than that on dense
+      // reports (50+ items, big PDF) — the parse is still running, but
+      // the user thinks it failed. New: 2s polling, 15-min ceiling, and
+      // on ceiling we redirect to the report URL (which has its own
+      // status display) instead of dead-ending with an alert.
+      const POLL_INTERVAL_MS = 2000;
+      const MAX_POLL_MS = 15 * 60 * 1000;
+      const SUCCESS_STATUSES = new Set(['parsed', 'review_pending', 'sent_to_client']);
+      const destination = homeowner
+        ? `/inspect-portal?tab=reports&report=${reportId}`
+        : `/inspect/${token}`;
       const poll = async () => {
-        for (let i = 0; i < 60; i++) {
-          await new Promise(r => setTimeout(r, 5000));
+        const start = Date.now();
+        while (Date.now() - start < MAX_POLL_MS) {
+          await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
           try {
             const status = await inspectService.getUploadStatus(reportId);
-            if (status.data?.parsingStatus === 'parsed' || status.data?.parsingStatus === 'review_pending') {
+            if (status.data?.parsingStatus && SUCCESS_STATUSES.has(status.data.parsingStatus)) {
               trackEvent('inspect_upload_parsed', {
                 source: 'consumer_landing',
                 report_id: reportId,
                 time_to_parse_ms: Date.now() - uploadStartedAt,
               });
               setUploadStatus(`${status.data.itemsParsed} items found! Redirecting...`);
-              const destination = homeowner
-                ? `/inspect-portal?tab=reports&report=${reportId}`
-                : `/inspect/${token}`;
               setTimeout(() => { window.location.href = destination; }, 1500);
               return;
             }
@@ -919,11 +930,15 @@ export default function HomieInspectionLanding() {
             if (status.data?.itemsParsed && status.data.itemsParsed > 0) {
               setUploadStatus(`Found ${status.data.itemsParsed} items so far...`);
             }
-          } catch { /* keep polling */ }
+          } catch { /* keep polling — transient network errors shouldn't kill the loop */ }
         }
+        // 15-min ceiling reached. Don't dead-end with an alert — parsing is
+        // still in flight server-side. Hand off to the report page; it has
+        // its own status display + will pick up the parse the moment it
+        // finishes.
         trackEvent('inspect_upload_failed', { source: 'consumer_landing', reason: 'parse_timeout' });
-        setUploadStatus(null); setUploading(false);
-        alert('Parsing is taking longer than expected. Check back shortly.');
+        setUploadStatus('Still parsing — opening your report page...');
+        setTimeout(() => { window.location.href = destination; }, 1200);
       };
       void poll();
     } catch (err) {
