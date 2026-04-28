@@ -128,31 +128,94 @@ const GRADE_RANK: Record<Grade, number> = {
 // Public entry points
 // ──────────────────────────────────────────────────────────────────────────
 
-/** Returns the cached Home IQ data when fresh; otherwise generates,
- *  caches, and returns. Forces regeneration when `force` is true. */
-export async function getOrGenerateHomeIQ(reportId: string, opts: { force?: boolean } = {}): Promise<HomeIQData | null> {
+/** Lookup result for the read endpoint. `'generating'` means a cache
+ *  miss with a background generation already kicked off — the caller
+ *  should respond 202 and the frontend should poll. `'unavailable'`
+ *  means the report can't have Home IQ yet (still parsing). */
+export type HomeIQLookup =
+  | { status: 'ready'; data: HomeIQData }
+  | { status: 'generating' }
+  | { status: 'unavailable' };
+
+/** In-memory lock so concurrent reads of an un-cached report share the
+ *  same generation instead of stampeding Claude. Per-process — fine
+ *  for the single-API-instance setup; if we ever scale horizontally
+ *  this needs to move to Redis (or just lean on the DB cache write
+ *  being idempotent and accept occasional duplicate work). */
+const inFlight = new Map<string, Promise<HomeIQData | null>>();
+
+/** Returns the cached Home IQ data if it exists. Otherwise kicks off
+ *  background generation (idempotent — concurrent calls share the
+ *  same in-flight Promise) and returns `{ status: 'generating' }`.
+ *  Cache is sticky once written: it doesn't auto-invalidate when items
+ *  change. The frontend "Refresh" button still triggers regeneration
+ *  via getOrRegenerate(reportId, { force: true }) below.
+ *
+ *  Why sticky: previous behavior auto-regenerated whenever any item
+ *  was updated since the cache was written, which fired Claude on
+ *  every visit (item updatedAt churn from background backfills + the
+ *  homeowner editing items). The error "Failed to generate Home IQ"
+ *  on revisit comes from that regeneration aborting when the user
+ *  navigates away. Sticky cache + explicit refresh fixes both.
+ */
+export async function readHomeIQ(reportId: string): Promise<HomeIQLookup> {
   const [report] = await db.select().from(inspectionReports).where(eq(inspectionReports.id, reportId)).limit(1);
-  if (!report) return null;
+  if (!report) return { status: 'unavailable' };
   if (report.parsingStatus !== 'parsed' && report.parsingStatus !== 'review_pending' && report.parsingStatus !== 'sent_to_client') {
-    return null;
+    return { status: 'unavailable' };
   }
-
   const cached = report.homeIqData as HomeIQData | null;
-  const cachedAt = report.homeIqGeneratedAt;
+  if (cached) return { status: 'ready', data: cached };
+  // No cache → make sure a generation is in flight, then tell the
+  // caller to poll. Don't await it.
+  kickOffHomeIQ(reportId);
+  return { status: 'generating' };
+}
 
-  // Return cached data when it exists and no item has been updated since.
-  if (!opts.force && cached && cachedAt) {
-    const [{ maxUpdatedAt } = { maxUpdatedAt: null }] = await db
-      .select({ maxUpdatedAt: maxItemUpdate(reportId) })
-      .from(inspectionReportItems)
-      .where(eq(inspectionReportItems.reportId, reportId))
-      .limit(1) as Array<{ maxUpdatedAt: Date | null }>;
-    if (!maxUpdatedAt || maxUpdatedAt.getTime() <= cachedAt.getTime()) {
-      return cached;
-    }
+/** Forces a fresh generation, awaiting completion. Used by the
+ *  "Refresh" button (?refresh=1) — the user explicitly asked, so
+ *  blocking is acceptable. Falls through to readHomeIQ semantics on
+ *  load failures (returns existing cache rather than wiping it). */
+export async function getOrRegenerate(reportId: string, opts: { force?: boolean } = {}): Promise<HomeIQLookup> {
+  if (!opts.force) return readHomeIQ(reportId);
+  const data = await runWithLock(reportId);
+  if (!data) {
+    // Generation failed — fall back to whatever's in the cache so a
+    // bad regeneration attempt doesn't strand the user with nothing.
+    const fallback = await readHomeIQ(reportId);
+    return fallback.status === 'ready' ? fallback : { status: 'unavailable' };
   }
+  return { status: 'ready', data };
+}
 
-  return generateHomeIQ(reportId);
+/** Fire-and-forget generator for a report. Idempotent — repeat calls
+ *  while one is already in flight no-op. Used at parse completion to
+ *  warm the cache before the user opens the Home IQ tab. */
+export function kickOffHomeIQ(reportId: string): void {
+  // No await — the caller is fire-and-forget. Errors are logged
+ //  inside runWithLock, never thrown.
+  void runWithLock(reportId);
+}
+
+async function runWithLock(reportId: string): Promise<HomeIQData | null> {
+  const existing = inFlight.get(reportId);
+  if (existing) return existing;
+  const promise = generateHomeIQ(reportId)
+    .catch(err => {
+      logger.error({ err, reportId }, '[home-iq] generation failed');
+      return null;
+    })
+    .finally(() => { inFlight.delete(reportId); });
+  inFlight.set(reportId, promise);
+  return promise;
+}
+
+/** @deprecated Use readHomeIQ + kickOffHomeIQ for the read path or
+ *  getOrRegenerate({ force: true }) for the explicit-refresh path.
+ *  Kept as a thin shim so any unmigrated caller still works. */
+export async function getOrGenerateHomeIQ(reportId: string, opts: { force?: boolean } = {}): Promise<HomeIQData | null> {
+  const result = await getOrRegenerate(reportId, opts);
+  return result.status === 'ready' ? result.data : null;
 }
 
 /** Generates Home IQ data fresh from the inspection items + property

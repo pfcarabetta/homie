@@ -3102,9 +3102,9 @@ router.get('/reports/:reportId/home-iq', async (req: Request, res: Response) => 
       return;
     }
     const force = req.query.refresh === '1' || req.query.refresh === 'true';
-    const { getOrGenerateHomeIQ } = await import('../services/home-iq');
-    const data = await getOrGenerateHomeIQ(req.params.reportId, { force });
-    if (!data) {
+    const { getOrRegenerate } = await import('../services/home-iq');
+    const result = await getOrRegenerate(req.params.reportId, { force });
+    if (result.status === 'unavailable') {
       res.status(409).json({
         data: null,
         error: 'Home IQ is only available for parsed reports. Wait for parsing to complete and try again.',
@@ -3112,7 +3112,19 @@ router.get('/reports/:reportId/home-iq', async (req: Request, res: Response) => 
       });
       return;
     }
-    res.json({ data, error: null, meta: {} });
+    if (result.status === 'generating') {
+      // Cache miss — generation is running in the background. Tell
+      // the frontend to poll. 202 keeps the request cheap (no Claude
+      // calls await this response) and survives the user navigating
+      // away or closing the tab while parsing finishes server-side.
+      res.status(202).json({
+        data: null,
+        error: null,
+        meta: { status: 'generating' },
+      });
+      return;
+    }
+    res.json({ data: result.data, error: null, meta: { status: 'ready' } });
   } catch (err) {
     logger.error({ err, reportId: req.params.reportId }, '[GET /account/reports/:reportId/home-iq]');
     res.status(500).json({ data: null, error: 'Failed to generate Home IQ', meta: {} });

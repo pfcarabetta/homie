@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { O, G, D } from './constants';
 import {
   inspectService,
@@ -59,9 +59,12 @@ export default function HomeIQTab({ reports, onNavigate }: HomeIQTabProps) {
   const [activeReportId, setActiveReportId] = useState<string | null>(() => parsedReports[0]?.id ?? null);
   const [data, setData] = useState<HomeIQData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedSystem, setSelectedSystem] = useState<string | null>(null);
+  const pollTimerRef = useRef<number | null>(null);
+  const cancelledRef = useRef(false);
 
   // Reset selection if the user picks a different report.
   useEffect(() => { setSelectedSystem(null); }, [activeReportId]);
@@ -73,30 +76,70 @@ export default function HomeIQTab({ reports, onNavigate }: HomeIQTabProps) {
     }
   }, [parsedReports, activeReportId]);
 
+  const clearPoll = useCallback(() => {
+    if (pollTimerRef.current !== null) {
+      window.clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  // Cancel any in-flight poll on unmount or when the report id changes
+  // — otherwise a slow generation can write into a stale component.
+  useEffect(() => {
+    cancelledRef.current = false;
+    return () => { cancelledRef.current = true; clearPoll(); };
+  }, [clearPoll]);
+
   const fetchHomeIQ = useCallback(async (reportId: string, refresh = false) => {
+    clearPoll();
     if (refresh) setRefreshing(true); else setLoading(true);
     setError(null);
     try {
       const res = await inspectService.getHomeIQ(reportId, { refresh });
-      if (res.error || !res.data) {
-        setError(res.error ?? 'Failed to load Home IQ');
+      if (cancelledRef.current) return;
+      if (res.error) {
+        setError(res.error);
         setData(null);
-      } else {
+        setGenerating(false);
+      } else if (res.data) {
+        // 200 OK with the cached payload — render immediately.
         setData(res.data);
+        setGenerating(false);
+      } else if (res.meta && (res.meta as { status?: string }).status === 'generating') {
+        // 202 — generation kicked off (or already running) on the
+        // server. Show the generating state and poll every 5s. The
+        // poll survives the user closing the tab and coming back
+        // because the server holds the lock + caches on completion.
+        setData(null);
+        setGenerating(true);
+        pollTimerRef.current = window.setTimeout(() => {
+          void fetchHomeIQ(reportId, false);
+        }, 5000);
+      } else {
+        setError('Failed to load Home IQ');
+        setData(null);
+        setGenerating(false);
       }
     } catch (err) {
+      if (cancelledRef.current) return;
       setError((err as Error).message ?? 'Failed to load Home IQ');
       setData(null);
+      setGenerating(false);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!cancelledRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, []);
+  }, [clearPoll]);
 
   useEffect(() => {
     if (!activeReportId) return;
     setData(null);
+    setGenerating(false);
     void fetchHomeIQ(activeReportId);
+    // Switching reports cancels the previous poll automatically because
+    // fetchHomeIQ calls clearPoll() at its top.
   }, [activeReportId, fetchHomeIQ]);
 
   const activeReport = parsedReports.find(r => r.id === activeReportId) ?? null;
@@ -166,13 +209,20 @@ export default function HomeIQTab({ reports, onNavigate }: HomeIQTabProps) {
         </div>
       </div>
 
-      {/* Loading state — initial generation can take up to ~10s */}
-      {loading && (
+      {/* Initial fetch (cache check) */}
+      {loading && !generating && (
         <LoadingState />
       )}
 
+      {/* Background generation — server is working, we're polling.
+          Survives the user navigating away because generation runs
+          server-side regardless of whether this tab is open. */}
+      {generating && !data && (
+        <GeneratingState />
+      )}
+
       {/* Error state */}
-      {error && !loading && (
+      {error && !loading && !generating && (
         <ErrorState
           message={error}
           onRetry={() => activeReportId && fetchHomeIQ(activeReportId)}
@@ -314,10 +364,47 @@ function LoadingState() {
     }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>{'🧠'}</div>
       <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: 'var(--bp-text)', marginBottom: 6 }}>
-        Generating Home IQ…
+        Loading Home IQ…
       </div>
       <div style={{ fontSize: 13, color: 'var(--bp-subtle)', maxWidth: 420, margin: '0 auto', lineHeight: 1.5 }}>
-        First-time generation runs a Claude assessment per system + queries FEMA & EPA. This usually takes 5–10 seconds. Subsequent loads will be instant.
+        Checking the cache for this property.
+      </div>
+    </div>
+  );
+}
+
+/** Background generation in flight on the server. Polls every 5s
+ *  until the cache lands. Survives the user navigating away — the
+ *  server keeps generating either way. */
+function GeneratingState() {
+  return (
+    <div style={{
+      background: 'var(--bp-card)', border: '1px solid var(--bp-border)',
+      borderRadius: 14, padding: 40, textAlign: 'center',
+      fontFamily: "'DM Sans',sans-serif",
+    }}>
+      <div style={{ position: 'relative', width: 56, height: 56, margin: '0 auto 16px' }}>
+        <style>{`@keyframes hi-iq-spin { to { transform: rotate(360deg); } } @keyframes hi-iq-spin-rev { to { transform: rotate(-360deg); } }`}</style>
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '50%',
+          border: '3px solid var(--bp-border)',
+        }} />
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '50%',
+          border: '3px solid transparent', borderTopColor: O,
+          animation: 'hi-iq-spin 1.4s linear infinite',
+        }} />
+        <div style={{
+          position: 'absolute', inset: 6, borderRadius: '50%',
+          border: '3px solid transparent', borderBottomColor: ACCENT,
+          animation: 'hi-iq-spin-rev 1.8s linear infinite',
+        }} />
+      </div>
+      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: 'var(--bp-text)', marginBottom: 6 }}>
+        Generating your Home IQ
+      </div>
+      <div style={{ fontSize: 13, color: 'var(--bp-subtle)', maxWidth: 460, margin: '0 auto', lineHeight: 1.55 }}>
+        Running an AI assessment for each system and benchmarking against public datasets (NAHB, AHS, FEMA, EPA). Typically <strong style={{ color: 'var(--bp-text)' }}>30–90 seconds</strong>. You can leave this page — we'll keep generating in the background and the next time you open this tab it'll be ready instantly.
       </div>
     </div>
   );

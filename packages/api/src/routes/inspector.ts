@@ -3347,6 +3347,19 @@ No preamble, no markdown code fences. Return ONLY the JSON object.`;
         }
       } catch (geoErr) {
         logger.warn({ err: geoErr, reportId }, '[inspector] Geocoding failed (non-fatal)');
+      } finally {
+        // Warm Home IQ regardless of whether the geocode landed —
+        // FEMA flood lookups gracefully skip when lat/lon is null
+        // and AHS cohort lookups gracefully skip when state is
+        // unrecognized. This way the homeowner finds Home IQ ready
+        // when they open the tab instead of triggering a fresh
+        // generation that breaks if they navigate away mid-flight.
+        try {
+          const { kickOffHomeIQ } = await import('../services/home-iq');
+          kickOffHomeIQ(reportId);
+        } catch (iqErr) {
+          logger.warn({ err: iqErr, reportId }, '[inspector] Home IQ warmup failed (non-fatal)');
+        }
       }
     })();
 
