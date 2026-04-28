@@ -3,6 +3,9 @@
   "outputDirectory": "packages/web/dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/((?!assets/|og-image\\.png).*)", "destination": "/index.html" }
+    { "source": "/inspect",  "destination": "/inspect.html" },
+    { "source": "/inspect/", "destination": "/inspect.html" },
+    { "source": "/((?!assets/|og-image\\.png|inspect\\.html).*)", "destination": "/index.html" }
   ]
 }
+
