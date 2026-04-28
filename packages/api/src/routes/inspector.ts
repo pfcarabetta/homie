@@ -1220,6 +1220,7 @@ router.get('/earnings/summary', requireInspectorAuth, async (req: Request, res: 
       pricingTier: inspectionReports.pricingTier,
       priceCentsPaid: inspectionReports.priceCentsPaid,
       paymentStatus: inspectionReports.paymentStatus,
+      source: inspectionReports.source,
       createdAt: inspectionReports.createdAt,
     })
       .from(inspectionReports)
@@ -1239,7 +1240,7 @@ router.get('/earnings/summary', requireInspectorAuth, async (req: Request, res: 
     for (const r of reports) {
       const cents = r.inspectorPartnerId === req.inspectorId
         ? estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector)
-        : referralBonusCentsFor(r);
+        : referralBonusCentsFor(r, pricingConfig.inspector);
       lifetimeCents += cents;
       const ts = r.createdAt.getTime();
       if (ts >= startOfMonth) {
@@ -1360,6 +1361,7 @@ router.get('/dashboard-metrics', requireInspectorAuth, async (req: Request, res:
       pricingTier: inspectionReports.pricingTier,
       priceCentsPaid: inspectionReports.priceCentsPaid,
       paymentStatus: inspectionReports.paymentStatus,
+      source: inspectionReports.source,
     })
       .from(inspectionReports)
       .where(and(
@@ -1374,7 +1376,7 @@ router.get('/dashboard-metrics', requireInspectorAuth, async (req: Request, res:
         return sum + estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector);
       }
       if (r.referrerPartnerId === partnerId) {
-        return sum + referralBonusCentsFor(r);
+        return sum + referralBonusCentsFor(r, pricingConfig.inspector);
       }
       return sum;
     }, 0);
@@ -1428,6 +1430,7 @@ router.get('/earnings', requireInspectorAuth, async (req: Request, res: Response
       pricingTier: inspectionReports.pricingTier,
       priceCentsPaid: inspectionReports.priceCentsPaid,
       paymentStatus: inspectionReports.paymentStatus,
+      source: inspectionReports.source,
       createdAt: inspectionReports.createdAt,
     })
       .from(inspectionReports)
@@ -1442,7 +1445,7 @@ router.get('/earnings', requireInspectorAuth, async (req: Request, res: Response
       .map(r => {
         const isReferral = r.referrerPartnerId === req.inspectorId && r.inspectorPartnerId !== req.inspectorId;
         const cents = isReferral
-          ? referralBonusCentsFor(r)
+          ? referralBonusCentsFor(r, pricingConfig.inspector)
           : estimatedEarningsCentsFor(overrides, r, pricingConfig.inspector);
         return {
           id: r.id,

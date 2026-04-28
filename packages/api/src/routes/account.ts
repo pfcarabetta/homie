@@ -1637,9 +1637,15 @@ router.post('/reports/:reportId/confirm-payment', async (req: Request, res: Resp
       return;
     }
 
-    // Set the pricing tier
+    // Set the pricing tier and stamp payment_status + price_cents_paid
+    // (the retail amount the homeowner actually paid). The latter two
+    // are what services/pricing.ts:referralBonusCentsFor reads to
+    // credit the partner who referred this homeowner — retail minus
+    // wholesale flows to the partner.
     await db.update(inspectionReports).set({
       pricingTier: tier,
+      paymentStatus: 'paid',
+      priceCentsPaid: REPORT_TIER_PRICES[tier].cents,
       updatedAt: new Date(),
     }).where(eq(inspectionReports.id, report.id));
 
