@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import SEO from '@/components/SEO';
 import { trackEvent } from '@/services/analytics';
 import { captureReferrerIfPresent, getStoredReferrer } from '@/services/referral-tracking';
+import InspectUploadModal, { type UploadPhase } from '@/components/InspectUploadModal';
 
 /**
  * Homie Inspect — landing page (Direction D · Combined).
@@ -810,6 +811,8 @@ export default function HomieInspectionLanding() {
   const [audience, setAudience] = useState<Audience>('buyer');
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [uploadPhase, setUploadPhase] = useState<UploadPhase>('uploading');
+  const [itemsParsedCount, setItemsParsedCount] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -865,7 +868,9 @@ export default function HomieInspectionLanding() {
     const uploadStartedAt = Date.now();
     trackEvent('inspect_upload_started', { source: 'consumer_landing' });
     setUploading(true);
-    setUploadStatus('Uploading report...');
+    setUploadPhase('uploading');
+    setItemsParsedCount(0);
+    setUploadStatus('Uploading your PDF…');
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -873,7 +878,8 @@ export default function HomieInspectionLanding() {
         reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsDataURL(file);
       });
-      setUploadStatus('Processing with AI...');
+      setUploadPhase('processing');
+      setUploadStatus('Reading the report and pulling out findings…');
       const { inspectService } = await import('@/services/inspector-api');
       const referrerPartner = getStoredReferrer();
       const res = await inspectService.uploadReport({
@@ -891,7 +897,8 @@ export default function HomieInspectionLanding() {
         report_id: reportId,
         file_size_kb: Math.round(file.size / 1024),
       });
-      setUploadStatus('Parsing inspection items...');
+      setUploadPhase('parsing');
+      setUploadStatus('Turning paragraphs into structured items…');
       // Poll cadence + ceiling intentionally match the homeowner-portal
       // UploadWizard. Original: 5s × 60 = 5 min hard cap, then a scary
       // alert. Claude can legitimately take longer than that on dense
@@ -917,7 +924,9 @@ export default function HomieInspectionLanding() {
                 report_id: reportId,
                 time_to_parse_ms: Date.now() - uploadStartedAt,
               });
-              setUploadStatus(`${status.data.itemsParsed} items found! Redirecting...`);
+              setUploadPhase('complete');
+              setItemsParsedCount(status.data.itemsParsed);
+              setUploadStatus(`${status.data.itemsParsed} items ready — redirecting you now`);
               setTimeout(() => { window.location.href = destination; }, 1500);
               return;
             }
@@ -928,7 +937,8 @@ export default function HomieInspectionLanding() {
               return;
             }
             if (status.data?.itemsParsed && status.data.itemsParsed > 0) {
-              setUploadStatus(`Found ${status.data.itemsParsed} items so far...`);
+              setItemsParsedCount(status.data.itemsParsed);
+              setUploadStatus(`Found ${status.data.itemsParsed} items so far…`);
             }
           } catch { /* keep polling — transient network errors shouldn't kill the loop */ }
         }
@@ -1069,19 +1079,15 @@ export default function HomieInspectionLanding() {
         </div>
       )}
 
-      {/* Upload-status toast */}
-      {uploadStatus && (
-        <div style={{
-          position: 'fixed', bottom: 32, right: 32, zIndex: 99,
-          background: C.dark, color: '#fff', padding: '14px 20px', borderRadius: 100,
-          boxShadow: '0 16px 40px -12px rgba(0,0,0,.35)',
-          ...DM, fontSize: 14, fontWeight: 600,
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.green, animation: 'hi-pulseDot 1.4s infinite' }}/>
-          {uploadStatus}
-        </div>
-      )}
+      {/* Upload-progress modal — full-screen takeover that survives the
+          full 2–5 min parse with educational rotating cards. Replaces
+          the older bottom-right toast which got missed on long parses. */}
+      <InspectUploadModal
+        open={uploading}
+        phase={uploadPhase}
+        statusText={uploadStatus ?? ''}
+        itemsParsed={itemsParsedCount}
+      />
     </div>
   );
 }
