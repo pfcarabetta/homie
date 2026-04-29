@@ -18,6 +18,7 @@ import HomeIQTab from './HomeIQTab';
 import DocumentsTab from './DocumentsTab';
 import SettingsTab from './SettingsTab';
 import InspectPortalTour, { hasSeenTour } from './InspectPortalTour';
+import SupportChatWidget from '@/components/SupportChatWidget';
 
 export default function InspectPortal() {
   useDocumentTitle('Homie Inspect');
@@ -160,6 +161,7 @@ export default function InspectPortal() {
         currentTab={tab}
         onNavigate={handleNavigate}
       />
+      <SupportChatWidget context={{ surface: 'inspect-portal', product: 'inspect' }} />
     </InspectLayout>
   );
 }

@@ -21,6 +21,7 @@ import TeamTab from './TeamTab';
 import SettingsTab from './SettingsTab';
 import BillingTab from './BillingTab';
 import BusinessChat from '../BusinessChat';
+import SupportChatWidget from '@/components/SupportChatWidget';
 
 /* ── Create Workspace Modal ─────────────────────────────────────────────── */
 
@@ -574,6 +575,7 @@ export default function BusinessPortal() {
             setShowCreate(false);
           }} />
       )}
+      <SupportChatWidget context={{ surface: 'business', product: 'business' }} />
     </BusinessLayout>
   );
 }

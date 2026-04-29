@@ -101,6 +101,25 @@ async function start() {
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS diy_analysis jsonb`);
     await db.execute(sql`ALTER TABLE inspection_report_items ADD COLUMN IF NOT EXISTS maintenance_completed_at timestamp with time zone`);
 
+    // Support tickets — submissions from /support's contact form. Mirrored
+    // to yo@homiepro.ai by email; the row is the audit trail.
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS support_tickets (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      product text NOT NULL,
+      name text,
+      email text NOT NULL,
+      subject text NOT NULL,
+      message text NOT NULL,
+      current_url text,
+      homeowner_id uuid,
+      workspace_id uuid,
+      status text NOT NULL DEFAULT 'open',
+      created_at timestamp with time zone NOT NULL DEFAULT now(),
+      replied_at timestamp with time zone
+    )`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS support_tickets_email_idx ON support_tickets(email)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS support_tickets_status_idx ON support_tickets(status)`);
+
     // Multi-document analysis tables
     await db.execute(sql`CREATE TABLE IF NOT EXISTS inspection_supporting_documents (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

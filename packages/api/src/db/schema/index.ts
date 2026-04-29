@@ -29,3 +29,4 @@ export * from './notifications';
 export * from './property-scans';
 export * from './pms-connections';
 export * from './inspector';
+export * from './support-tickets';

@@ -32,8 +32,17 @@ export async function sendSms(to: string, body: string): Promise<void> {
 /**
  * Sends a plain-text email via SendGrid.
  * Silently skips (with a warning) if SendGrid is not configured.
+ *
+ * `options.replyTo` lets the recipient hit Reply and have it land at a
+ * different address (e.g. inbound support emails routed to yo@ should
+ * reply directly to the user who wrote in).
  */
-export async function sendEmail(to: string, subject: string, htmlOrText: string): Promise<void> {
+export async function sendEmail(
+  to: string,
+  subject: string,
+  htmlOrText: string,
+  options?: { replyTo?: string },
+): Promise<void> {
   const apiKey = process.env.SENDGRID_API_KEY;
   const fromEmail = process.env.SENDGRID_FROM_EMAIL;
 
@@ -48,6 +57,7 @@ export async function sendEmail(to: string, subject: string, htmlOrText: string)
     to,
     from: { email: fromEmail, name: 'Homie' },
     subject,
+    ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
     ...(isHtml ? { html: htmlOrText } : { text: htmlOrText }),
   });
 }

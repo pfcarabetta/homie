@@ -64,6 +64,7 @@ import BusinessChatPreview from '@/pages/BusinessChatPreview';
 import DIYPreviewDemo from '@/pages/DIYPreviewDemo';
 import OutreachTransparencyDemo from '@/pages/OutreachTransparencyDemo';
 import QuoteTabsDemo from '@/pages/QuoteTabsDemo';
+import SupportPage from '@/pages/SupportPage';
 
 /** Fires a GA `page_view` on every SPA route change. The initial
  *  page_view is fired by the inline gtag snippet in index.html before
@@ -100,6 +101,9 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/reset-password/confirm" element={<ResetPasswordConfirm />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/support" element={<SupportPage />} />
+          <Route path="/support/:product" element={<SupportPage />} />
+          <Route path="/support/:product/:slug" element={<SupportPage />} />
           <Route path="/business" element={<BusinessPortal />} />
           <Route path="/business/landing" element={<BusinessLanding />} />
           <Route path="/inspect-portal" element={<InspectPortal />} />

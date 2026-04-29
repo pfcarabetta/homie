@@ -4,6 +4,7 @@ import healthRouter from './routes/health';
 import authRouter from './routes/auth';
 import diagnosticRouter from './routes/diagnostic';
 import diyRouter from './routes/diy';
+import supportRouter from './routes/support';
 import voiceRouter from './routes/voice';
 import geoRouter from './routes/geo';
 import jobsRouter from './routes/jobs';
@@ -82,6 +83,9 @@ app.use('/api/v1/diagnostic', diagnosticLimiter, diagnosticRouter);
 // DIY analysis — public (no auth) so it works during pre-auth intake,
 // rate-limited like diagnostic since it's also an LLM call per request.
 app.use('/api/v1/diy', diagnosticLimiter, diyRouter);
+// Support — public (no auth) for the contact form + AI chat. Rate-limited
+// like diagnostic since the chat endpoint is an LLM call per request.
+app.use('/api/v1/support', diagnosticLimiter, supportRouter);
 app.use('/api/v1/voice', diagnosticLimiter, voiceRouter);
 app.use('/api/v1/geo', apiLimiter, geoRouter);
 app.use('/api/v1/jobs', apiLimiter, requireAuth, jobsRouter);
