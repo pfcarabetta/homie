@@ -41,6 +41,16 @@ export interface InspectorTierConfig {
   /** What we suggest the inspector charges their client. Display-
    *  only — Homie never collects this. */
   retailPriceCents: number;
+  /** Active promo retail price (cents). When non-null, the homeowner-
+   *  direct retail flows (consumer landing TiersB and the homeowner
+   *  Stripe checkout in /account/reports/:reportId/checkout) charge
+   *  this instead of `retailPriceCents`, and display the regular price
+   *  with a strikethrough. Wholesale is unaffected — inspectors still
+   *  pay the same `wholesalePriceCents` regardless of promo state. */
+  promoRetailPriceCents: number | null;
+  /** Display label for the promo, e.g. "Launch pricing". Only shown
+   *  when `promoRetailPriceCents` is non-null. */
+  promoLabel: string | null;
 }
 export interface InspectorPricingConfig {
   tiers: {
@@ -86,9 +96,9 @@ export const DEFAULT_PRICING: PricingConfig = {
     // pricing_config row — defaults only apply when the DB row is
     // missing the inspector key.
     tiers: {
-      essential:    { wholesalePriceCents: 4900,  retailPriceCents: 9900  },
-      professional: { wholesalePriceCents: 7900,  retailPriceCents: 19900 },
-      premium:      { wholesalePriceCents: 9900,  retailPriceCents: 29900 },
+      essential:    { wholesalePriceCents: 4900,  retailPriceCents: 9900,  promoRetailPriceCents: null, promoLabel: null },
+      professional: { wholesalePriceCents: 7900,  retailPriceCents: 19900, promoRetailPriceCents: null, promoLabel: null },
+      premium:      { wholesalePriceCents: 9900,  retailPriceCents: 29900, promoRetailPriceCents: null, promoLabel: null },
     },
   },
 };
@@ -116,10 +126,28 @@ export async function getPricingConfig(): Promise<PricingConfig> {
     // missing `tiers` — we fall through to the tiered defaults so
     // the upload path keeps working without a manual data fix.
     const storedInspector = stored?.inspector as InspectorPricingConfig | { reportPriceCents?: number } | undefined;
-    const inspector: InspectorPricingConfig =
-      storedInspector && 'tiers' in storedInspector && storedInspector.tiers
-        ? storedInspector
-        : DEFAULT_PRICING.inspector;
+    let inspector: InspectorPricingConfig;
+    if (storedInspector && 'tiers' in storedInspector && storedInspector.tiers) {
+      // Promo fields landed after the original tiered shape, so older
+      // singleton rows are missing them. Backfill with `null` so the
+      // shape is uniform downstream — never silently revert a stored
+      // wholesale/retail value.
+      const fillTier = (t: Partial<InspectorTierConfig> | undefined, defaults: InspectorTierConfig): InspectorTierConfig => ({
+        wholesalePriceCents: t?.wholesalePriceCents ?? defaults.wholesalePriceCents,
+        retailPriceCents: t?.retailPriceCents ?? defaults.retailPriceCents,
+        promoRetailPriceCents: t?.promoRetailPriceCents ?? null,
+        promoLabel: t?.promoLabel ?? null,
+      });
+      inspector = {
+        tiers: {
+          essential: fillTier(storedInspector.tiers.essential, DEFAULT_PRICING.inspector.tiers.essential),
+          professional: fillTier(storedInspector.tiers.professional, DEFAULT_PRICING.inspector.tiers.professional),
+          premium: fillTier(storedInspector.tiers.premium, DEFAULT_PRICING.inspector.tiers.premium),
+        },
+      };
+    } else {
+      inspector = DEFAULT_PRICING.inspector;
+    }
     const config: PricingConfig = {
       homeowner: stored?.homeowner ?? DEFAULT_PRICING.homeowner,
       business: stored?.business ?? DEFAULT_PRICING.business,
@@ -140,6 +168,23 @@ export async function getInspectorTierPricing(tier: InspectorTier): Promise<Insp
   const config = await getPricingConfig();
   return config.inspector.tiers[tier] ?? DEFAULT_PRICING.inspector.tiers[tier] ?? DEFAULT_PRICING.inspector.tiers.professional;
 }
+
+/** What the homeowner-direct flows actually charge for a tier. When
+ *  an admin has set `promoRetailPriceCents`, that's the live price;
+ *  otherwise it's the regular retail. Use this everywhere we'd hit
+ *  Stripe with the homeowner's card or render a price on a public
+ *  surface. Wholesale is intentionally untouched — inspector
+ *  upload-time billing still pays `wholesalePriceCents`. */
+export function effectiveInspectorRetailCents(tier: InspectorTierConfig): number {
+  return tier.promoRetailPriceCents ?? tier.retailPriceCents;
+}
+
+/** Display label for a tier, e.g. `"Essential"` or `"Essential — Launch pricing"`. */
+export const INSPECTOR_TIER_LABELS: Record<InspectorTier, string> = {
+  essential: 'Essential',
+  professional: 'Professional',
+  premium: 'Premium',
+};
 
 export function invalidatePricingCache(): void {
   _cache = null;

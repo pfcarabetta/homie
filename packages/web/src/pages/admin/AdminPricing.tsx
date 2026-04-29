@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { adminService } from '@/services/admin-api';
-import { PricingConfig, HomeownerTierConfig, BusinessPlanConfig, DEFAULT_PRICING } from '@/hooks/usePricing';
+import { PricingConfig, HomeownerTierConfig, BusinessPlanConfig, InspectorTierConfig, DEFAULT_PRICING } from '@/hooks/usePricing';
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
@@ -215,12 +215,128 @@ function BusinessPlanRow({ planId, label, config, onChange, readOnly }: Business
   );
 }
 
+/* ── Inspector tier editor ────────────────────────────────────────────────── */
+
+interface InspectorTierRowProps {
+  tierId: string;
+  label: string;
+  config: InspectorTierConfig;
+  onChange: (updated: InspectorTierConfig) => void;
+}
+
+function InspectorTierRow({ tierId, label, config, onChange }: InspectorTierRowProps) {
+  const hasPromo = config.promoRetailPriceCents != null;
+  const effectiveRetail = hasPromo ? config.promoRetailPriceCents! : config.retailPriceCents;
+  const spread = effectiveRetail - config.wholesalePriceCents;
+
+  return (
+    <div className="bg-white rounded-xl border border-dark/10 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-dark capitalize">{label}</h3>
+        <span className="text-xs text-dark/40 font-mono">{tierId}</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-3">
+        <div>
+          <label className="block text-xs text-dark/50 mb-1">Wholesale ($)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={centsToStr(config.wholesalePriceCents)}
+            onChange={(e) => onChange({ ...config, wholesalePriceCents: strToCents(e.target.value) })}
+            className="w-full border border-dark/15 rounded-lg px-3 py-2 text-sm text-dark focus:outline-none focus:border-orange-500"
+          />
+          <p className="text-[10px] text-dark/40 mt-1">Inspector pays at upload</p>
+        </div>
+        <div>
+          <label className="block text-xs text-dark/50 mb-1">Retail ($)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={centsToStr(config.retailPriceCents)}
+            onChange={(e) => onChange({ ...config, retailPriceCents: strToCents(e.target.value) })}
+            className="w-full border border-dark/15 rounded-lg px-3 py-2 text-sm text-dark focus:outline-none focus:border-orange-500"
+          />
+          <p className="text-[10px] text-dark/40 mt-1">Homeowner-direct charge</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label className="block text-xs text-dark/50 mb-1">Effective retail (after promo)</label>
+          <div className="w-full border border-dark/10 rounded-lg px-3 py-2 text-sm text-dark/40 bg-warm">
+            ${centsToStr(effectiveRetail)}
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs text-dark/50 mb-1">Inspector spread</label>
+          <div className="w-full border border-dark/10 rounded-lg px-3 py-2 text-sm text-dark/40 bg-warm">
+            ${centsToStr(Math.max(0, spread))}
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-dark/8 pt-4">
+        <label className="flex items-center gap-2 cursor-pointer mb-3">
+          <input
+            type="checkbox"
+            checked={hasPromo}
+            onChange={(e) => {
+              if (e.target.checked) {
+                onChange({ ...config, promoRetailPriceCents: config.retailPriceCents, promoLabel: 'Limited time offer' });
+              } else {
+                onChange({ ...config, promoRetailPriceCents: null, promoLabel: null });
+              }
+            }}
+            className="accent-orange-500"
+          />
+          <span className="text-sm font-medium text-dark">Active promo (strikethrough display)</span>
+        </label>
+
+        {hasPromo && (
+          <div className="grid grid-cols-2 gap-4 mt-2">
+            <div>
+              <label className="block text-xs text-dark/50 mb-1">Promo retail price ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={centsToStr(config.promoRetailPriceCents!)}
+                onChange={(e) => onChange({ ...config, promoRetailPriceCents: strToCents(e.target.value) })}
+                className="w-full border border-orange-300 rounded-lg px-3 py-2 text-sm text-dark focus:outline-none focus:border-orange-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-dark/50 mb-1">Promo label</label>
+              <input
+                type="text"
+                placeholder="e.g. Limited time offer"
+                value={config.promoLabel ?? ''}
+                onChange={(e) => onChange({ ...config, promoLabel: e.target.value || null })}
+                className="w-full border border-orange-300 rounded-lg px-3 py-2 text-sm text-dark focus:outline-none focus:border-orange-500"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main page ────────────────────────────────────────────────────────────── */
 
 const HOMEOWNER_TIER_LABELS: Record<string, string> = {
   standard: 'Standard',
   priority: 'Priority',
   emergency: 'Emergency',
+};
+
+const INSPECTOR_TIER_LABELS: Record<string, string> = {
+  essential: 'Essential',
+  professional: 'Professional',
+  premium: 'Premium',
 };
 
 const BUSINESS_PLAN_LABELS: Record<string, string> = {
@@ -266,6 +382,16 @@ export default function AdminPricing() {
     setConfig((c) => ({ ...c, business: { ...c.business, [planId]: updated } }));
   }
 
+  function updateInspectorTier(tierId: 'essential' | 'professional' | 'premium', updated: InspectorTierConfig) {
+    setConfig((c) => ({
+      ...c,
+      inspector: {
+        ...c.inspector,
+        tiers: { ...c.inspector.tiers, [tierId]: updated },
+      },
+    }));
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -298,6 +424,25 @@ export default function AdminPricing() {
               label={label}
               config={config.homeowner[tierId] ?? DEFAULT_PRICING.homeowner[tierId]}
               onChange={(updated) => updateHomeownerTier(tierId, updated)}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* Inspector tiers */}
+      <section className="mb-8">
+        <h2 className="text-lg font-bold text-dark mb-1">Homie Inspect Tiers</h2>
+        <p className="text-sm text-dark/50 mb-4">
+          Wholesale = what inspectors pay at upload. Retail = what homeowners pay direct (consumer landing checkout + portal upgrade flow). Promo retail flows through both surfaces with the regular price struck through.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {(['essential', 'professional', 'premium'] as const).map((tierId) => (
+            <InspectorTierRow
+              key={tierId}
+              tierId={tierId}
+              label={INSPECTOR_TIER_LABELS[tierId]}
+              config={config.inspector?.tiers?.[tierId] ?? DEFAULT_PRICING.inspector.tiers[tierId]}
+              onChange={(updated) => updateInspectorTier(tierId, updated)}
             />
           ))}
         </div>

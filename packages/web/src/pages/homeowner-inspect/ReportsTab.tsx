@@ -9,6 +9,7 @@ import DIYBadge from './DIYBadge';
 import PageCitation from './PageCitation';
 import ModeToggle, { type ReportMode } from './ModeToggle';
 import SupportingDocUploadModal from './SupportingDocUploadModal';
+import { usePricing, effectiveInspectorRetailCents } from '@/hooks/usePricing';
 
 interface ReportsTabProps {
   onNavigate: (tab: Tab) => void;
@@ -1024,30 +1025,40 @@ function ReportDetail({ reportId, reports, onBack, onReportsChange, onNavigate }
 
 // ── Pricing Modal ───────────────────────────────────────────────────────────
 
-const TIERS = [
+const TIER_DEFS = [
   {
     id: 'essential' as const,
     name: 'Essential',
-    price: 99,
+    fallbackCents: 9900,
     features: ['AI report analysis', 'Item details & severity', 'Cost estimates', 'Category breakdown'],
+    popular: false,
   },
   {
     id: 'professional' as const,
     name: 'Professional',
-    price: 199,
+    fallbackCents: 19900,
     popular: true,
     features: ['Everything in Essential', 'Dispatch to providers', 'Quote comparison', 'Real-time quote tracking'],
   },
   {
     id: 'premium' as const,
     name: 'Premium',
-    price: 299,
+    fallbackCents: 29900,
+    popular: false,
     features: ['Everything in Professional', 'Negotiation documents', 'Priority dispatch', 'Maintenance timeline'],
   },
 ];
 
+// Render a cents value in dollar form. Whole-dollar amounts drop the
+// `.00` to match the existing $99/$199/$299 styling.
+function fmtTierPrice(cents: number): string {
+  const dollars = cents / 100;
+  return `$${dollars % 1 === 0 ? dollars.toFixed(0) : dollars.toFixed(2)}`;
+}
+
 function PricingModal({ reportId, itemCount, mode }: { reportId: string; itemCount: number; mode: ReportMode }) {
   const [loading, setLoading] = useState<string | null>(null);
+  const { pricing } = usePricing();
 
   async function handleSelectTier(tier: 'essential' | 'professional' | 'premium') {
     setLoading(tier);
@@ -1086,7 +1097,13 @@ function PricingModal({ reportId, itemCount, mode }: { reportId: string; itemCou
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14 }}>
-          {TIERS.map(tier => (
+          {TIER_DEFS.map(tier => {
+            const tierConfig = pricing.inspector?.tiers?.[tier.id];
+            const effectiveCents = tierConfig ? effectiveInspectorRetailCents(tierConfig) : tier.fallbackCents;
+            const regularCents = tierConfig?.retailPriceCents ?? tier.fallbackCents;
+            const promoActive = tierConfig?.promoRetailPriceCents != null;
+            const promoLabel = tierConfig?.promoLabel ?? null;
+            return (
             <div key={tier.id} style={{
               borderRadius: 14, padding: '22px 18px',
               border: `2px solid ${tier.popular ? ACCENT : 'var(--bp-border)'}`,
@@ -1104,10 +1121,18 @@ function PricingModal({ reportId, itemCount, mode }: { reportId: string; itemCou
               <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, color: 'var(--bp-text)', marginBottom: 4 }}>
                 {tier.name}
               </div>
-              <div style={{ fontFamily: "'DM Sans',sans-serif", marginBottom: 14 }}>
-                <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--bp-text)' }}>${tier.price}</span>
-                <span style={{ fontSize: 13, color: 'var(--bp-subtle)', marginLeft: 4 }}>/report</span>
+              <div style={{ fontFamily: "'DM Sans',sans-serif", marginBottom: promoActive ? 4 : 14, display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--bp-text)' }}>{fmtTierPrice(effectiveCents)}</span>
+                {promoActive && (
+                  <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--bp-subtle)', textDecoration: 'line-through' }}>{fmtTierPrice(regularCents)}</span>
+                )}
+                <span style={{ fontSize: 13, color: 'var(--bp-subtle)' }}>/report</span>
               </div>
+              {promoActive && promoLabel && (
+                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: ACCENT, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+                  {promoLabel}
+                </div>
+              )}
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {tier.features.map(f => (
                   <li key={f} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: 'var(--bp-subtle)', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
@@ -1131,7 +1156,8 @@ function PricingModal({ reportId, itemCount, mode }: { reportId: string; itemCou
                 {loading === tier.id ? 'Redirecting...' : `Select ${tier.name}`}
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

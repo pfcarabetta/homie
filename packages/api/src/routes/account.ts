@@ -20,6 +20,7 @@ import { computeSellerAction } from './inspector';
 import { parseSupportingDoc } from '../services/document-parsers';
 import { extractItemsFromDoc } from '../services/doc-item-extractor';
 import { generateCrossReferenceInsights } from '../services/cross-reference';
+import { getInspectorTierPricing, effectiveInspectorRetailCents, INSPECTOR_TIER_LABELS, type InspectorTier } from '../services/pricing';
 import { crossProductMembershipsForEmail } from '../services/cross-products';
 import { ApiResponse } from '../types/api';
 
@@ -1402,12 +1403,15 @@ router.delete('/reports/:reportId', async (req: Request, res: Response) => {
   }
 });
 
-// Per-report pricing tiers
-const REPORT_TIER_PRICES: Record<string, { cents: number; label: string }> = {
-  essential: { cents: 9900, label: 'Essential' },
-  professional: { cents: 19900, label: 'Professional' },
-  premium: { cents: 29900, label: 'Premium' },
-};
+// Per-report pricing tiers — single source of truth lives in
+// services/pricing.ts (admin-editable). The homeowner-direct flows
+// here charge the *effective retail* (promo if active, else regular
+// retail). Wholesale stays in inspector-side flows; this module only
+// handles homeowner-direct.
+const VALID_REPORT_TIERS: readonly InspectorTier[] = ['essential', 'professional', 'premium'] as const;
+function isValidReportTier(t: string | undefined): t is InspectorTier {
+  return !!t && (VALID_REPORT_TIERS as readonly string[]).includes(t);
+}
 
 // PATCH /api/v1/account/reports/:reportId/mode — switch buyer/seller mode for this report
 router.patch('/reports/:reportId/mode', async (req: Request, res: Response) => {
@@ -1543,7 +1547,7 @@ router.post('/reports/:reportId/items/:itemId/diy', async (req: Request, res: Re
 router.post('/reports/:reportId/checkout', async (req: Request, res: Response) => {
   const { tier } = req.body as { tier: string };
 
-  if (!tier || !REPORT_TIER_PRICES[tier]) {
+  if (!isValidReportTier(tier)) {
     res.status(400).json({ data: null, error: 'Invalid tier. Must be essential, professional, or premium', meta: {} });
     return;
   }
@@ -1563,7 +1567,12 @@ router.post('/reports/:reportId/checkout', async (req: Request, res: Response) =
       return;
     }
 
-    const tierConfig = REPORT_TIER_PRICES[tier];
+    // Live pricing — admin's promo (if any) flows through here so the
+    // Stripe charge matches what the homeowner saw on the upgrade modal.
+    const tierConfig = await getInspectorTierPricing(tier);
+    const amountCents = effectiveInspectorRetailCents(tierConfig);
+    const tierLabel = INSPECTOR_TIER_LABELS[tier];
+    const promoSuffix = tierConfig.promoLabel && tierConfig.promoRetailPriceCents != null ? ` (${tierConfig.promoLabel})` : '';
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
       apiVersion: '2025-01-27.acacia' as Stripe.LatestApiVersion,
     });
@@ -1579,8 +1588,8 @@ router.post('/reports/:reportId/checkout', async (req: Request, res: Response) =
       line_items: [{
         price_data: {
           currency: 'usd',
-          product_data: { name: `Homie Inspect ${tierConfig.label} — ${report.propertyAddress}` },
-          unit_amount: tierConfig.cents,
+          product_data: { name: `Homie Inspect ${tierLabel}${promoSuffix} — ${report.propertyAddress}` },
+          unit_amount: amountCents,
         },
         quantity: 1,
       }],
@@ -1596,7 +1605,7 @@ router.post('/reports/:reportId/checkout', async (req: Request, res: Response) =
       cancel_url: `${APP_URL}/inspect-portal?tab=reports&report=${report.id}&payment=canceled`,
     });
 
-    res.json({ data: { checkoutUrl: session.url, amountCents: tierConfig.cents, tier }, error: null, meta: {} });
+    res.json({ data: { checkoutUrl: session.url, amountCents, tier }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[POST /account/reports/:reportId/checkout]');
     res.status(500).json({ data: null, error: `Checkout failed: ${(err as Error).message}`, meta: {} });
@@ -1633,10 +1642,18 @@ router.post('/reports/:reportId/confirm-payment', async (req: Request, res: Resp
     }
 
     const tier = session.metadata?.tier;
-    if (!tier || !REPORT_TIER_PRICES[tier]) {
+    if (!isValidReportTier(tier)) {
       res.status(400).json({ data: null, error: 'Invalid tier in session', meta: {} });
       return;
     }
+
+    // Stamp the actual amount Stripe collected (in case the admin
+    // flipped the promo between checkout-creation and confirm; the
+    // session's `amount_total` is authoritative). Falls back to the
+    // current effective retail if Stripe doesn't return it.
+    const tierConfig = await getInspectorTierPricing(tier);
+    const fallbackCents = effectiveInspectorRetailCents(tierConfig);
+    const priceCentsPaid = typeof session.amount_total === 'number' ? session.amount_total : fallbackCents;
 
     // Set the pricing tier and stamp payment_status + price_cents_paid
     // (the retail amount the homeowner actually paid). The latter two
@@ -1646,7 +1663,7 @@ router.post('/reports/:reportId/confirm-payment', async (req: Request, res: Resp
     await db.update(inspectionReports).set({
       pricingTier: tier,
       paymentStatus: 'paid',
-      priceCentsPaid: REPORT_TIER_PRICES[tier].cents,
+      priceCentsPaid,
       updatedAt: new Date(),
     }).where(eq(inspectionReports.id, report.id));
 

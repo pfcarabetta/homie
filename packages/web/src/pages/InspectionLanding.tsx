@@ -4,6 +4,7 @@ import SEO from '@/components/SEO';
 import { trackEvent } from '@/services/analytics';
 import { captureReferrerIfPresent, getStoredReferrer } from '@/services/referral-tracking';
 import InspectUploadModal, { type UploadPhase } from '@/components/InspectUploadModal';
+import { usePricing, effectiveInspectorRetailCents, type InspectorTierConfig } from '@/hooks/usePricing';
 
 /**
  * Homie Inspect — landing page (Direction D · Combined).
@@ -636,10 +637,28 @@ function NegotiationC({ audience }: { audience: Audience }) {
 
 // ─── TiersB — B5: editorial 3-up with dark "popular" tier ────────────
 function TiersB() {
+  const { pricing } = usePricing();
+
+  // Render `$N` with no decimals when the cents value is whole dollars
+  // (matches the existing $99/$199/$299 styling), otherwise show 2dp.
+  const fmt = (cents: number): string => {
+    const dollars = cents / 100;
+    return `$${dollars % 1 === 0 ? dollars.toFixed(0) : dollars.toFixed(2)}`;
+  };
+  const tierPrice = (tier: InspectorTierConfig | undefined, fallback: number) => {
+    const t = tier ?? { wholesalePriceCents: 0, retailPriceCents: fallback, promoRetailPriceCents: null, promoLabel: null };
+    return {
+      effective: fmt(effectiveInspectorRetailCents(t)),
+      regular: fmt(t.retailPriceCents),
+      promoActive: t.promoRetailPriceCents != null,
+      promoLabel: t.promoLabel,
+    };
+  };
+
   const tiers = [
-    { name: 'Essential',    price: '$99',  sub: 'Understand what\'s in your report', f: ['Item details', 'Severity ratings', 'AI cost estimates', 'Category breakdown'], pop: false },
-    { name: 'Professional', price: '$199', sub: 'Real numbers from real pros',       f: ['Everything in Essential', 'Dispatch + provider quotes', 'Value-impact estimates', 'Lender flags'], pop: true },
-    { name: 'Premium',      price: '$299', sub: 'Negotiate, plan, benchmark',        f: ['Everything in Professional', 'Negotiation documents', 'Maintenance timeline', 'Priority dispatch', 'Full Home IQ'], pop: false },
+    { name: 'Essential',    pricing: tierPrice(pricing.inspector?.tiers.essential,    9900),  sub: 'Understand what\'s in your report', f: ['Item details', 'Severity ratings', 'AI cost estimates', 'Category breakdown'], pop: false },
+    { name: 'Professional', pricing: tierPrice(pricing.inspector?.tiers.professional, 19900), sub: 'Real numbers from real pros',       f: ['Everything in Essential', 'Dispatch + provider quotes', 'Value-impact estimates', 'Lender flags'], pop: true },
+    { name: 'Premium',      pricing: tierPrice(pricing.inspector?.tiers.premium,      29900), sub: 'Negotiate, plan, benchmark',        f: ['Everything in Professional', 'Negotiation documents', 'Maintenance timeline', 'Priority dispatch', 'Full Home IQ'], pop: false },
   ];
   return (
     <section id="pricing" className="hi-tiers" style={{ background: C.white, padding: '120px 36px' }}>
@@ -660,10 +679,18 @@ function TiersB() {
                 <div style={{ ...MO, fontSize: 10, letterSpacing: '.18em', color: t.pop ? 'rgba(255,255,255,.5)' : C.meta, textTransform: 'uppercase' }}>Tier {String(i + 1).padStart(2, '0')}</div>
                 <h3 style={{ ...FR, fontWeight: 700, fontSize: 36, margin: '8px 0 6px', letterSpacing: '-0.015em', color: t.pop ? '#fff' : C.dark }}>{t.name}</h3>
                 <p style={{ ...FR, fontSize: 18, fontStyle: 'italic', color: t.pop ? 'rgba(255,255,255,.7)' : C.muted, margin: '0 0 18px', fontWeight: 400 }}>{t.sub}</p>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 24 }}>
-                  <span style={{ ...FR, fontSize: 44, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em', color: t.pop ? '#fff' : C.dark }}>{t.price}</span>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: t.pricing.promoActive ? 6 : 24, flexWrap: 'wrap' }}>
+                  <span style={{ ...FR, fontSize: 44, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em', color: t.pop ? '#fff' : C.dark }}>{t.pricing.effective}</span>
+                  {t.pricing.promoActive && (
+                    <span style={{ ...FR, fontSize: 22, fontWeight: 600, lineHeight: 1, textDecoration: 'line-through', color: t.pop ? 'rgba(255,255,255,.5)' : C.meta }}>{t.pricing.regular}</span>
+                  )}
                   <span style={{ ...DM, fontSize: 13, color: t.pop ? 'rgba(255,255,255,.6)' : C.meta }}>one-time</span>
                 </div>
+                {t.pricing.promoActive && t.pricing.promoLabel && (
+                  <div style={{ ...DM, fontSize: 11, fontWeight: 700, color: C.orange, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 22 }}>
+                    {t.pricing.promoLabel}
+                  </div>
+                )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {t.f.map(x => (
                     <div key={x} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
