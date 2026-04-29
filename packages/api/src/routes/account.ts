@@ -20,6 +20,7 @@ import { computeSellerAction } from './inspector';
 import { parseSupportingDoc } from '../services/document-parsers';
 import { extractItemsFromDoc } from '../services/doc-item-extractor';
 import { generateCrossReferenceInsights } from '../services/cross-reference';
+import { crossProductMembershipsForEmail } from '../services/cross-products';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -3178,6 +3179,26 @@ router.get('/documents', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[GET /account/documents]');
     res.status(500).json({ data: null, error: 'Failed to load documents', meta: {} });
+  }
+});
+
+// GET /api/v1/account/cross-products — returns the other Homie products
+// this homeowner is also registered in (Inspect partner / Provider /
+// Business workspaces). Drives the "Switch to ..." links in the avatar
+// dropdown so users can discover their cross-product accounts.
+router.get('/cross-products', async (req: Request, res: Response) => {
+  try {
+    const [ho] = await db.select({ email: homeowners.email })
+      .from(homeowners).where(eq(homeowners.id, req.homeownerId)).limit(1);
+    if (!ho) {
+      res.status(404).json({ data: null, error: 'Homeowner not found', meta: {} });
+      return;
+    }
+    const memberships = await crossProductMembershipsForEmail(ho.email);
+    res.json({ data: memberships, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/cross-products]');
+    res.status(500).json({ data: null, error: 'Failed to load cross-product memberships', meta: {} });
   }
 });
 

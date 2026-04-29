@@ -294,7 +294,18 @@ async function inspectorFetchMultipart<T>(
 
 // ── Inspector Service (authenticated) ───────────────────────────────────────
 
+export interface CrossProductMemberships {
+  personal:        { available: boolean; url: string };
+  business:        { available: boolean; url: string; workspaceCount: number };
+  inspect_partner: { available: boolean; url: string; companyName: string | null; partnerSlug: string | null };
+  provider:        { available: boolean; url: string; name: string | null };
+}
+
 export const inspectorService = {
+  getCrossProducts() {
+    return inspectorFetch<CrossProductMemberships>('/api/v1/inspector/cross-products');
+  },
+
   signup(data: InspectorSignupData) {
     return inspectorFetch<{ token: string; inspector: InspectorProfile }>('/api/v1/inspector/signup', {
       method: 'POST',

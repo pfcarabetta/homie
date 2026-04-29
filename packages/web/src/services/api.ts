@@ -669,8 +669,16 @@ export const trackingService = {
 // ── accountService ─────────────────────────────────────────────────────────
 // HomeData + SmartSuggestion are re-exported above from @homie/shared.
 
+export interface CrossProductMemberships {
+  personal:        { available: boolean; url: string };
+  business:        { available: boolean; url: string; workspaceCount: number };
+  inspect_partner: { available: boolean; url: string; companyName: string | null; partnerSlug: string | null };
+  provider:        { available: boolean; url: string; name: string | null };
+}
+
 export const accountService = {
   getProfile: () => fetchAPI<AccountProfile>('/api/v1/account'),
+  getCrossProducts: () => fetchAPI<CrossProductMemberships>('/api/v1/account/cross-products'),
   updateProfile: (data: Partial<{ first_name: string; last_name: string; email: string; phone: string; zip_code: string; current_password: string; new_password: string; title: string; notify_email_quotes: boolean; notify_sms_quotes: boolean; notify_email_bookings: boolean; notify_sms_bookings: boolean }>) =>
     fetchAPI<AccountProfile>('/api/v1/account', { method: 'PATCH', body: JSON.stringify(data) }),
   getJobs: () => fetchAPI<{ jobs: AccountJob[] }>('/api/v1/account/jobs'),

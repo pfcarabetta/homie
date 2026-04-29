@@ -24,6 +24,7 @@ import jwt from 'jsonwebtoken';
 import { sendEmail } from '../services/notifications';
 import { buildStripeMetadata } from '../services/stripe';
 import { getPricingConfig, estimatedEarningsCentsFor, referralBonusCentsFor, type InspectorRetailOverrides } from '../services/pricing';
+import { crossProductMembershipsForEmail } from '../services/cross-products';
 import { or } from 'drizzle-orm';
 
 /** Normalize a phone to digits-only with US country code stripped — for fuzzy matching. */
@@ -3060,6 +3061,25 @@ router.post('/claim/verify', async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, '[POST /inspect/claim/verify]');
     res.status(500).json({ data: null, error: 'Failed to verify claim', meta: {} });
+  }
+});
+
+// GET /api/v1/inspector/cross-products — sibling Homie products this
+// partner email is also registered in. Drives the "Switch to Personal /
+// Business / Provider" links in the inspector portal sidebar.
+router.get('/cross-products', requireInspectorAuth, async (req: Request, res: Response) => {
+  try {
+    const [ip] = await db.select({ email: inspectorPartners.email })
+      .from(inspectorPartners).where(eq(inspectorPartners.id, req.inspectorId)).limit(1);
+    if (!ip) {
+      res.status(404).json({ data: null, error: 'Partner not found', meta: {} });
+      return;
+    }
+    const memberships = await crossProductMembershipsForEmail(ip.email);
+    res.json({ data: memberships, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /inspector/cross-products]');
+    res.status(500).json({ data: null, error: 'Failed to load cross-product memberships', meta: {} });
   }
 });
 

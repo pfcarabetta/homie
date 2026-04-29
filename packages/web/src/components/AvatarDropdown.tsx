@@ -2,15 +2,17 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { businessService } from '@/services/api';
+import { accountService, businessService, type CrossProductMemberships } from '@/services/api';
 
 const O = '#E8632B', G = '#1B9E77';
+const PURPLE = '#7C3AED';
 
 export default function AvatarDropdown() {
   const { homeowner, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [hasWorkspaces, setHasWorkspaces] = useState(false);
+  const [crossProducts, setCrossProducts] = useState<CrossProductMemberships | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   /** Popover lives in a portal on document.body (see render below),
@@ -71,6 +73,11 @@ export default function AvatarDropdown() {
     if (isAuthenticated) {
       businessService.listWorkspaces().then(res => {
         if (res.data && res.data.length > 0) setHasWorkspaces(true);
+      }).catch(() => {});
+      // Cross-product detection — surface "Switch to Inspect / Provider"
+      // links when this email is also registered in the other portals.
+      accountService.getCrossProducts().then(res => {
+        if (res.data) setCrossProducts(res.data);
       }).catch(() => {});
     }
   }, [isAuthenticated]);
@@ -155,6 +162,43 @@ export default function AvatarDropdown() {
                 onMouseLeave={e => e.currentTarget.style.background = 'none'}
               >My Profile</button>
             </div>
+          )}
+          {/* Cross-product links — surface other Homie portals this user is in */}
+          {crossProducts?.inspect_partner.available && (
+            <button onClick={() => { setOpen(false); window.location.href = '/inspector'; }} style={{
+              width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+              borderBottom: '1px solid rgba(0,0,0,0.06)',
+              fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
+              fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#FFF5EB'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <span style={{ fontFamily: "'Fraunces', serif", fontSize: 14, fontWeight: 700, color: '#E8632B' }}>homie</span>
+              <span style={{
+                fontSize: 8, fontWeight: 800, color: '#fff', background: O,
+                padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.08em', textTransform: 'uppercase',
+              }}>Inspect</span>
+            </button>
+          )}
+          {crossProducts?.provider.available && (
+            <button onClick={() => { setOpen(false); window.location.href = '/portal'; }} style={{
+              width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+              borderBottom: '1px solid rgba(0,0,0,0.06)',
+              fontSize: 14, color: '#2D2926', cursor: 'pointer', textAlign: 'left',
+              fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#FAF5FF'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <span style={{ fontFamily: "'Fraunces', serif", fontSize: 14, fontWeight: 700, color: '#E8632B' }}>homie</span>
+              <span style={{
+                fontSize: 8, fontWeight: 800, color: '#fff', background: PURPLE,
+                padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.08em', textTransform: 'uppercase',
+              }}>Provider</span>
+            </button>
           )}
           <button onClick={() => { setOpen(false); window.location.href = '/account'; }} style={{
             width: '100%', padding: '12px 16px', background: 'none', border: 'none',

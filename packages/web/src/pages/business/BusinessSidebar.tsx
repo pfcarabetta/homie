@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Tab } from './constants';
 import BusinessPortalRoot from './BusinessPortalRoot';
-import type { RentalType } from '@/services/api';
+import { accountService, type RentalType, type CrossProductMemberships } from '@/services/api';
 import { rentalTermsFor } from '@/hooks/useRentalTerms';
 
 interface NavItem {
@@ -128,12 +128,20 @@ export default function BusinessSidebar({
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { homeowner, logout } = useAuth();
+  const [crossProducts, setCrossProducts] = useState<CrossProductMemberships | null>(null);
 
   useEffect(() => {
     function onResize() { setIsMobile(window.innerWidth < 768); }
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    if (!homeowner) return;
+    accountService.getCrossProducts().then(res => {
+      if (res.data) setCrossProducts(res.data);
+    }).catch(() => {});
+  }, [homeowner]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -435,6 +443,52 @@ export default function BusinessSidebar({
                 </button>
               </div>
 
+              {/* Cross-product cards \u2014 Inspect / Provider when same email is registered */}
+              {crossProducts?.inspect_partner.available && (
+                <div style={{ padding: '8px 16px 4px' }}>
+                  <button onClick={() => { setAccountOpen(false); navigate('/inspector'); }} style={{
+                    width: '100%',
+                    background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
+                    border: '1px solid #F5C9A8', borderRadius: 12,
+                    padding: '14px 16px', cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif", textAlign: 'left',
+                    display: 'flex', alignItems: 'center', gap: 12,
+                  }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bp-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{'\ud83d\udd0d'}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--bp-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, color: '#E8632B' }}>homie</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#E8632B', padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Inspect</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--bp-muted)', marginTop: 2 }}>Your inspector partner portal</div>
+                    </div>
+                    <span style={{ color: '#E8632B', fontSize: 18, flexShrink: 0 }}>{'\u2192'}</span>
+                  </button>
+                </div>
+              )}
+              {crossProducts?.provider.available && (
+                <div style={{ padding: '8px 16px 4px' }}>
+                  <button onClick={() => { setAccountOpen(false); navigate('/portal'); }} style={{
+                    width: '100%',
+                    background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
+                    border: '1px solid #F5C9A8', borderRadius: 12,
+                    padding: '14px 16px', cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif", textAlign: 'left',
+                    display: 'flex', alignItems: 'center', gap: 12,
+                  }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bp-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{'\ud83d\udd27'}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--bp-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, color: '#E8632B' }}>homie</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#7C3AED', padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Provider</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--bp-muted)', marginTop: 2 }}>Your service provider portal</div>
+                    </div>
+                    <span style={{ color: '#E8632B', fontSize: 18, flexShrink: 0 }}>{'\u2192'}</span>
+                  </button>
+                </div>
+              )}
+
               <div style={{ borderTop: '1px solid #F5F0EB', marginTop: 8 }}>
                 <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...mobileMenuItemStyle, color: '#E24B4A' }}>Sign out</button>
               </div>
@@ -512,6 +566,58 @@ export default function BusinessSidebar({
                 <span style={{ color: '#E8632B', fontSize: 15, flexShrink: 0 }}>{'\u2192'}</span>
               </button>
             </div>
+
+            {/* Cross-product cards \u2014 Inspect / Provider when same email is registered */}
+            {crossProducts?.inspect_partner.available && (
+              <div style={{ padding: '4px 12px' }}>
+                <button onClick={() => { setAccountOpen(false); navigate('/inspector'); }} style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
+                  border: '1px solid #F5C9A8', borderRadius: 10,
+                  padding: '10px 12px', cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif", textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  transition: 'transform 0.1s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bp-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{'\ud83d\udd0d'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontFamily: 'Fraunces, serif', fontSize: 13, color: '#E8632B' }}>homie</span>
+                      <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', background: '#E8632B', padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Inspect</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--bp-muted)', marginTop: 1 }}>Your inspector partner portal</div>
+                  </div>
+                  <span style={{ color: '#E8632B', fontSize: 15, flexShrink: 0 }}>{'\u2192'}</span>
+                </button>
+              </div>
+            )}
+            {crossProducts?.provider.available && (
+              <div style={{ padding: '4px 12px' }}>
+                <button onClick={() => { setAccountOpen(false); navigate('/portal'); }} style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
+                  border: '1px solid #F5C9A8', borderRadius: 10,
+                  padding: '10px 12px', cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif", textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  transition: 'transform 0.1s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bp-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{'\ud83d\udd27'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontFamily: 'Fraunces, serif', fontSize: 13, color: '#E8632B' }}>homie</span>
+                      <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', background: '#7C3AED', padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Provider</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--bp-muted)', marginTop: 1 }}>Your service provider portal</div>
+                  </div>
+                  <span style={{ color: '#E8632B', fontSize: 15, flexShrink: 0 }}>{'\u2192'}</span>
+                </button>
+              </div>
+            )}
 
             <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 6 }}>
               <button onClick={() => { setAccountOpen(false); logout(); window.location.href = '/'; }} style={{ ...accountMenuItemStyle, color: '#E24B4A' }}

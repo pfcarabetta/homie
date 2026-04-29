@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { useInspectorAuth } from '@/contexts/InspectorAuthContext';
+import { inspectorService, type CrossProductMemberships } from '@/services/inspector-api';
 
 /**
  * Inspector portal sidebar. Visual + interaction parity with
@@ -67,19 +67,28 @@ export default function InspectorSidebar({ collapsed, setCollapsed, onNavigateCa
   const navigate = useNavigate();
   const location = useLocation();
   const { inspector, logout } = useInspectorAuth();
-  const { homeowner } = useAuth();
   const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountMenuPos, setAccountMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const accountBtnRef = useRef<HTMLButtonElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const [crossProducts, setCrossProducts] = useState<CrossProductMemberships | null>(null);
 
   useEffect(() => {
     function onResize() { setIsMobile(window.innerWidth < 768); }
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Cross-product detection — surface "Switch to Personal / Business /
+  // Provider" links if this partner email is also registered there.
+  useEffect(() => {
+    if (!inspector) return;
+    inspectorService.getCrossProducts().then(res => {
+      if (res.data) setCrossProducts(res.data);
+    }).catch(() => {});
+  }, [inspector]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -134,6 +143,57 @@ export default function InspectorSidebar({ collapsed, setCollapsed, onNavigateCa
     fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
     borderBottom: '1px solid var(--ip-border)',
   };
+
+  /** Cards for sibling Homie products this email is also registered in.
+   *  Same gradient treatment as the existing Personal card so the cross-
+   *  product nav reads as one block. `mobile` toggles padding/font sizes
+   *  to match the bottom-sheet vs. desktop popover scale. */
+  function renderCrossProducts(mobile: boolean) {
+    if (!crossProducts) return null;
+    const cards: { label: string; tone: string; url: string; subtitle: string }[] = [];
+    if (crossProducts.personal.available) cards.push({ label: 'Personal', tone: '#1B9E77', url: '/account', subtitle: 'Home services for your own home' });
+    if (crossProducts.business.available) cards.push({ label: 'Business', tone: '#1B9E77', url: '/business', subtitle: 'Your team workspace' });
+    if (crossProducts.provider.available) cards.push({ label: 'Provider', tone: '#7C3AED', url: '/portal', subtitle: 'Your service provider portal' });
+    if (cards.length === 0) return null;
+
+    const wrapPad = mobile ? '14px 16px 4px' : '12px 12px 4px';
+    const cardPad = mobile ? '14px 16px' : '10px 12px';
+    const radius = mobile ? 12 : 10;
+    const iconSize = mobile ? 36 : 32;
+    const titleSize = mobile ? 13 : 12;
+    const subSize = mobile ? 11 : 10;
+    const arrow = mobile ? 18 : 15;
+    const gap = mobile ? 12 : 10;
+
+    return (
+      <div style={{ padding: wrapPad, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {cards.map(c => (
+          <button key={c.url} onClick={() => { setAccountOpen(false); navigate(c.url); }} style={{
+            width: '100%',
+            background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
+            border: '1px solid #F5C9A8', borderRadius: radius,
+            padding: cardPad, cursor: 'pointer',
+            fontFamily: "'DM Sans', sans-serif", textAlign: 'left',
+            display: 'flex', alignItems: 'center', gap,
+            transition: 'transform 0.1s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
+          >
+            <div style={{ width: iconSize, height: iconSize, borderRadius: 10, background: 'var(--ip-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: mobile ? 20 : 16, flexShrink: 0 }}>{'🏠'}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: titleSize, fontWeight: 700, color: 'var(--ip-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontFamily: 'Fraunces, serif', fontSize: titleSize + 1, color: '#E8632B' }}>homie</span>
+                <span style={{ fontSize: mobile ? 9 : 8, fontWeight: 800, color: '#fff', background: c.tone, padding: mobile ? '2px 6px' : '1.5px 5px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{c.label}</span>
+              </div>
+              <div style={{ fontSize: subSize, color: 'var(--ip-muted)', marginTop: mobile ? 2 : 1 }}>{c.subtitle}</div>
+            </div>
+            <span style={{ color: '#E8632B', fontSize: arrow, flexShrink: 0 }}>{'→'}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -262,28 +322,7 @@ export default function InspectorSidebar({ collapsed, setCollapsed, onNavigateCa
               )}
               <button onClick={() => { setAccountOpen(false); handleNav('/inspector/settings'); }} style={mobileMenuItemStyle}>Settings</button>
               <button onClick={() => { setAccountOpen(false); handleNav('/inspector/marketing'); }} style={mobileMenuItemStyle}>Marketing materials</button>
-              {homeowner && (
-                <div style={{ padding: '14px 16px 4px' }}>
-                  <button onClick={() => { setAccountOpen(false); navigate('/account'); }} style={{
-                    width: '100%',
-                    background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
-                    border: '1px solid #F5C9A8', borderRadius: 12,
-                    padding: '14px 16px', cursor: 'pointer',
-                    fontFamily: "'DM Sans', sans-serif", textAlign: 'left',
-                    display: 'flex', alignItems: 'center', gap: 12,
-                  }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--ip-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{'🏠'}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ip-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, color: '#E8632B' }}>homie</span>
-                        <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Personal</span>
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--ip-muted)', marginTop: 2 }}>Home services for your own home</div>
-                    </div>
-                    <span style={{ color: '#E8632B', fontSize: 18, flexShrink: 0 }}>{'→'}</span>
-                  </button>
-                </div>
-              )}
+              {renderCrossProducts(true)}
               <div style={{ borderTop: '1px solid var(--ip-border)', marginTop: 8 }}>
                 <button onClick={() => { setAccountOpen(false); handleLogout(); }} style={{ ...mobileMenuItemStyle, color: '#E24B4A' }}>Sign out</button>
               </div>
@@ -313,31 +352,7 @@ export default function InspectorSidebar({ collapsed, setCollapsed, onNavigateCa
             <button onClick={() => { setAccountOpen(false); handleNav('/inspector/marketing'); }} style={accountMenuItemStyle}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--ip-hover)'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>Marketing materials</button>
-            {homeowner && (
-              <div style={{ padding: '12px 12px 4px' }}>
-                <button onClick={() => { setAccountOpen(false); navigate('/account'); }} style={{
-                  width: '100%',
-                  background: 'linear-gradient(135deg, #FFF3E8 0%, #FFE8D6 100%)',
-                  border: '1px solid #F5C9A8', borderRadius: 10,
-                  padding: '10px 12px', cursor: 'pointer',
-                  fontFamily: "'DM Sans', sans-serif", textAlign: 'left',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  transition: 'transform 0.1s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ip-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{'🏠'}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ip-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontFamily: 'Fraunces, serif', fontSize: 13, color: '#E8632B' }}>homie</span>
-                      <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', background: '#1B9E77', padding: '1.5px 5px', borderRadius: 3, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Personal</span>
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--ip-muted)', marginTop: 1 }}>Home services for your own home</div>
-                  </div>
-                  <span style={{ color: '#E8632B', fontSize: 15, flexShrink: 0 }}>{'→'}</span>
-                </button>
-              </div>
-            )}
+            {renderCrossProducts(false)}
             <div style={{ borderTop: '1px solid var(--ip-border)', marginTop: 6 }}>
               <button onClick={() => { setAccountOpen(false); handleLogout(); }} style={{ ...accountMenuItemStyle, color: '#E24B4A' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#FFF5F5'}

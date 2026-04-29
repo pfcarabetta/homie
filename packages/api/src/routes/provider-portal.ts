@@ -12,6 +12,7 @@ import { homeowners } from '../db/schema/homeowners';
 import { suppressionList } from '../db/schema/suppression-list';
 import { recordProviderResponse } from '../services/providers/scores';
 import { notifyWorkspaceOfQuote } from '../services/quote-notifications';
+import { crossProductMembershipsForEmail } from '../services/cross-products';
 
 const router = Router();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -526,6 +527,25 @@ router.post('/bookings/:bookingId/cancel', async (req: Request, res: Response) =
   } catch (err) {
     logger.error({ err }, '[POST /portal/bookings/:id/cancel]');
     res.status(500).json({ data: null, error: 'Failed to cancel booking', meta: {} });
+  }
+});
+
+// GET /api/v1/portal/cross-products — sibling Homie products this provider
+// email is also registered in. Drives the cross-product links in the
+// provider portal (when we add that menu).
+router.get('/cross-products', async (req: Request, res: Response) => {
+  try {
+    const [pr] = await db.select({ email: providers.email })
+      .from(providers).where(eq(providers.id, req.providerId)).limit(1);
+    if (!pr || !pr.email) {
+      res.status(404).json({ data: null, error: 'Provider not found', meta: {} });
+      return;
+    }
+    const memberships = await crossProductMembershipsForEmail(pr.email);
+    res.json({ data: memberships, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /portal/cross-products]');
+    res.status(500).json({ data: null, error: 'Failed to load cross-product memberships', meta: {} });
   }
 });
 
