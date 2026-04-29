@@ -164,6 +164,10 @@ router.get('/users', async (req: Request, res: Response) => {
   const q = (req.query.q as string || '').trim().toLowerCase();
   const productFilter = (req.query.product as string || '').trim();
 
+  // Track which phase fails so the prod 500 logs (and the admin-facing
+  // error message) point straight at the broken query instead of the
+  // generic "Failed to fetch users".
+  let phase = 'init';
   try {
     // Single CTE-style query in JS — pull from each identity table once,
     // merge in JS keyed by lower(email). Cheaper than three round-trips
@@ -185,35 +189,41 @@ router.get('/users', async (req: Request, res: Response) => {
       sql`LOWER(${providers.name}) ILIKE ${'%' + escaped + '%'}`,
     ) : undefined;
 
-    const [hoRows, inspRows, provRows] = await Promise.all([
-      db.select({
-        id: homeowners.id,
-        email: homeowners.email,
-        firstName: homeowners.firstName,
-        lastName: homeowners.lastName,
-        phone: homeowners.phone,
-        membershipTier: homeowners.membershipTier,
-        createdAt: homeowners.createdAt,
-      }).from(homeowners).where(homeFilter),
-      db.select({
-        id: inspectorPartners.id,
-        email: inspectorPartners.email,
-        companyName: inspectorPartners.companyName,
-        phone: inspectorPartners.phone,
-        partnerSlug: inspectorPartners.partnerSlug,
-        status: inspectorPartners.status,
-        createdAt: inspectorPartners.createdAt,
-      }).from(inspectorPartners).where(inspFilter),
-      db.select({
-        id: providers.id,
-        email: providers.email,
-        name: providers.name,
-        phone: providers.phone,
-        discoveredAt: providers.discoveredAt,
-      }).from(providers)
-        .where(and(isNotNull(providers.passwordHash), provFilter ?? sql`TRUE`)),
-    ]);
+    phase = 'identity_homeowners';
+    const hoRows = await db.select({
+      id: homeowners.id,
+      email: homeowners.email,
+      firstName: homeowners.firstName,
+      lastName: homeowners.lastName,
+      phone: homeowners.phone,
+      membershipTier: homeowners.membershipTier,
+      createdAt: homeowners.createdAt,
+    }).from(homeowners).where(homeFilter);
 
+    phase = 'identity_inspector_partners';
+    const inspRows = await db.select({
+      id: inspectorPartners.id,
+      email: inspectorPartners.email,
+      companyName: inspectorPartners.companyName,
+      phone: inspectorPartners.phone,
+      partnerSlug: inspectorPartners.partnerSlug,
+      status: inspectorPartners.status,
+      createdAt: inspectorPartners.createdAt,
+    }).from(inspectorPartners).where(inspFilter);
+
+    phase = 'identity_providers';
+    const provRows = await db.select({
+      id: providers.id,
+      email: providers.email,
+      name: providers.name,
+      phone: providers.phone,
+      discoveredAt: providers.discoveredAt,
+    }).from(providers)
+      .where(provFilter
+        ? and(isNotNull(providers.passwordHash), provFilter)
+        : isNotNull(providers.passwordHash));
+
+    phase = 'merge_identities';
     // Build a map keyed by lower(email). Each entry is the merged user row.
     const userMap = new Map<string, UserRow>();
     function emailKey(email: string | null): string | null {
@@ -314,30 +324,42 @@ router.get('/users', async (req: Request, res: Response) => {
     const homeownerIds = Array.from(userMap.values()).map(u => u.homeownerId).filter((x): x is string => !!x);
     const inspectorIds = Array.from(userMap.values()).map(u => u.inspectorPartnerId).filter((x): x is string => !!x);
 
-    const [jobCounts, bookingCounts, wsCounts, lastJobs, lastBookings, reportRowsForEarnings, lastUploads] = await Promise.all([
-      homeownerIds.length === 0 ? [] : db.select({ homeownerId: jobs.homeownerId, value: count() })
-        .from(jobs).where(inArray(jobs.homeownerId, homeownerIds)).groupBy(jobs.homeownerId),
-      homeownerIds.length === 0 ? [] : db.select({ homeownerId: bookings.homeownerId, value: count() })
-        .from(bookings).where(inArray(bookings.homeownerId, homeownerIds)).groupBy(bookings.homeownerId),
-      homeownerIds.length === 0 ? [] : db.select({ homeownerId: workspaceMembers.homeownerId, value: count() })
-        .from(workspaceMembers).where(inArray(workspaceMembers.homeownerId, homeownerIds)).groupBy(workspaceMembers.homeownerId),
-      homeownerIds.length === 0 ? [] : db.select({ homeownerId: jobs.homeownerId, lastAt: sql<Date>`MAX(${jobs.createdAt})` })
-        .from(jobs).where(inArray(jobs.homeownerId, homeownerIds)).groupBy(jobs.homeownerId),
-      homeownerIds.length === 0 ? [] : db.select({ homeownerId: bookings.homeownerId, lastAt: sql<Date>`MAX(${bookings.confirmedAt})` })
-        .from(bookings).where(inArray(bookings.homeownerId, homeownerIds)).groupBy(bookings.homeownerId),
-      inspectorIds.length === 0 ? [] : db.select({
-        inspectorPartnerId: inspectionReports.inspectorPartnerId,
-        pricingTier: inspectionReports.pricingTier,
-        priceCentsPaid: inspectionReports.priceCentsPaid,
-        paymentStatus: inspectionReports.paymentStatus,
-        source: inspectionReports.source,
-      }).from(inspectionReports).where(inArray(inspectionReports.inspectorPartnerId, inspectorIds)),
-      inspectorIds.length === 0 ? [] : db.select({
-        inspectorPartnerId: inspectionReports.inspectorPartnerId,
-        lastAt: sql<Date>`MAX(${inspectionReports.createdAt})`,
-      }).from(inspectionReports).where(inArray(inspectionReports.inspectorPartnerId, inspectorIds)).groupBy(inspectionReports.inspectorPartnerId),
-    ]);
+    phase = 'activity_jobs';
+    const jobCounts = homeownerIds.length === 0 ? [] : await db.select({ homeownerId: jobs.homeownerId, value: count() })
+      .from(jobs).where(inArray(jobs.homeownerId, homeownerIds)).groupBy(jobs.homeownerId);
 
+    phase = 'activity_bookings';
+    const bookingCounts = homeownerIds.length === 0 ? [] : await db.select({ homeownerId: bookings.homeownerId, value: count() })
+      .from(bookings).where(inArray(bookings.homeownerId, homeownerIds)).groupBy(bookings.homeownerId);
+
+    phase = 'activity_workspaces';
+    const wsCounts = homeownerIds.length === 0 ? [] : await db.select({ homeownerId: workspaceMembers.homeownerId, value: count() })
+      .from(workspaceMembers).where(inArray(workspaceMembers.homeownerId, homeownerIds)).groupBy(workspaceMembers.homeownerId);
+
+    phase = 'activity_last_jobs';
+    const lastJobs = homeownerIds.length === 0 ? [] : await db.select({ homeownerId: jobs.homeownerId, lastAt: sql<Date>`MAX(${jobs.createdAt})` })
+      .from(jobs).where(inArray(jobs.homeownerId, homeownerIds)).groupBy(jobs.homeownerId);
+
+    phase = 'activity_last_bookings';
+    const lastBookings = homeownerIds.length === 0 ? [] : await db.select({ homeownerId: bookings.homeownerId, lastAt: sql<Date>`MAX(${bookings.confirmedAt})` })
+      .from(bookings).where(inArray(bookings.homeownerId, homeownerIds)).groupBy(bookings.homeownerId);
+
+    phase = 'activity_inspector_reports';
+    const reportRowsForEarnings = inspectorIds.length === 0 ? [] : await db.select({
+      inspectorPartnerId: inspectionReports.inspectorPartnerId,
+      pricingTier: inspectionReports.pricingTier,
+      priceCentsPaid: inspectionReports.priceCentsPaid,
+      paymentStatus: inspectionReports.paymentStatus,
+      source: inspectionReports.source,
+    }).from(inspectionReports).where(inArray(inspectionReports.inspectorPartnerId, inspectorIds));
+
+    phase = 'activity_last_uploads';
+    const lastUploads = inspectorIds.length === 0 ? [] : await db.select({
+      inspectorPartnerId: inspectionReports.inspectorPartnerId,
+      lastAt: sql<Date>`MAX(${inspectionReports.createdAt})`,
+    }).from(inspectionReports).where(inArray(inspectionReports.inspectorPartnerId, inspectorIds)).groupBy(inspectionReports.inspectorPartnerId);
+
+    phase = 'index_activity';
     const jobByHo = new Map(jobCounts.map(r => [r.homeownerId, Number(r.value)]));
     const bookByHo = new Map(bookingCounts.map(r => [r.homeownerId, Number(r.value)]));
     const wsByHo = new Map(wsCounts.map(r => [r.homeownerId, Number(r.value)]));
@@ -345,6 +367,7 @@ router.get('/users', async (req: Request, res: Response) => {
     const lastBookByHo = new Map(lastBookings.map(r => [r.homeownerId, r.lastAt]));
     const lastUploadByInsp = new Map(lastUploads.map(r => [r.inspectorPartnerId, r.lastAt]));
 
+    phase = 'pricing_config';
     // Group reports by inspector for earnings rollup
     const config = await getPricingConfig();
     const reportsByInsp = new Map<string, typeof reportRowsForEarnings>();
@@ -355,6 +378,7 @@ router.get('/users', async (req: Request, res: Response) => {
       reportsByInsp.set(r.inspectorPartnerId, arr);
     }
 
+    phase = 'inspector_overrides';
     // Per-inspector retail overrides (one query for all)
     const inspOverrides = inspectorIds.length === 0 ? [] : await db.select({
       id: inspectorPartners.id,
@@ -364,6 +388,14 @@ router.get('/users', async (req: Request, res: Response) => {
     }).from(inspectorPartners).where(inArray(inspectorPartners.id, inspectorIds));
     const overrideById = new Map(inspOverrides.map(o => [o.id, o]));
 
+    phase = 'merge_activity';
+    function safeIso(d: unknown): string | null {
+      if (!d) return null;
+      if (d instanceof Date) return d.toISOString();
+      const parsed = new Date(d as string);
+      return isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    }
+
     for (const u of userMap.values()) {
       if (u.homeownerId) {
         u.jobCount = jobByHo.get(u.homeownerId) ?? 0;
@@ -371,10 +403,10 @@ router.get('/users', async (req: Request, res: Response) => {
         u.workspaceCount = wsByHo.get(u.homeownerId) ?? 0;
         if (u.workspaceCount > 0 && !u.products.includes('business')) u.products.push('business');
 
-        const lastJob = lastJobByHo.get(u.homeownerId) ?? null;
-        const lastBook = lastBookByHo.get(u.homeownerId) ?? null;
-        for (const t of [lastJob, lastBook]) {
-          if (t && (!u.lastActivityAt || t > new Date(u.lastActivityAt))) u.lastActivityAt = t.toISOString();
+        const candidates = [lastJobByHo.get(u.homeownerId), lastBookByHo.get(u.homeownerId)];
+        for (const c of candidates) {
+          const iso = safeIso(c);
+          if (iso && (!u.lastActivityAt || new Date(iso) > new Date(u.lastActivityAt))) u.lastActivityAt = iso;
         }
       }
       if (u.inspectorPartnerId) {
@@ -383,8 +415,8 @@ router.get('/users', async (req: Request, res: Response) => {
         const ov = overrideById.get(u.inspectorPartnerId);
         const overrides: InspectorRetailOverrides = ov ?? { retailPriceEssentialCents: null, retailPriceProfessionalCents: null, retailPricePremiumCents: null };
         u.inspectorEarningsCents = reports.reduce((sum, r) => sum + estimatedEarningsCentsFor(overrides, r, config.inspector), 0);
-        const lastUp = lastUploadByInsp.get(u.inspectorPartnerId) ?? null;
-        if (lastUp && (!u.lastActivityAt || lastUp > new Date(u.lastActivityAt))) u.lastActivityAt = lastUp.toISOString();
+        const iso = safeIso(lastUploadByInsp.get(u.inspectorPartnerId));
+        if (iso && (!u.lastActivityAt || new Date(iso) > new Date(u.lastActivityAt))) u.lastActivityAt = iso;
       }
     }
 
@@ -406,8 +438,12 @@ router.get('/users', async (req: Request, res: Response) => {
 
     res.json({ data: paged, error: null, meta: { total, limit, offset } });
   } catch (err) {
-    logger.error({ err }, '[GET /admin/users]');
-    res.status(500).json({ data: null, error: 'Failed to fetch users', meta: {} });
+    const errMsg = (err as Error)?.message ?? String(err);
+    logger.error({ err, phase, errMsg }, '[GET /admin/users] failed');
+    // Surface the phase + error message in the admin-only response so we
+    // can debug without prod log access. Not safe for public endpoints,
+    // OK here since requireAdmin gates the whole router.
+    res.status(500).json({ data: null, error: `Failed to fetch users [phase=${phase}]: ${errMsg}`, meta: {} });
   }
 });
 
