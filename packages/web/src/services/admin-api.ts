@@ -406,6 +406,27 @@ export const adminService = {
     );
   },
 
+  async impersonateHomeowner(homeownerId: string) {
+    return fetchAdmin<{
+      token: string;
+      homeowner: {
+        id: string;
+        first_name: string | null;
+        last_name: string | null;
+        email: string;
+        zip_code: string;
+        membership_tier: string;
+      };
+    }>(`/api/v1/admin/homeowners/${homeownerId}/impersonate`, { method: 'POST' });
+  },
+
+  async impersonateProvider(providerId: string) {
+    return fetchAdmin<{
+      token: string;
+      provider: { id: string; name: string; email: string | null };
+    }>(`/api/v1/admin/providers/${providerId}/impersonate`, { method: 'POST' });
+  },
+
   async getHomeowners(params?: { limit?: number; offset?: number; q?: string }) {
     const q = new URLSearchParams();
     if (params?.limit) q.set('limit', String(params.limit));

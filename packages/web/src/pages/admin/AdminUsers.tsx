@@ -38,6 +38,111 @@ function formatCurrency(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
+type ImpersonationRole = 'homeowner' | 'inspector' | 'provider';
+
+/**
+ * Mints an impersonation token for the chosen role and opens the matching
+ * portal in a new tab. The /admin/impersonate handler stuffs the token +
+ * profile blob into sessionStorage (tab-scoped) and redirects into the
+ * portal — so closing the tab cleanly ends the impersonation.
+ */
+async function launchImpersonation(role: ImpersonationRole, ids: { homeownerId?: string | null; inspectorPartnerId?: string | null; providerId?: string | null }, onError: (msg: string) => void) {
+  try {
+    let token: string;
+    let profile: unknown;
+    if (role === 'homeowner') {
+      if (!ids.homeownerId) throw new Error('No homeowner id');
+      const res = await adminService.impersonateHomeowner(ids.homeownerId);
+      if (!res.data?.token) throw new Error(res.error ?? 'No token returned');
+      token = res.data.token; profile = res.data.homeowner;
+    } else if (role === 'inspector') {
+      if (!ids.inspectorPartnerId) throw new Error('No inspector partner id');
+      const res = await adminService.impersonateInspectPartner(ids.inspectorPartnerId);
+      if (!res.data?.token) throw new Error(res.error ?? 'No token returned');
+      token = res.data.token; profile = res.data.partner;
+    } else {
+      if (!ids.providerId) throw new Error('No provider id');
+      const res = await adminService.impersonateProvider(ids.providerId);
+      if (!res.data?.token) throw new Error(res.error ?? 'No token returned');
+      token = res.data.token; profile = res.data.provider;
+    }
+    const profileParam = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(profile)))));
+    const url = `/admin/impersonate?as=${role}&token=${encodeURIComponent(token)}&profile=${profileParam}`;
+    window.open(url, '_blank', 'noopener');
+  } catch (err) {
+    onError((err as Error).message);
+  }
+}
+
+/**
+ * Returns the impersonation roles available for a given user row.
+ * 'business' is folded into 'homeowner' (same auth backend) — the
+ * dropdown labels make it explicit when the user is also in Business.
+ */
+function rolesForUser(u: { homeownerId: string | null; inspectorPartnerId: string | null; providerId: string | null; products: string[] }): { role: ImpersonationRole; label: string }[] {
+  const out: { role: ImpersonationRole; label: string }[] = [];
+  if (u.homeownerId) {
+    const isBiz = u.products.includes('business');
+    out.push({ role: 'homeowner', label: isBiz ? 'Personal / Business' : 'Personal' });
+  }
+  if (u.inspectorPartnerId) out.push({ role: 'inspector', label: 'Inspect partner' });
+  if (u.providerId)         out.push({ role: 'provider', label: 'Service provider' });
+  return out;
+}
+
+function LoginAsButton({ user, onError }: { user: { homeownerId: string | null; inspectorPartnerId: string | null; providerId: string | null; products: string[] }; onError: (msg: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<ImpersonationRole | null>(null);
+  const roles = rolesForUser(user);
+  if (roles.length === 0) return null;
+
+  async function go(role: ImpersonationRole) {
+    setBusy(role);
+    setOpen(false);
+    await launchImpersonation(role, user, onError);
+    setBusy(null);
+  }
+
+  // Single-product user: button logs in directly. Multi-product: dropdown picker.
+  if (roles.length === 1) {
+    const r = roles[0];
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); void go(r.role); }}
+        disabled={busy !== null}
+        className="text-xs font-semibold px-3 py-1 rounded-md bg-dark text-white hover:bg-dark/80 disabled:opacity-50 whitespace-nowrap"
+      >
+        {busy ? '…' : `Log in as ${r.label} ↗`}
+      </button>
+    );
+  }
+
+  return (
+    <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        disabled={busy !== null}
+        className="text-xs font-semibold px-3 py-1 rounded-md bg-dark text-white hover:bg-dark/80 disabled:opacity-50 whitespace-nowrap"
+      >
+        {busy ? '…' : 'Log in as ▾'}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 bg-white border border-dark/10 rounded-lg shadow-lg z-30 min-w-[180px]">
+          {roles.map(r => (
+            <button
+              key={r.role}
+              onClick={() => void go(r.role)}
+              className="block w-full text-left text-xs font-semibold px-3 py-2 hover:bg-warm whitespace-nowrap"
+            >
+              {r.label} ↗
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatRelative(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -65,6 +170,12 @@ export default function AdminUsers() {
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [detail, setDetail] = useState<UserDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -135,13 +246,14 @@ export default function AdminUsers() {
                 <th className="text-right px-4 py-3 font-semibold text-dark/60">Earnings</th>
                 <th className="text-left px-4 py-3 font-semibold text-dark/60">Last activity</th>
                 <th className="text-left px-4 py-3 font-semibold text-dark/60">Joined</th>
+                <th className="text-right px-4 py-3 font-semibold text-dark/60">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-dark/40">Loading…</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-dark/40">Loading…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No users yet'}</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-dark/40">{search ? 'No matches' : 'No users yet'}</td></tr>
               ) : (
                 rows.map(u => {
                   const isSelected = selectedEmail === u.email;
@@ -172,10 +284,13 @@ export default function AdminUsers() {
                         </td>
                         <td className="px-4 py-3 text-dark/60 whitespace-nowrap text-xs">{formatRelative(u.lastActivityAt)}</td>
                         <td className="px-4 py-3 text-dark/60 whitespace-nowrap text-xs">{new Date(u.firstSeenAt).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <LoginAsButton user={u} onError={(msg) => showToast(`Login failed: ${msg}`)} />
+                        </td>
                       </tr>
                       {isSelected && (
                         <tr>
-                          <td colSpan={8} className="px-0 py-0 bg-warm/30">
+                          <td colSpan={9} className="px-0 py-0 bg-warm/30">
                             {detailLoading ? (
                               <div className="px-6 py-8 text-center text-dark/40">Loading details…</div>
                             ) : detail ? (
@@ -194,6 +309,12 @@ export default function AdminUsers() {
           </table>
         </div>
       </div>
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-dark text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg z-50">
+          {toast}
+        </div>
+      )}
 
       {total > PAGE_SIZE && (
         <div className="flex items-center justify-center gap-4 mt-4">
@@ -219,14 +340,7 @@ function UserDetailView({ detail }: { detail: UserDetailData }) {
 
   async function viewAsPartner() {
     if (!inspector) return;
-    try {
-      const res = await adminService.impersonateInspectPartner(inspector.id);
-      if (!res.data?.token) throw new Error(res.error ?? 'No token returned');
-      const url = `/admin/impersonate?token=${encodeURIComponent(res.data.token)}&inspectorId=${inspector.id}`;
-      window.open(url, '_blank', 'noopener');
-    } catch (err) {
-      alert(`Failed: ${(err as Error).message}`);
-    }
+    await launchImpersonation('inspector', { inspectorPartnerId: inspector.id }, (msg) => alert(`Failed: ${msg}`));
   }
 
   return (

@@ -13,6 +13,7 @@ export * from '@homie/shared';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const TOKEN_KEY = 'homie_token';
+const IMPERSONATION_KEY = 'homie_impersonation';
 
 import type { ApiResponse } from '@homie/shared';
 
@@ -30,7 +31,10 @@ export class ApiError extends Error {
 // ── Auth helpers ────────────────────────────────────────────────────────────
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  // sessionStorage wins so the admin "Login as user" flow scopes the
+  // impersonation to a single tab without clobbering the user's own
+  // homie_token in localStorage on the same device.
+  return sessionStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string): void {
@@ -38,7 +42,12 @@ export function setToken(token: string): void {
 }
 
 export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+  // Only clear the active store (sessionStorage if impersonating, else localStorage)
+  if (sessionStorage.getItem(IMPERSONATION_KEY) === '1') {
+    sessionStorage.removeItem(TOKEN_KEY);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
 }
 
 // ── Base fetch ──────────────────────────────────────────────────────────────

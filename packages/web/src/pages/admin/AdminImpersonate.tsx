@@ -2,18 +2,62 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 /**
- * Admin → Inspector portal handoff. The Partners tab calls
- * /admin/inspect/partners/:id/impersonate, then opens this route in a
- * new tab with ?token=...&inspectorId=...  We stash the token in
- * sessionStorage (tab-scoped — closing the tab ends the impersonation
- * automatically without polluting the admin's real localStorage) and
- * redirect into the inspector portal.
+ * Admin → user portal handoff. The Users / Partners tabs open this route
+ * in a new tab with ?as={inspector|homeowner|provider}&token=...  plus the
+ * full identity blob in &profile=<base64-json>. We stuff the token + blob
+ * into sessionStorage (tab-scoped — closing the tab ends impersonation
+ * cleanly without polluting the admin's real localStorage on this device)
+ * then redirect into the right portal.
  *
- * The inspector portal (InspectorAuthContext + inspector-api) prefers
- * sessionStorage over localStorage when reading the token, so this tab
- * sees the partner's view while a regular inspector tab elsewhere on the
- * device keeps its own login.
+ * Each portal's auth context (AuthContext, InspectorAuthContext,
+ * ProviderAuthContext) prefers sessionStorage over localStorage when
+ * reading its token, so this tab sees the impersonated view while any
+ * other tab on the same device keeps its own login intact.
  */
+
+type UserRole = 'inspector' | 'homeowner' | 'provider';
+
+interface RoleConfig {
+  tokenKey: string;
+  profileKey: string;
+  flagKey: string;
+  redirectPath: string;
+  labelNoun: string;
+}
+
+const ROLE: Record<UserRole, RoleConfig> = {
+  inspector: {
+    tokenKey: 'homie_inspector_token',
+    profileKey: 'homie_inspector',
+    flagKey: 'homie_inspector_impersonation',
+    redirectPath: '/inspector',
+    labelNoun: 'partner',
+  },
+  homeowner: {
+    tokenKey: 'homie_token',
+    profileKey: 'homie_homeowner',
+    flagKey: 'homie_impersonation',
+    redirectPath: '/account',
+    labelNoun: 'homeowner',
+  },
+  provider: {
+    tokenKey: 'homie_provider_token',
+    profileKey: 'homie_provider',
+    flagKey: 'homie_provider_impersonation',
+    redirectPath: '/portal',
+    labelNoun: 'service provider',
+  },
+};
+
+function decodeProfile(raw: string | null): unknown | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(decodeURIComponent(escape(atob(raw))));
+  } catch {
+    return null;
+  }
+}
+
 export default function AdminImpersonate() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -21,18 +65,31 @@ export default function AdminImpersonate() {
 
   useEffect(() => {
     const token = params.get('token');
-    if (!token) {
-      setError('Missing token');
-      return;
+    const asParam = (params.get('as') ?? 'inspector') as UserRole;
+    const cfg = ROLE[asParam];
+
+    if (!token) { setError('Missing token'); return; }
+    if (!cfg) { setError(`Unknown role: ${asParam}`); return; }
+
+    sessionStorage.setItem(cfg.tokenKey, token);
+    sessionStorage.setItem(cfg.flagKey, '1');
+
+    // Profile blob is optional. When present, store it so the destination
+    // portal renders immediately without an extra fetch. When absent
+    // (legacy inspector flow), the destination context fetches the profile
+    // itself.
+    const profile = decodeProfile(params.get('profile'));
+    if (profile) {
+      sessionStorage.setItem(cfg.profileKey, JSON.stringify(profile));
+    } else {
+      sessionStorage.removeItem(cfg.profileKey);
     }
 
-    sessionStorage.setItem('homie_inspector_token', token);
-    sessionStorage.setItem('homie_inspector_impersonation', '1');
-    // Force a fresh profile load on the inspector side.
-    sessionStorage.removeItem('homie_inspector');
-
-    navigate('/inspector', { replace: true });
+    navigate(cfg.redirectPath, { replace: true });
   }, [params, navigate]);
+
+  const role = (params.get('as') ?? 'inspector') as UserRole;
+  const noun = ROLE[role]?.labelNoun ?? 'user';
 
   return (
     <div style={{ padding: 32, fontFamily: 'system-ui, sans-serif', color: '#2D2926' }}>
@@ -42,7 +99,7 @@ export default function AdminImpersonate() {
           <div style={{ color: '#C8531E' }}>{error}</div>
         </div>
       ) : (
-        <div>Opening partner view…</div>
+        <div>Opening {noun} view…</div>
       )}
     </div>
   );

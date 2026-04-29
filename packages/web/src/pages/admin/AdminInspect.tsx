@@ -1018,7 +1018,8 @@ function PartnersSection() {
     try {
       const res = await adminService.impersonateInspectPartner(partnerId);
       if (!res.data?.token) throw new Error(res.error ?? 'No token returned');
-      const url = `/admin/impersonate?token=${encodeURIComponent(res.data.token)}&inspectorId=${partnerId}`;
+      const profileParam = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(res.data.partner)))));
+      const url = `/admin/impersonate?as=inspector&token=${encodeURIComponent(res.data.token)}&profile=${profileParam}`;
       window.open(url, '_blank', 'noopener');
       setToast(`Opened ${companyName} in a new tab`);
     } catch (err) {

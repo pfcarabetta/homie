@@ -4,6 +4,7 @@ import { trackEvent, setUserType } from '@/services/analytics';
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const TOKEN_KEY = 'homie_provider_token';
 const PROVIDER_KEY = 'homie_provider';
+const IMPERSONATION_KEY = 'homie_provider_impersonation';
 
 export interface ProviderInfo {
   id: string;
@@ -16,6 +17,9 @@ export interface ProviderInfo {
 interface ProviderAuthContextValue {
   provider: ProviderInfo | null;
   isProviderAuthenticated: boolean;
+  /** True when this tab is viewing a provider via the admin "Login as"
+   *  flow (sessionStorage-scoped token). */
+  isImpersonating: boolean;
   loginWithToken: (token: string) => Promise<string | null>;
   requestMagicLink: (phoneOrEmail: string) => Promise<string | null>;
   logout: () => void;
@@ -23,15 +27,33 @@ interface ProviderAuthContextValue {
 
 const ProviderAuthContext = createContext<ProviderAuthContextValue | null>(null);
 
+function isImpersonationActive(): boolean {
+  return sessionStorage.getItem(IMPERSONATION_KEY) === '1' && !!sessionStorage.getItem(TOKEN_KEY);
+}
+
 function loadStored(): ProviderInfo | null {
   try {
-    const raw = localStorage.getItem(PROVIDER_KEY);
+    const store = isImpersonationActive() ? sessionStorage : localStorage;
+    const raw = store.getItem(PROVIDER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
 export function ProviderAuthProvider({ children }: { children: ReactNode }) {
   const [provider, setProvider] = useState<ProviderInfo | null>(loadStored);
+  const [isImpersonating, setIsImpersonating] = useState<boolean>(isImpersonationActive);
+
+  // Impersonation handoff: AdminImpersonate writes token + provider blob
+  // into sessionStorage after this provider already mounted with empty
+  // initial state. Re-read once so the impersonated portal renders.
+  useEffect(() => {
+    if (!isImpersonationActive() || provider !== null) return;
+    const fresh = loadStored();
+    if (fresh) {
+      setProvider(fresh);
+      setIsImpersonating(true);
+    }
+  }, [provider]);
 
   // Check URL for magic link token on mount
   useEffect(() => {
@@ -83,13 +105,20 @@ export function ProviderAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(PROVIDER_KEY);
+    if (isImpersonationActive()) {
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(PROVIDER_KEY);
+      sessionStorage.removeItem(IMPERSONATION_KEY);
+      setIsImpersonating(false);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(PROVIDER_KEY);
+    }
     setProvider(null);
   }, []);
 
   return (
-    <ProviderAuthContext.Provider value={{ provider, isProviderAuthenticated: provider !== null, loginWithToken, requestMagicLink, logout }}>
+    <ProviderAuthContext.Provider value={{ provider, isProviderAuthenticated: provider !== null, isImpersonating, loginWithToken, requestMagicLink, logout }}>
       {children}
     </ProviderAuthContext.Provider>
   );

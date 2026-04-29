@@ -2,7 +2,9 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const TOKEN_KEY = 'homie_provider_token';
 
 function getProviderToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  // sessionStorage wins so the admin "Login as" flow scopes the
+  // impersonation to a single tab without clobbering localStorage.
+  return sessionStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY);
 }
 
 async function fetchProviderAPI<T>(path: string, options: RequestInit = {}): Promise<{ data: T | null; error: string | null; meta: Record<string, unknown> }> {

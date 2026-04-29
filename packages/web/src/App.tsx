@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ProviderAuthProvider } from '@/contexts/ProviderAuthContext';
 import { InspectorAuthProvider } from '@/contexts/InspectorAuthContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import ImpersonationBanner from '@/components/ImpersonationBanner';
 import HomePage from '@/pages/HomePage';
 import DiagnosticChat from '@/pages/DiagnosticChat';
 import GetQuotes from '@/pages/GetQuotes';
@@ -89,6 +90,7 @@ export default function App() {
       <InspectorAuthProvider>
       <BrowserRouter>
         <PageViewTracker />
+        <ImpersonationBanner />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/chat" element={<DiagnosticChat />} />

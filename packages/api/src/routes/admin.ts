@@ -10,6 +10,8 @@ import { generateCrossReferenceInsights } from '../services/cross-reference';
 import { parseInspectionReportAsync } from './inspector';
 import { parseSupportingDocAsync } from './account';
 import { signInspectorToken } from '../middleware/inspector-auth';
+import { signToken as signHomeownerToken } from '../middleware/auth';
+import { signProviderToken } from '../middleware/provider-auth';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -2539,6 +2541,90 @@ router.post('/inspect/partners/:id/impersonate', async (req: Request, res: Respo
     });
   } catch (err) {
     logger.error({ err }, '[POST /admin/inspect/partners/:id/impersonate]');
+    res.status(500).json({ data: null, error: 'Failed to issue impersonation token', meta: {} });
+  }
+});
+
+// POST /api/v1/admin/homeowners/:id/impersonate — issue a homeowner JWT for admin
+// view. The /admin/impersonate?as=homeowner page stuffs this into sessionStorage
+// then redirects to /dashboard, so closing the tab ends the session.
+router.post('/homeowners/:id/impersonate', async (req: Request, res: Response) => {
+  try {
+    const [ho] = await db.select({
+      id: homeowners.id,
+      email: homeowners.email,
+      firstName: homeowners.firstName,
+      lastName: homeowners.lastName,
+      zipCode: homeowners.zipCode,
+      membershipTier: homeowners.membershipTier,
+    }).from(homeowners).where(eq(homeowners.id, req.params.id)).limit(1);
+
+    if (!ho) {
+      res.status(404).json({ data: null, error: 'Homeowner not found', meta: {} });
+      return;
+    }
+
+    const token = signHomeownerToken(ho.id);
+    logger.info({ action: 'admin:impersonate_homeowner', homeownerId: ho.id, email: ho.email }, 'Admin started homeowner impersonation');
+    // Return AuthHomeowner shape so the AdminImpersonate handler can stash
+    // it directly into sessionStorage under 'homie_homeowner' — same key
+    // and shape that login() writes there, so AuthContext picks it up
+    // without an extra fetch.
+    res.json({
+      data: {
+        token,
+        homeowner: {
+          id: ho.id,
+          first_name: ho.firstName,
+          last_name: ho.lastName,
+          email: ho.email,
+          zip_code: ho.zipCode,
+          membership_tier: ho.membershipTier,
+        },
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/homeowners/:id/impersonate]');
+    res.status(500).json({ data: null, error: 'Failed to issue impersonation token', meta: {} });
+  }
+});
+
+// POST /api/v1/admin/providers/:id/impersonate — issue a provider JWT for admin
+// view. Same sessionStorage-scoped pattern as the other impersonation flows.
+// Only registered providers (password_hash IS NOT NULL) can be impersonated;
+// cold-outreach listings have nothing to log into.
+router.post('/providers/:id/impersonate', async (req: Request, res: Response) => {
+  try {
+    const [pr] = await db.select({
+      id: providers.id,
+      name: providers.name,
+      email: providers.email,
+      passwordHash: providers.passwordHash,
+    }).from(providers).where(eq(providers.id, req.params.id)).limit(1);
+
+    if (!pr) {
+      res.status(404).json({ data: null, error: 'Provider not found', meta: {} });
+      return;
+    }
+    if (!pr.passwordHash) {
+      res.status(400).json({ data: null, error: 'Provider has not registered for the portal yet', meta: {} });
+      return;
+    }
+
+    const token = signProviderToken(pr.id);
+    logger.info({ action: 'admin:impersonate_provider', providerId: pr.id, email: pr.email }, 'Admin started provider impersonation');
+    res.json({
+      data: {
+        token,
+        provider: { id: pr.id, name: pr.name, email: pr.email },
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/providers/:id/impersonate]');
     res.status(500).json({ data: null, error: 'Failed to issue impersonation token', meta: {} });
   }
 });
