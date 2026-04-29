@@ -131,6 +131,503 @@ router.get('/homeowners/:id', async (req: Request, res: Response) => {
   }
 });
 
+// ── Unified Users (across homeowners / inspector_partners / providers) ─────
+//
+// Bird's-eye view that joins identity tables on lower(email) so a single
+// human shows up once with all the products they're active in. Cold-outreach
+// providers (no password_hash) are intentionally excluded — they live in
+// /admin/providers as listings, not users.
+
+interface UserRow {
+  email: string;
+  name: string | null;
+  phone: string | null;
+  homeownerId: string | null;
+  inspectorPartnerId: string | null;
+  providerId: string | null;
+  partnerSlug: string | null;
+  membershipTier: string | null;
+  workspaceCount: number;
+  inspectorReportsUploaded: number;
+  jobCount: number;
+  bookingCount: number;
+  inspectorEarningsCents: number;
+  firstSeenAt: string;
+  lastActivityAt: string | null;
+  products: string[];
+}
+
+// GET /api/v1/admin/users
+router.get('/users', async (req: Request, res: Response) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const offset = Number(req.query.offset) || 0;
+  const q = (req.query.q as string || '').trim().toLowerCase();
+  const productFilter = (req.query.product as string || '').trim();
+
+  try {
+    // Single CTE-style query in JS — pull from each identity table once,
+    // merge in JS keyed by lower(email). Cheaper than three round-trips
+    // per user and keeps the join logic in one place.
+    const escaped = q.replace(/[%_\\]/g, '\\$&');
+    const homeFilter = q ? or(
+      sql`LOWER(${homeowners.email}) ILIKE ${'%' + escaped + '%'}`,
+      sql`${homeowners.phone} ILIKE ${'%' + escaped + '%'}`,
+      sql`LOWER(COALESCE(${homeowners.firstName}, '') || ' ' || COALESCE(${homeowners.lastName}, '')) ILIKE ${'%' + escaped + '%'}`,
+    ) : undefined;
+    const inspFilter = q ? or(
+      sql`LOWER(${inspectorPartners.email}) ILIKE ${'%' + escaped + '%'}`,
+      sql`${inspectorPartners.phone} ILIKE ${'%' + escaped + '%'}`,
+      sql`LOWER(${inspectorPartners.companyName}) ILIKE ${'%' + escaped + '%'}`,
+    ) : undefined;
+    const provFilter = q ? or(
+      sql`LOWER(${providers.email}) ILIKE ${'%' + escaped + '%'}`,
+      sql`${providers.phone} ILIKE ${'%' + escaped + '%'}`,
+      sql`LOWER(${providers.name}) ILIKE ${'%' + escaped + '%'}`,
+    ) : undefined;
+
+    const [hoRows, inspRows, provRows] = await Promise.all([
+      db.select({
+        id: homeowners.id,
+        email: homeowners.email,
+        firstName: homeowners.firstName,
+        lastName: homeowners.lastName,
+        phone: homeowners.phone,
+        membershipTier: homeowners.membershipTier,
+        createdAt: homeowners.createdAt,
+      }).from(homeowners).where(homeFilter),
+      db.select({
+        id: inspectorPartners.id,
+        email: inspectorPartners.email,
+        companyName: inspectorPartners.companyName,
+        phone: inspectorPartners.phone,
+        partnerSlug: inspectorPartners.partnerSlug,
+        status: inspectorPartners.status,
+        createdAt: inspectorPartners.createdAt,
+      }).from(inspectorPartners).where(inspFilter),
+      db.select({
+        id: providers.id,
+        email: providers.email,
+        name: providers.name,
+        phone: providers.phone,
+        discoveredAt: providers.discoveredAt,
+      }).from(providers)
+        .where(and(isNotNull(providers.passwordHash), provFilter ?? sql`TRUE`)),
+    ]);
+
+    // Build a map keyed by lower(email). Each entry is the merged user row.
+    const userMap = new Map<string, UserRow>();
+    function emailKey(email: string | null): string | null {
+      const e = (email ?? '').trim().toLowerCase();
+      return e ? e : null;
+    }
+
+    for (const ho of hoRows) {
+      const key = emailKey(ho.email);
+      if (!key) continue;
+      const name = [ho.firstName, ho.lastName].filter(Boolean).join(' ') || null;
+      userMap.set(key, {
+        email: ho.email,
+        name,
+        phone: ho.phone,
+        homeownerId: ho.id,
+        inspectorPartnerId: null,
+        providerId: null,
+        partnerSlug: null,
+        membershipTier: ho.membershipTier,
+        workspaceCount: 0,
+        inspectorReportsUploaded: 0,
+        jobCount: 0,
+        bookingCount: 0,
+        inspectorEarningsCents: 0,
+        firstSeenAt: ho.createdAt.toISOString(),
+        lastActivityAt: null,
+        products: ['personal'],
+      });
+    }
+
+    for (const ip of inspRows) {
+      const key = emailKey(ip.email);
+      if (!key) continue;
+      const existing = userMap.get(key);
+      if (existing) {
+        existing.inspectorPartnerId = ip.id;
+        existing.partnerSlug = ip.partnerSlug;
+        existing.products.push('inspect_partner');
+        if (ip.createdAt < new Date(existing.firstSeenAt)) {
+          existing.firstSeenAt = ip.createdAt.toISOString();
+        }
+      } else {
+        userMap.set(key, {
+          email: ip.email,
+          name: ip.companyName,
+          phone: ip.phone,
+          homeownerId: null,
+          inspectorPartnerId: ip.id,
+          providerId: null,
+          partnerSlug: ip.partnerSlug,
+          membershipTier: null,
+          workspaceCount: 0,
+          inspectorReportsUploaded: 0,
+          jobCount: 0,
+          bookingCount: 0,
+          inspectorEarningsCents: 0,
+          firstSeenAt: ip.createdAt.toISOString(),
+          lastActivityAt: null,
+          products: ['inspect_partner'],
+        });
+      }
+    }
+
+    for (const pr of provRows) {
+      const key = emailKey(pr.email);
+      if (!key) continue;
+      const existing = userMap.get(key);
+      if (existing) {
+        existing.providerId = pr.id;
+        existing.products.push('provider');
+        if (pr.discoveredAt < new Date(existing.firstSeenAt)) {
+          existing.firstSeenAt = pr.discoveredAt.toISOString();
+        }
+      } else {
+        userMap.set(key, {
+          email: pr.email!,
+          name: pr.name,
+          phone: pr.phone,
+          homeownerId: null,
+          inspectorPartnerId: null,
+          providerId: pr.id,
+          partnerSlug: null,
+          membershipTier: null,
+          workspaceCount: 0,
+          inspectorReportsUploaded: 0,
+          jobCount: 0,
+          bookingCount: 0,
+          inspectorEarningsCents: 0,
+          firstSeenAt: pr.discoveredAt.toISOString(),
+          lastActivityAt: null,
+          products: ['provider'],
+        });
+      }
+    }
+
+    // Activity: jobs, bookings, workspaces (Business badge), reports uploaded
+    const homeownerIds = Array.from(userMap.values()).map(u => u.homeownerId).filter((x): x is string => !!x);
+    const inspectorIds = Array.from(userMap.values()).map(u => u.inspectorPartnerId).filter((x): x is string => !!x);
+
+    const [jobCounts, bookingCounts, wsCounts, lastJobs, lastBookings, reportRowsForEarnings, lastUploads] = await Promise.all([
+      homeownerIds.length === 0 ? [] : db.select({ homeownerId: jobs.homeownerId, value: count() })
+        .from(jobs).where(inArray(jobs.homeownerId, homeownerIds)).groupBy(jobs.homeownerId),
+      homeownerIds.length === 0 ? [] : db.select({ homeownerId: bookings.homeownerId, value: count() })
+        .from(bookings).where(inArray(bookings.homeownerId, homeownerIds)).groupBy(bookings.homeownerId),
+      homeownerIds.length === 0 ? [] : db.select({ homeownerId: workspaceMembers.homeownerId, value: count() })
+        .from(workspaceMembers).where(inArray(workspaceMembers.homeownerId, homeownerIds)).groupBy(workspaceMembers.homeownerId),
+      homeownerIds.length === 0 ? [] : db.select({ homeownerId: jobs.homeownerId, lastAt: sql<Date>`MAX(${jobs.createdAt})` })
+        .from(jobs).where(inArray(jobs.homeownerId, homeownerIds)).groupBy(jobs.homeownerId),
+      homeownerIds.length === 0 ? [] : db.select({ homeownerId: bookings.homeownerId, lastAt: sql<Date>`MAX(${bookings.confirmedAt})` })
+        .from(bookings).where(inArray(bookings.homeownerId, homeownerIds)).groupBy(bookings.homeownerId),
+      inspectorIds.length === 0 ? [] : db.select({
+        inspectorPartnerId: inspectionReports.inspectorPartnerId,
+        pricingTier: inspectionReports.pricingTier,
+        priceCentsPaid: inspectionReports.priceCentsPaid,
+        paymentStatus: inspectionReports.paymentStatus,
+        source: inspectionReports.source,
+      }).from(inspectionReports).where(inArray(inspectionReports.inspectorPartnerId, inspectorIds)),
+      inspectorIds.length === 0 ? [] : db.select({
+        inspectorPartnerId: inspectionReports.inspectorPartnerId,
+        lastAt: sql<Date>`MAX(${inspectionReports.createdAt})`,
+      }).from(inspectionReports).where(inArray(inspectionReports.inspectorPartnerId, inspectorIds)).groupBy(inspectionReports.inspectorPartnerId),
+    ]);
+
+    const jobByHo = new Map(jobCounts.map(r => [r.homeownerId, Number(r.value)]));
+    const bookByHo = new Map(bookingCounts.map(r => [r.homeownerId, Number(r.value)]));
+    const wsByHo = new Map(wsCounts.map(r => [r.homeownerId, Number(r.value)]));
+    const lastJobByHo = new Map(lastJobs.map(r => [r.homeownerId, r.lastAt]));
+    const lastBookByHo = new Map(lastBookings.map(r => [r.homeownerId, r.lastAt]));
+    const lastUploadByInsp = new Map(lastUploads.map(r => [r.inspectorPartnerId, r.lastAt]));
+
+    // Group reports by inspector for earnings rollup
+    const config = await getPricingConfig();
+    const reportsByInsp = new Map<string, typeof reportRowsForEarnings>();
+    for (const r of reportRowsForEarnings) {
+      if (!r.inspectorPartnerId) continue;
+      const arr = reportsByInsp.get(r.inspectorPartnerId) ?? [];
+      arr.push(r);
+      reportsByInsp.set(r.inspectorPartnerId, arr);
+    }
+
+    // Per-inspector retail overrides (one query for all)
+    const inspOverrides = inspectorIds.length === 0 ? [] : await db.select({
+      id: inspectorPartners.id,
+      retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
+      retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
+      retailPricePremiumCents: inspectorPartners.retailPricePremiumCents,
+    }).from(inspectorPartners).where(inArray(inspectorPartners.id, inspectorIds));
+    const overrideById = new Map(inspOverrides.map(o => [o.id, o]));
+
+    for (const u of userMap.values()) {
+      if (u.homeownerId) {
+        u.jobCount = jobByHo.get(u.homeownerId) ?? 0;
+        u.bookingCount = bookByHo.get(u.homeownerId) ?? 0;
+        u.workspaceCount = wsByHo.get(u.homeownerId) ?? 0;
+        if (u.workspaceCount > 0 && !u.products.includes('business')) u.products.push('business');
+
+        const lastJob = lastJobByHo.get(u.homeownerId) ?? null;
+        const lastBook = lastBookByHo.get(u.homeownerId) ?? null;
+        for (const t of [lastJob, lastBook]) {
+          if (t && (!u.lastActivityAt || t > new Date(u.lastActivityAt))) u.lastActivityAt = t.toISOString();
+        }
+      }
+      if (u.inspectorPartnerId) {
+        const reports = reportsByInsp.get(u.inspectorPartnerId) ?? [];
+        u.inspectorReportsUploaded = reports.length;
+        const ov = overrideById.get(u.inspectorPartnerId);
+        const overrides: InspectorRetailOverrides = ov ?? { retailPriceEssentialCents: null, retailPriceProfessionalCents: null, retailPricePremiumCents: null };
+        u.inspectorEarningsCents = reports.reduce((sum, r) => sum + estimatedEarningsCentsFor(overrides, r, config.inspector), 0);
+        const lastUp = lastUploadByInsp.get(u.inspectorPartnerId) ?? null;
+        if (lastUp && (!u.lastActivityAt || lastUp > new Date(u.lastActivityAt))) u.lastActivityAt = lastUp.toISOString();
+      }
+    }
+
+    let allRows = Array.from(userMap.values());
+
+    if (productFilter && productFilter !== 'all') {
+      allRows = allRows.filter(u => u.products.includes(productFilter));
+    }
+
+    // Sort by most recent activity, then by first-seen
+    allRows.sort((a, b) => {
+      const at = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : new Date(a.firstSeenAt).getTime();
+      const bt = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : new Date(b.firstSeenAt).getTime();
+      return bt - at;
+    });
+
+    const total = allRows.length;
+    const paged = allRows.slice(offset, offset + limit);
+
+    res.json({ data: paged, error: null, meta: { total, limit, offset } });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/users]');
+    res.status(500).json({ data: null, error: 'Failed to fetch users', meta: {} });
+  }
+});
+
+// GET /api/v1/admin/users/by-email/:email — unified detail across products
+router.get('/users/by-email/:email', async (req: Request, res: Response) => {
+  const email = decodeURIComponent(req.params.email).trim().toLowerCase();
+  if (!email) {
+    res.status(400).json({ data: null, error: 'email required', meta: {} });
+    return;
+  }
+
+  try {
+    const [[homeowner], [inspector], [provider]] = await Promise.all([
+      db.select({
+        id: homeowners.id,
+        firstName: homeowners.firstName,
+        lastName: homeowners.lastName,
+        email: homeowners.email,
+        phone: homeowners.phone,
+        zipCode: homeowners.zipCode,
+        membershipTier: homeowners.membershipTier,
+        stripeCustomerId: homeowners.stripeCustomerId,
+        emailVerified: homeowners.emailVerified,
+        smsOptIn: homeowners.smsOptIn,
+        createdAt: homeowners.createdAt,
+      }).from(homeowners).where(sql`LOWER(${homeowners.email}) = ${email}`).limit(1),
+      db.select({
+        id: inspectorPartners.id,
+        companyName: inspectorPartners.companyName,
+        email: inspectorPartners.email,
+        phone: inspectorPartners.phone,
+        website: inspectorPartners.website,
+        partnerSlug: inspectorPartners.partnerSlug,
+        companyLogoUrl: inspectorPartners.companyLogoUrl,
+        status: inspectorPartners.status,
+        tier: inspectorPartners.tier,
+        payoutMethod: inspectorPartners.payoutMethod,
+        stripeConnectAccountId: inspectorPartners.stripeConnectAccountId,
+        retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
+        retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
+        retailPricePremiumCents: inspectorPartners.retailPricePremiumCents,
+        joinedAt: inspectorPartners.joinedAt,
+        createdAt: inspectorPartners.createdAt,
+      }).from(inspectorPartners).where(sql`LOWER(${inspectorPartners.email}) = ${email}`).limit(1),
+      db.select({
+        id: providers.id,
+        name: providers.name,
+        email: providers.email,
+        phone: providers.phone,
+        website: providers.website,
+        rating: providers.rating,
+        reviewCount: providers.reviewCount,
+        categories: providers.categories,
+        notificationPref: providers.notificationPref,
+        vacationMode: providers.vacationMode,
+        serviceZips: providers.serviceZips,
+        discoveredAt: providers.discoveredAt,
+      }).from(providers).where(and(
+        sql`LOWER(${providers.email}) = ${email}`,
+        isNotNull(providers.passwordHash),
+      )!).limit(1),
+    ]);
+
+    if (!homeowner && !inspector && !provider) {
+      res.status(404).json({ data: null, error: 'User not found', meta: {} });
+      return;
+    }
+
+    const products: string[] = [];
+    if (homeowner) products.push('personal');
+    if (inspector) products.push('inspect_partner');
+    if (provider) products.push('provider');
+
+    // Personal-side activity
+    let personalJobs: Array<Record<string, unknown>> = [];
+    let personalBookings: Array<Record<string, unknown>> = [];
+    let workspaceMemberships: Array<Record<string, unknown>> = [];
+    let personalStats = { total_jobs: 0, total_bookings: 0 };
+    let receivedReports: Array<Record<string, unknown>> = [];
+    if (homeowner) {
+      const [jobRows, bookRows, wsRows, [{ value: totalJobs }], [{ value: totalBookings }], ccReports] = await Promise.all([
+        db.select({ id: jobs.id, status: jobs.status, tier: jobs.tier, diagnosis: jobs.diagnosis, zipCode: jobs.zipCode, workspaceId: jobs.workspaceId, createdAt: jobs.createdAt })
+          .from(jobs).where(eq(jobs.homeownerId, homeowner.id)).orderBy(desc(jobs.createdAt)).limit(20),
+        db.select({ id: bookings.id, jobId: bookings.jobId, providerName: providers.name, status: bookings.status, confirmedAt: bookings.confirmedAt })
+          .from(bookings).leftJoin(providers, eq(bookings.providerId, providers.id))
+          .where(eq(bookings.homeownerId, homeowner.id)).orderBy(desc(bookings.confirmedAt)).limit(20),
+        db.select({ workspaceId: workspaceMembers.workspaceId, role: workspaceMembers.role, workspaceName: workspaces.name, workspacePlan: workspaces.plan })
+          .from(workspaceMembers).innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
+          .where(eq(workspaceMembers.homeownerId, homeowner.id)),
+        db.select({ value: count() }).from(jobs).where(eq(jobs.homeownerId, homeowner.id)),
+        db.select({ value: count() }).from(bookings).where(eq(bookings.homeownerId, homeowner.id)),
+        // Reports the user paid for / owns / was CC'd on
+        db.select({
+          id: inspectionReports.id,
+          propertyAddress: inspectionReports.propertyAddress,
+          inspectionDate: inspectionReports.inspectionDate,
+          pricingTier: inspectionReports.pricingTier,
+          parsingStatus: inspectionReports.parsingStatus,
+          paymentStatus: inspectionReports.paymentStatus,
+          createdAt: inspectionReports.createdAt,
+          clientAccessToken: inspectionReports.clientAccessToken,
+        }).from(inspectionReports).where(or(
+          eq(inspectionReports.homeownerId, homeowner.id),
+          sql`${homeowner.id}::uuid = ANY(${inspectionReports.ccHomeownerIds})`,
+          sql`LOWER(${inspectionReports.clientEmail}) = ${email}`,
+          sql`${email} = ANY(SELECT LOWER(unnest(${inspectionReports.ccEmails})))`,
+        )!).orderBy(desc(inspectionReports.createdAt)).limit(20),
+      ]);
+      personalJobs = jobRows;
+      personalBookings = bookRows;
+      workspaceMemberships = wsRows;
+      personalStats = { total_jobs: Number(totalJobs), total_bookings: Number(totalBookings) };
+      receivedReports = ccReports;
+      if (wsRows.length > 0 && !products.includes('business')) products.push('business');
+    } else {
+      // Even non-homeowners might be CC'd on reports by raw email match
+      const ccReports = await db.select({
+        id: inspectionReports.id,
+        propertyAddress: inspectionReports.propertyAddress,
+        inspectionDate: inspectionReports.inspectionDate,
+        pricingTier: inspectionReports.pricingTier,
+        parsingStatus: inspectionReports.parsingStatus,
+        paymentStatus: inspectionReports.paymentStatus,
+        createdAt: inspectionReports.createdAt,
+        clientAccessToken: inspectionReports.clientAccessToken,
+      }).from(inspectionReports).where(or(
+        sql`LOWER(${inspectionReports.clientEmail}) = ${email}`,
+        sql`${email} = ANY(SELECT LOWER(unnest(${inspectionReports.ccEmails})))`,
+      )!).orderBy(desc(inspectionReports.createdAt)).limit(20);
+      receivedReports = ccReports;
+    }
+
+    // Inspector-partner activity
+    let uploadedReports: Array<Record<string, unknown>> = [];
+    let inspectorStats: Record<string, unknown> | null = null;
+    if (inspector) {
+      const reportRows = await db.select({
+        id: inspectionReports.id,
+        propertyAddress: inspectionReports.propertyAddress,
+        clientName: inspectionReports.clientName,
+        clientEmail: inspectionReports.clientEmail,
+        inspectionDate: inspectionReports.inspectionDate,
+        pricingTier: inspectionReports.pricingTier,
+        priceCentsPaid: inspectionReports.priceCentsPaid,
+        paymentStatus: inspectionReports.paymentStatus,
+        source: inspectionReports.source,
+        parsingStatus: inspectionReports.parsingStatus,
+        itemsParsed: inspectionReports.itemsParsed,
+        createdAt: inspectionReports.createdAt,
+        clientAccessToken: inspectionReports.clientAccessToken,
+      }).from(inspectionReports)
+        .where(eq(inspectionReports.inspectorPartnerId, inspector.id))
+        .orderBy(desc(inspectionReports.createdAt))
+        .limit(20);
+      uploadedReports = reportRows;
+
+      const config = await getPricingConfig();
+      const overrides: InspectorRetailOverrides = {
+        retailPriceEssentialCents: inspector.retailPriceEssentialCents,
+        retailPriceProfessionalCents: inspector.retailPriceProfessionalCents,
+        retailPricePremiumCents: inspector.retailPricePremiumCents,
+      };
+      const allReports = await db.select({
+        pricingTier: inspectionReports.pricingTier,
+        priceCentsPaid: inspectionReports.priceCentsPaid,
+      }).from(inspectionReports).where(eq(inspectionReports.inspectorPartnerId, inspector.id));
+      const totalReports = allReports.length;
+      const lifetimeEarningsCents = allReports.reduce((s, r) => s + estimatedEarningsCentsFor(overrides, r, config.inspector), 0);
+      inspectorStats = {
+        totalReports,
+        lifetimeEarningsCents,
+        landingPageUrl: `/partner/${inspector.partnerSlug}`,
+        stripeConnected: !!inspector.stripeConnectAccountId,
+      };
+    }
+
+    // Provider activity
+    let providerStats: Record<string, unknown> | null = null;
+    if (provider) {
+      const [scoreRow] = await db.select({
+        acceptanceRate: providerScores.acceptanceRate,
+        avgResponseSec: providerScores.avgResponseSec,
+        completionRate: providerScores.completionRate,
+        avgHomeownerRating: providerScores.avgHomeownerRating,
+        totalOutreach: providerScores.totalOutreach,
+        totalAccepted: providerScores.totalAccepted,
+      }).from(providerScores).where(eq(providerScores.providerId, provider.id)).limit(1);
+      const [{ value: outreachCount }] = await db.select({ value: count() })
+        .from(outreachAttempts).where(eq(outreachAttempts.providerId, provider.id));
+      providerStats = {
+        scores: scoreRow ?? null,
+        outreachCount: Number(outreachCount),
+      };
+    }
+
+    res.json({
+      data: {
+        email,
+        products,
+        homeowner: homeowner ?? null,
+        inspector: inspector ?? null,
+        provider: provider ?? null,
+        personalStats,
+        personalJobs,
+        personalBookings,
+        workspaceMemberships,
+        receivedReports,
+        uploadedReports,
+        inspectorStats,
+        providerStats,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/users/by-email/:email]');
+    res.status(500).json({ data: null, error: 'Failed to fetch user details', meta: {} });
+  }
+});
+
 // GET /api/v1/admin/jobs
 router.get('/jobs', async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);

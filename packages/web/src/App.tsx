@@ -31,7 +31,7 @@ import Security from '@/pages/Security';
 import AdminLogin from '@/pages/admin/AdminLogin';
 import AdminLayout from '@/pages/admin/AdminLayout';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
-import AdminHomeowners from '@/pages/admin/AdminHomeowners';
+import AdminUsers from '@/pages/admin/AdminUsers';
 import AdminJobs from '@/pages/admin/AdminJobs';
 import AdminInspect from '@/pages/admin/AdminInspect';
 import AdminImpersonate from '@/pages/admin/AdminImpersonate';
@@ -127,7 +127,8 @@ export default function App() {
           <Route path="/admin/impersonate" element={<AdminImpersonate />} />
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/admin/homeowners" element={<AdminHomeowners />} />
+            <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/homeowners" element={<AdminUsers />} />
             <Route path="/admin/jobs" element={<AdminJobs />} />
             <Route path="/admin/inspect" element={<AdminInspect />} />
             <Route path="/admin/providers" element={<AdminProviders />} />

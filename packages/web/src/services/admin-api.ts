@@ -89,6 +89,111 @@ export interface InspectReportRow {
   expiresAt: string;
 }
 
+export interface UserRow {
+  email: string;
+  name: string | null;
+  phone: string | null;
+  homeownerId: string | null;
+  inspectorPartnerId: string | null;
+  providerId: string | null;
+  partnerSlug: string | null;
+  membershipTier: string | null;
+  workspaceCount: number;
+  inspectorReportsUploaded: number;
+  jobCount: number;
+  bookingCount: number;
+  inspectorEarningsCents: number;
+  firstSeenAt: string;
+  lastActivityAt: string | null;
+  products: string[];
+}
+
+export interface UserDetailData {
+  email: string;
+  products: string[];
+  homeowner: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    phone: string | null;
+    zipCode: string;
+    membershipTier: string;
+    stripeCustomerId: string | null;
+    emailVerified: boolean;
+    smsOptIn: boolean;
+    createdAt: string;
+  } | null;
+  inspector: {
+    id: string;
+    companyName: string;
+    email: string;
+    phone: string | null;
+    website: string | null;
+    partnerSlug: string;
+    companyLogoUrl: string | null;
+    status: string;
+    tier: string;
+    payoutMethod: string;
+    stripeConnectAccountId: string | null;
+    joinedAt: string | null;
+    createdAt: string;
+  } | null;
+  provider: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    website: string | null;
+    rating: string | null;
+    reviewCount: number;
+    categories: string[] | null;
+    notificationPref: string;
+    vacationMode: boolean;
+    serviceZips: string[] | null;
+    discoveredAt: string;
+  } | null;
+  personalStats: { total_jobs: number; total_bookings: number };
+  personalJobs: Array<{
+    id: string; status: string; tier: string;
+    diagnosis: { category?: string; summary?: string } | null;
+    zipCode: string; workspaceId: string | null; createdAt: string;
+  }>;
+  personalBookings: Array<{
+    id: string; jobId: string; providerName: string | null;
+    status: string; confirmedAt: string;
+  }>;
+  workspaceMemberships: Array<{
+    workspaceId: string; role: string; workspaceName: string; workspacePlan: string;
+  }>;
+  receivedReports: Array<{
+    id: string; propertyAddress: string; inspectionDate: string;
+    pricingTier: string | null; parsingStatus: string;
+    paymentStatus: string; createdAt: string; clientAccessToken: string;
+  }>;
+  uploadedReports: Array<{
+    id: string; propertyAddress: string; clientName: string; clientEmail: string;
+    inspectionDate: string; pricingTier: string | null;
+    priceCentsPaid: number | null; paymentStatus: string;
+    source: string; parsingStatus: string; itemsParsed: number;
+    createdAt: string; clientAccessToken: string;
+  }>;
+  inspectorStats: {
+    totalReports: number;
+    lifetimeEarningsCents: number;
+    landingPageUrl: string;
+    stripeConnected: boolean;
+  } | null;
+  providerStats: {
+    scores: {
+      acceptanceRate: string | null; avgResponseSec: string | null;
+      completionRate: string | null; avgHomeownerRating: string | null;
+      totalOutreach: number; totalAccepted: number;
+    } | null;
+    outreachCount: number;
+  } | null;
+}
+
 export interface InspectPartnerRow {
   id: string;
   partnerSlug: string;
@@ -273,6 +378,19 @@ export const adminService = {
       method: 'POST',
       body: JSON.stringify({ tier }),
     });
+  },
+
+  async getUsers(params?: { limit?: number; offset?: number; q?: string; product?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.limit != null) qs.set('limit', String(params.limit));
+    if (params?.offset != null) qs.set('offset', String(params.offset));
+    if (params?.q) qs.set('q', params.q);
+    if (params?.product && params.product !== 'all') qs.set('product', params.product);
+    return fetchAdmin<UserRow[]>(`/api/v1/admin/users?${qs}`);
+  },
+
+  async getUserDetail(email: string) {
+    return fetchAdmin<UserDetailData>(`/api/v1/admin/users/by-email/${encodeURIComponent(email)}`);
   },
 
   async getInspectPartners(params?: { all?: boolean }) {

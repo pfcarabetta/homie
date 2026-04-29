@@ -14,7 +14,7 @@ interface NavItem { id: string; label: string; path: string; icon: string; }
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard',  label: 'Dashboard',  path: '/admin/dashboard',  icon: 'dashboard' },
-  { id: 'homeowners', label: 'Homeowners', path: '/admin/homeowners', icon: 'people' },
+  { id: 'users',      label: 'Users',      path: '/admin/users',      icon: 'people' },
   { id: 'jobs',       label: 'Jobs',       path: '/admin/jobs',       icon: 'jobs' },
   { id: 'inspect',    label: 'Inspect',    path: '/admin/inspect',    icon: 'inspect' },
   { id: 'providers',  label: 'Providers',  path: '/admin/providers',  icon: 'wrench' },
