@@ -34,6 +34,7 @@ import AdminDashboard from '@/pages/admin/AdminDashboard';
 import AdminHomeowners from '@/pages/admin/AdminHomeowners';
 import AdminJobs from '@/pages/admin/AdminJobs';
 import AdminInspect from '@/pages/admin/AdminInspect';
+import AdminImpersonate from '@/pages/admin/AdminImpersonate';
 import AdminProviders from '@/pages/admin/AdminProviders';
 import AdminBookings from '@/pages/admin/AdminBookings';
 import AdminBusiness from '@/pages/admin/AdminBusiness';
@@ -123,6 +124,7 @@ export default function App() {
           <Route path="/portal/signup" element={<ProSignup />} />
           <Route path="/portal" element={<ProviderPortal />} />
           <Route path="/admin" element={<AdminLogin />} />
+          <Route path="/admin/impersonate" element={<AdminImpersonate />} />
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/homeowners" element={<AdminHomeowners />} />

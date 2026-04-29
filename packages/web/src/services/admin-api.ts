@@ -89,6 +89,27 @@ export interface InspectReportRow {
   expiresAt: string;
 }
 
+export interface InspectPartnerRow {
+  id: string;
+  partnerSlug: string;
+  companyName: string;
+  email: string;
+  phone: string | null;
+  status: string;
+  tier: string;
+  website: string | null;
+  companyLogoUrl: string | null;
+  payoutMethod: string;
+  stripeConnected: boolean;
+  landingPageUrl: string;
+  joinedAt: string | null;
+  createdAt: string;
+  reportsUploaded: number;
+  lastUploadAt: string | null;
+  lifetimeEarningsCents: number;
+  currentMonthEarningsCents: number;
+}
+
 export interface InspectReportItemRow {
   id: string;
   title: string;
@@ -252,6 +273,19 @@ export const adminService = {
       method: 'POST',
       body: JSON.stringify({ tier }),
     });
+  },
+
+  async getInspectPartners(params?: { all?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params?.all) qs.set('all', '1');
+    return fetchAdmin<InspectPartnerRow[]>(`/api/v1/admin/inspect/partners${qs.toString() ? `?${qs}` : ''}`);
+  },
+
+  async impersonateInspectPartner(partnerId: string) {
+    return fetchAdmin<{ token: string; partner: { id: string; companyName: string; email: string } }>(
+      `/api/v1/admin/inspect/partners/${partnerId}/impersonate`,
+      { method: 'POST' },
+    );
   },
 
   async getHomeowners(params?: { limit?: number; offset?: number; q?: string }) {

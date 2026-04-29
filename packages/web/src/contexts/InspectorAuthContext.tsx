@@ -1,13 +1,17 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { inspectorService, type InspectorProfile, type InspectorSignupData } from '@/services/inspector-api';
 import { trackEvent, setUserType } from '@/services/analytics';
 
 const TOKEN_KEY = 'homie_inspector_token';
 const INSPECTOR_KEY = 'homie_inspector';
+const IMPERSONATION_KEY = 'homie_inspector_impersonation';
 
 interface InspectorAuthContextValue {
   inspector: InspectorProfile | null;
   isAuthenticated: boolean;
+  /** True when the current tab is viewing a partner's account via the
+   *  admin "View as partner" flow (sessionStorage-scoped token). */
+  isImpersonating: boolean;
   login: (email: string, password: string) => Promise<string | null>;
   signup: (data: InspectorSignupData) => Promise<string | null>;
   logout: () => void;
@@ -20,9 +24,16 @@ interface InspectorAuthContextValue {
 
 const InspectorAuthContext = createContext<InspectorAuthContextValue | null>(null);
 
+function isImpersonationActive(): boolean {
+  return sessionStorage.getItem(IMPERSONATION_KEY) === '1' && !!sessionStorage.getItem(TOKEN_KEY);
+}
+
 function loadStored(): InspectorProfile | null {
   try {
-    const raw = localStorage.getItem(INSPECTOR_KEY);
+    // Impersonation tabs read/write sessionStorage so they don't clobber
+    // the admin's own inspector login (if any) in localStorage.
+    const store = isImpersonationActive() ? sessionStorage : localStorage;
+    const raw = store.getItem(INSPECTOR_KEY);
     return raw ? (JSON.parse(raw) as InspectorProfile) : null;
   } catch {
     return null;
@@ -31,6 +42,28 @@ function loadStored(): InspectorProfile | null {
 
 export function InspectorAuthProvider({ children }: { children: ReactNode }) {
   const [inspector, setInspector] = useState<InspectorProfile | null>(loadStored);
+  const [isImpersonating, setIsImpersonating] = useState<boolean>(isImpersonationActive);
+
+  // When admin opens /admin/impersonate, the token lands in sessionStorage
+  // but no profile is cached yet. Fetch it once on mount so the inspector
+  // portal renders the partner's data.
+  useEffect(() => {
+    if (!isImpersonationActive() || inspector !== null) return;
+    let cancelled = false;
+    inspectorService.getProfile().then(res => {
+      if (cancelled || !res.data) return;
+      sessionStorage.setItem(INSPECTOR_KEY, JSON.stringify(res.data));
+      setInspector(res.data);
+      setIsImpersonating(true);
+    }).catch(() => {
+      // Bad token / expired — clear and fall back to login.
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(INSPECTOR_KEY);
+      sessionStorage.removeItem(IMPERSONATION_KEY);
+      setIsImpersonating(false);
+    });
+    return () => { cancelled = true; };
+  }, [inspector]);
 
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     try {
@@ -120,18 +153,28 @@ export function InspectorAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(INSPECTOR_KEY);
+    // Impersonation tab → only clear sessionStorage so the admin's own
+    // login (if any) in localStorage stays intact in their other tabs.
+    if (isImpersonationActive()) {
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(INSPECTOR_KEY);
+      sessionStorage.removeItem(IMPERSONATION_KEY);
+      setIsImpersonating(false);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(INSPECTOR_KEY);
+    }
     setInspector(null);
   }, []);
 
   const replaceInspector = useCallback((profile: InspectorProfile) => {
-    localStorage.setItem(INSPECTOR_KEY, JSON.stringify(profile));
+    const store = isImpersonationActive() ? sessionStorage : localStorage;
+    store.setItem(INSPECTOR_KEY, JSON.stringify(profile));
     setInspector(profile);
   }, []);
 
   return (
-    <InspectorAuthContext.Provider value={{ inspector, isAuthenticated: inspector !== null, login, signup, logout, setInspector: replaceInspector }}>
+    <InspectorAuthContext.Provider value={{ inspector, isAuthenticated: inspector !== null, isImpersonating, login, signup, logout, setInspector: replaceInspector }}>
       {children}
     </InspectorAuthContext.Provider>
   );

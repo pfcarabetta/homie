@@ -3,12 +3,13 @@ import { count, desc, eq, sql, or, ilike, and, gt, lt, isNull, isNotNull, gte, l
 import logger from '../logger';
 import { db } from '../db';
 import { homeowners, jobs, bookings, providers, providerScores, outreachAttempts, providerResponses, suppressionList, workspaces, workspaceMembers, properties } from '../db/schema';
-import { inspectionReports, inspectionReportItems, inspectionSupportingDocuments, inspectionCrossReferenceInsights } from '../db/schema/inspector';
+import { inspectionReports, inspectionReportItems, inspectionSupportingDocuments, inspectionCrossReferenceInsights, inspectorPartners } from '../db/schema/inspector';
 import { pricingConfig } from '../db/schema/pricing-config';
-import { getPricingConfig, invalidatePricingCache, PricingConfig } from '../services/pricing';
+import { getPricingConfig, invalidatePricingCache, PricingConfig, estimatedEarningsCentsFor, referralBonusCentsFor, type InspectorRetailOverrides } from '../services/pricing';
 import { generateCrossReferenceInsights } from '../services/cross-reference';
 import { parseInspectionReportAsync } from './inspector';
 import { parseSupportingDocAsync } from './account';
+import { signInspectorToken } from '../middleware/inspector-auth';
 import { ApiResponse } from '../types/api';
 
 const router = Router();
@@ -1855,6 +1856,157 @@ router.post('/inspect/reports/:id/extend', async (req: Request, res: Response) =
   } catch (err) {
     logger.error({ err }, '[POST /admin/inspect/reports/:id/extend]');
     res.status(500).json({ data: null, error: 'Failed to extend expiration', meta: {} });
+  }
+});
+
+// GET /api/v1/admin/inspect/partners — list active inspector partners with stats
+router.get('/inspect/partners', async (req: Request, res: Response) => {
+  const includeAll = req.query.all === '1' || req.query.all === 'true';
+  try {
+    const partnerRows = await db.select({
+      id: inspectorPartners.id,
+      partnerSlug: inspectorPartners.partnerSlug,
+      companyName: inspectorPartners.companyName,
+      email: inspectorPartners.email,
+      phone: inspectorPartners.phone,
+      status: inspectorPartners.status,
+      tier: inspectorPartners.tier,
+      website: inspectorPartners.website,
+      companyLogoUrl: inspectorPartners.companyLogoUrl,
+      retailPriceEssentialCents: inspectorPartners.retailPriceEssentialCents,
+      retailPriceProfessionalCents: inspectorPartners.retailPriceProfessionalCents,
+      retailPricePremiumCents: inspectorPartners.retailPricePremiumCents,
+      payoutMethod: inspectorPartners.payoutMethod,
+      stripeConnectAccountId: inspectorPartners.stripeConnectAccountId,
+      joinedAt: inspectorPartners.joinedAt,
+      createdAt: inspectorPartners.createdAt,
+    })
+      .from(inspectorPartners)
+      .where(includeAll ? undefined : eq(inspectorPartners.status, 'active'))
+      .orderBy(desc(inspectorPartners.createdAt));
+
+    if (partnerRows.length === 0) {
+      res.json({ data: [], error: null, meta: { total: 0 } });
+      return;
+    }
+
+    const partnerIds = partnerRows.map(p => p.id);
+    const config = await getPricingConfig();
+
+    // Pull the rows we need to compute earnings — both uploads and referrals.
+    const reportRows = await db.select({
+      id: inspectionReports.id,
+      inspectorPartnerId: inspectionReports.inspectorPartnerId,
+      referrerPartnerId: inspectionReports.referrerPartnerId,
+      pricingTier: inspectionReports.pricingTier,
+      priceCentsPaid: inspectionReports.priceCentsPaid,
+      paymentStatus: inspectionReports.paymentStatus,
+      source: inspectionReports.source,
+      createdAt: inspectionReports.createdAt,
+      parsingStatus: inspectionReports.parsingStatus,
+    })
+      .from(inspectionReports)
+      .where(or(
+        inArray(inspectionReports.inspectorPartnerId, partnerIds),
+        inArray(inspectionReports.referrerPartnerId, partnerIds),
+      )!);
+
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const data = partnerRows.map(p => {
+      const overrides: InspectorRetailOverrides = {
+        retailPriceEssentialCents: p.retailPriceEssentialCents,
+        retailPriceProfessionalCents: p.retailPriceProfessionalCents,
+        retailPricePremiumCents: p.retailPricePremiumCents,
+      };
+
+      let reportsUploaded = 0;
+      let lifetimeEarningsCents = 0;
+      let currentMonthEarningsCents = 0;
+      let lastUploadAt: Date | null = null;
+
+      for (const r of reportRows) {
+        const isUpload = r.inspectorPartnerId === p.id;
+        const isReferral = r.referrerPartnerId === p.id && r.inspectorPartnerId !== p.id;
+        if (!isUpload && !isReferral) continue;
+
+        const cents = isReferral
+          ? referralBonusCentsFor(r, config.inspector)
+          : estimatedEarningsCentsFor(overrides, r, config.inspector);
+
+        if (isUpload) {
+          reportsUploaded += 1;
+          if (!lastUploadAt || r.createdAt > lastUploadAt) lastUploadAt = r.createdAt;
+        }
+        lifetimeEarningsCents += cents;
+        if (r.createdAt >= monthStart) currentMonthEarningsCents += cents;
+      }
+
+      return {
+        id: p.id,
+        partnerSlug: p.partnerSlug,
+        companyName: p.companyName,
+        email: p.email,
+        phone: p.phone,
+        status: p.status,
+        tier: p.tier,
+        website: p.website,
+        companyLogoUrl: p.companyLogoUrl,
+        payoutMethod: p.payoutMethod,
+        stripeConnected: !!p.stripeConnectAccountId,
+        landingPageUrl: `/partner/${p.partnerSlug}`,
+        joinedAt: p.joinedAt ? p.joinedAt.toISOString() : null,
+        createdAt: p.createdAt.toISOString(),
+        reportsUploaded,
+        lastUploadAt: lastUploadAt ? (lastUploadAt as Date).toISOString() : null,
+        lifetimeEarningsCents,
+        currentMonthEarningsCents,
+      };
+    });
+
+    res.json({ data, error: null, meta: { total: data.length } });
+  } catch (err) {
+    logger.error({ err }, '[GET /admin/inspect/partners]');
+    res.status(500).json({ data: null, error: 'Failed to load partners', meta: {} });
+  }
+});
+
+// POST /api/v1/admin/inspect/partners/:id/impersonate — issue a fresh inspector JWT
+//
+// Used by the admin "View as partner" button. Returns a signed inspector token
+// that the admin pastes into sessionStorage on the inspector portal so they can
+// view the partner's account without the partner's password. Tab-scoped (the
+// /admin/impersonate handler stores in sessionStorage, not localStorage), so
+// closing the tab clears the impersonation.
+router.post('/inspect/partners/:id/impersonate', async (req: Request, res: Response) => {
+  try {
+    const [partner] = await db.select({
+      id: inspectorPartners.id,
+      companyName: inspectorPartners.companyName,
+      email: inspectorPartners.email,
+      status: inspectorPartners.status,
+    }).from(inspectorPartners).where(eq(inspectorPartners.id, req.params.id)).limit(1);
+
+    if (!partner) {
+      res.status(404).json({ data: null, error: 'Partner not found', meta: {} });
+      return;
+    }
+
+    const token = signInspectorToken(partner.id);
+    logger.info({ action: 'admin:impersonate_partner', partnerId: partner.id, email: partner.email }, 'Admin started partner impersonation');
+    res.json({
+      data: {
+        token,
+        partner: { id: partner.id, companyName: partner.companyName, email: partner.email },
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /admin/inspect/partners/:id/impersonate]');
+    res.status(500).json({ data: null, error: 'Failed to issue impersonation token', meta: {} });
   }
 });
 

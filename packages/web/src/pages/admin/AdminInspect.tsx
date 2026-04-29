@@ -9,6 +9,7 @@ import {
   type InspectReportItemRow,
   type InspectSupportingDocRow,
   type InspectCrossRefInsight,
+  type InspectPartnerRow,
   type RevenuePeriod,
 } from '@/services/admin-api';
 
@@ -45,13 +46,53 @@ function formatUntil(iso: string): string {
   return `in ${days}d`;
 }
 
+type InspectTab = 'overview' | 'reports' | 'partners';
+
+const TABS: { id: InspectTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'reports', label: 'Reports' },
+  { id: 'partners', label: 'Partners' },
+];
+
 export default function AdminInspect() {
+  const [tab, setTab] = useState<InspectTab>(() => {
+    if (typeof window === 'undefined') return 'overview';
+    const stored = window.localStorage.getItem('admin_inspect_tab') as InspectTab | null;
+    return stored && TABS.some(t => t.id === stored) ? stored : 'overview';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('admin_inspect_tab', tab);
+    }
+  }, [tab]);
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-dark mb-6">Inspect</h1>
-      <KpiSection />
-      <DiagnosticsSection />
-      <ReportsSection />
+      <h1 className="text-2xl font-bold text-dark mb-4">Inspect</h1>
+
+      <div className="flex gap-1 bg-warm rounded-full p-1 mb-6 w-fit flex-wrap">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+              tab === t.id ? 'bg-white text-dark shadow-sm' : 'text-dark/50 hover:text-dark'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'overview' && (
+        <>
+          <KpiSection />
+          <DiagnosticsSection />
+        </>
+      )}
+      {tab === 'reports' && <ReportsSection />}
+      {tab === 'partners' && <PartnersSection />}
     </div>
   );
 }
@@ -948,6 +989,197 @@ function ItemRow({ item }: { item: InspectReportItemRow }) {
       </td>
     </tr>
   );
+}
+
+// ── Partners Section ────────────────────────────────────────────────────────
+
+function PartnersSection() {
+  const [rows, setRows] = useState<InspectPartnerRow[]>([]);
+  const [includeAll, setIncludeAll] = useState(false);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    adminService.getInspectPartners({ all: includeAll })
+      .then(res => setRows(res.data ?? []))
+      .catch(err => setError((err as Error).message))
+      .finally(() => setLoading(false));
+  }, [includeAll]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function viewAsPartner(partnerId: string, companyName: string) {
+    setBusyId(partnerId);
+    try {
+      const res = await adminService.impersonateInspectPartner(partnerId);
+      if (!res.data?.token) throw new Error(res.error ?? 'No token returned');
+      const url = `/admin/impersonate?token=${encodeURIComponent(res.data.token)}&inspectorId=${partnerId}`;
+      window.open(url, '_blank', 'noopener');
+      setToast(`Opened ${companyName} in a new tab`);
+    } catch (err) {
+      setToast(`Error: ${(err as Error).message}`);
+    } finally {
+      setBusyId(null);
+      setTimeout(() => setToast(null), 3500);
+    }
+  }
+
+  const filtered = search
+    ? rows.filter(r => {
+        const q = search.toLowerCase();
+        return r.companyName.toLowerCase().includes(q) ||
+          r.email.toLowerCase().includes(q) ||
+          r.partnerSlug.toLowerCase().includes(q);
+      })
+    : rows;
+
+  const totals = filtered.reduce((acc, r) => ({
+    reports: acc.reports + r.reportsUploaded,
+    lifetime: acc.lifetime + r.lifetimeEarningsCents,
+    month: acc.month + r.currentMonthEarningsCents,
+  }), { reports: 0, lifetime: 0, month: 0 });
+
+  return (
+    <div className="bg-white rounded-xl border border-dark/10 p-5">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <h2 className="text-lg font-bold text-dark">Inspector partners</h2>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-dark/60 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeAll}
+              onChange={e => setIncludeAll(e.target.checked)}
+              className="accent-orange-500"
+            />
+            Include inactive
+          </label>
+          <div className="text-xs text-dark/40">{filtered.length} partner{filtered.length === 1 ? '' : 's'}</div>
+        </div>
+      </div>
+
+      <input
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search by company, email, or slug…"
+        className="w-full px-4 py-2.5 mb-3 rounded-lg border border-dark/10 text-sm outline-none focus:border-orange-400 bg-white"
+      />
+
+      {error && <div className="text-red-600 text-sm py-3">{error}</div>}
+
+      <div className="border border-dark/10 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[1100px]">
+            <thead>
+              <tr className="border-b border-dark/10 bg-warm">
+                <th className="text-left px-3 py-2.5 font-semibold text-dark/60">Partner</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-dark/60">Status</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-dark/60">Joined</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-dark/60">Reports</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-dark/60">This month</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-dark/60">Lifetime</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-dark/60">Last upload</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-dark/60">Landing page</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-dark/60">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-dark/40">Loading partners…</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-dark/40">No partners found</td></tr>
+              ) : (
+                filtered.map(p => (
+                  <tr key={p.id} className="border-b border-dark/5 hover:bg-warm/50 transition-colors">
+                    <td className="px-3 py-2.5 max-w-[260px]">
+                      <div className="font-semibold text-dark truncate">{p.companyName}</div>
+                      <div className="text-xs text-dark/50 truncate">{p.email}</div>
+                      {p.phone && <div className="text-xs text-dark/40 truncate">{p.phone}</div>}
+                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${partnerStatusClasses(p.status)}`}>
+                        {p.status.replace(/_/g, ' ')}
+                      </span>
+                      {p.stripeConnected && (
+                        <div className="text-[10px] text-green-700 font-semibold mt-1">Stripe ✓</div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-dark/60 whitespace-nowrap">
+                      {p.joinedAt ? new Date(p.joinedAt).toLocaleDateString() : new Date(p.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-dark whitespace-nowrap">{p.reportsUploaded}</td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      <span className="font-semibold text-dark">{formatCurrency(p.currentMonthEarningsCents)}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      <span className="font-semibold text-dark">{formatCurrency(p.lifetimeEarningsCents)}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-dark/60 whitespace-nowrap">
+                      {p.lastUploadAt ? formatRelative(p.lastUploadAt) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <a
+                        href={p.landingPageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-semibold text-orange-600 hover:underline"
+                      >
+                        /partner/{p.partnerSlug} ↗
+                      </a>
+                    </td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => viewAsPartner(p.id, p.companyName)}
+                        disabled={busyId === p.id}
+                        className="text-xs font-semibold px-3 py-1 rounded-md bg-dark text-white hover:bg-dark/80 disabled:opacity-50"
+                      >
+                        {busyId === p.id ? '…' : 'View as partner'}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-dark/10 bg-warm/40 font-semibold">
+                  <td className="px-3 py-2.5 text-dark/70 text-xs uppercase tracking-wide">Totals</td>
+                  <td className="px-3 py-2.5"></td>
+                  <td className="px-3 py-2.5"></td>
+                  <td className="px-3 py-2.5 text-right text-dark">{totals.reports}</td>
+                  <td className="px-3 py-2.5 text-right text-dark">{formatCurrency(totals.month)}</td>
+                  <td className="px-3 py-2.5 text-right text-dark">{formatCurrency(totals.lifetime)}</td>
+                  <td className="px-3 py-2.5"></td>
+                  <td className="px-3 py-2.5"></td>
+                  <td className="px-3 py-2.5"></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-dark text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg z-50">
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function partnerStatusClasses(status: string): string {
+  switch (status) {
+    case 'active': return 'bg-green-100 text-green-700';
+    case 'paused': return 'bg-amber-100 text-amber-700';
+    case 'deactivated': return 'bg-red-100 text-red-700';
+    case 'pending_verification': return 'bg-blue-100 text-blue-700';
+    default: return 'bg-dark/5 text-dark/50';
+  }
 }
 
 function DocRow({ doc, busy, onRetry }: { doc: InspectSupportingDocRow; busy: boolean | undefined; onRetry: () => void }) {

@@ -209,7 +209,10 @@ export interface InspectReportPublic {
 // ── Auth helpers ────────────────────────────────────────────────────────────
 
 function getInspectorToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  // sessionStorage takes precedence so the admin "View as partner" flow
+  // (AdminImpersonate stuffs token into sessionStorage) overrides the
+  // tab's normal localStorage login without disturbing it.
+  return sessionStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY);
 }
 
 function inspectorAuthHeaders(): Record<string, string> {
