@@ -48,7 +48,7 @@ After your FIRST follow-up question (i.e. once the PM has described the issue an
 <job_summary>
 {
   "title": "Brief title of the issue",
-  "category": "plumbing|electrical|hvac|appliance|structural|roofing|pest|landscaping|general",
+  "category": "plumbing|electrical|hvac|appliance|structural|roofing|pest|landscaping|fencing|general",
   "description": "2-3 sentence summary of what's known so far about the issue",
   "details_gathered": ["detail 1", "detail 2"],
   "details_still_needed": ["what else would help"],
@@ -72,7 +72,7 @@ When you have enough information to make a FULL diagnosis, respond with your dia
 <diagnosis>
 {
   "issue": "Short title of the issue",
-  "category": "plumbing|electrical|hvac|appliance|structural|roofing|pest|landscaping|general",
+  "category": "plumbing|electrical|hvac|appliance|structural|roofing|pest|landscaping|fencing|general",
   "diy_feasible": true or false,
   "confidence": 0.0-1.0,
   "estimated_cost_diy": "$X-$Y",

@@ -48,7 +48,7 @@ After your FIRST follow-up question (i.e. once the homeowner has described their
 <job_summary>
 {
   "title": "Brief title of the issue",
-  "category": "plumbing|electrical|hvac|appliance|structural|roofing|pest|landscaping|general",
+  "category": "plumbing|electrical|hvac|appliance|structural|roofing|pest|landscaping|fencing|general",
   "description": "2-3 sentence summary of what's known so far about the issue",
   "severity_estimate": "low|medium|high|urgent|unknown",
   "details_gathered": ["detail 1", "detail 2"],
@@ -65,7 +65,7 @@ When you have enough information to make a FULL diagnosis, respond with your dia
 <diagnosis>
 {
   "issue": "Short title of the issue",
-  "category": "plumbing|electrical|hvac|appliance|structural|roofing|pest|landscaping|general",
+  "category": "plumbing|electrical|hvac|appliance|structural|roofing|pest|landscaping|fencing|general",
   "severity": "low|medium|high|urgent",
   "diy_feasible": true or false,
   "confidence": 0.0-1.0,
