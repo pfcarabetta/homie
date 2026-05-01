@@ -2767,7 +2767,12 @@ Write ONLY the summary — no questions, no conversational language, no greeting
     if (data.extra) parts.push(data.extra);
     return parts.join(' \n ').toLowerCase();
   })();
-  const homeIQCategoryLabel = repairGroupMeta?.label || catMeta?.label || null;
+  // Prefer the specific subcategory label (e.g. "Fencing") over the parent
+  // group label (e.g. "Outdoor & Landscaping"). The parent group lumps
+  // distinct trades together — fence contractors are a different business
+  // from landscapers, and the dispatched provider type follows the
+  // subcategory, so the displayed label should match.
+  const homeIQCategoryLabel = catMeta?.label || repairGroupMeta?.label || null;
 
   // ── Protection cards (warranty + recall scanner) ──────────────────────
   // Candidates: correlated Home IQ items with brand AND model, deduped
