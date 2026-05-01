@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "@homie/shared": "*",
     "@sendgrid/mail": "^8.1.6",
     "@sentry/node": "^10.45.0",
     "@types/pdfkit": "^0.17.5",
