@@ -17,9 +17,9 @@ interface TierOption {
 }
 
 const TIERS: TierOption[] = [
-  { id: 'standard', name: 'Standard', time: '~2 hours', providers: '5 providers' },
-  { id: 'priority', name: 'Priority', time: '~30 min', providers: '10 providers', popular: true },
-  { id: 'emergency', name: 'Emergency', time: '~15 min', providers: '15 providers' },
+  { id: 'standard', name: 'Standard', time: '~2 hours', providers: '10 providers' },
+  { id: 'priority', name: 'Priority', time: '~30 min', providers: '20 providers', popular: true },
+  { id: 'emergency', name: 'Emergency', time: '~15 min', providers: '30 providers' },
 ];
 
 const FALLBACK_PRICES: Record<string, { priceCents: number; promoPriceCents: null; promoLabel: null }> = {

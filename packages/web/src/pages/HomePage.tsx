@@ -1577,11 +1577,11 @@ export default function HomePage() {
         <div className="hp-pricing-grid">
           {([
             { tierId: 'standard', tier: 'Standard', time: '~2 hours', popular: false,
-              features: ['Results in ~2 hours', '5 pros contacted via SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
+              features: ['Results in ~2 hours', '10 pros contacted via SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
             { tierId: 'priority', tier: 'Priority', time: '~30 minutes', popular: true,
-              features: ['Results in ~30 minutes', '10 pros contacted simultaneously', 'AI voice calls + SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
+              features: ['Results in ~30 minutes', '20 pros contacted simultaneously', 'AI voice calls + SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
             { tierId: 'emergency', tier: 'Emergency', time: '~15 minutes', popular: false,
-              features: ['Results in ~15 minutes', '15 pros blitzed across all channels', 'Contacts closed businesses too', 'Human Outreach Manager gathers additional quotes', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
+              features: ['Results in ~15 minutes', '30 pros blitzed across all channels', 'Contacts closed businesses too', 'Human Outreach Manager gathers additional quotes', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
           ] as const).map((t, i) => {
             const tierPricing = pricing.homeowner[t.tierId];
             const regularPrice = tierPricing ? centsToDisplay(tierPricing.priceCents) : '';

@@ -72,9 +72,9 @@ export async function emitTrackingEvent(jobId: string, eventType: TrackingEventT
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const TIER_PROVIDER_LIMITS: Record<JobTier, number> = {
-  standard: 5,
-  priority: 10,
-  emergency: 15,
+  standard: 10,
+  priority: 20,
+  emergency: 30,
 };
 
 // Fetch extra from discovery so we still hit the limit after suppressed/rate-limited filtering

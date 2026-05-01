@@ -1295,9 +1295,9 @@ function EarlyMatchCard({ summary, onRequestPro }: { summary: JobSummaryV2; onRe
 // ── Diagnostic Outreach Modal (matches QuoteOutreachModal pattern) ───────
 
 const DIAG_TIERS = [
-  { id: 'standard',  name: 'Standard',  time: '~2 hours', detail: '5 pros via SMS + web' },
-  { id: 'priority',  name: 'Priority',  time: '~30 min',  detail: '10 pros via voice + SMS + web', popular: true },
-  { id: 'emergency', name: 'Emergency', time: '~15 min',  detail: '15 pros, all channels blitz' },
+  { id: 'standard',  name: 'Standard',  time: '~2 hours', detail: '10 pros via SMS + web' },
+  { id: 'priority',  name: 'Priority',  time: '~30 min',  detail: '20 pros via voice + SMS + web', popular: true },
+  { id: 'emergency', name: 'Emergency', time: '~15 min',  detail: '30 pros, all channels blitz' },
 ];
 
 const DIAG_OUTREACH_LOG = [

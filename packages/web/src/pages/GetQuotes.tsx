@@ -279,9 +279,9 @@ const CATEGORY_FLOWS: Record<string, {
 };
 
 const TIERS = [
-  { id: 'standard',  name: 'Standard',  time: '~2 hours', detail: '5 pros via SMS + web' },
-  { id: 'priority',  name: 'Priority',  time: '~30 min',  detail: '10 pros via voice + SMS + web', popular: true },
-  { id: 'emergency', name: 'Emergency', time: '~15 min',  detail: '15 pros, all channels blitz' },
+  { id: 'standard',  name: 'Standard',  time: '~2 hours', detail: '10 pros via SMS + web' },
+  { id: 'priority',  name: 'Priority',  time: '~30 min',  detail: '20 pros via voice + SMS + web', popular: true },
+  { id: 'emergency', name: 'Emergency', time: '~15 min',  detail: '30 pros, all channels blitz' },
 ];
 
 /** Lightweight keyword classifier for free-text prefills (the homepage's

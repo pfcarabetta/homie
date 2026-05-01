@@ -788,7 +788,7 @@ function OutreachEngine() {
                   </div>
                   <div>
                     <div style={{ ...dm, fontSize: 16, fontWeight: 600, color: COLORS.white }}>2 quotes ready in under 3 minutes</div>
-                    <div style={{ ...dm, fontSize: 13, color: COLORS.gray }}>5 providers contacted across 3 channels</div>
+                    <div style={{ ...dm, fontSize: 13, color: COLORS.gray }}>10 providers contacted across 3 channels</div>
                   </div>
                 </div>
               )}
