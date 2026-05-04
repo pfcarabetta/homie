@@ -1,3 +1,5 @@
+import { isDemoMode, DemoPdfModal, useDemoPdfModal } from './demo-mode';
+
 interface PageCitationProps {
   sourcePages?: number[] | null;
   reportFileUrl?: string | null;
@@ -9,6 +11,8 @@ interface PageCitationProps {
  * Renders non-clickable text if the URL is a data URL (no page navigation possible).
  */
 export default function PageCitation({ sourcePages, reportFileUrl }: PageCitationProps) {
+  const demo = isDemoMode();
+  const [modalOpen, openModal, closeModal] = useDemoPdfModal();
   if (!sourcePages || sourcePages.length === 0) return null;
 
   // Format the label
@@ -48,6 +52,36 @@ export default function PageCitation({ sourcePages, reportFileUrl }: PageCitatio
   const titleText = isDataUrl
     ? `Open inspection PDF (page anchor not supported for inline PDFs — scroll to ${label.toLowerCase()})`
     : `Open inspection PDF at ${label.toLowerCase()}`;
+
+  // In demo mode the source PDF is hidden so the underlying real test
+  // report stays private. Render the same blue badge as an <a> (anchors
+  // are NOT disabled by the demo-mode <fieldset disabled> wrapper, unlike
+  // <button>) and route the click through a modal that explains what
+  // would happen in a real report.
+  if (demo) {
+    return (
+      <>
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); openModal(); }}
+          title="Source PDF is hidden in this sample"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600,
+            color: '#2563EB', padding: '2px 8px', borderRadius: 4,
+            background: '#2563EB10', border: '1px solid #2563EB25',
+            cursor: 'pointer', textDecoration: 'none',
+          }}
+          onMouseOver={e => { e.currentTarget.style.background = '#2563EB20'; }}
+          onMouseOut={e => { e.currentTarget.style.background = '#2563EB10'; }}
+        >
+          <span style={{ fontSize: 10 }}>{'\uD83D\uDCC4'}</span>
+          {label}
+        </a>
+        <DemoPdfModal open={modalOpen} onClose={closeModal} />
+      </>
+    );
+  }
 
   return (
     <a

@@ -8,6 +8,7 @@ import { paidReports, reportsWithTier } from './constants';
 import type { Tab } from './constants';
 import SupportingDocUploadModal, { type SupportingDocType } from './SupportingDocUploadModal';
 import LockedTabPlaceholder from './LockedTabPlaceholder';
+import { isDemoMode, DemoPdfModal, useDemoPdfModal } from './demo-mode';
 
 const ACCENT = '#2563EB';
 
@@ -353,6 +354,8 @@ function DocCard({ doc, onDelete }: { doc: DocViewItem; onDelete: (() => void) |
   const status = STATUS_META[doc.parsingStatus] ?? STATUS_META.processing;
   const summary = doc.documentType === 'inspection_report' ? null : summarizeParsedDoc(doc);
   const sourceUrl = doc.documentFileUrl;
+  const demo = isDemoMode();
+  const [pdfModalOpen, openPdfModal, closePdfModal] = useDemoPdfModal();
 
   return (
     <div style={{
@@ -396,6 +399,23 @@ function DocCard({ doc, onDelete }: { doc: DocViewItem; onDelete: (() => void) |
 
       <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
         {sourceUrl ? (
+          demo ? (
+            // Use <a> not <button> — the demo-mode <fieldset disabled>
+            // wrapper in InspectPortal disables form controls but not
+            // anchors. preventDefault stops the # navigation.
+            <a
+              href="#"
+              onClick={(e) => { e.preventDefault(); openPdfModal(); }}
+              style={{
+                flex: 1, textAlign: 'center', padding: '7px 10px', borderRadius: 8,
+                border: `1px solid ${ACCENT}`, background: 'transparent', color: ACCENT,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+                textDecoration: 'none', cursor: 'pointer',
+              }}
+            >
+              View PDF
+            </a>
+          ) : (
           <a
             href={sourceUrl}
             target="_blank"
@@ -409,6 +429,7 @@ function DocCard({ doc, onDelete }: { doc: DocViewItem; onDelete: (() => void) |
           >
             View PDF
           </a>
+          )
         ) : (
           <span style={{
             flex: 1, textAlign: 'center', padding: '7px 10px', borderRadius: 8,
@@ -431,6 +452,7 @@ function DocCard({ doc, onDelete }: { doc: DocViewItem; onDelete: (() => void) |
           </button>
         )}
       </div>
+      <DemoPdfModal open={pdfModalOpen} onClose={closePdfModal} />
     </div>
   );
 }
