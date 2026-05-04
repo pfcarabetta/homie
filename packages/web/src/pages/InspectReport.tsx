@@ -35,6 +35,10 @@ function formatCurrency(amount: number): string {
 export default function InspectReport() {
   const { token } = useParams<{ token: string }>();
   const { homeowner } = useAuth();
+  // /inspect/sample is the inspector partner-program demo — bypasses
+  // claim/redirect so logged-in users don't hang on "Opening your
+  // report..." while a (correctly-failing) claimNow call spins.
+  const isDemo = token === 'sample';
 
   const [report, setReport] = useState<InspectReportPublic | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,8 +61,11 @@ export default function InspectReport() {
     }).finally(() => setLoading(false));
   }, [token]);
 
-  // Logged-in users skip the email round-trip — claim directly and redirect
+  // Logged-in users skip the email round-trip — claim directly and redirect.
+  // Demo path opts out: a sample report should never get attached to the
+  // viewer's account, and the preview view below is the demo target.
   useEffect(() => {
+    if (isDemo) return;
     if (!homeowner || !token || !report) return;
     let cancelled = false;
     inspectService.claimNow(token).then(res => {
@@ -68,7 +75,7 @@ export default function InspectReport() {
       }
     }).catch(() => {/* fall through to preview if claim fails */});
     return () => { cancelled = true; };
-  }, [homeowner, token, report]);
+  }, [homeowner, token, report, isDemo]);
 
   // Compute preview stats from the loaded report (without revealing item details)
   const stats = useMemo(() => {
@@ -127,7 +134,8 @@ export default function InspectReport() {
   }
 
   // Logged-in users see a "Redirecting…" splash until claimNow completes.
-  if (homeowner) {
+  // Demo skips the splash — the preview view IS the destination.
+  if (homeowner && !isDemo) {
     return (
       <Centered>
         <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -219,8 +227,25 @@ export default function InspectReport() {
           </div>
         )}
 
-        {/* Claim CTA */}
-        {!emailSent ? (
+        {/* Demo banner replaces the claim CTA when token === 'sample' so
+            inspectors don't accidentally email a "claim this report" link
+            to themselves and pull the sample into their own portal. */}
+        {isDemo ? (
+          <div style={{ background: '#fff', borderRadius: 16, border: `2px solid ${O}`, padding: 24, marginTop: 8, position: 'relative' }}>
+            <div style={{ position: 'absolute', top: -14, left: 24, background: O, color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 100 }}>
+              Sample report
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: D, marginBottom: 6, marginTop: 4 }}>
+              This is what your clients see
+            </div>
+            <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.6, marginBottom: 16 }}>
+              Sample data, real product. The page above is exactly the preview a homeowner gets when you upload their report — items, severity, AI cost estimates, and a one-tap claim into the full portal.
+            </div>
+            <a href="/inspect/inspectors" style={{ display: 'inline-block', padding: '12px 24px', borderRadius: 10, background: O, color: '#fff', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
+              Back to the partner program
+            </a>
+          </div>
+        ) : !emailSent ? (
           <form
             onSubmit={handleSendLink}
             style={{
