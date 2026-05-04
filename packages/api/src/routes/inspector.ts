@@ -1801,6 +1801,109 @@ router.get('/partner/:slug', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/inspect/demo-portal — feeds the /inspect-portal/demo route
+// the portal-shaped reports payload using the configured demo report.
+// No auth: returns a single-element reports list with the property
+// address overridden, pricingTier forced to 'premium', and paymentStatus
+// to 'paid' so every tier-gated feature lights up. Mirrors the shape of
+// /api/v1/account/reports (the auth'd 'getMyReports' endpoint) so the
+// frontend portal can render it without code branches per field.
+router.get('/demo-portal', async (_req: Request, res: Response) => {
+  try {
+    const demoReportId = process.env.DEMO_INSPECTION_REPORT_ID ?? '';
+    if (!demoReportId) {
+      res.status(404).json({ data: null, error: 'Demo report not configured', meta: {} });
+      return;
+    }
+    const [report] = await db.select().from(inspectionReports).where(eq(inspectionReports.id, demoReportId)).limit(1);
+    if (!report) {
+      res.status(404).json({ data: null, error: 'Demo report not found', meta: {} });
+      return;
+    }
+    const items = await db.select().from(inspectionReportItems)
+      .where(eq(inspectionReportItems.reportId, report.id))
+      .orderBy(inspectionReportItems.sortOrder);
+
+    // Aggregates — same math as /account/reports
+    let totalEstimateLow = 0;
+    let totalEstimateHigh = 0;
+    let totalQuoteValue = 0;
+    let dispatchedCount = 0;
+    let quotedCount = 0;
+    for (const item of items) {
+      totalEstimateLow += item.aiCostEstimateLowCents ?? 0;
+      totalEstimateHigh += item.aiCostEstimateHighCents ?? 0;
+      totalQuoteValue += item.quoteAmountCents ?? 0;
+      if (item.dispatchStatus === 'dispatched' || item.dispatchStatus === 'quotes_received' || item.dispatchStatus === 'booked' || item.dispatchStatus === 'completed') dispatchedCount++;
+      if (item.quoteAmountCents) quotedCount++;
+    }
+
+    const data = {
+      id: report.id,
+      // Address override so the demo never leaks the real test property.
+      propertyAddress: process.env.DEMO_INSPECTION_PROPERTY_ADDRESS ?? '1024 Maplewood Lane',
+      propertyCity: process.env.DEMO_INSPECTION_PROPERTY_CITY ?? 'Springfield',
+      propertyState: process.env.DEMO_INSPECTION_PROPERTY_STATE ?? 'IL',
+      propertyZip: process.env.DEMO_INSPECTION_PROPERTY_ZIP ?? '62704',
+      displayName: report.displayName ?? null,
+      inspectionDate: report.inspectionDate,
+      inspectionType: report.inspectionType,
+      parsingStatus: report.parsingStatus,
+      clientAccessToken: report.clientAccessToken,
+      // Force premium so every tier-gated feature renders. The PDF proxy
+      // is reached via the existing /inspect/sample/source-pdf route so
+      // page citations resolve without leaking the real token.
+      pricingTier: 'premium' as const,
+      reportMode: report.reportMode ?? 'buyer',
+      reportFileUrl: report.reportFileUrl
+        ? `${(process.env.API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '')}/api/v1/inspect/sample/source-pdf`
+        : null,
+      itemCount: items.length,
+      dispatchedCount,
+      quotedCount,
+      totalEstimateLow,
+      totalEstimateHigh,
+      totalQuoteValue,
+      createdAt: report.createdAt,
+      items: items.map(i => {
+        const sa = computeSellerAction(i.category, i.severity, i.aiCostEstimateLowCents ?? 0, i.aiCostEstimateHighCents ?? 0);
+        return {
+          id: i.id,
+          title: i.title,
+          severity: i.severity,
+          category: i.category,
+          location: i.locationInProperty,
+          costEstimateMin: i.aiCostEstimateLowCents,
+          costEstimateMax: i.aiCostEstimateHighCents,
+          dispatchStatus: i.dispatchStatus,
+          quoteAmount: i.quoteAmountCents,
+          providerName: i.providerName,
+          quotes: i.quotes ?? [],
+          isIncludedInRequest: i.isIncludedInRequest,
+          homeownerNotes: i.homeownerNotes,
+          sellerAgreedAmountCents: i.sellerAgreedAmountCents,
+          creditIssuedCents: i.creditIssuedCents,
+          concessionStatus: i.concessionStatus,
+          repairRequestSource: i.repairRequestSource,
+          repairRequestCustomAmountCents: i.repairRequestCustomAmountCents,
+          sourcePages: i.sourcePages,
+          maintenanceCompletedAt: i.maintenanceCompletedAt?.toISOString() ?? null,
+          sellerAction: sa.action,
+          sellerActionReason: sa.reason,
+          sourceDocumentId: i.sourceDocumentId,
+          crossReferencedItemIds: i.crossReferencedItemIds ?? [],
+          diyAnalysis: i.diyAnalysis ?? null,
+        };
+      }),
+    };
+
+    res.json({ data: { reports: [data] }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /inspect/demo-portal]');
+    res.status(500).json({ data: null, error: 'Failed to load demo portal', meta: {} });
+  }
+});
+
 // GET /api/v1/inspect/:token — client views their report
 //
 // Special case: token === 'sample' loads the report whose UUID is in

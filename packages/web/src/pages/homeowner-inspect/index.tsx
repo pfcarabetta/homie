@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { inspectService, type PortalReport } from '@/services/inspector-api';
@@ -24,7 +24,14 @@ export default function InspectPortal() {
   useDocumentTitle('Homie Inspect');
   const { homeowner } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { mode: themeMode, resolvedTheme, setTheme } = useThemeMode();
+  // /inspect-portal/demo serves the inspector partner-program demo:
+  // bypasses auth, loads the configured demo report at premium tier,
+  // and disables every mutation surface via a single fieldset wrap so
+  // inspectors can tour the real portal without owning a report or
+  // accidentally triggering dispatch/quotes/booking/etc.
+  const isDemo = location.pathname.startsWith('/inspect-portal/demo');
 
   const [tab, setTab] = useState<Tab>(() => {
     try {
@@ -51,16 +58,17 @@ export default function InspectPortal() {
   }
 
   const fetchReports = useCallback(() => {
-    inspectService.getMyReports()
+    const promise = isDemo ? inspectService.getDemoReports() : inspectService.getMyReports();
+    promise
       .then(res => { if (res.data) setReports(res.data.reports); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [isDemo]);
 
   useEffect(() => {
-    if (!homeowner) { navigate('/login?redirect=/inspect-portal'); return; }
+    if (!isDemo && !homeowner) { navigate('/login?redirect=/inspect-portal'); return; }
     fetchReports();
-  }, [homeowner, navigate, fetchReports]);
+  }, [homeowner, navigate, fetchReports, isDemo]);
 
   useEffect(() => {
     setStoredNav('tab', tab);
@@ -69,7 +77,10 @@ export default function InspectPortal() {
   // Auto-start the onboarding tour for first-time users once we have at least
   // one parsed report (so the sidebar items the tour anchors to actually
   // render). hasSeenTour() is localStorage-backed so this only fires once.
+  // Skipped in demo mode — the tour gates anchor to user-specific elements
+  // and the inspector isn't onboarding their own portal.
   useEffect(() => {
+    if (isDemo) return;
     if (loading) return;
     if (hasSeenTour()) return;
     const hasParsedReport = reports.some(r => r.parsingStatus === 'parsed');
@@ -85,15 +96,20 @@ export default function InspectPortal() {
     setMobileMenuOpen(false);
   }
 
-  // User info for sidebar
-  const userName = homeowner
-    ? [homeowner.first_name, homeowner.last_name].filter(Boolean).join(' ') || homeowner.email
-    : 'User';
-  const userInitials = homeowner?.first_name && homeowner?.last_name
-    ? `${homeowner.first_name[0]}${homeowner.last_name[0]}`.toUpperCase()
-    : homeowner?.email?.[0]?.toUpperCase() || 'U';
+  // User info for sidebar — fake names in demo mode so the avatar/sidebar
+  // don't display the inspector's logged-in account name.
+  const userName = isDemo
+    ? 'Sample Homeowner'
+    : homeowner
+      ? [homeowner.first_name, homeowner.last_name].filter(Boolean).join(' ') || homeowner.email
+      : 'User';
+  const userInitials = isDemo
+    ? 'SH'
+    : homeowner?.first_name && homeowner?.last_name
+      ? `${homeowner.first_name[0]}${homeowner.last_name[0]}`.toUpperCase()
+      : homeowner?.email?.[0]?.toUpperCase() || 'U';
 
-  if (!homeowner) return null;
+  if (!isDemo && !homeowner) return null;
 
   const sidebarEl = (
     <InspectSidebar
@@ -153,7 +169,28 @@ export default function InspectPortal() {
       setMobileOpen={setMobileMenuOpen}
       resolvedTheme={resolvedTheme}
     >
-      {renderTab()}
+      {isDemo && (
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 50,
+          padding: '10px 16px',
+          background: '#E8632B', color: '#fff',
+          fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600,
+          textAlign: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap',
+        }}>
+          <span>🎬 Sample report — this is exactly what your clients see when you upload their inspection. Quotes, dispatch, bookings, and other actions are disabled in demo mode.</span>
+          <a href="/inspect/inspectors" style={{ color: '#fff', textDecoration: 'underline', fontWeight: 700 }}>← Partner program</a>
+        </div>
+      )}
+      {/* fieldset[disabled] natively disables every form control inside —
+          buttons, inputs, selects, textareas. One line that covers every
+          mutation surface across all tabs without per-tab edits. */}
+      <fieldset
+        disabled={isDemo}
+        style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}
+      >
+        {renderTab()}
+      </fieldset>
       <InspectPortalTour
         active={tourActive}
         setActive={setTourActive}

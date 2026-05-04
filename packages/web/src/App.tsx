@@ -107,6 +107,7 @@ export default function App() {
           <Route path="/business" element={<BusinessPortal />} />
           <Route path="/business/landing" element={<BusinessLanding />} />
           <Route path="/inspect-portal" element={<InspectPortal />} />
+          <Route path="/inspect-portal/demo" element={<InspectPortal />} />
           <Route path="/inspect" element={<InspectionLanding />} />
           <Route path="/inspect/inspectors" element={<InspectionInspectorsLanding />} />
           <Route path="/inspect/p/:slug" element={<InspectionPartnerLanding />} />

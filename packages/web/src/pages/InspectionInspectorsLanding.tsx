@@ -154,7 +154,7 @@ function ClientPortalDemo({ demoTier, setDemoTier }: { demoTier: DemoTier; setDe
           <div style={{ textAlign: "center", marginTop: 48, padding: "24px 20px", background: C.warm, borderRadius: 16 }}>
             <div style={{ ...dm, fontSize: 14, color: C.darkMid, marginBottom: 12 }}>Want the real thing? Open a fully-populated sample report — Premium tier, all features unlocked.</div>
             <a
-              href="/inspect/sample"
+              href="/inspect-portal/demo"
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackEvent('inspector_landing_cta_clicked', { cta_location: 'demo_sample_report' })}

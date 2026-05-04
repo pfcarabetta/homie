@@ -658,6 +658,12 @@ export const inspectService = {
     return fetchAPI<{ reports: PortalReport[] }>('/api/v1/account/reports');
   },
 
+  /** Public: fetch the demo report (singleton list) for /inspect-portal/demo.
+   *  Backend returns it as premium + paid so all tier-gated UI lights up. */
+  getDemoReports() {
+    return fetchAPI<{ reports: PortalReport[] }>('/api/v1/inspect/demo-portal');
+  },
+
   /** Authenticated: fetch the Home IQ payload for a report. First call
    *  triggers generation (per-category Claude assessments + hazard
    *  lookups) and may take 5–10s; cached calls return instantly. Pass
