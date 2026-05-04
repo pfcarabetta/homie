@@ -1178,7 +1178,11 @@ export default function HomePage() {
             font-family: 'DM Sans', sans-serif;
           }
           .hp-mobile-menu button { color: ${ORANGE}; font-weight: 600; }
-          .hp-big-hero { padding: 64px 16px 48px; min-height: auto; }
+          /* Top padding clears the 56px fixed nav with breathing room
+             above the headline; hp-big-hero-head bottom margin opens
+             a clear gap between the headline and the input card. */
+          .hp-big-hero { padding: 104px 16px 48px; min-height: auto; }
+          .hp-big-hero-head { margin-bottom: 44px !important; }
           .hp-big-title { font-size: 34px !important; line-height: 1.08 !important; }
           /* Section h2's (HowItWorks "Quotes in minutes, not days"
              and Explainer "Why homeowners love homie") — scaled down
