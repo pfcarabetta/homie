@@ -851,7 +851,7 @@ function TierCards({ onSelect }: { onSelect: (t: typeof TIERS[number]) => void }
         >
           {t.popular && <div style={{ position: 'absolute', top: -9, right: 14, background: O, color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 100 }}>RECOMMENDED</div>}
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>· {t.time}</span></div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{t.name}</div>
             <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -1557,9 +1557,7 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
                         fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 100,
                       }}>RECOMMENDED</div>}
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 16, color: D }}>
-                          {t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>{'\u00B7'} {t.time}</span>
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: D }}>{t.name}</div>
                         <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>

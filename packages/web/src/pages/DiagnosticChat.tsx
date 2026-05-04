@@ -1696,9 +1696,7 @@ function DiagnosticOutreachModal({ isOpen, onClose, diagnosis, jobSummary, isDem
                         fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 100,
                       }}>RECOMMENDED</div>}
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 16, color: Dk }}>
-                          {t.name} <span style={{ fontWeight: 400, color: '#9B9490', fontSize: 13 }}>{'\u00B7'} {t.time}</span>
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: Dk }}>{t.name}</div>
                         <div style={{ fontSize: 13, color: '#9B9490', marginTop: 2 }}>{t.detail}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>

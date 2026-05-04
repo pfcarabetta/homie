@@ -1580,12 +1580,12 @@ export default function HomePage() {
 
         <div className="hp-pricing-grid">
           {([
-            { tierId: 'standard', tier: 'Standard', time: '~2 hours', popular: false,
-              features: ['Results in ~2 hours', '10 pros contacted via SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
-            { tierId: 'priority', tier: 'Priority', time: '~30 minutes', popular: true,
-              features: ['Results in ~30 minutes', '20 pros contacted simultaneously', 'AI voice calls + SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
-            { tierId: 'emergency', tier: 'Emergency', time: '~15 minutes', popular: false,
-              features: ['Results in ~15 minutes', '30 pros blitzed across all channels', 'Contacts closed businesses too', 'Human Outreach Manager gathers additional quotes', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
+            { tierId: 'standard', tier: 'Standard', popular: false,
+              features: ['10 pros contacted via SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
+            { tierId: 'priority', tier: 'Priority', popular: true,
+              features: ['20 pros contacted simultaneously', 'AI voice calls + SMS + web', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
+            { tierId: 'emergency', tier: 'Emergency', popular: false,
+              features: ['30 pros blitzed across all channels', 'Contacts closed businesses too', 'Human Outreach Manager gathers additional quotes', 'Full AI diagnostic included', 'Only charged if you get quotes'] },
           ] as const).map((t, i) => {
             const tierPricing = pricing.homeowner[t.tierId];
             const regularPrice = tierPricing ? centsToDisplay(tierPricing.priceCents) : '';
@@ -1603,23 +1603,14 @@ export default function HomePage() {
                   padding: '4px 14px', borderRadius: 100, letterSpacing: '0.04em', whiteSpace: 'nowrap',
                 }}>MOST POPULAR</div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: t.popular ? 'rgba(255,255,255,0.6)' : '#9B9490' }}>{t.tier}</div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <div className="hp-pricing-price" style={{ color: t.popular ? 'white' : DARK, margin: 0 }}>{promoPrice ?? regularPrice}</div>
-                    {promoPrice && <div style={{ fontSize: 16, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490', textDecoration: 'line-through' }}>{regularPrice}</div>}
-                  </div>
-                  {tierPricing?.promoLabel && <div style={{ fontSize: 11, fontWeight: 600, color: ORANGE, marginTop: 2 }}>{tierPricing.promoLabel}</div>}
-                  <div style={{ fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490' }}>per search</div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: t.popular ? 'rgba(255,255,255,0.6)' : '#9B9490' }}>{t.tier}</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <div className="hp-pricing-price" style={{ color: t.popular ? 'white' : DARK, margin: 0 }}>{promoPrice ?? regularPrice}</div>
+                  {promoPrice && <div style={{ fontSize: 16, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490', textDecoration: 'line-through' }}>{regularPrice}</div>}
                 </div>
-                <div style={{
-                  background: t.popular ? ORANGE : 'rgba(27,158,119,0.1)', borderRadius: 10, padding: '8px 14px',
-                  textAlign: 'center',
-                }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: t.popular ? 'white' : GREEN }}>{t.time.replace('~', '')}</div>
-                  <div style={{ fontSize: 10, color: t.popular ? 'rgba(255,255,255,0.7)' : '#9B9490', fontWeight: 500 }}>avg response</div>
-                </div>
+                {tierPricing?.promoLabel && <div style={{ fontSize: 11, fontWeight: 600, color: ORANGE, marginTop: 2 }}>{tierPricing.promoLabel}</div>}
+                <div style={{ fontSize: 13, color: t.popular ? 'rgba(255,255,255,0.4)' : '#9B9490' }}>per search</div>
               </div>
               <div className="hp-pricing-features">
                 {t.features.map((f, j) => (
