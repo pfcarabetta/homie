@@ -29,7 +29,308 @@ function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: number }
   return <div ref={ref} style={{ opacity: v ? 1 : 0, transform: v ? "translateY(0)" : "translateY(20px)", transition: `opacity 0.6s ease ${delay}s, transform 0.6s ease ${delay}s` }}>{children}</div>;
 }
 
+// ─── ClientPortalDemo ──────────────────────────────────────────────────────
+// Tier-tabbed visual mockups of the homeowner portal so inspectors can see
+// exactly which features unlock at each tier they sell. The mockups are
+// stylized — not screenshots — but mirror real components & data shapes
+// from packages/web/src/pages/homeowner-inspect/ (severity badges, category
+// icons, item cards, quote cards, repair-request docs, IQ timeline). When
+// the homeowner portal evolves, update these to keep parity.
+//
+// CTA at the bottom routes to /inspect/sample, which the API special-cases
+// to load DEMO_INSPECTION_REPORT_ID with the property address overridden —
+// so an inspector clicking through sees a real, fully-populated report
+// without exposing the underlying private token or test address.
+
+interface DemoFeature { icon: string; title: string; desc: string }
+
+const DEMO_TIER_META: Record<DemoTier, { title: string; sub: string; tabLabel: string; features: DemoFeature[] }> = {
+  essential: {
+    tabLabel: "Essential",
+    title: "Essential — your client's digital report",
+    sub: "AI-parsed inspection items, severity flags, AI cost estimates, source-page citations, and DIY hints.",
+    features: [
+      { icon: "📋", title: "Every item, prioritized", desc: "Each finding from the PDF parsed into a card with title, location, severity, and a short plain-English explanation." },
+      { icon: "🚦", title: "Severity at a glance", desc: "Safety hazard / Urgent / Recommended / Monitor / Informational badges so the most important items rise to the top." },
+      { icon: "💵", title: "AI cost estimates", desc: "Each item tagged with a low-high cost range based on category, severity, and regional pricing data." },
+      { icon: "📄", title: "Tap-to-source citations", desc: "Every item links back to the exact page in the original inspection PDF — your client trusts what they're seeing." },
+      { icon: "🔧", title: "DIY hints", desc: "Items that are safe to tackle without a pro get a DIY badge with steps, tools, and time estimate." },
+    ],
+  },
+  professional: {
+    tabLabel: "Professional",
+    title: "Professional — everything in Essential, plus live contractor quotes",
+    sub: "One-tap dispatch to local pros, real-time quote tracking, AI Q&A on the report, and bookings.",
+    features: [
+      { icon: "📋", title: "Everything in Essential", desc: "Items, severity, cost estimates, citations, DIY hints — all included." },
+      { icon: "📤", title: "One-tap dispatch", desc: "Your client picks the items they want quotes for; Homie reaches out to local pros automatically via SMS, voice, and email." },
+      { icon: "💬", title: "Real-time quote cards", desc: "Each pro's quote lands as a card with name, rating, price, availability, and the option to book directly." },
+      { icon: "🤖", title: "AI Q&A on the report", desc: "Your client can ask questions like 'is the panel a safety issue?' or 'what would lender flag here?' and get cited answers." },
+      { icon: "📅", title: "In-portal bookings", desc: "Confirmed appointments live in the Bookings tab — your client never has to chase a contractor." },
+    ],
+  },
+  premium: {
+    tabLabel: "Premium",
+    title: "Premium — everything in Pro, plus negotiation + Home IQ",
+    sub: "Auto-generated repair-request packages, multi-vendor coordination, and the year-round maintenance timeline.",
+    features: [
+      { icon: "📋", title: "Everything in Professional", desc: "Items, quotes, AI Q&A, bookings — all included." },
+      { icon: "📑", title: "Negotiation documents", desc: "One click generates a polished repair-request PDF with the items your client picked, attached quotes, and the requested concession (price reduction, credit, escrow holdback)." },
+      { icon: "🤝", title: "Multi-vendor coordination", desc: "Homie dispatches multiple specialists in parallel when an item touches several trades, then surfaces the bundle that gets your client to a deal." },
+      { icon: "📈", title: "Home IQ timeline", desc: "Year-round maintenance roadmap auto-built from the report — when to service the HVAC, re-caulk the tub, flush the water heater. Drives renewal value long after the inspection." },
+      { icon: "⚡", title: "Priority dispatching", desc: "Premium reports jump to the front of the dispatch queue — quotes back in minutes, not hours." },
+    ],
+  },
+};
+
+function ClientPortalDemo({ demoTier, setDemoTier }: { demoTier: DemoTier; setDemoTier: (t: DemoTier) => void }) {
+  const meta = DEMO_TIER_META[demoTier];
+  return (
+    <section style={{ background: C.white, padding: "96px 24px", borderTop: `1px solid ${C.warm}` }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <FadeIn>
+          <div style={{ textAlign: "center", marginBottom: 36 }}>
+            <span style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.green, letterSpacing: 1, textTransform: "uppercase" }}>What your clients get</span>
+            <h2 style={{ ...fr, fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 700, color: C.dark, margin: "12px 0 0" }}>See exactly what you're selling</h2>
+            <p style={{ ...dm, fontSize: 16, color: C.darkMid, margin: "16px auto 0", maxWidth: 620, lineHeight: 1.55 }}>Click a tier to preview the homeowner portal at that tier. Same interactive view your clients open the moment you upload their report.</p>
+          </div>
+        </FadeIn>
+
+        {/* Tab switcher */}
+        <FadeIn delay={0.1}>
+          <div role="tablist" style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 32, flexWrap: "wrap" }}>
+            {(Object.keys(DEMO_TIER_META) as DemoTier[]).map(t => {
+              const active = demoTier === t;
+              return (
+                <button
+                  key={t}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setDemoTier(t)}
+                  style={{
+                    ...dm,
+                    fontSize: 14, fontWeight: 600,
+                    padding: "10px 22px", borderRadius: 100,
+                    border: `1.5px solid ${active ? C.green : C.grayLight}`,
+                    background: active ? C.green : C.white,
+                    color: active ? C.white : C.darkMid,
+                    cursor: "pointer", transition: "all 0.15s",
+                  }}
+                >{DEMO_TIER_META[t].tabLabel}</button>
+              );
+            })}
+          </div>
+        </FadeIn>
+
+        {/* Two-column: mockup left, feature list right */}
+        <FadeIn delay={0.15}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1fr)", gap: 48, alignItems: "start" }} className="hpi-demo-grid">
+            <div>
+              {demoTier === 'essential' && <EssentialMockup />}
+              {demoTier === 'professional' && <ProfessionalMockup />}
+              {demoTier === 'premium' && <PremiumMockup />}
+            </div>
+            <div>
+              <div style={{ ...dm, fontSize: 12, fontWeight: 700, color: C.green, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>{meta.tabLabel} tier · what's included</div>
+              <h3 style={{ ...fr, fontSize: 26, fontWeight: 700, color: C.dark, margin: "0 0 8px", lineHeight: 1.2 }}>{meta.title}</h3>
+              <p style={{ ...dm, fontSize: 15, color: C.darkMid, margin: "0 0 24px", lineHeight: 1.6 }}>{meta.sub}</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {meta.features.map((f, i) => (
+                  <div key={i} style={{ display: "flex", gap: 12 }}>
+                    <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.4 }}>{f.icon}</span>
+                    <div>
+                      <div style={{ ...dm, fontSize: 14, fontWeight: 600, color: C.dark, marginBottom: 2 }}>{f.title}</div>
+                      <div style={{ ...dm, fontSize: 13, color: C.gray, lineHeight: 1.55 }}>{f.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </FadeIn>
+
+        {/* Live sample CTA */}
+        <FadeIn delay={0.25}>
+          <div style={{ textAlign: "center", marginTop: 48, padding: "24px 20px", background: C.warm, borderRadius: 16 }}>
+            <div style={{ ...dm, fontSize: 14, color: C.darkMid, marginBottom: 12 }}>Want the real thing? Open a fully-populated sample report — Premium tier, all features unlocked.</div>
+            <a
+              href="/inspect/sample"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackEvent('inspector_landing_cta_clicked', { cta_location: 'demo_sample_report' })}
+              style={{
+                ...dm, fontSize: 15, fontWeight: 600, color: C.white,
+                background: C.dark, border: "none", borderRadius: 100,
+                padding: "12px 28px", cursor: "pointer", textDecoration: "none",
+                display: "inline-block",
+              }}
+            >Tour a live sample report →</a>
+          </div>
+        </FadeIn>
+      </div>
+
+      <style>{`
+        @media (max-width: 820px) {
+          .hpi-demo-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+// ── Mockup pieces ──────────────────────────────────────────────────────────
+// These are stylized illustrations of real homeowner-portal components.
+// Field names + severity slugs match packages/web/src/pages/homeowner-inspect/
+// constants.tsx so the visuals feel authentic.
+
+const SEV_COLORS: Record<string, string> = {
+  urgent: '#E24B4A',
+  recommended: '#EF9F27',
+  monitor: '#9B9490',
+};
+
+function MockFrame({ children }: { children: ReactNode }) {
+  return (
+    <div style={{
+      background: C.white, borderRadius: 14, border: `1px solid ${C.grayLight}`,
+      boxShadow: "0 12px 40px rgba(0,0,0,0.08)",
+      overflow: "hidden",
+    }}>
+      {/* Browser-chrome header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 14px", background: C.warm, borderBottom: `1px solid ${C.grayLight}` }}>
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#FF5F57" }} />
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#FFBD2E" }} />
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#28CA41" }} />
+        <span style={{ ...dm, fontSize: 11, color: C.gray, marginLeft: 10 }}>homie inspect — 1024 Maplewood Lane</span>
+      </div>
+      <div style={{ padding: 18 }}>{children}</div>
+    </div>
+  );
+}
+
+function MockItemCard({ severity, category, title, location, low, high, diy }: {
+  severity: 'urgent' | 'recommended' | 'monitor';
+  category: string; title: string; location: string;
+  low: number; high: number; diy?: boolean;
+}) {
+  const sev = SEV_COLORS[severity];
+  return (
+    <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.grayLight}`, background: C.white, marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+        <span style={{ ...dm, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: `${sev}1A`, color: sev, textTransform: "capitalize" }}>{severity}</span>
+        <span style={{ ...dm, fontSize: 11, color: C.gray }}>{category}</span>
+        {diy && <span style={{ ...dm, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: "#E1F5EE", color: C.green }}>🔧 DIY</span>}
+      </div>
+      <div style={{ ...dm, fontSize: 13, fontWeight: 600, color: C.dark, marginBottom: 2 }}>{title}</div>
+      <div style={{ ...dm, fontSize: 11, color: C.gray, marginBottom: 6 }}>{location}</div>
+      <div style={{ ...dm, fontSize: 11, color: C.darkMid }}>Est. <strong style={{ color: C.dark }}>${low.toLocaleString()}–${high.toLocaleString()}</strong></div>
+    </div>
+  );
+}
+
+function EssentialMockup() {
+  return (
+    <MockFrame>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+        <div>
+          <div style={{ ...fr, fontSize: 16, fontWeight: 700, color: C.dark }}>Inspection items</div>
+          <div style={{ ...dm, fontSize: 11, color: C.gray }}>23 items · sorted by severity</div>
+        </div>
+        <div style={{ ...dm, fontSize: 11, color: C.gray }}>Filter ▾</div>
+      </div>
+      <MockItemCard severity="urgent" category="⚡ Electrical" title="Double-tapped breaker in main panel" location="Garage · panel A" low={250} high={450} />
+      <MockItemCard severity="recommended" category="💧 Plumbing" title="Slow drip at kitchen sink P-trap" location="Kitchen" low={120} high={220} diy />
+      <MockItemCard severity="recommended" category="🏠 Roofing" title="Missing flashing at chimney base" location="Roof · NW corner" low={400} high={750} />
+      <MockItemCard severity="monitor" category="❄️ HVAC" title="HVAC condenser nearing end of life" location="Side yard" low={3800} high={6200} />
+    </MockFrame>
+  );
+}
+
+function ProfessionalMockup() {
+  return (
+    <MockFrame>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <div>
+          <div style={{ ...fr, fontSize: 16, fontWeight: 700, color: C.dark }}>Quotes coming in</div>
+          <div style={{ ...dm, fontSize: 11, color: C.gray }}>3 of 8 pros responded · 4 still working</div>
+        </div>
+        <div style={{ ...dm, fontSize: 11, fontWeight: 600, color: C.green, display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, animation: "pulse 1.4s infinite" }} />Live
+        </div>
+      </div>
+      <div style={{ marginBottom: 10, padding: "10px 12px", background: C.warm, borderRadius: 10 }}>
+        <div style={{ ...dm, fontSize: 11, color: C.gray, marginBottom: 2 }}>Item · Double-tapped breaker</div>
+        <div style={{ ...dm, fontSize: 12, fontWeight: 600, color: C.dark }}>3 quotes received</div>
+      </div>
+      {[
+        { name: "Pacific Electric Co.", rating: 4.8, price: "$285", avail: "Tue 9am" },
+        { name: "Coastline Wiring", rating: 4.9, price: "$340", avail: "Wed 1pm" },
+        { name: "Bayside Power Pros", rating: 4.6, price: "$310", avail: "Thu 10am" },
+      ].map((q, i) => (
+        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 10, border: `1px solid ${C.grayLight}`, marginBottom: 8 }}>
+          <div>
+            <div style={{ ...dm, fontSize: 12, fontWeight: 600, color: C.dark }}>{q.name}</div>
+            <div style={{ ...dm, fontSize: 10, color: C.gray }}>★ {q.rating} · earliest {q.avail}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ ...dm, fontSize: 14, fontWeight: 700, color: C.dark }}>{q.price}</span>
+            <button style={{ ...dm, fontSize: 11, fontWeight: 600, color: C.white, background: C.green, border: "none", borderRadius: 100, padding: "5px 12px", cursor: "default" }}>Book</button>
+          </div>
+        </div>
+      ))}
+      <div style={{ ...dm, fontSize: 11, color: C.gray, marginTop: 8, padding: "10px 12px", background: C.greenLight, borderRadius: 8 }}>
+        💬 Ask AI: "Which of these is the safest pick?"
+      </div>
+      <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
+    </MockFrame>
+  );
+}
+
+function PremiumMockup() {
+  return (
+    <MockFrame>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ ...fr, fontSize: 16, fontWeight: 700, color: C.dark }}>Repair-request package</div>
+        <div style={{ ...dm, fontSize: 11, color: C.gray }}>Auto-generated · ready to send to seller's agent</div>
+      </div>
+      <div style={{ padding: "14px 16px", background: C.warm, borderRadius: 10, marginBottom: 14 }}>
+        <div style={{ ...dm, fontSize: 10, color: C.gray, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 6 }}>Repair request · Draft</div>
+        <div style={{ ...fr, fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 10 }}>1024 Maplewood Lane</div>
+        {[
+          { item: "Double-tapped breaker", val: "$340" },
+          { item: "Chimney flashing repair", val: "$650" },
+          { item: "P-trap leak fix", val: "$180" },
+          { item: "+ 2 more line items", val: "$1,420" },
+        ].map((r, i, a) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: i < a.length - 1 ? `1px solid ${C.grayLight}` : "none", ...dm, fontSize: 12, color: i === a.length - 1 ? C.gray : C.darkMid, fontStyle: i === a.length - 1 ? "italic" : "normal" }}>
+            <span>{r.item}</span><span style={{ fontWeight: 600 }}>{r.val}</span>
+          </div>
+        ))}
+        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, marginTop: 8, borderTop: `2px solid ${C.dark}` }}>
+          <span style={{ ...dm, fontSize: 12, fontWeight: 700, color: C.dark }}>Total credit requested</span>
+          <span style={{ ...fr, fontSize: 16, fontWeight: 700, color: C.green }}>$2,590</span>
+        </div>
+      </div>
+      <div style={{ ...fr, fontSize: 13, fontWeight: 700, color: C.dark, marginBottom: 8 }}>Home IQ timeline</div>
+      {[
+        { mo: "Apr", task: "Service HVAC condenser before peak season", color: C.orange },
+        { mo: "Jun", task: "Re-caulk master tub", color: C.gray },
+        { mo: "Sep", task: "Flush water heater · check anode rod", color: C.green },
+      ].map((t, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+          <span style={{ width: 28, ...dm, fontSize: 10, fontWeight: 700, color: t.color, letterSpacing: 0.4 }}>{t.mo}</span>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
+          <span style={{ ...dm, fontSize: 12, color: C.darkMid }}>{t.task}</span>
+        </div>
+      ))}
+    </MockFrame>
+  );
+}
+
+type DemoTier = 'essential' | 'professional' | 'premium';
+
 export default function InspectionInspectorsLanding() {
+  const [demoTier, setDemoTier] = useState<DemoTier>('professional');
   return (
     <div style={{ ...dm, background: C.white, minHeight: "100vh" }}>
       <SEO title="Homie Inspector Partner Program — turn every inspection into recurring revenue" description="Add the Homie AI report to every inspection. Three tiers to match each client, healthy inspector margins, free to join. You set retail — we handle delivery." canonical="/inspect/inspectors" />
@@ -121,6 +422,9 @@ export default function InspectionInspectorsLanding() {
           </div>
         </div>
       </section>
+
+      {/* WHAT YOUR CLIENTS GET — tier-tabbed product demo */}
+      <ClientPortalDemo demoTier={demoTier} setDemoTier={setDemoTier} />
 
       {/* VALUE PROPS + REVENUE MOCKUP */}
       <section style={{ background: C.warm, padding: "96px 24px" }}>

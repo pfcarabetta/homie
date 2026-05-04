@@ -1802,14 +1802,38 @@ router.get('/partner/:slug', async (req: Request, res: Response) => {
 });
 
 // GET /api/v1/inspect/:token — client views their report
+//
+// Special case: token === 'sample' loads the report whose UUID is in
+// DEMO_INSPECTION_REPORT_ID (env), with the property address fields
+// overridden by DEMO_INSPECTION_PROPERTY_ADDRESS / _CITY / _STATE / _ZIP.
+// Used by /inspect/sample on the marketing site so the inspector
+// partner landing page can deep-link inspectors into a real, fully-
+// populated report without exposing the underlying private token or
+// the real test property's address. Skips expiration check.
 router.get('/:token', async (req: Request, res: Response) => {
   try {
-    const [report] = await db.select().from(inspectionReports)
-      .where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
+    const isDemo = req.params.token === 'sample';
+    const demoReportId = process.env.DEMO_INSPECTION_REPORT_ID ?? '';
+    if (isDemo && !demoReportId) {
+      res.status(404).json({ data: null, error: 'Demo report not configured', meta: {} });
+      return;
+    }
+    const [report] = isDemo
+      ? await db.select().from(inspectionReports).where(eq(inspectionReports.id, demoReportId)).limit(1)
+      : await db.select().from(inspectionReports).where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
     if (!report) { res.status(404).json({ data: null, error: 'Report not found', meta: {} }); return; }
-    if (new Date() > report.expiresAt) {
+    if (!isDemo && new Date() > report.expiresAt) {
       res.status(410).json({ data: null, error: 'This report link has expired. Contact your inspector for a new link.', meta: {} });
       return;
+    }
+    // Apply address override for the demo so we don't leak the real
+    // test property publicly. Falls back to a neutral placeholder if
+    // the env vars aren't set.
+    if (isDemo) {
+      report.propertyAddress = process.env.DEMO_INSPECTION_PROPERTY_ADDRESS ?? '1024 Maplewood Lane';
+      report.propertyCity = process.env.DEMO_INSPECTION_PROPERTY_CITY ?? 'Springfield';
+      report.propertyState = process.env.DEMO_INSPECTION_PROPERTY_STATE ?? 'IL';
+      report.propertyZip = process.env.DEMO_INSPECTION_PROPERTY_ZIP ?? '62704';
     }
     const items = await db.select().from(inspectionReportItems)
       .where(eq(inspectionReportItems.reportId, report.id))
@@ -2752,10 +2776,17 @@ router.get('/:token/documents/:docId/source-pdf', async (req: Request, res: Resp
 // when opened directly in a new tab). Handles both Cloudinary URLs and base64 data URLs.
 router.get('/:token/source-pdf', async (req: Request, res: Response) => {
   try {
-    const [report] = await db.select({ reportFileUrl: inspectionReports.reportFileUrl })
-      .from(inspectionReports)
-      .where(eq(inspectionReports.clientAccessToken, req.params.token))
-      .limit(1);
+    const isDemo = req.params.token === 'sample';
+    const demoReportId = process.env.DEMO_INSPECTION_REPORT_ID ?? '';
+    if (isDemo && !demoReportId) {
+      res.status(404).send('Demo report not configured');
+      return;
+    }
+    const [report] = isDemo
+      ? await db.select({ reportFileUrl: inspectionReports.reportFileUrl })
+          .from(inspectionReports).where(eq(inspectionReports.id, demoReportId)).limit(1)
+      : await db.select({ reportFileUrl: inspectionReports.reportFileUrl })
+          .from(inspectionReports).where(eq(inspectionReports.clientAccessToken, req.params.token)).limit(1);
 
     if (!report || !report.reportFileUrl) {
       res.status(404).send('Source PDF not available');
