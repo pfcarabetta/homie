@@ -32,7 +32,7 @@ function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: number }
 export default function InspectionInspectorsLanding() {
   return (
     <div style={{ ...dm, background: C.white, minHeight: "100vh" }}>
-      <SEO title="Homie Inspector Partner Program — Sell our report add-on, keep up to $200 per inspection" description="Add the Homie report add-on to every inspection. You charge your client retail ($99–$299), pay Homie wholesale ($49–$99), and keep $50–$200 per report. Free to join, always." canonical="/inspect/inspectors" />
+      <SEO title="Homie Inspector Partner Program — turn every inspection into recurring revenue" description="Add the Homie AI report to every inspection. Three tiers to match each client, healthy inspector margins, free to join. You set retail — we handle delivery." canonical="/inspect/inspectors" />
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
       {/* NAV */}
@@ -67,7 +67,7 @@ export default function InspectionInspectorsLanding() {
           </FadeIn>
           <FadeIn delay={0.2}>
             <p style={{ ...dm, fontSize: "clamp(17px, 1.8vw, 21px)", color: C.darkMid, lineHeight: 1.6, maxWidth: 580, margin: "24px 0 36px" }}>
-              Add the Homie report add-on to every inspection. You charge your client retail ($99–$299), pay Homie wholesale ($49–$99), and keep $50–$200 per report. Free to join — you only pay when you upload a report you've already sold.
+              Add the Homie report to every inspection. Your clients walk away with an interactive AI-powered report; you walk away with a high-margin revenue stream on top of every job. Free to join, no monthly fees.
             </p>
           </FadeIn>
           <FadeIn delay={0.3}>
@@ -78,14 +78,14 @@ export default function InspectionInspectorsLanding() {
           <FadeIn delay={0.45}>
             <div style={{ display: "flex", gap: 40, marginTop: 56, flexWrap: "wrap" }}>
               {[
-                ["Up to $200", "kept per Premium report sold"],
-                ["50–67%", "your cut on every tier"],
-                ["$1,250/mo", "typical earnings at 12 reports/mo"],
-                ["$0", "cost to join — free forever"],
+                ["Your highest-margin add-on", "sells alongside every inspection"],
+                ["Your retail. Your spread.", "no commission splits, no holdbacks"],
+                ["Free forever", "no subscriptions, no monthly fees"],
+                ["Drop-in upgrade", "works with your existing workflow"],
               ].map(([stat, label], i) => (
-                <div key={i} style={{ display: "flex", flexDirection: "column" }}>
-                  <span style={{ ...fr, fontSize: 32, fontWeight: 700, color: C.green }}>{stat}</span>
-                  <span style={{ ...dm, fontSize: 14, color: C.gray, fontWeight: 500 }}>{label}</span>
+                <div key={i} style={{ display: "flex", flexDirection: "column", maxWidth: 220 }}>
+                  <span style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.green, lineHeight: 1.2 }}>{stat}</span>
+                  <span style={{ ...dm, fontSize: 14, color: C.gray, fontWeight: 500, marginTop: 4 }}>{label}</span>
                 </div>
               ))}
             </div>
@@ -105,9 +105,9 @@ export default function InspectionInspectorsLanding() {
           </FadeIn>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
             {[
-              { num: "Essential", title: "Sell at $99 · Keep $50", desc: "AI-parsed digital report with prioritized items, severity flags, and clean summaries. Perfect upsell for first-time buyers and routine inspections. You pay Homie $49 wholesale.", color: C.green, badge: "50% margin" },
-              { num: "Professional", title: "Sell at $199 · Keep $120", desc: "Everything in Essential plus contractor quote dispatch and AI Q&A on the report. The sweet spot — most inspectors sell this tier by default. You pay Homie $79 wholesale.", color: C.orange, badge: "60% margin · most popular" },
-              { num: "Premium", title: "Sell at $299 · Keep $200", desc: "Everything in Professional plus full quote concierge, multi-vendor coordination, and priority dispatching. Built for high-stakes purchases and complex properties. You pay Homie $99 wholesale.", color: C.green, badge: "67% margin" },
+              { num: "Essential", title: "Essential — the easy upsell", desc: "AI-parsed digital report with prioritized items, severity flags, and clean summaries. The lowest-friction add-on you can offer — perfect for first-time buyers and routine inspections.", color: C.green, badge: "Easy add-on" },
+              { num: "Professional", title: "Professional — the sweet spot", desc: "Everything in Essential plus contractor quote dispatch and AI Q&A on the report. The tier most inspectors default to — best balance of client value and inspector revenue.", color: C.orange, badge: "Most popular" },
+              { num: "Premium", title: "Premium — your top-tier offer", desc: "Everything in Professional plus full quote concierge, multi-vendor coordination, and priority dispatching. Built for high-stakes purchases and complex properties — your highest-margin SKU when the deal warrants it.", color: C.green, badge: "Highest margin" },
             ].map((s, i) => (
               <FadeIn key={i} delay={i * 0.1}>
                 <div style={{ background: C.warm, borderRadius: 20, padding: 32, height: "100%", borderTop: `3px solid ${s.color}` }}>
