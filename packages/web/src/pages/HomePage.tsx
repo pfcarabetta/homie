@@ -816,8 +816,8 @@ export default function HomePage() {
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: 'white', overflowX: 'hidden' }}>
       <SEO
-        title="AI-Powered Home Maintenance & Repair Quotes"
-        description="Stop calling around for home repair quotes. Homie's AI agent calls, texts, and emails local pros for you — and brings back quotes in minutes."
+        title="Homie — AI-Powered Home Maintenance & Service Provider Matching"
+        description="Stop calling around for home repair quotes. Homie's AI agent calls, texts, and emails local pros for you — and brings back quotes in minutes. Free DIY diagnostics, plumbing, HVAC, electrical, and 16+ service categories."
         canonical="/"
       />
       <style>{`

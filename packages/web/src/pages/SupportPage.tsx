@@ -55,8 +55,27 @@ export default function SupportPage() {
   return (
     <div style={{ minHeight: '100vh', background: WARM, fontFamily: "'DM Sans', sans-serif" }}>
       <SEO
-        title={article ? `${article.title} — Homie Support` : 'Homie Support'}
-        description={article?.excerpt ?? "Help articles for Homie, Homie Inspect, and Homie Business. Plus an AI assistant and direct contact for anything we haven't covered."}
+        title={
+          article
+            ? `${article.title} — Homie Support`
+            : product === 'homie'
+              ? 'Homie support — homeowner help center'
+              : product === 'inspect'
+                ? 'Homie Inspect support — inspection report help'
+                : product === 'business'
+                  ? 'Homie Business support — property manager help'
+                  : 'Homie support center'
+        }
+        description={
+          article?.excerpt
+            ?? (product === 'homie'
+              ? 'Help articles for Homie homeowners — quotes, bookings, AI diagnostics, DIY analysis, and more.'
+              : product === 'inspect'
+                ? 'Help articles for Homie Inspect — claiming reports, tier features, AI Deep Dive, repair requests, negotiation documents.'
+                : product === 'business'
+                  ? 'Help articles for Homie Business — workspaces, properties, dispatching, vendor scorecards, billing.'
+                  : "Articles, guides, and AI chat for Homie, Homie Inspect, and Homie Business. Search the knowledge base or ask Homie's support AI for answers grounded in our help docs.")
+        }
         canonical={article ? `/support/${article.fullSlug}` : product ? `/support/${product}` : '/support'}
       />
 

@@ -3,9 +3,21 @@
   "outputDirectory": "packages/web/dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/inspect",  "destination": "/inspect.html" },
-    { "source": "/inspect/", "destination": "/inspect.html" },
-    { "source": "/((?!assets/|og-image\\.png|inspect\\.html).*)", "destination": "/index.html" }
+    { "source": "/quote",                "destination": "/quote.html" },
+    { "source": "/quote/",               "destination": "/quote.html" },
+    { "source": "/chat",                 "destination": "/chat.html" },
+    { "source": "/chat/",                "destination": "/chat.html" },
+    { "source": "/inspect",              "destination": "/inspect.html" },
+    { "source": "/inspect/",             "destination": "/inspect.html" },
+    { "source": "/inspect/inspectors",   "destination": "/inspect/inspectors.html" },
+    { "source": "/inspect/inspectors/",  "destination": "/inspect/inspectors.html" },
+    { "source": "/business/landing",     "destination": "/business/landing.html" },
+    { "source": "/business/landing/",    "destination": "/business/landing.html" },
+    { "source": "/support",              "destination": "/support.html" },
+    { "source": "/support/",             "destination": "/support.html" },
+    { "source": "/support/homie",        "destination": "/support/homie.html" },
+    { "source": "/support/inspect",      "destination": "/support/inspect.html" },
+    { "source": "/support/business",     "destination": "/support/business.html" },
+    { "source": "/((?!assets/|og-image\\.png|favicon\\.svg|robots\\.txt|sitemap\\.xml|.*\\.html).*)", "destination": "/index.html" }
   ]
 }
-

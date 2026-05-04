@@ -3,13 +3,24 @@ Allow: /
 
 Sitemap: https://homiepro.ai/sitemap.xml
 
-# Disallow private/auth pages
+# Public marketing routes — explicitly allowed so the broader Disallow rules
+# below (which use prefix matching) don't accidentally swallow them.
+Allow: /business/landing
+Allow: /inspect/inspectors
+Allow: /support
+
+# Private/auth pages — keep out of crawl
 Disallow: /account
 Disallow: /business
 Disallow: /business/chat
+Disallow: /inspect-portal
 Disallow: /portal
 Disallow: /admin
 Disallow: /payment
 Disallow: /results
 Disallow: /verify-email
 Disallow: /reset-password
+Disallow: /demo/
+
+# Inspector-only surfaces (private to partners)
+Disallow: /inspector

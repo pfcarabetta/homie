@@ -839,8 +839,8 @@ export default function BusinessLanding() {
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: COLORS.white, minHeight: "100vh" }}>
       <SEO
-        title="Homie for Business — Property Management Maintenance Platform"
-        description="Dispatch local pros across your entire property portfolio in 3 taps. AI-powered vendor coordination for property managers and vacation rental hosts."
+        title="Homie Business — AI-powered maintenance for property managers and hosts"
+        description="Dispatch AI agents to handle every maintenance call, message, and quote across your portfolio. Built for property managers, vacation rental hosts, and operators."
         canonical="/business/landing"
       />
       <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />

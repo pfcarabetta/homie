@@ -958,8 +958,8 @@ export default function DiagnosticChat() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'white', fontFamily: "'DM Sans', sans-serif" }}>
       <SEO
-        title="Free DIY Home Repair Diagnostic"
-        description="Get a free AI-powered diagnosis for any home maintenance issue. Upload photos, describe the problem, and get expert guidance on whether to DIY or hire a pro."
+        title="Free AI home repair diagnostics — Homie"
+        description="Describe your problem; Homie's AI diagnoses it, walks you through safe DIY fixes, or dispatches local pros for quotes. Free to use, no signup required."
         canonical="/chat"
       />
       <style>{`

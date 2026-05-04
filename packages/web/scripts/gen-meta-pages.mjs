@@ -31,12 +31,68 @@ const BASE_URL = 'https://homiepro.ai';
 /** @type {Array<{ outFile: string; canonical: string; title: string; description: string; ogImage?: string; twitterTitle?: string }>} */
 const PAGES = [
   {
+    outFile: 'quote.html',
+    canonical: '/quote',
+    title: 'Get home repair quotes in minutes — Homie',
+    description: 'Skip the calls. Homie\'s AI texts and calls local pros for you and brings back real quotes in minutes for plumbing, HVAC, electrical, and 16+ trades. Only charged if you get quotes.',
+    twitterTitle: 'Get home repair quotes in minutes',
+  },
+  {
+    outFile: 'chat.html',
+    canonical: '/chat',
+    title: 'Free AI home repair diagnostics — Homie',
+    description: 'Describe your problem; Homie\'s AI diagnoses it, walks you through safe DIY fixes, or dispatches local pros for quotes. Free to use, no signup required.',
+    twitterTitle: 'Free AI home repair diagnostics',
+  },
+  {
     outFile: 'inspect.html',
     canonical: '/inspect',
     title: 'Homie Inspect — Real items, real quotes, from any inspection report',
     description: 'Upload your home inspection PDF and Homie\'s AI turns it into actionable items with real cost estimates, local provider quotes, and a Home IQ benchmark.',
     ogImage: '/og-image.png', // TODO swap to /og-inspect.png once a branded image exists
     twitterTitle: 'Homie Inspect — Real items, real quotes',
+  },
+  {
+    outFile: 'inspect/inspectors.html',
+    canonical: '/inspect/inspectors',
+    title: 'Homie Inspector Partner Program — turn every inspection into recurring revenue',
+    description: 'Add the Homie AI report to every inspection. Three tiers to match each client, healthy inspector margins, free to join. You set retail — we handle delivery.',
+    twitterTitle: 'Homie Inspector Partner Program',
+  },
+  {
+    outFile: 'business/landing.html',
+    canonical: '/business/landing',
+    title: 'Homie Business — AI-powered maintenance for property managers and hosts',
+    description: 'Dispatch AI agents to handle every maintenance call, message, and quote across your portfolio. Built for property managers, vacation rental hosts, and operators.',
+    twitterTitle: 'Homie Business — AI-powered maintenance',
+  },
+  {
+    outFile: 'support.html',
+    canonical: '/support',
+    title: 'Homie support center',
+    description: 'Articles, guides, and AI chat for Homie, Homie Inspect, and Homie Business. Search the knowledge base or ask Homie\'s support AI for answers grounded in our help docs.',
+    twitterTitle: 'Homie support center',
+  },
+  {
+    outFile: 'support/homie.html',
+    canonical: '/support/homie',
+    title: 'Homie support — homeowner help center',
+    description: 'Help articles for Homie homeowners — quotes, bookings, AI diagnostics, DIY analysis, and more.',
+    twitterTitle: 'Homie support — homeowners',
+  },
+  {
+    outFile: 'support/inspect.html',
+    canonical: '/support/inspect',
+    title: 'Homie Inspect support — inspection report help',
+    description: 'Help articles for Homie Inspect — claiming reports, tier features, AI Deep Dive, repair requests, negotiation documents.',
+    twitterTitle: 'Homie Inspect support',
+  },
+  {
+    outFile: 'support/business.html',
+    canonical: '/support/business',
+    title: 'Homie Business support — property manager help',
+    description: 'Help articles for Homie Business — workspaces, properties, dispatching, vendor scorecards, billing.',
+    twitterTitle: 'Homie Business support',
   },
 ];
 

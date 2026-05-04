@@ -2821,8 +2821,8 @@ Write ONLY the summary — no questions, no conversational language, no greeting
   return (
     <div style={{ minHeight: '100vh', background: W, fontFamily: "'DM Sans', sans-serif", overflowX: 'hidden', maxWidth: '100vw' }}>
       <SEO
-        title="Get Home Repair Quotes"
-        description="Get multiple quotes from local service providers in minutes. Homie contacts pros for you via phone, text, and email — no more calling around."
+        title="Get home repair quotes in minutes — Homie"
+        description="Skip the calls. Homie's AI texts and calls local pros for you and brings back real quotes in minutes for plumbing, HVAC, electrical, and 16+ trades. Only charged if you get quotes."
         canonical="/quote"
       />
       <style>{`
