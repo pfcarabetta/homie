@@ -24,8 +24,209 @@ import { getInspectorTierPricing, effectiveInspectorRetailCents, INSPECTOR_TIER_
 import { crossProductMembershipsForEmail } from '../services/cross-products';
 import { ApiResponse } from '../types/api';
 
+import { homeownerProperties, HOMEOWNER_PROPERTY_TYPES } from '../db/schema/homeowner-properties';
+import * as homeownerPropertiesSvc from '../services/homeowner-properties';
+
 const router = Router();
 const BCRYPT_ROUNDS = 12;
+
+// ─── Homeowner properties (Membership Phase 1) ────────────────────────────
+//
+// Minimal CRUD for /api/v1/account/properties. Used by the Vendors page
+// to populate the property selector when adding a recurring vendor.
+//
+// Backfill from migration 0048 already populated one is_primary=true row
+// per existing homeowner with home_address etc; new homeowners create
+// their first property here.
+
+router.get('/properties', async (req: Request, res: Response) => {
+  try {
+    const properties = await homeownerPropertiesSvc.listForHomeowner(req.homeownerId);
+    res.json({ data: { properties }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/properties]');
+    res.status(500).json({ data: null, error: 'Failed to load properties', meta: {} });
+  }
+});
+
+router.post('/properties', async (req: Request, res: Response) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const propertyType = typeof body.property_type === 'string' ? body.property_type : 'single_family';
+    if (!(HOMEOWNER_PROPERTY_TYPES as readonly string[]).includes(propertyType)) {
+      res.status(400).json({
+        data: null,
+        error: `Invalid property_type. Allowed: ${HOMEOWNER_PROPERTY_TYPES.join(', ')}`,
+        meta: {},
+      });
+      return;
+    }
+    // First property is primary by default; subsequent ones are not.
+    const existing = await homeownerPropertiesSvc.listForHomeowner(req.homeownerId);
+    const isPrimary = existing.length === 0;
+
+    const property = await homeownerPropertiesSvc.create({
+      homeownerId: req.homeownerId,
+      isPrimary,
+      nickname: typeof body.nickname === 'string' ? body.nickname : null,
+      address: typeof body.address === 'string' ? body.address : null,
+      city: typeof body.city === 'string' ? body.city : null,
+      state: typeof body.state === 'string' ? body.state : null,
+      zipCode: typeof body.zip_code === 'string' ? body.zip_code : null,
+      propertyType,
+      bedrooms: typeof body.bedrooms === 'number' ? body.bedrooms : null,
+      bathrooms: typeof body.bathrooms === 'string' ? body.bathrooms : null,
+      sqft: typeof body.sqft === 'number' ? body.sqft : null,
+    });
+    res.status(201).json({ data: { property }, error: null, meta: {} });
+  } catch (err) {
+    if (err instanceof homeownerPropertiesSvc.HomeownerPropertyValidationError) {
+      res.status(400).json({ data: null, error: err.message, meta: {} });
+      return;
+    }
+    logger.error({ err }, '[POST /account/properties]');
+    res.status(500).json({ data: null, error: 'Failed to create property', meta: {} });
+  }
+});
+
+// keep linter happy on the schema-table re-export pulled in for typing
+void homeownerProperties;
+
+// ─── Payment methods (Membership Phase 1, Session 4) ──────────────────────
+//
+// Stripe Setup Intent flow for saving a card off-session. The card is then
+// available as the homeowner's `payment_method_id` for new recurring
+// vendors (auto-fills the dropdown on the Add Vendor form) and for
+// `services/vendor-payments.processPayment` to charge against.
+
+/**
+ * Create a Stripe-hosted Checkout Session for saving a card. Returns
+ * a URL to redirect the member to. After they finish, Stripe sends
+ * them back to {successUrl}; the card is now attached to their Stripe
+ * customer and shows up in the GET /payment-methods list.
+ *
+ * This is the MVP path. The Setup Intent endpoint below stays
+ * available for a future in-page Stripe Elements flow.
+ */
+router.post('/payment-methods/setup-checkout', async (req: Request, res: Response) => {
+  try {
+    const [homeowner] = await db
+      .select({ email: homeowners.email })
+      .from(homeowners)
+      .where(eq(homeowners.id, req.homeownerId))
+      .limit(1);
+    if (!homeowner) {
+      res.status(404).json({ data: null, error: 'Homeowner not found', meta: {} });
+      return;
+    }
+    const { getOrCreateCustomer, createSetupCheckoutSession } = await import('../services/stripe');
+    const customerId = await getOrCreateCustomer(req.homeownerId, homeowner.email);
+    const APP_URL = process.env.CORS_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+    // Caller can pass a return-to page (e.g. /vendors). Defaults to /account.
+    // Allowlist guards against open-redirect — only paths starting with `/`.
+    const body = req.body as { return_to?: unknown };
+    const safeReturnTo = typeof body.return_to === 'string' && body.return_to.startsWith('/')
+      ? body.return_to
+      : '/account';
+    const sep = safeReturnTo.includes('?') ? '&' : '?';
+    const session = await createSetupCheckoutSession({
+      customerId,
+      successUrl: `${APP_URL}${safeReturnTo}${sep}card=added`,
+      cancelUrl: `${APP_URL}${safeReturnTo}`,
+    });
+    if (!session.url) throw new Error('Stripe returned a Checkout Session without a URL');
+    res.json({ data: { checkoutUrl: session.url }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/payment-methods/setup-checkout]');
+    res.status(500).json({ data: null, error: 'Failed to start card setup', meta: {} });
+  }
+});
+
+router.post('/payment-methods/setup-intent', async (req: Request, res: Response) => {
+  try {
+    const [homeowner] = await db
+      .select({ email: homeowners.email })
+      .from(homeowners)
+      .where(eq(homeowners.id, req.homeownerId))
+      .limit(1);
+    if (!homeowner) {
+      res.status(404).json({ data: null, error: 'Homeowner not found', meta: {} });
+      return;
+    }
+    const { getOrCreateCustomer, createSetupIntent } = await import('../services/stripe');
+    const customerId = await getOrCreateCustomer(req.homeownerId, homeowner.email);
+    const intent = await createSetupIntent(customerId);
+    if (!intent.client_secret) {
+      throw new Error('Stripe returned a SetupIntent without a client_secret');
+    }
+    res.json({
+      data: { clientSecret: intent.client_secret, customerId },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[POST /account/payment-methods/setup-intent]');
+    res.status(500).json({ data: null, error: 'Failed to start card setup', meta: {} });
+  }
+});
+
+router.get('/payment-methods', async (req: Request, res: Response) => {
+  try {
+    const [homeowner] = await db
+      .select({ stripeCustomerId: homeowners.stripeCustomerId })
+      .from(homeowners)
+      .where(eq(homeowners.id, req.homeownerId))
+      .limit(1);
+    if (!homeowner?.stripeCustomerId) {
+      res.json({ data: { paymentMethods: [] }, error: null, meta: {} });
+      return;
+    }
+    const { listCustomerPaymentMethods } = await import('../services/stripe');
+    const pms = await listCustomerPaymentMethods(homeowner.stripeCustomerId);
+    // Trim to the fields the UI cares about — never expose raw Stripe data
+    // (PCI scope) and never echo back the full card object.
+    const safe = pms.map((pm) => ({
+      id: pm.id,
+      brand: pm.card?.brand ?? null,
+      last4: pm.card?.last4 ?? null,
+      expMonth: pm.card?.exp_month ?? null,
+      expYear: pm.card?.exp_year ?? null,
+    }));
+    res.json({ data: { paymentMethods: safe }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/payment-methods]');
+    res.status(500).json({ data: null, error: 'Failed to list payment methods', meta: {} });
+  }
+});
+
+router.delete('/payment-methods/:id', async (req: Request, res: Response) => {
+  try {
+    const [homeowner] = await db
+      .select({ stripeCustomerId: homeowners.stripeCustomerId })
+      .from(homeowners)
+      .where(eq(homeowners.id, req.homeownerId))
+      .limit(1);
+    if (!homeowner?.stripeCustomerId) {
+      res.status(404).json({ data: null, error: 'No saved payment methods', meta: {} });
+      return;
+    }
+    // Ownership check: ensure the PM belongs to this customer before
+    // detaching. Otherwise an attacker who guesses any pm_xxx ID could
+    // detach someone else's card.
+    const { listCustomerPaymentMethods, detachPaymentMethod } = await import('../services/stripe');
+    const pms = await listCustomerPaymentMethods(homeowner.stripeCustomerId);
+    const owned = pms.find((p) => p.id === req.params.id);
+    if (!owned) {
+      res.status(404).json({ data: null, error: 'Payment method not found', meta: {} });
+      return;
+    }
+    await detachPaymentMethod(req.params.id);
+    res.json({ data: { detached: true }, error: null, meta: {} });
+  } catch (err) {
+    logger.error({ err }, '[DELETE /account/payment-methods/:id]');
+    res.status(500).json({ data: null, error: 'Failed to remove payment method', meta: {} });
+  }
+});
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // GET /api/v1/account

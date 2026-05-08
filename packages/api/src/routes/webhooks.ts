@@ -980,4 +980,40 @@ router.post('/web/submit-quote', async (req: Request, res: Response) => {
 </html>`);
 });
 
+// ── POST /twilio/sms-inbound ─────────────────────────────────────────────
+//
+// Recurring vendors reply to our reminder SMS with short keywords:
+//   YES / Y / CONFIRM    → confirm upcoming visit (status='confirmed')
+//   DONE / COMPLETE      → mark visit completed; auto-pay fires per
+//                          the vendor's auto_pay_rule
+//   STOP                 → carrier-level opt-out (Twilio enforces; we log)
+//
+// Membership Phase 1, Session 4. No auto-reply per spec — vendors get
+// confirmation via the next normal flow (push to homeowner, ACH lands,
+// etc.) rather than chatty SMS roundtrips.
+
+router.post('/twilio/sms-inbound', async (req: Request, res: Response) => {
+  if (!isTwilioRequestValid(req)) {
+    res.status(403).type('text/xml').send('<Response/>');
+    return;
+  }
+  const body = req.body as { From?: string; Body?: string };
+  const from = typeof body.From === 'string' ? body.From : '';
+  const messageBody = typeof body.Body === 'string' ? body.Body : '';
+  if (!from || !messageBody) {
+    res.status(200).type('text/xml').send('<Response/>');
+    return;
+  }
+  try {
+    const { handleInboundVendorSms } = await import('../services/vendor-sms-inbound');
+    await handleInboundVendorSms({ fromPhone: from, body: messageBody });
+  } catch (err) {
+    logger.error({ err, from }, '[twilio/sms-inbound] handler threw');
+    // Still return 200 so Twilio doesn't retry — the failure is on us
+    // and a retry won't help. The homeowner can use the manual
+    // "approve payment" path on the Vendors page if needed.
+  }
+  res.status(200).type('text/xml').send('<Response/>');
+});
+
 export default router;
