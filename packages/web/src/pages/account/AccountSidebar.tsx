@@ -70,6 +70,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     collapse: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M13 4l-6 6 6 6"/></svg>,
     expand: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M7 4l6 6-6 6"/></svg>,
     plus: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 4v12M4 10h12"/></svg>,
+    chat: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h14a1 1 0 011 1v9a1 1 0 01-1 1H8l-4 3v-3H3a1 1 0 01-1-1V5a1 1 0 011-1z"/><circle cx="7" cy="9.5" r="0.5" fill="currentColor"/><circle cx="10" cy="9.5" r="0.5" fill="currentColor"/><circle cx="13" cy="9.5" r="0.5" fill="currentColor"/></svg>,
     arrowOut: <svg style={{ ...s, width: 12, height: 12 }} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M3 9l6-6M5 3h4v4"/></svg>,
   };
   return icons[name] || null;
@@ -195,7 +196,10 @@ export default function AccountSidebar({
         </button>
       </div>
 
-      {/* New Quote CTA */}
+      {/* Ask Homie CTA — entry point to the chat command center.
+          Despite the prop name (kept stable for now), this opens the
+          full Homie Chat surface, which spans diagnostics, quote
+          dispatch, and tier-feature shortcuts. */}
       {!collapsed ? (
         <div style={{ padding: '12px 12px 4px' }}>
           <button onClick={() => { onNewQuote(); onNavigateCallback?.(); }} style={{
@@ -204,20 +208,20 @@ export default function AccountSidebar({
             background: O, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
             fontFamily: "'DM Sans', sans-serif",
           }}>
-            <Icon name="plus" size={14} /> New Quote
+            <Icon name="chat" size={15} /> Ask Homie
           </button>
         </div>
       ) : (
         <div style={{ padding: '12px 8px 4px', display: 'flex', justifyContent: 'center' }}>
           <button onClick={() => { onNewQuote(); onNavigateCallback?.(); }}
-            onMouseEnter={(e) => showTooltip(e, 'New Quote')}
+            onMouseEnter={(e) => showTooltip(e, 'Ask Homie')}
             onMouseLeave={hideTooltip}
             style={{
               width: 40, height: 40, borderRadius: 10, border: 'none',
               background: O, color: '#fff', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-            <Icon name="plus" size={16} />
+            <Icon name="chat" size={16} />
           </button>
         </div>
       )}

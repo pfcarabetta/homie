@@ -128,7 +128,7 @@ export default function QuoteTabsBar({
 
         <button
           onClick={onNewQuote}
-          title="Start a new quote chat"
+          title="Start a new chat with Homie"
           style={{
             padding: '6px 12px', background: 'transparent',
             border: `1px dashed ${BORDER}`, borderRadius: 100,
@@ -148,7 +148,7 @@ export default function QuoteTabsBar({
             e.currentTarget.style.background = 'transparent';
           }}
         >
-          <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> New quote
+          <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> New chat
         </button>
       </div>
 

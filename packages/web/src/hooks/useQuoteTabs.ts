@@ -123,7 +123,7 @@ function prune(): void {
 /** Pick a human-friendly short title from the current session state.
  *  Priority: user's initial description → category label → generic. */
 export function deriveTitle(data: { category?: string | null; a1?: string | null; aiDiagnosis?: string | null } | null | undefined): string {
-  if (!data) return 'New quote';
+  if (!data) return 'New chat';
   const a1 = (data.a1 ?? '').trim();
   if (a1.length > 0) {
     const short = a1.length > 36 ? a1.slice(0, 34) + '…' : a1;
@@ -131,7 +131,7 @@ export function deriveTitle(data: { category?: string | null; a1?: string | null
   }
   const cat = (data.category ?? '').trim();
   if (cat.length > 0) return cat.replace(/^./, c => c.toUpperCase()) + ' job';
-  return 'New quote';
+  return 'New chat';
 }
 
 /** Map a GetQuotes `phase` to a tab status bucket. Callers can

@@ -17,6 +17,7 @@ import ProtectionCard from '@/components/ProtectionCard';
 import QuoteTabsBar, { type QuoteTabStatus } from '@/components/QuoteTabsBar';
 import InlineOutreachPanel from '@/components/InlineOutreachPanel';
 import { useHomeIQ } from '@/hooks/useHomeIQ';
+import { useAuth } from '@/contexts/AuthContext';
 import { useQuoteTabs, newSessionId, sessionStorageKey, deriveTitle, inferStatus } from '@/hooks/useQuoteTabs';
 import { correlateItemToChat, computeSharedItemTypeWords } from '@/utils/home-iq';
 import { primeAudio } from '@/components/audioUnlocker';
@@ -550,6 +551,11 @@ function DirectInput({ onSubmit, onPhoto, onVideoClick, onVoiceClick, examples, 
         <span style={{ height: 1, flex: 1, background: BORDER }} />
       </div>
 
+      {/* Tier-aware suggestion chips — visible only to signed-in
+          members. Tapping a chip preloads the textarea with a starter
+          prompt the existing diagnostic AI can handle. */}
+      <HomieSuggestionChips onPick={(p) => setText(p)} />
+
       <div style={{
         background: '#fff', borderRadius: 20,
         border: focus ? `2px solid ${O}` : `2px solid ${BORDER}`,
@@ -662,6 +668,86 @@ const DIRECT_EXAMPLES = [
   "Garbage disposal hums but won't spin",
   "Water stain growing on bedroom ceiling after last storm",
 ];
+
+// ── Tier-aware suggestion chips ───────────────────────────────────────
+//
+// Phase B-lite of the "Homie Chat as command center" thread: surface
+// what the chat can do beyond the diagnostic flow. Tapping a chip
+// preloads the textarea with a starter prompt so the existing AI
+// pipeline handles it. Features that don't yet exist (walkthroughs,
+// tune-ups, concierge) get a graceful conversational fallback from the
+// AI rather than a hard 404 — phase C wires real intent routing.
+interface TierChip { emoji: string; label: string; prompt: string }
+
+const CHIPS_ALL: TierChip[] = [
+  { emoji: '\u{1F527}', label: 'Try DIY first', prompt: 'Walk me through fixing this myself first.' },
+  { emoji: '\u{1F50D}', label: 'Find a pro', prompt: 'I need a pro to fix this — help me find one.' },
+];
+
+const CHIPS_PLUS: TierChip[] = [
+  { emoji: '✨', label: 'My Health Score', prompt: "What's my Home Health Score and what's pulling it down?" },
+  { emoji: '\u{1F44B}', label: 'Add a homie', prompt: 'Help me add a recurring vendor to my team.' },
+  { emoji: '\u{1F342}', label: 'Schedule a walkthrough', prompt: 'Schedule my next seasonal home walkthrough.' },
+];
+
+const CHIPS_PREMIER: TierChip[] = [
+  { emoji: '\u{1F6E0}️', label: 'Annual tune-up', prompt: 'Schedule my annual home tune-up.' },
+  { emoji: '\u{1F4AC}', label: 'Message concierge', prompt: 'I want to talk to my Homie concierge.' },
+];
+
+function chipsForTier(tier: string | null | undefined): TierChip[] {
+  switch (tier) {
+    case 'premier': return [...CHIPS_ALL, ...CHIPS_PLUS, ...CHIPS_PREMIER];
+    case 'plus': return [...CHIPS_ALL, ...CHIPS_PLUS];
+    default: return CHIPS_ALL;
+  }
+}
+
+function HomieSuggestionChips({ onPick }: { onPick: (prompt: string) => void }) {
+  const { homeowner } = useAuth();
+  // Pre-auth visitors get the category tile grid + DIRECT_EXAMPLES;
+  // chips are for signed-in members deciding "what can I ask Homie?"
+  if (!homeowner) return null;
+  const chips = chipsForTier(homeowner.membership_tier);
+  return (
+    <div style={{ marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+      <span style={{
+        fontSize: 10, fontFamily: "'DM Mono',monospace", letterSpacing: 1.4,
+        textTransform: 'uppercase', color: DIM, fontWeight: 700,
+        padding: '4px 4px 4px 0',
+      }}>
+        Try asking
+      </span>
+      {chips.map((c) => (
+        <button
+          key={c.label}
+          type="button"
+          onClick={() => onPick(c.prompt)}
+          style={{
+            padding: '6px 12px', borderRadius: 100,
+            background: '#fff', border: `1px solid ${BORDER}`,
+            fontSize: 12, fontWeight: 600, color: D,
+            fontFamily: "'DM Sans', sans-serif", cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = O;
+            e.currentTarget.style.color = O;
+            e.currentTarget.style.background = `${O}08`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = BORDER;
+            e.currentTarget.style.color = D;
+            e.currentTarget.style.background = '#fff';
+          }}
+        >
+          <span aria-hidden>{c.emoji}</span> {c.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function PhotoUpload({ onUpload }: { onUpload: (url: string) => void }) {
   const ref = useRef<HTMLInputElement>(null);
