@@ -37,7 +37,15 @@ const TIER_NAMES: Record<string, string> = {
  *                             homeowner whose contact info is on the
  *                             upload form.
  *    workspace_subscription — business workspace SaaS subscription. */
-export type HomieProduct = 'homie_quote' | 'inspect_report' | 'inspector_upload' | 'workspace_subscription';
+export type HomieProduct =
+  | 'homie_quote'
+  | 'inspect_report'
+  | 'inspector_upload'
+  | 'workspace_subscription'
+  /** Consumer Membership subscription (Plus / Premier) — Phase 1, Session 6.
+   *  Tagged on `customer.subscription.created` checkout session metadata so
+   *  the admin revenue dashboard can split membership MRR from the rest. */
+  | 'homeowner_membership';
 
 export interface CanonicalStripeMetadata {
   product: HomieProduct;
@@ -397,4 +405,297 @@ export async function listInvoices(
     hostedUrl: inv.hosted_invoice_url ?? null,
     pdf: inv.invoice_pdf ?? null,
   }));
+}
+
+// ─── Stripe Connect (vendor payouts — Membership Phase 1, Session 2) ───────
+//
+// Vendors are Stripe Connect Express accounts. The flow is:
+//   1. Member adds a BYO vendor → we create a Connect Express account
+//      placeholder via createConnectAccount + createAccountLink, send the
+//      link via SMS.
+//   2. Vendor finishes Stripe-hosted onboarding (bank account, ToS, etc.).
+//      Stripe fires `account.updated` to our webhook; we flip
+//      recurring_vendors.status to 'active' once payouts_enabled.
+//   3. When vendor_visits → completed, services/vendor-payments.processPayment
+//      creates a PaymentIntent against the homeowner and a Transfer to the
+//      vendor's Connect account.
+//
+// All Connect calls take an idempotency key derived from a stable resource
+// identifier so retries don't double-charge or double-create.
+
+/**
+ * Create a Stripe Connect Express account for a vendor. The vendor's
+ * email is pre-filled into the onboarding flow; everything else (legal
+ * entity, bank account, ToS) is collected during the Stripe-hosted
+ * onboarding step.
+ *
+ * `idempotencyKey` should be the stable Homie identifier (e.g. the
+ * recurring_vendor.id) so a retry of this call never creates a second
+ * account for the same vendor.
+ */
+export async function createConnectAccount(params: {
+  email: string;
+  vendorName: string;
+  /** Stable Homie identifier (recurring_vendor.id) for idempotency. */
+  idempotencyKey: string;
+}): Promise<Stripe.Account> {
+  return getStripe().accounts.create(
+    {
+      type: 'express',
+      email: params.email,
+      business_profile: {
+        name: params.vendorName,
+        // Service-provider home repair / cleaning / landscaping etc. The
+        // exact MCC matters less than declaring "service" as the type.
+        mcc: '7349', // "Cleaning, maintenance, & janitorial services"
+      },
+      capabilities: {
+        transfers: { requested: true },
+      },
+      metadata: { homie_recurring_vendor_id: params.idempotencyKey },
+    },
+    { idempotencyKey: `connect-account:${params.idempotencyKey}` },
+  );
+}
+
+/**
+ * Generate a one-time Stripe-hosted onboarding URL for a Connect
+ * Express account. URLs are short-lived (Stripe expires them quickly,
+ * minutes-scale) — caller should request a fresh one each time the
+ * vendor opens the SMS link or refreshes the page.
+ *
+ * The `returnUrl` is where Stripe redirects the vendor on success;
+ * `refreshUrl` is for if the link goes stale.
+ */
+export async function createAccountLink(params: {
+  accountId: string;
+  returnUrl: string;
+  refreshUrl: string;
+}): Promise<Stripe.AccountLink> {
+  return getStripe().accountLinks.create({
+    account: params.accountId,
+    type: 'account_onboarding',
+    return_url: params.returnUrl,
+    refresh_url: params.refreshUrl,
+  });
+}
+
+/**
+ * Read-only fetch of a Connect account. Used to check
+ * `details_submitted` / `payouts_enabled` after the vendor finishes
+ * onboarding (also fired async via the `account.updated` webhook).
+ */
+export async function getConnectAccount(accountId: string): Promise<Stripe.Account> {
+  return getStripe().accounts.retrieve(accountId);
+}
+
+/**
+ * Transfer funds from Homie's platform balance to a connected vendor.
+ * Called by services/vendor-payments.processPayment after a successful
+ * PaymentIntent against the homeowner. Idempotent on `transferGroup`
+ * (typically the vendor_visit.id).
+ */
+export async function createConnectTransfer(params: {
+  amountCents: number;
+  destinationAccountId: string;
+  /** vendor_visit.id — used for idempotency + the Stripe `transfer_group`
+   *  field so reporting can correlate charge → transfer. */
+  visitId: string;
+  /** vendor_payments.id — added to metadata for webhook routing. */
+  paymentId: string;
+  /** Optional: the PaymentIntent ID that funded this transfer, for
+   *  reporting + reconciliation. */
+  sourceTransactionId?: string;
+}): Promise<Stripe.Transfer> {
+  return getStripe().transfers.create(
+    {
+      amount: params.amountCents,
+      currency: 'usd',
+      destination: params.destinationAccountId,
+      transfer_group: `visit:${params.visitId}`,
+      ...(params.sourceTransactionId
+        ? { source_transaction: params.sourceTransactionId }
+        : {}),
+      metadata: {
+        homie_vendor_payment_id: params.paymentId,
+        homie_vendor_visit_id: params.visitId,
+      },
+    },
+    { idempotencyKey: `connect-transfer:${params.paymentId}` },
+  );
+}
+
+// ─── Setup Intents (Membership Phase 1, Session 4) ─────────────────────────
+//
+// Setup Intents let a homeowner save a payment method for off-session use
+// (which is what auto-pay needs — `processPayment` calls
+// `paymentIntents.create` with `off_session: true` and references a saved
+// payment method). The flow is:
+//   1. Frontend asks backend for a Setup Intent client secret
+//   2. Stripe Elements collects card details, confirms the SetupIntent
+//      against Stripe (no Homie server roundtrip for raw card data)
+//   3. Stripe attaches the resulting payment method to the customer
+//   4. Frontend tells backend "done" — backend lists the customer's
+//      payment methods to verify and surface them in the UI
+
+/** Create a Setup Intent for a homeowner. Caller must have called
+ *  `getOrCreateCustomer` to ensure the homeowner has a Stripe customer ID. */
+export async function createSetupIntent(customerId: string): Promise<Stripe.SetupIntent> {
+  return getStripe().setupIntents.create({
+    customer: customerId,
+    // off_session is the key flag: the saved PM will be used to charge
+    // the customer when they're not present (i.e. when a vendor visit
+    // completes and auto-pay fires).
+    usage: 'off_session',
+    payment_method_types: ['card'],
+  });
+}
+
+/** List a customer's saved card payment methods. */
+export async function listCustomerPaymentMethods(customerId: string): Promise<Stripe.PaymentMethod[]> {
+  const result = await getStripe().paymentMethods.list({
+    customer: customerId,
+    type: 'card',
+    limit: 20,
+  });
+  return result.data;
+}
+
+/** Detach a payment method. Caller must verify ownership first. */
+export async function detachPaymentMethod(paymentMethodId: string): Promise<Stripe.PaymentMethod> {
+  return getStripe().paymentMethods.detach(paymentMethodId);
+}
+
+// ─── Membership subscriptions (Phase 1, Session 6) ─────────────────────────
+//
+// Plus + Premier are monthly subscriptions billed via Stripe Subscriptions.
+// Each tier maps to a pre-created Stripe Product + Price (configured once
+// in the Stripe dashboard) whose IDs live in env vars:
+//
+//   STRIPE_PRICE_PLUS_MONTHLY     — price_xxx for $29/mo
+//   STRIPE_PRICE_PREMIER_MONTHLY  — price_xxx for $99/mo
+//
+// Without these env vars the subscription endpoints return 503. Annual
+// billing is deferred — MVP ships monthly only.
+
+export type MembershipTier = 'free' | 'plus' | 'premier';
+
+/** Resolve the Stripe Price ID for a membership tier. */
+export function getMembershipPriceId(tier: 'plus' | 'premier'): string | null {
+  if (tier === 'plus') return process.env.STRIPE_PRICE_PLUS_MONTHLY ?? null;
+  if (tier === 'premier') return process.env.STRIPE_PRICE_PREMIER_MONTHLY ?? null;
+  return null;
+}
+
+/**
+ * Create a Stripe Checkout Session that subscribes the homeowner to a
+ * paid tier. Hosted-Checkout flow — Stripe collects payment method,
+ * activates the subscription, and redirects back. Webhook handlers
+ * (`customer.subscription.created` / `invoice.paid`) flip the
+ * homeowner row's `membership_tier` + `tier_*_at` fields.
+ *
+ * Caller must have already called `getOrCreateCustomer` so the
+ * homeowner has a Stripe customer ID.
+ */
+export async function createMembershipCheckout(params: {
+  customerId: string;
+  homeownerId: string;
+  tier: 'plus' | 'premier';
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<Stripe.Checkout.Session> {
+  const priceId = getMembershipPriceId(params.tier);
+  if (!priceId) {
+    throw new Error(`Stripe Price ID not configured for tier: ${params.tier}`);
+  }
+  return getStripe().checkout.sessions.create({
+    mode: 'subscription',
+    customer: params.customerId,
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+    metadata: buildStripeMetadata({
+      product: 'homeowner_membership',
+      homeowner_id: params.homeownerId,
+      tier: params.tier,
+    }),
+  });
+}
+
+/**
+ * Switch an existing subscription to a different price. Use for
+ * Plus → Premier upgrades and Premier → Plus downgrades.
+ *
+ * Strategy:
+ *   - Upgrades: prorate immediately + charge the difference now
+ *     (`proration_behavior: 'create_prorations'`, `billing_cycle_anchor: 'now'`)
+ *   - Downgrades: schedule for period end (no immediate charge,
+ *     access stays at current tier until renewal). Done by setting
+ *     the new price + `proration_behavior: 'none'` and accepting
+ *     that the member finishes their billed period at the higher tier.
+ */
+export async function changeSubscriptionTier(params: {
+  subscriptionId: string;
+  newTier: 'plus' | 'premier';
+  /** True for upgrades (prorate now), false for downgrades (period end). */
+  upgrade: boolean;
+}): Promise<Stripe.Subscription> {
+  const newPriceId = getMembershipPriceId(params.newTier);
+  if (!newPriceId) throw new Error(`Stripe Price ID not configured for tier: ${params.newTier}`);
+  const stripe = getStripe();
+  // Subscriptions have one item per price; need to update that item, not
+  // create a new one (a second item would charge BOTH prices).
+  const subscription = await stripe.subscriptions.retrieve(params.subscriptionId);
+  const itemId = subscription.items.data[0]?.id;
+  if (!itemId) throw new Error(`Subscription ${params.subscriptionId} has no items`);
+  return stripe.subscriptions.update(params.subscriptionId, {
+    items: [{ id: itemId, price: newPriceId }],
+    proration_behavior: params.upgrade ? 'create_prorations' : 'none',
+    cancel_at_period_end: false, // un-cancel if they were heading toward expiry
+  });
+}
+
+/**
+ * Cancel at period end. Member keeps access through the current
+ * billing period; tier flips to 'free' when the subscription
+ * actually deletes (handled by `customer.subscription.deleted` webhook).
+ */
+export async function cancelSubscriptionAtPeriodEnd(subscriptionId: string): Promise<Stripe.Subscription> {
+  return getStripe().subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+}
+
+/** Undo a "cancel at period end" while still in the paid window. */
+export async function reactivateSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+  return getStripe().subscriptions.update(subscriptionId, { cancel_at_period_end: false });
+}
+
+/**
+ * Read-only fetch of the homeowner's current subscription, used by
+ * `GET /subscriptions/current` to render the membership page.
+ */
+export async function getSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+  return getStripe().subscriptions.retrieve(subscriptionId);
+}
+
+/**
+ * Create a Stripe-hosted Checkout Session for saving a payment method
+ * off-session. Simpler UX than in-page Stripe Elements: redirect the
+ * member to Stripe, they fill the form, Stripe redirects back. The
+ * card auto-attaches to the customer.
+ *
+ * This is the MVP path; in-page Elements via `createSetupIntent` above
+ * is a future enhancement when we want polished in-page UX.
+ */
+export async function createSetupCheckoutSession(params: {
+  customerId: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<Stripe.Checkout.Session> {
+  return getStripe().checkout.sessions.create({
+    mode: 'setup',
+    customer: params.customerId,
+    payment_method_types: ['card'],
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+  });
 }

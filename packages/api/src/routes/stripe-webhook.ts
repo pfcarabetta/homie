@@ -8,6 +8,9 @@ import { bookings } from '../db/schema/bookings';
 import { workspaces } from '../db/schema/workspaces';
 import { sendBookingNotifications, dispatchJob } from '../services/orchestration';
 import { constructWebhookEvent } from '../services/stripe';
+import { vendorPayments, recurringVendors } from '../db/schema/recurring-vendors';
+import { markVendorActive } from '../services/vendor-confirmation';
+import { homeowners } from '../db/schema/homeowners';
 
 export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
   const sig = req.headers['stripe-signature'];
@@ -47,6 +50,55 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         } catch (err) {
           logger.error({ err }, '[Stripe webhook] Failed to save subscription ID');
         }
+      }
+      res.status(200).json({ received: true });
+      return;
+    }
+
+    // ── Consumer Membership subscription activated (Plus / Premier) ────
+    // Phase 1, Session 6. The homeowner hit Stripe-hosted Checkout from
+    // the Membership page; metadata identifies the homeowner_id + tier.
+    // Flip the homeowner row's membership_tier + stripe_subscription_id
+    // and stamp tier_started_at / tier_renews_at. Subsequent state is
+    // managed by `customer.subscription.updated` / `.deleted` below.
+    if (
+      session.mode === 'subscription' &&
+      session.metadata?.product === 'homeowner_membership' &&
+      session.metadata?.homeowner_id
+    ) {
+      const homeownerId = session.metadata.homeowner_id;
+      const tier = session.metadata.tier === 'premier' ? 'premier' : 'plus';
+      const subscriptionId = typeof session.subscription === 'string'
+        ? session.subscription
+        : session.subscription?.toString() ?? null;
+
+      try {
+        const now = new Date();
+        // Pull the live subscription so we can stamp tier_renews_at
+        // accurately. The Checkout session itself may not have it yet
+        // depending on Stripe's timing; the subscription always does.
+        let renewsAt: Date | null = null;
+        if (subscriptionId) {
+          const { getSubscription } = await import('../services/stripe');
+          const sub = await getSubscription(subscriptionId) as Stripe.Subscription & { current_period_end?: number };
+          renewsAt = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
+        }
+        await db
+          .update(homeowners)
+          .set({
+            membershipTier: tier,
+            stripeSubscriptionId: subscriptionId,
+            tierStartedAt: now,
+            tierRenewsAt: renewsAt,
+            tierCancelsAt: null,
+          })
+          .where(eq(homeowners.id, homeownerId));
+        logger.info(
+          { homeownerId, tier, subscriptionId },
+          '[Stripe webhook] Homeowner membership activated',
+        );
+      } catch (err) {
+        logger.error({ err, homeownerId }, '[Stripe webhook] Failed to activate homeowner membership');
       }
       res.status(200).json({ received: true });
       return;
@@ -227,6 +279,71 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         logger.error({ err }, `[Stripe webhook] Failed to update subscription status`);
       }
     }
+
+    // ── Consumer Membership: same event, different table ──────────────
+    // Match by stripe_subscription_id since the subscription metadata
+    // may not always carry the homeowner_id (Stripe doesn't auto-copy
+    // metadata from Checkout Session → Subscription on every update).
+    try {
+      const [hRow] = await db
+        .select({
+          id: homeowners.id,
+          membershipTier: homeowners.membershipTier,
+        })
+        .from(homeowners)
+        .where(eq(homeowners.stripeSubscriptionId, sub.id))
+        .limit(1);
+
+      if (hRow) {
+        if (event.type === 'customer.subscription.deleted') {
+          // Subscription has actually ended. Flip to free, clear all
+          // tier_*_at fields. The tier_started_at on a future re-up
+          // will get re-stamped by the next checkout completion.
+          await db
+            .update(homeowners)
+            .set({
+              membershipTier: 'free',
+              stripeSubscriptionId: null,
+              tierStartedAt: null,
+              tierRenewsAt: null,
+              tierCancelsAt: null,
+            })
+            .where(eq(homeowners.id, hRow.id));
+          logger.info(
+            { homeownerId: hRow.id },
+            '[Stripe webhook] Homeowner subscription deleted — reverted to free',
+          );
+        } else {
+          // customer.subscription.updated: re-derive tier from the
+          // subscription's current price ID, plus update renewal +
+          // cancellation pending state.
+          const priceId = sub.items.data[0]?.price?.id ?? null;
+          let derivedTier: 'plus' | 'premier' | null = null;
+          if (priceId === process.env.STRIPE_PRICE_PLUS_MONTHLY) derivedTier = 'plus';
+          else if (priceId === process.env.STRIPE_PRICE_PREMIER_MONTHLY) derivedTier = 'premier';
+
+          const renewsAt = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
+          const cancelsAt =
+            sub.cancel_at_period_end && sub.current_period_end
+              ? new Date(sub.current_period_end * 1000)
+              : null;
+          await db
+            .update(homeowners)
+            .set({
+              membershipTier: derivedTier ?? hRow.membershipTier,
+              tierRenewsAt: renewsAt,
+              tierCancelsAt: cancelsAt,
+            })
+            .where(eq(homeowners.id, hRow.id));
+          logger.info(
+            { homeownerId: hRow.id, derivedTier, status: sub.status, cancelAtPeriodEnd: sub.cancel_at_period_end },
+            '[Stripe webhook] Homeowner subscription updated',
+          );
+        }
+      }
+    } catch (err) {
+      logger.error({ err, subscriptionId: sub.id }, '[Stripe webhook] Failed to sync homeowner subscription');
+    }
   }
 
   if (event.type === 'invoice.payment_failed') {
@@ -240,8 +357,113 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
           await db.update(workspaces).set({ subscriptionStatus: 'past_due', updatedAt: new Date() }).where(eq(workspaces.id, ws.id));
           logger.warn({ workspaceId: ws.id }, '[Stripe webhook] Subscription payment failed — marked past_due');
         }
+        // Consumer membership: log but don't immediately downgrade —
+        // the spec calls for a 3-day grace period + retries before
+        // flipping to free. Stripe handles the retry schedule via
+        // dunning settings on the Subscription. When dunning fully
+        // fails, Stripe fires `customer.subscription.deleted` which
+        // is already handled above.
+        const [hRow] = await db
+          .select({ id: homeowners.id })
+          .from(homeowners)
+          .where(eq(homeowners.stripeSubscriptionId, subId))
+          .limit(1);
+        if (hRow) {
+          logger.warn(
+            { homeownerId: hRow.id },
+            '[Stripe webhook] Homeowner subscription payment failed — Stripe will retry via dunning',
+          );
+        }
       } catch (err) {
         logger.error({ err }, '[Stripe webhook] Failed to handle payment failure');
+      }
+    }
+  }
+
+  // ─── Membership Phase 1, Session 2: Stripe Connect events ──────────────
+  //
+  // account.updated fires every time a Connect account changes — most
+  // notably when the vendor finishes onboarding and `payouts_enabled`
+  // flips to true. We use it to mark the recurring_vendor 'active'.
+  // The other Connect events update vendor_payments status for
+  // observability + to surface failures.
+
+  if (event.type === 'account.updated') {
+    const account = event.data.object as Stripe.Account;
+    if (account.payouts_enabled) {
+      try {
+        await markVendorActive(account.id);
+      } catch (err) {
+        logger.error({ err, accountId: account.id }, '[Stripe webhook] account.updated → markVendorActive failed');
+      }
+    }
+  }
+
+  // transfer.created — Stripe has booked the payout to the vendor's
+  // Connect account. Stamp stripe_transfer_id on the matching
+  // vendor_payments row via the metadata we set on the PaymentIntent
+  // in services/vendor-payments.processPayment (Stripe propagates the
+  // metadata to the auto-created Transfer for destination charges).
+  //
+  // Note: there is no `transfer.paid` / `transfer.failed` event in the
+  // current Stripe API — actual deposit success/failure at the
+  // vendor's bank surfaces via `payout.failed` on the connected
+  // account (handled below). For observability we capture transfer.id
+  // when it's created and rely on payout events for bank-deposit
+  // outcomes.
+  if (event.type === 'transfer.created') {
+    const transfer = event.data.object as Stripe.Transfer;
+    const paymentId = transfer.metadata?.homie_vendor_payment_id;
+    if (paymentId) {
+      try {
+        await db
+          .update(vendorPayments)
+          .set({ stripeTransferId: transfer.id })
+          .where(eq(vendorPayments.id, paymentId));
+        logger.info(
+          { paymentId, transferId: transfer.id },
+          '[Stripe webhook] vendor transfer recorded',
+        );
+      } catch (err) {
+        logger.error({ err, paymentId }, '[Stripe webhook] Failed to record vendor transfer');
+      }
+    }
+  }
+
+  // payout.failed — Stripe couldn't deposit funds into the vendor's
+  // bank account. Doesn't directly map to a vendor_payments row (a
+  // payout is a batch); just log loudly so ops can investigate via the
+  // Stripe dashboard. Vendor's account on the Homie side stays active —
+  // the vendor's bank info is the issue, not their relationship.
+  if (event.type === 'payout.failed') {
+    const payout = event.data.object as Stripe.Payout;
+    const accountId = (event as Stripe.Event & { account?: string }).account;
+    logger.error(
+      {
+        payoutId: payout.id,
+        accountId,
+        failureCode: payout.failure_code,
+        failureMessage: payout.failure_message,
+      },
+      '[Stripe webhook] vendor payout failed — manual ops follow-up needed',
+    );
+    if (accountId) {
+      try {
+        // Best-effort: find the vendor associated with this Connect account
+        // for breadcrumb context in the log. Doesn't change state.
+        const [vendor] = await db
+          .select({ id: recurringVendors.id, vendorName: recurringVendors.vendorName })
+          .from(recurringVendors)
+          .where(eq(recurringVendors.stripeConnectAccountId, accountId))
+          .limit(1);
+        if (vendor) {
+          logger.error(
+            { payoutId: payout.id, vendorId: vendor.id, vendorName: vendor.vendorName },
+            '[Stripe webhook] payout.failed mapped to recurring_vendor',
+          );
+        }
+      } catch (err) {
+        logger.error({ err }, '[Stripe webhook] payout.failed lookup failed');
       }
     }
   }
