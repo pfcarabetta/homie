@@ -11,8 +11,26 @@ export const homeowners = pgTable('homeowners', {
   passwordHash: text('password_hash').notNull(),
   phone: text('phone'),
   zipCode: text('zip_code').notNull(),
+  /** Membership tier — 'free' | 'plus' | 'premier'. The text+constants
+   *  pattern is enforced in app code; see CLAUDE-MEMBERSHIP.md. Defaults
+   *  to 'free' so every homeowner row implicitly has a tier. */
   membershipTier: text('membership_tier').notNull().default('free'),
   stripeCustomerId: text('stripe_customer_id'),
+  /** Stripe Subscription ID for the homeowner's paid membership. Null
+   *  for Free-tier homeowners. Set by the membership upgrade webhook
+   *  (later phase). */
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  /** When the homeowner first entered their current paid tier. Reset
+   *  on tier upgrade (Plus→Premier preserves it; downgrade→cancel
+   *  clears it on the next renewal). Null for Free-tier homeowners. */
+  tierStartedAt: timestamp('tier_started_at', { withTimezone: true }),
+  /** Next renewal/billing date for the current Stripe subscription.
+   *  Used by the dashboard to show "renews May 15". Null for Free. */
+  tierRenewsAt: timestamp('tier_renews_at', { withTimezone: true }),
+  /** When set, the homeowner has cancelled and access ends on this
+   *  date (downgrade-at-period-end semantics). Null = no scheduled
+   *  cancellation. */
+  tierCancelsAt: timestamp('tier_cancels_at', { withTimezone: true }),
   emailVerified: boolean('email_verified').notNull().default(false),
   emailVerifyToken: text('email_verify_token'),
   smsOptIn: boolean('sms_opt_in').notNull().default(false),
