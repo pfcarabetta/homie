@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { trackPageView } from '@/services/analytics';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProviderAuthProvider } from '@/contexts/ProviderAuthContext';
@@ -26,7 +26,6 @@ import InspectionPartnerLanding from '@/pages/InspectionPartnerLanding';
 import InspectionInspectorsLanding from '@/pages/InspectionInspectorsLanding';
 import VendorConfirmation from '@/pages/VendorConfirmation';
 import Vendors from '@/pages/Vendors';
-import Dashboard from '@/pages/Dashboard';
 import Membership from '@/pages/Membership';
 import PaymentSuccess from '@/pages/PaymentSuccess';
 import VerifyEmail from '@/pages/VerifyEmail';
@@ -116,7 +115,10 @@ export default function App() {
           <Route path="/inspect/inspectors" element={<InspectionInspectorsLanding />} />
           <Route path="/vendor-confirmation/:token" element={<VendorConfirmation />} />
           <Route path="/vendors" element={<Vendors />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          {/* /dashboard was the standalone Phase 1 member surface; the
+              same content now lives inside /account?tab=dashboard so
+              redirect to keep old links working. */}
+          <Route path="/dashboard" element={<Navigate to="/account?tab=dashboard" replace />} />
           <Route path="/membership" element={<Membership />} />
           <Route path="/inspect/p/:slug" element={<InspectionPartnerLanding />} />
           <Route path="/business/chat" element={<BusinessChat />} />

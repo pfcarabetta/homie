@@ -1,10 +1,63 @@
 import { useEffect, useState } from 'react';
-import { accountService, type AccountJob, type AccountBooking, type SmartSuggestion } from '@/services/api';
+import { useNavigate } from 'react-router-dom';
+import { accountService, fetchAPI, type AccountJob, type AccountBooking, type SmartSuggestion } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 import type { AccountTab } from './AccountSidebar';
 
 const O = '#E8632B';
 const G = '#1B9E77';
 const D = '#2D2926';
+const GRAY_LIGHT = '#D3CEC9';
+const GREEN_LIGHT = '#E1F5EE';
+
+// ── Membership-tier types (mirrors Phase 1 backend payload shapes) ────
+interface PortalProperty {
+  id: string;
+  isPrimary: boolean;
+  nickname: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+interface PortalVendor {
+  id: string;
+  vendorName: string;
+  serviceCategory: string;
+  status: string;
+  amountCents: number;
+  totalPaidYtdCents: number;
+}
+
+interface HealthScoreCurrent {
+  score: number | null;
+  band: 'excellent' | 'good' | 'needs_work' | 'concerning' | null;
+  deltaFromPrevMonth: number | null;
+  periodMonth: string | null;
+  message?: string;
+}
+
+const BAND_COLOR: Record<string, string> = {
+  excellent: '#1B9E77',
+  good: '#E8632B',
+  needs_work: '#EF9F27',
+  concerning: '#E24B4A',
+};
+
+function bandLabel(band: string | null): string {
+  switch (band) {
+    case 'excellent': return 'Excellent shape';
+    case 'good': return 'Good — room to grow';
+    case 'needs_work': return 'Needs work';
+    case 'concerning': return 'Concerning';
+    default: return 'Establishing';
+  }
+}
+
+function fmtMoney(cents: number): string {
+  if (!cents) return '$0';
+  return `$${(cents / 100).toFixed(0)}`;
+}
 
 const CATEGORY_ICON: Record<string, string> = {
   hvac: '\u2744\uFE0F',
@@ -180,6 +233,11 @@ export default function DashboardSection({ userFirstName, onNavigate, onNewQuote
       <p style={{ fontSize: 14, color: '#6B6560', marginBottom: 24 }}>
         {'Here\u2019s what\u2019s happening with your home services.'}
       </p>
+
+      {/* Membership hero \u2014 Health Score + vendor team for paying members,
+          slim upgrade banner for free. Renders nothing while auth/tier
+          is still resolving so we don't flash the wrong variant. */}
+      <MembershipHero />
 
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
@@ -524,5 +582,332 @@ function SuggestionTile({ suggestion, onAct, onDismiss }: {
         Get a quote {'\u2192'}
       </button>
     </div>
+  );
+}
+
+// \u2500\u2500 Membership Hero \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+//
+// Renders above the existing dashboard. For free members, a slim upsell
+// banner. For Plus/Premier, a property banner + Health Score hero +
+// vendor stat tiles + "Your team" panel. Phase 1 of the Membership
+// product \u2014 replaces the standalone /dashboard page that used to host
+// these surfaces in isolation, so paying users have one home in the
+// portal instead of two.
+
+function MembershipHero() {
+  const { homeowner } = useAuth();
+  const navigate = useNavigate();
+  const [properties, setProperties] = useState<PortalProperty[]>([]);
+  const [vendors, setVendors] = useState<PortalVendor[]>([]);
+  const [healthScore, setHealthScore] = useState<HealthScoreCurrent | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const tier = homeowner?.membership_tier ?? 'free';
+  const isPaying = tier === 'plus' || tier === 'premier';
+
+  useEffect(() => {
+    if (!isPaying) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [pRes, vRes, hsRes] = await Promise.all([
+          fetchAPI<{ properties: PortalProperty[] }>('/api/v1/account/properties').catch(() => ({ data: { properties: [] } })),
+          fetchAPI<{ vendors: PortalVendor[] }>('/api/v1/account/vendors').catch(() => ({ data: { vendors: [] } })),
+          fetchAPI<HealthScoreCurrent>('/api/v1/account/health-score/current').catch(() => ({ data: null })),
+        ]);
+        if (cancelled) return;
+        if (pRes.data) setProperties(pRes.data.properties);
+        if (vRes.data) setVendors(vRes.data.vendors);
+        if (hsRes.data) setHealthScore(hsRes.data);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isPaying]);
+
+  if (!homeowner) return null;
+
+  // Free members \u2192 upsell banner.
+  if (!isPaying) {
+    return <UpsellBanner onUpgrade={() => navigate('/membership')} />;
+  }
+
+  // Plus/Premier \u2192 full hero stack.
+  const primary = properties.find((p) => p.isPrimary) ?? properties[0] ?? null;
+  const activeVendors = vendors.filter((v) => v.status !== 'cancelled');
+  const ytdTotal = activeVendors.reduce((s, v) => s + v.totalPaidYtdCents, 0);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {primary && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 700,
+            color: '#9B9490', textTransform: 'uppercase', letterSpacing: 0.6,
+          }}>
+            Your home
+          </div>
+          <div style={{
+            fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700,
+            color: D, margin: '4px 0 2px',
+          }}>
+            {primary.nickname ?? primary.address ?? 'Your home'}
+          </div>
+          {primary.city && primary.state && (
+            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#6B6560' }}>
+              {primary.city}, {primary.state}
+            </div>
+          )}
+        </div>
+      )}
+
+      <HealthScoreHero loading={loading} score={healthScore} />
+
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 12, marginBottom: 16,
+      }}>
+        <MembershipStat
+          label="Active vendors"
+          value={String(activeVendors.length)}
+          sub={activeVendors.length === 0 ? 'Add your first' : 'See your team'}
+          href="/vendors"
+        />
+        <MembershipStat
+          label="Paid this year"
+          value={fmtMoney(ytdTotal)}
+          sub="Tax-ready breakdown"
+          href="/vendors"
+        />
+      </div>
+
+      <YourTeamPanel
+        loading={loading}
+        vendors={activeVendors}
+        onManage={() => navigate('/vendors')}
+      />
+    </div>
+  );
+}
+
+function UpsellBanner({ onUpgrade }: { onUpgrade: () => void }) {
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #FFF7ED 0%, #FFFFFF 100%)',
+      border: `1px solid ${O}33`, borderRadius: 14,
+      padding: '18px 20px', marginBottom: 20,
+      display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+      fontFamily: "'DM Sans', sans-serif",
+    }}>
+      <div style={{
+        width: 44, height: 44, borderRadius: '50%',
+        background: `${O}1A`, display: 'flex', alignItems: 'center',
+        justifyContent: 'center', flexShrink: 0, fontSize: 22,
+      }}>
+        {'\u2728'}
+      </div>
+      <div style={{ flex: 1, minWidth: 220 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: D, marginBottom: 2 }}>
+          Unlock your Home Health Score
+        </div>
+        <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5 }}>
+          Plus members get the Health Score, recurring vendor management, and tax-ready records. Premier adds an annual Tune-Up + concierge.
+        </div>
+      </div>
+      <button
+        onClick={onUpgrade}
+        style={{
+          padding: '10px 20px', borderRadius: 100, border: 'none',
+          background: O, color: '#fff', fontSize: 13, fontWeight: 700,
+          cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          flexShrink: 0,
+        }}
+      >
+        See plans
+      </button>
+    </div>
+  );
+}
+
+function HealthScoreHero({ loading, score }: { loading: boolean; score: HealthScoreCurrent | null }) {
+  const hasScore = score?.score != null;
+  const band = score?.band ?? null;
+  const bandColor = band ? BAND_COLOR[band] : '#9B9490';
+  const delta = score?.deltaFromPrevMonth ?? null;
+  return (
+    <div
+      style={{
+        background: '#fff', borderRadius: 14, border: `1px solid ${GRAY_LIGHT}`,
+        padding: 24, marginBottom: 16,
+        display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+      }}
+    >
+      <div
+        style={{
+          width: 100, height: 100, borderRadius: '50%',
+          background: hasScore
+            ? `linear-gradient(135deg, ${bandColor}1A, #fff)`
+            : `linear-gradient(135deg, ${GREEN_LIGHT}, #fff)`,
+          border: `4px solid ${hasScore ? `${bandColor}66` : GREEN_LIGHT}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <span style={{
+          fontFamily: "'Fraunces', serif", fontSize: 38, fontWeight: 700,
+          color: hasScore ? bandColor : '#9B9490',
+        }}>
+          {hasScore ? score!.score : '\u2014'}
+        </span>
+      </div>
+      <div style={{ flex: 1, minWidth: 220 }}>
+        <div style={{
+          fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 700,
+          color: '#9B9490', textTransform: 'uppercase', letterSpacing: 0.6,
+        }}>
+          Home Health Score
+        </div>
+        <div style={{
+          fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700,
+          color: D, margin: '6px 0 4px',
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+        }}>
+          {loading ? 'Loading\u2026' : hasScore ? bandLabel(band) : (score?.message ?? 'Establishing your score')}
+          {delta !== null && delta !== 0 && (
+            <span
+              style={{
+                fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700,
+                padding: '2px 8px', borderRadius: 100,
+                background: delta > 0 ? '#E1F5EE' : '#FEE2E2',
+                color: delta > 0 ? '#085041' : '#991B1B',
+              }}
+            >
+              {delta > 0 ? '+' : ''}{delta} this month
+            </span>
+          )}
+        </div>
+        <p style={{
+          fontFamily: "'DM Sans', sans-serif", fontSize: 13,
+          color: '#4A4543', lineHeight: 1.55, margin: 0,
+        }}>
+          {hasScore
+            ? 'Updated nightly across maintenance compliance, open items, asset age, inspection recency, and warranty coverage.'
+            : 'We need a few more days of data before your score is meaningful. Upload an inspection report, add a few recurring vendors, or complete a seasonal walkthrough \u2014 your score builds from there.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MembershipStat({ label, value, sub, href }: {
+  label: string; value: string; sub: string; href?: string;
+}) {
+  const inner = (
+    <div style={{
+      background: '#fff', borderRadius: 12, padding: 16,
+      border: `1px solid ${GRAY_LIGHT}`,
+      fontFamily: "'DM Sans', sans-serif",
+    }}>
+      <div style={{
+        fontSize: 11, fontWeight: 700, color: '#9B9490',
+        textTransform: 'uppercase', letterSpacing: 0.6,
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
+        color: D, margin: '6px 0 2px',
+      }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 12, color: '#6B6560' }}>{sub}</div>
+    </div>
+  );
+  if (href) {
+    return <a href={href} style={{ textDecoration: 'none' }}>{inner}</a>;
+  }
+  return inner;
+}
+
+function YourTeamPanel({
+  loading, vendors, onManage,
+}: { loading: boolean; vendors: PortalVendor[]; onManage: () => void }) {
+  return (
+    <section style={{
+      background: '#fff', borderRadius: 14, border: `1px solid ${GRAY_LIGHT}`,
+      padding: 20, marginBottom: 4,
+    }}>
+      <header style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: 8, marginBottom: 12,
+      }}>
+        <div>
+          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 700, color: D }}>
+            Your team
+          </div>
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#6B6560', marginTop: 4 }}>
+            {vendors.length > 0
+              ? 'Vendors Homie pays on a recurring schedule for you.'
+              : 'Add your cleaner, gardener, pool service, or any pro you pay regularly.'}
+          </div>
+        </div>
+        <button
+          onClick={onManage}
+          style={{
+            fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600,
+            color: O, background: 'transparent', border: `1px solid ${O}30`,
+            padding: '6px 12px', borderRadius: 100, cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {vendors.length > 0 ? 'Manage vendors \u2192' : '+ Add vendor'}
+        </button>
+      </header>
+      {loading ? (
+        <div style={{ color: '#9B9490', fontSize: 13, padding: 12 }}>Loading\u2026</div>
+      ) : vendors.length === 0 ? (
+        <div style={{ color: '#9B9490', fontSize: 13, padding: '8px 0' }}>
+          No vendors yet. Tap <strong style={{ color: D }}>+ Add vendor</strong> to get started.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {vendors.slice(0, 4).map((v) => (
+            <div
+              key={v.id}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 12px', borderRadius: 10, background: '#F9F5F2',
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{v.vendorName}</div>
+                <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
+                  {v.serviceCategory.replace(/_/g, ' ')} {'\u00b7'} {fmtMoney(v.amountCents)}/visit
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: '#4A4543' }}>
+                YTD <strong style={{ color: D }}>{fmtMoney(v.totalPaidYtdCents)}</strong>
+              </div>
+            </div>
+          ))}
+          {vendors.length > 4 && (
+            <a
+              href="/vendors"
+              style={{
+                fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: O,
+                textDecoration: 'none', alignSelf: 'flex-start', padding: 4,
+              }}
+            >
+              + {vendors.length - 4} more {'\u2192'}
+            </a>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

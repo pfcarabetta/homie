@@ -35,7 +35,11 @@ export default function Login() {
         if (stored) {
           const homeowner = JSON.parse(stored) as { membership_tier?: string };
           if (homeowner.membership_tier === 'plus' || homeowner.membership_tier === 'premier') {
-            navigate('/dashboard');
+            // Member dashboard now lives inside /account?tab=dashboard
+            // alongside the existing quotes/bookings/profile surfaces, so
+            // paying members land on the unified portal home rather than
+            // the deprecated standalone /dashboard route.
+            navigate('/account?tab=dashboard');
             return;
           }
         }
