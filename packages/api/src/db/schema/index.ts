@@ -30,3 +30,6 @@ export * from './property-scans';
 export * from './pms-connections';
 export * from './inspector';
 export * from './support-tickets';
+export * from './homeowner-properties';
+export * from './recurring-vendors';
+export * from './home-health-scores';

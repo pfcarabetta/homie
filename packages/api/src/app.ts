@@ -26,6 +26,10 @@ import { slackAuthRouter, slackPublicRouter } from './routes/slack-integration';
 import estimatesRouter from './routes/estimates';
 import { scheduleRouter, templateRouter } from './routes/schedules';
 import { guestPublicRouter, guestPmRouter } from './routes/guest-reporter';
+import vendorConfirmationRouter from './routes/vendor-confirmation';
+import vendorsRouter from './routes/vendors';
+import subscriptionsRouter from './routes/subscriptions';
+import healthScoreRouter from './routes/health-score';
 import { bookingMessagesPublicRouter } from './routes/booking-messages-public';
 import inspectorRouter from './routes/inspector';
 import audioRouter from './routes/audio';
@@ -86,12 +90,20 @@ app.use('/api/v1/diy', diagnosticLimiter, diyRouter);
 // Support — public (no auth) for the contact form + AI chat. Rate-limited
 // like diagnostic since the chat endpoint is an LLM call per request.
 app.use('/api/v1/support', diagnosticLimiter, supportRouter);
+// Vendor SMS confirmation — public (no auth) by design. Vendors don't
+// have Homie accounts; the URL token (validated against
+// recurring_vendors.vendor_confirmation_token + 7-day expiry) is the
+// sole authorization mechanism. Rate-limited as a normal API.
+app.use('/api/v1/vendor-confirmation', apiLimiter, vendorConfirmationRouter);
 app.use('/api/v1/voice', diagnosticLimiter, voiceRouter);
 app.use('/api/v1/geo', apiLimiter, geoRouter);
 app.use('/api/v1/jobs', apiLimiter, requireAuth, jobsRouter);
 app.use('/api/v1/bookings', apiLimiter, requireAuth, bookingsRouter);
 app.use('/api/v1/providers', apiLimiter, providersRouter);
 app.use('/api/v1/account', apiLimiter, requireAuth, accountRouter);
+app.use('/api/v1/account/vendors', apiLimiter, requireAuth, vendorsRouter);
+app.use('/api/v1/account/subscriptions', apiLimiter, requireAuth, subscriptionsRouter);
+app.use('/api/v1/account/health-score', apiLimiter, requireAuth, healthScoreRouter);
 app.use('/api/v1/payments', apiLimiter, requireAuth, paymentsRouter);
 app.use('/api/v1/provider-auth', authLimiter, providerAuthRouter);
 app.use('/api/v1/portal', apiLimiter, requireProviderAuth, providerPortalRouter);

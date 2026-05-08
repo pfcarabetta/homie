@@ -22,6 +22,9 @@ import { startOutreachExpansionWorker } from './services/outreach-expansion-work
 import { startIcalSyncWorker } from './services/ical-sync-worker';
 import { startSmsNotesTimeoutWorker } from './services/sms-notes-timeout-worker';
 import { startInspectionReminderWorker } from './services/inspection-reminder-worker';
+import { startVendorScheduleWorker } from './services/vendor-schedule-worker';
+import { startVendorConfirmationReminderWorker } from './services/vendor-confirmation-reminder-worker';
+import { startHealthScoreWorker } from './services/health-score-worker';
 import type { JwtPayload } from './middleware/auth';
 
 const PORT = process.env.PORT ?? 3001;
@@ -273,6 +276,9 @@ async function start() {
     startIcalSyncWorker();
     startSmsNotesTimeoutWorker();
     startInspectionReminderWorker();
+    startVendorScheduleWorker();
+    startVendorConfirmationReminderWorker();
+    startHealthScoreWorker();
   });
 }
 

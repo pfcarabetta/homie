@@ -24,6 +24,10 @@ import ProSignup from '@/pages/ProSignup';
 import InspectionLanding from '@/pages/InspectionLanding';
 import InspectionPartnerLanding from '@/pages/InspectionPartnerLanding';
 import InspectionInspectorsLanding from '@/pages/InspectionInspectorsLanding';
+import VendorConfirmation from '@/pages/VendorConfirmation';
+import Vendors from '@/pages/Vendors';
+import Dashboard from '@/pages/Dashboard';
+import Membership from '@/pages/Membership';
 import PaymentSuccess from '@/pages/PaymentSuccess';
 import VerifyEmail from '@/pages/VerifyEmail';
 import Terms from '@/pages/Terms';
@@ -110,6 +114,10 @@ export default function App() {
           <Route path="/inspect-portal/demo" element={<InspectPortal />} />
           <Route path="/inspect" element={<InspectionLanding />} />
           <Route path="/inspect/inspectors" element={<InspectionInspectorsLanding />} />
+          <Route path="/vendor-confirmation/:token" element={<VendorConfirmation />} />
+          <Route path="/vendors" element={<Vendors />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/membership" element={<Membership />} />
           <Route path="/inspect/p/:slug" element={<InspectionPartnerLanding />} />
           <Route path="/business/chat" element={<BusinessChat />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
