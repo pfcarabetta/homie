@@ -478,6 +478,16 @@ router.post('/twilio/sms', async (req: Request, res: Response) => {
   }
 
   if (!provider) {
+    // Not a known provider — could be a recurring vendor confirming or
+    // completing a visit (Membership Phase 1, Session 4). Vendors don't
+    // have Homie accounts, so they're matched by phone number inside
+    // handleInboundVendorSms. If they don't match either, it's a no-op.
+    try {
+      const { handleInboundVendorSms } = await import('../services/vendor-sms-inbound');
+      await handleInboundVendorSms({ fromPhone: From, body: Body });
+    } catch (err) {
+      logger.error({ err, from: From }, '[sms-webhook] vendor fallback threw');
+    }
     res.type('text/xml').send(twiml.toString());
     return;
   }
