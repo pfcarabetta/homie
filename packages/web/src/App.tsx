@@ -25,7 +25,6 @@ import InspectionLanding from '@/pages/InspectionLanding';
 import InspectionPartnerLanding from '@/pages/InspectionPartnerLanding';
 import InspectionInspectorsLanding from '@/pages/InspectionInspectorsLanding';
 import VendorConfirmation from '@/pages/VendorConfirmation';
-import Vendors from '@/pages/Vendors';
 import Membership from '@/pages/Membership';
 import PaymentSuccess from '@/pages/PaymentSuccess';
 import VerifyEmail from '@/pages/VerifyEmail';
@@ -114,7 +113,10 @@ export default function App() {
           <Route path="/inspect" element={<InspectionLanding />} />
           <Route path="/inspect/inspectors" element={<InspectionInspectorsLanding />} />
           <Route path="/vendor-confirmation/:token" element={<VendorConfirmation />} />
-          <Route path="/vendors" element={<Vendors />} />
+          {/* /vendors was the standalone Phase 1 vendor surface; the
+              same content now lives inside /account?tab=homies so the
+              old route redirects to keep external links working. */}
+          <Route path="/vendors" element={<Navigate to="/account?tab=homies" replace />} />
           {/* /dashboard was the standalone Phase 1 member surface; the
               same content now lives inside /account?tab=dashboard so
               redirect to keep old links working. */}

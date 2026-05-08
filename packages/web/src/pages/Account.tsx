@@ -9,12 +9,13 @@ import EstimateBadge from '@/components/EstimateBadge';
 import AccountLayout from './account/AccountLayout';
 import AccountSidebar, { type AccountTab } from './account/AccountSidebar';
 import DashboardSection from './account/DashboardSection';
+import HomiesSection from './account/HomiesSection';
 import QuoteTabsBar from '@/components/QuoteTabsBar';
 import { useQuoteTabs } from '@/hooks/useQuoteTabs';
 
 const O = '#E8632B', G = '#1B9E77', D = '#2D2926', W = '#F9F5F2';
 
-const TABS = ['dashboard', 'quotes', 'bookings', 'home', 'profile'] as const;
+const TABS = ['dashboard', 'quotes', 'bookings', 'homies', 'home', 'profile'] as const;
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   open: { bg: '#EFF6FF', text: '#2563EB' },
@@ -2381,6 +2382,7 @@ export default function Account() {
       )}
       {activeTab === 'profile' && <ProfileTab />}
       {activeTab === 'home' && <MyHomeTab />}
+      {activeTab === 'homies' && <HomiesSection />}
       {activeTab === 'quotes' && <QuotesTab />}
       {activeTab === 'bookings' && <BookingsTab />}
     </AccountLayout>

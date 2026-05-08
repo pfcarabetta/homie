@@ -1,19 +1,14 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchAPI } from '@/services/api';
-import SEO from '@/components/SEO';
 
 /**
- * Recurring Vendors page (Membership Phase 1, Session 3).
- *
- * Lists the homeowner's vendor team, lets them add a new BYO vendor
- * (which fires the SMS + Connect onboarding flow), and exposes the
- * per-vendor actions: skip next visit, travel hold, resume, cancel.
- *
- * Visual style mirrors the existing inspect-portal pages — dm-sans
- * body + Fraunces headers, orange CTAs. Intentionally minimal so the
- * full Member Dashboard can replace it as the home screen later.
+ * "My Homies" — recurring vendor team, integrated into the /account
+ * portal as a sidebar tab. Adapted from the standalone /pages/Vendors
+ * page so the page chrome (logo header, full-page background, SEO) is
+ * dropped — AccountLayout provides those at the portal level. The
+ * standalone Vendors page now redirects here so any old links keep
+ * working.
  */
 
 const C = {
@@ -98,9 +93,8 @@ function fmtMoney(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
-export default function Vendors() {
+export default function HomiesSection() {
   const { homeowner } = useAuth();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [vendors, setVendors] = useState<RecurringVendor[]>([]);
   const [properties, setProperties] = useState<HomeownerProperty[]>([]);
@@ -109,11 +103,10 @@ export default function Vendors() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!homeowner) {
-      navigate('/login?redirect=/vendors');
-      return;
-    }
+    if (!homeowner) return;
     refresh();
+    // Refresh is intentionally not in the dep array — it'd retrigger
+    // every render and we only need the initial load + manual refreshes.
   }, [homeowner]);
 
   async function refresh() {
@@ -137,7 +130,7 @@ export default function Vendors() {
     try {
       const res = await fetchAPI<{ checkoutUrl: string }>('/api/v1/account/payment-methods/setup-checkout', {
         method: 'POST',
-        body: JSON.stringify({ return_to: '/vendors' }),
+        body: JSON.stringify({ return_to: '/account?tab=homies' }),
       });
       if (res.data?.checkoutUrl) {
         window.location.href = res.data.checkoutUrl;
@@ -204,32 +197,24 @@ export default function Vendors() {
   if (!homeowner) return null;
 
   return (
-    <div style={{ ...dm, minHeight: '100vh', background: C.warm }}>
-      <SEO title="Your team — Homie" description="Pay your cleaner, gardener, pool service, and more on autopilot. Recurring vendor management on Homie." canonical="/vendors" />
-      <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
-      {/* Header */}
-      <div style={{ background: '#fff', borderBottom: `1px solid ${C.grayLight}` }}>
-        <div style={{ maxWidth: 960, margin: '0 auto', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <span style={{ ...fr, fontWeight: 700, fontSize: 24, color: C.orange }}>homie</span>
-            <span style={{ ...dm, fontSize: 14, color: C.gray, marginLeft: 6 }}>your team</span>
-          </div>
-          <button onClick={() => setShowAdd(true)} style={{
-            padding: '10px 20px', fontSize: 14, fontWeight: 700, color: '#fff',
-            background: C.orange, border: 'none', borderRadius: 100, cursor: 'pointer',
-          }}>+ Add vendor</button>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <h1 style={{ ...fr, fontSize: 28, fontWeight: 700, color: C.dark, margin: '0 0 6px' }}>My Homies</h1>
+          <p style={{ ...dm, fontSize: 14, color: C.darkMid, lineHeight: 1.55, margin: 0, maxWidth: 600 }}>
+            Vendors you pay on a schedule. Add your cleaner, gardener, pool guy, or pest control —
+            Homie sends them an SMS to confirm payment details, then handles the rest. Skip a visit,
+            travel hold, or cancel anytime.
+          </p>
         </div>
+        <button onClick={() => setShowAdd(true)} style={{
+          padding: '10px 20px', fontSize: 14, fontWeight: 700, color: '#fff',
+          background: C.orange, border: 'none', borderRadius: 100, cursor: 'pointer', ...dm,
+          flexShrink: 0,
+        }}>+ Add vendor</button>
       </div>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px 80px' }}>
-        <h1 style={{ ...fr, fontSize: 32, fontWeight: 700, color: C.dark, margin: '0 0 8px' }}>Your recurring team</h1>
-        <p style={{ fontSize: 14, color: C.darkMid, lineHeight: 1.55, margin: '0 0 24px', maxWidth: 600 }}>
-          Vendors you pay on a schedule. Add your cleaner, gardener, pool guy, or pest control —
-          Homie sends them an SMS to confirm payment details, then handles the rest. Skip a visit,
-          travel hold, or cancel anytime.
-        </p>
-
+      <div style={{ marginTop: 24 }}>
         <PaymentMethodsSection paymentMethods={paymentMethods} onAdd={addCard} onRemove={removeCard} />
 
         {error && (
@@ -287,19 +272,19 @@ function VendorCard({ vendor, onSkip, onTravelHold, onResume, onCancel }: {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div style={{ ...fr, fontSize: 18, fontWeight: 700, color: C.dark }}>{vendor.vendorName}</div>
-          <div style={{ fontSize: 13, color: C.gray, marginTop: 2 }}>
-            {cat} · {sched} · {fmtMoney(vendor.amountCents)}/visit
+          <div style={{ ...dm, fontSize: 13, color: C.gray, marginTop: 2 }}>
+            {cat} {'·'} {sched} {'·'} {fmtMoney(vendor.amountCents)}/visit
             {vendor.vendorType === 'network' && (
               <span style={{ marginLeft: 8, padding: '2px 8px', background: C.greenLight, color: '#085041', borderRadius: 100, fontSize: 11, fontWeight: 600 }}>Network</span>
             )}
           </div>
         </div>
-        <span style={{ padding: '4px 12px', borderRadius: 100, background: `${status.color}18`, color: status.color, fontSize: 12, fontWeight: 700 }}>
+        <span style={{ ...dm, padding: '4px 12px', borderRadius: 100, background: `${status.color}18`, color: status.color, fontSize: 12, fontWeight: 700 }}>
           {status.label}
         </span>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, fontSize: 12, color: C.darkMid, paddingTop: 8, borderTop: `1px solid ${C.warm}` }}>
+      <div style={{ ...dm, display: 'flex', gap: 24, fontSize: 12, color: C.darkMid, paddingTop: 8, borderTop: `1px solid ${C.warm}` }}>
         <span>YTD paid: <strong style={{ color: C.dark }}>{fmtMoney(vendor.totalPaidYtdCents)}</strong></span>
         <span>Auto-pay: <strong style={{ color: C.dark }}>{vendor.autoPayRule.replace(/_/g, ' ')}</strong></span>
       </div>
@@ -322,7 +307,7 @@ function VendorCard({ vendor, onSkip, onTravelHold, onResume, onCancel }: {
 }
 
 function ActionBtn({ children, onClick, primary, danger }: { children: React.ReactNode; onClick: () => void; primary?: boolean; danger?: boolean }) {
-  const bg = primary ? C.orange : danger ? '#fff' : '#fff';
+  const bg = primary ? C.orange : '#fff';
   const color = primary ? '#fff' : danger ? '#DC2626' : C.dark;
   const border = primary ? 'none' : danger ? '1px solid #DC262640' : `1px solid ${C.grayLight}`;
   return (
@@ -336,16 +321,16 @@ function ActionBtn({ children, onClick, primary, danger }: { children: React.Rea
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <div style={{ background: '#fff', borderRadius: 14, border: `1px dashed ${C.grayLight}`, padding: '48px 24px', textAlign: 'center' }}>
-      <div style={{ fontSize: 36, marginBottom: 12 }}>👋</div>
-      <div style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, marginBottom: 8 }}>No vendors yet</div>
-      <p style={{ fontSize: 14, color: C.darkMid, lineHeight: 1.55, maxWidth: 480, margin: '0 auto 20px' }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>{'👋'}</div>
+      <div style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, marginBottom: 8 }}>No homies yet</div>
+      <p style={{ ...dm, fontSize: 14, color: C.darkMid, lineHeight: 1.55, maxWidth: 480, margin: '0 auto 20px' }}>
         Add your cleaner, landscaper, pool service, pest control, or any pro you pay on a schedule.
         Homie sends them an SMS to set up payments — they're done in 60 seconds.
       </p>
       <button onClick={onAdd} style={{
         padding: '12px 24px', fontSize: 15, fontWeight: 700, color: '#fff',
         background: C.orange, border: 'none', borderRadius: 100, cursor: 'pointer', ...dm,
-      }}>+ Add your first vendor</button>
+      }}>+ Add your first homie</button>
     </div>
   );
 }
@@ -414,13 +399,13 @@ function AddVendorModal({ properties, onClose, onSuccess }: {
         maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
       }}>
-        <div style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, marginBottom: 6 }}>Add a vendor</div>
-        <p style={{ fontSize: 13, color: C.darkMid, marginBottom: 20, lineHeight: 1.5 }}>
+        <div style={{ ...fr, fontSize: 22, fontWeight: 700, color: C.dark, marginBottom: 6 }}>Add a homie</div>
+        <p style={{ ...dm, fontSize: 13, color: C.darkMid, marginBottom: 20, lineHeight: 1.5 }}>
           We'll text them a one-tap link to confirm payment details. They don't need an app.
         </p>
 
         {properties.length === 0 ? (
-          <div style={{ background: '#FEF3C7', color: '#92400E', padding: '12px 14px', borderRadius: 10, fontSize: 13, marginBottom: 16 }}>
+          <div style={{ ...dm, background: '#FEF3C7', color: '#92400E', padding: '12px 14px', borderRadius: 10, fontSize: 13, marginBottom: 16 }}>
             You need a property on file first. Add one in your account settings, then come back here.
           </div>
         ) : (
@@ -478,7 +463,7 @@ function AddVendorModal({ properties, onClose, onSuccess }: {
         </div>
 
         {err && (
-          <div style={{ background: '#FEE2E2', color: '#991B1B', padding: '10px 14px', borderRadius: 10, fontSize: 13, marginTop: 12 }}>{err}</div>
+          <div style={{ ...dm, background: '#FEE2E2', color: '#991B1B', padding: '10px 14px', borderRadius: 10, fontSize: 13, marginTop: 12 }}>{err}</div>
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
@@ -490,7 +475,7 @@ function AddVendorModal({ properties, onClose, onSuccess }: {
             flex: 2, padding: 12, fontSize: 14, fontWeight: 700, color: '#fff', background: C.orange,
             border: 'none', borderRadius: 100, cursor: submitting ? 'wait' : 'pointer',
             opacity: submitting || properties.length === 0 ? 0.5 : 1, ...dm,
-          }}>{submitting ? 'Adding…' : 'Add vendor + send SMS'}</button>
+          }}>{submitting ? 'Adding…' : 'Add homie + send SMS'}</button>
         </div>
       </form>
     </div>
@@ -537,7 +522,7 @@ function PaymentMethodsSection({
           <div style={{ ...dm, fontSize: 13, color: C.darkMid, marginTop: 4 }}>
             {hasCards
               ? 'Cards Homie can charge when a vendor visit completes.'
-              : "Add a card so Homie can pay your vendors automatically when they finish a visit."}
+              : "Add a card so Homie can pay your homies automatically when they finish a visit."}
           </div>
         </div>
         <button
@@ -575,7 +560,7 @@ function PaymentMethodsSection({
               }}
             >
               <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{pm.brand ?? 'card'}</span>
-              <span style={{ color: C.gray }}>•••• {pm.last4 ?? '----'}</span>
+              <span style={{ color: C.gray }}>{'••••'} {pm.last4 ?? '----'}</span>
               {pm.expMonth && pm.expYear && (
                 <span style={{ color: C.gray }}>
                   {String(pm.expMonth).padStart(2, '0')}/{String(pm.expYear).slice(-2)}
@@ -586,7 +571,7 @@ function PaymentMethodsSection({
                 title="Remove card"
                 style={{ background: 'transparent', border: 'none', color: '#DC2626', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
               >
-                ✕
+                {'✕'}
               </button>
             </div>
           ))}

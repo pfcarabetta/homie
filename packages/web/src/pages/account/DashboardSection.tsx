@@ -237,7 +237,7 @@ export default function DashboardSection({ userFirstName, onNavigate, onNewQuote
       {/* Membership hero \u2014 Health Score + vendor team for paying members,
           slim upgrade banner for free. Renders nothing while auth/tier
           is still resolving so we don't flash the wrong variant. */}
-      <MembershipHero />
+      <MembershipHero onNavigate={onNavigate} />
 
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
@@ -594,7 +594,7 @@ function SuggestionTile({ suggestion, onAct, onDismiss }: {
 // these surfaces in isolation, so paying users have one home in the
 // portal instead of two.
 
-function MembershipHero() {
+function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void }) {
   const { homeowner } = useAuth();
   const navigate = useNavigate();
   const [properties, setProperties] = useState<PortalProperty[]>([]);
@@ -672,23 +672,23 @@ function MembershipHero() {
         gap: 12, marginBottom: 16,
       }}>
         <MembershipStat
-          label="Active vendors"
+          label="My homies"
           value={String(activeVendors.length)}
           sub={activeVendors.length === 0 ? 'Add your first' : 'See your team'}
-          href="/vendors"
+          onClick={() => onNavigate('homies')}
         />
         <MembershipStat
           label="Paid this year"
           value={fmtMoney(ytdTotal)}
           sub="Tax-ready breakdown"
-          href="/vendors"
+          onClick={() => onNavigate('homies')}
         />
       </div>
 
       <YourTeamPanel
         loading={loading}
         vendors={activeVendors}
-        onManage={() => navigate('/vendors')}
+        onManage={() => onNavigate('homies')}
       />
     </div>
   );
@@ -803,15 +803,32 @@ function HealthScoreHero({ loading, score }: { loading: boolean; score: HealthSc
   );
 }
 
-function MembershipStat({ label, value, sub, href }: {
-  label: string; value: string; sub: string; href?: string;
+function MembershipStat({ label, value, sub, onClick }: {
+  label: string; value: string; sub: string; onClick?: () => void;
 }) {
-  const inner = (
-    <div style={{
-      background: '#fff', borderRadius: 12, padding: 16,
-      border: `1px solid ${GRAY_LIGHT}`,
-      fontFamily: "'DM Sans', sans-serif",
-    }}>
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      style={{
+        background: '#fff', borderRadius: 12, padding: 16,
+        border: `1px solid ${GRAY_LIGHT}`,
+        fontFamily: "'DM Sans', sans-serif",
+        textAlign: 'left', cursor: onClick ? 'pointer' : 'default',
+        display: 'block', width: '100%',
+        transition: 'transform 0.15s, box-shadow 0.15s',
+      }}
+      onMouseEnter={(e) => {
+        if (onClick) {
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.06)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
       <div style={{
         fontSize: 11, fontWeight: 700, color: '#9B9490',
         textTransform: 'uppercase', letterSpacing: 0.6,
@@ -825,12 +842,8 @@ function MembershipStat({ label, value, sub, href }: {
         {value}
       </div>
       <div style={{ fontSize: 12, color: '#6B6560' }}>{sub}</div>
-    </div>
+    </button>
   );
-  if (href) {
-    return <a href={href} style={{ textDecoration: 'none' }}>{inner}</a>;
-  }
-  return inner;
 }
 
 function YourTeamPanel({
@@ -896,15 +909,16 @@ function YourTeamPanel({
             </div>
           ))}
           {vendors.length > 4 && (
-            <a
-              href="/vendors"
+            <button
+              onClick={onManage}
               style={{
                 fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: O,
-                textDecoration: 'none', alignSelf: 'flex-start', padding: 4,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                alignSelf: 'flex-start', padding: 4,
               }}
             >
               + {vendors.length - 4} more {'\u2192'}
-            </a>
+            </button>
           )}
         </div>
       )}

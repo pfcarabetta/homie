@@ -7,7 +7,7 @@ const O = '#E8632B'; // Brand orange — primary accent across all 3 products
 const G = '#1B9E77'; // Avatar accent (green for the consumer surface)
 const D = '#2D2926';
 
-export type AccountTab = 'dashboard' | 'quotes' | 'bookings' | 'home' | 'profile';
+export type AccountTab = 'dashboard' | 'quotes' | 'bookings' | 'homies' | 'home' | 'profile';
 
 interface NavItem {
   id: string;
@@ -43,6 +43,7 @@ function getNavItems(hasInspect: boolean, hasWorkspace: boolean): NavItem[] {
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', tab: 'dashboard' },
     { id: 'quotes', label: 'My Quotes', icon: 'quotes', tab: 'quotes' },
     { id: 'bookings', label: 'My Bookings', icon: 'bookings', tab: 'bookings' },
+    { id: 'homies', label: 'My Homies', icon: 'homies', tab: 'homies' },
     { id: 'home', label: 'My Home IQ', icon: 'home', tab: 'home' },
   ];
   if (hasInspect || hasWorkspace) items.push({ id: 'div1', label: '', icon: '', divider: true });
@@ -59,6 +60,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     dashboard: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="2" y="2" width="7" height="8" rx="2"/><rect x="11" y="2" width="7" height="5" rx="2"/><rect x="2" y="12" width="7" height="6" rx="2"/><rect x="11" y="9" width="7" height="9" rx="2"/></svg>,
     quotes: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M10 2v16M6 6c0-1.5 1.8-2.5 4-2.5s4 1 4 2.5-1.8 2.5-4 2.5S6 9.5 6 8"/><path d="M14 12c0 1.5-1.8 2.5-4 2.5S6 13.5 6 12"/></svg>,
     bookings: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="14" height="14" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/><path d="M7 12l2 2 4-4"/></svg>,
+    homies: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="3"/><circle cx="14" cy="8" r="2.5"/><path d="M2 17c0-2.5 2.2-4.5 5-4.5s5 2 5 4.5"/><path d="M12 17c0-1.7 1.4-3.5 3.5-3.5S19 15.3 19 17"/></svg>,
     home: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 18V8l7-5.5L17 8v10"/><path d="M7 18v-5h6v5"/></svg>,
     diagnostic: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2l2 4 4 1-3 3 1 4-4-2-4 2 1-4-3-3 4-1z"/></svg>,
     inspect: <svg style={s} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="9" cy="9" r="5.5"/><path d="M13.5 13.5L17 17"/></svg>,
