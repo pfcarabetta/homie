@@ -23,9 +23,25 @@ export default function Login() {
     setLoading(false);
     if (err) {
       setError(err);
-    } else {
-      navigate(returnTo);
+      return;
     }
+    // Tier-based routing: Plus + Premier members land on the Member
+    // Dashboard. Free stays on the existing chat-led home. The
+    // explicit ?redirect= param wins over tier-default — someone
+    // hitting /login?redirect=/vendors should still land on /vendors.
+    if (returnTo === '/') {
+      try {
+        const stored = localStorage.getItem('homie_homeowner');
+        if (stored) {
+          const homeowner = JSON.parse(stored) as { membership_tier?: string };
+          if (homeowner.membership_tier === 'plus' || homeowner.membership_tier === 'premier') {
+            navigate('/dashboard');
+            return;
+          }
+        }
+      } catch { /* ignore — fall through to default */ }
+    }
+    navigate(returnTo);
   }
 
   return (
