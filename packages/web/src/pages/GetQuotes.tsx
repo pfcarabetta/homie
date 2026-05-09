@@ -1495,6 +1495,25 @@ function QuoteOutreachModal({ isOpen, onClose, diagnosis, category, subcategory,
 
       trackEvent('quote_submit_completed', { source: 'quote_page', category });
 
+      // Phase 4: Plus/Premier members consume from their dispatch
+      // allowance ledger before being asked to pay. The endpoint
+      // returns 402 if they have no allowance to draw from — in that
+      // case we fall through to the existing Stripe checkout flow.
+      try {
+        const allowanceRes = await paymentService.useAllowance(res.data.id);
+        if (allowanceRes.data?.dispatched) {
+          // Allowance covered the dispatch. Outreach has already been
+          // fired server-side — same UX path as the post-Stripe
+          // success branch below (skip the redirect, light up the
+          // outreach panel inline).
+          setJobId(res.data.id);
+          setLoading(false);
+          onOutreachStart(res.data.id);
+          onClose(true);
+          return;
+        }
+      } catch { /* No allowance — fall through to Stripe. */ }
+
       // Try Stripe payment
       try {
         const payRes = await paymentService.createCheckout(res.data.id, '', '', '/quote');

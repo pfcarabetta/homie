@@ -1880,6 +1880,30 @@ router.post('/reports/:reportId/confirm-payment', async (req: Request, res: Resp
       ));
     }
 
+    // Phase 2/4: when the authenticated homeowner buys Premium tier
+    // ($299), grant the year-of-Plus bundle (mirrors the inspector_upload
+    // webhook hook for the alternate path where the inspector pays
+    // wholesale and the homeowner later upgrades to a paid tier).
+    // Idempotent via the (homeowner_id, 'unlimited_grant', source_id)
+    // partial unique index so calling this twice is a no-op.
+    if (tier === 'premium') {
+      try {
+        const { grantInspectPremiumBundle } = await import('../services/dispatch-allowance');
+        const grant = await grantInspectPremiumBundle({
+          homeownerId: req.homeownerId,
+          sourceId: `inspect_premium:${report.id}`,
+        });
+        if (grant.inserted) {
+          logger.info(
+            { reportId: report.id, homeownerId: req.homeownerId, expiresAt: grant.expiresAt },
+            '[reports/confirm-payment] Inspect Premium bundle activated — Plus year granted',
+          );
+        }
+      } catch (bundleErr) {
+        logger.warn({ err: bundleErr, reportId: report.id }, '[reports/confirm-payment] Premium bundle grant failed (non-fatal)');
+      }
+    }
+
     res.json({ data: { tier, confirmed: true }, error: null, meta: {} });
   } catch (err) {
     logger.error({ err }, '[POST /account/reports/:reportId/confirm-payment]');

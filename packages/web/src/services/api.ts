@@ -572,6 +572,19 @@ export const paymentService = {
   async getPaymentStatus(jobId: string): Promise<ApiResponse<{ payment_status: string; job_status: string }>> {
     return fetchAPI<{ payment_status: string; job_status: string }>(`/api/v1/payments/status/${jobId}`);
   },
+
+  /** Membership Phase 4 — Plus/Premier alternative to createCheckout.
+   *  Consumes one dispatch from the homeowner's allowance ledger and
+   *  immediately fires outreach. Returns a 402 with `requiresPayment`
+   *  in `meta` when the homeowner has no allowance to draw from — the
+   *  caller should then fall back to createCheckout for the Stripe
+   *  pay-per-action flow. */
+  async useAllowance(jobId: string): Promise<ApiResponse<{ dispatched: boolean; drewFrom: 'unlimited' | 'pro_bundle' | 'monthly' }>> {
+    return fetchAPI<{ dispatched: boolean; drewFrom: 'unlimited' | 'pro_bundle' | 'monthly' }>(
+      '/api/v1/payments/use-allowance',
+      { method: 'POST', body: JSON.stringify({ job_id: jobId }) },
+    );
+  },
 };
 
 // ── WebSocket ───────────────────────────────────────────────────────────────
@@ -676,9 +689,27 @@ export interface CrossProductMemberships {
   provider:        { available: boolean; url: string; name: string | null };
 }
 
+/** Membership Phase 4 — current dispatch allowance for the signed-in
+ *  homeowner. Drives the Dashboard "Dispatch balance" card and the
+ *  Inspect dispatch button states. Returned shape mirrors the backend
+ *  `AllowanceState` (services/dispatch-allowance.ts). */
+export interface DispatchAllowanceState {
+  hasUnlimited: boolean;
+  unlimitedUntil: string | null; // ISO timestamp
+  monthlyBank: number;
+  proBundleCredits: number;
+  payPerItemCents: number;
+  payPerBundleSmallCents: number;
+  payPerBundleLargeCents: number;
+  effectiveTier: 'free' | 'plus' | 'premier';
+  membershipSource: string | null;
+}
+
 export const accountService = {
   getProfile: () => fetchAPI<AccountProfile>('/api/v1/account'),
   getCrossProducts: () => fetchAPI<CrossProductMemberships>('/api/v1/account/cross-products'),
+  /** Phase 4: read the homeowner's current dispatch allowance. */
+  getDispatchAllowance: () => fetchAPI<DispatchAllowanceState>('/api/v1/account/dispatch-allowance'),
   updateProfile: (data: Partial<{ first_name: string; last_name: string; email: string; phone: string; zip_code: string; current_password: string; new_password: string; title: string; notify_email_quotes: boolean; notify_sms_quotes: boolean; notify_email_bookings: boolean; notify_sms_bookings: boolean }>) =>
     fetchAPI<AccountProfile>('/api/v1/account', { method: 'PATCH', body: JSON.stringify(data) }),
   getJobs: () => fetchAPI<{ jobs: AccountJob[] }>('/api/v1/account/jobs'),

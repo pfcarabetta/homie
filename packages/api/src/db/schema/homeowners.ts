@@ -41,6 +41,11 @@ export const homeowners = pgTable('homeowners', {
    *  homeowners (year-1 free Plus). Null for direct subscriptions —
    *  those use Stripe's billing cycle directly. */
   membershipExpiresAt: timestamp('membership_expires_at', { withTimezone: true }),
+  /** When the 30-day-out renewal email was sent. Null = not yet sent.
+   *  Used by the renewal worker to dedup. */
+  bundleRenewal30dSentAt: timestamp('bundle_renewal_30d_sent_at', { withTimezone: true }),
+  /** When the 7-day-out renewal email was sent. Null = not yet sent. */
+  bundleRenewal7dSentAt: timestamp('bundle_renewal_7d_sent_at', { withTimezone: true }),
   emailVerified: boolean('email_verified').notNull().default(false),
   emailVerifyToken: text('email_verify_token'),
   smsOptIn: boolean('sms_opt_in').notNull().default(false),

@@ -26,6 +26,7 @@ import { startVendorScheduleWorker } from './services/vendor-schedule-worker';
 import { startVendorConfirmationReminderWorker } from './services/vendor-confirmation-reminder-worker';
 import { startHealthScoreWorker } from './services/health-score-worker';
 import { startDispatchMonthlyGrantWorker } from './services/dispatch-monthly-grant-worker';
+import { startBundleRenewalWorker } from './services/bundle-renewal-worker';
 import type { JwtPayload } from './middleware/auth';
 
 const PORT = process.env.PORT ?? 3001;
@@ -206,6 +207,12 @@ async function start() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS dispatch_ledger_homeowner_idx ON dispatch_allowance_ledger (homeowner_id)`);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS dispatch_ledger_dedup_uniq ON dispatch_allowance_ledger (homeowner_id, reason, source_id) WHERE source_id IS NOT NULL`);
 
+    // Phase 5: bundle renewal email tracking. Set when the renewal
+    // worker has emailed each homeowner at the 30/7-day-out marks so
+    // we don't double-send.
+    await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS bundle_renewal_30d_sent_at timestamp with time zone`);
+    await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS bundle_renewal_7d_sent_at timestamp with time zone`);
+
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');
@@ -301,6 +308,7 @@ async function start() {
     startVendorConfirmationReminderWorker();
     startHealthScoreWorker();
     startDispatchMonthlyGrantWorker();
+    startBundleRenewalWorker();
   });
 }
 

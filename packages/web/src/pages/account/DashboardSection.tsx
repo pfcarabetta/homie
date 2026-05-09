@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { accountService, fetchAPI, type AccountJob, type AccountBooking, type SmartSuggestion } from '@/services/api';
+import { accountService, fetchAPI, type AccountJob, type AccountBooking, type SmartSuggestion, type DispatchAllowanceState } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import type { AccountTab } from './AccountSidebar';
 
@@ -600,6 +600,7 @@ function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void 
   const [properties, setProperties] = useState<PortalProperty[]>([]);
   const [vendors, setVendors] = useState<PortalVendor[]>([]);
   const [healthScore, setHealthScore] = useState<HealthScoreCurrent | null>(null);
+  const [allowance, setAllowance] = useState<DispatchAllowanceState | null>(null);
   const [loading, setLoading] = useState(true);
 
   const tier = homeowner?.membership_tier ?? 'free';
@@ -613,15 +614,17 @@ function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void 
     let cancelled = false;
     (async () => {
       try {
-        const [pRes, vRes, hsRes] = await Promise.all([
+        const [pRes, vRes, hsRes, daRes] = await Promise.all([
           fetchAPI<{ properties: PortalProperty[] }>('/api/v1/account/properties').catch(() => ({ data: { properties: [] } })),
           fetchAPI<{ vendors: PortalVendor[] }>('/api/v1/account/vendors').catch(() => ({ data: { vendors: [] } })),
           fetchAPI<HealthScoreCurrent>('/api/v1/account/health-score/current').catch(() => ({ data: null })),
+          accountService.getDispatchAllowance().catch(() => ({ data: null as DispatchAllowanceState | null })),
         ]);
         if (cancelled) return;
         if (pRes.data) setProperties(pRes.data.properties);
         if (vRes.data) setVendors(vRes.data.vendors);
         if (hsRes.data) setHealthScore(hsRes.data);
+        if (daRes.data) setAllowance(daRes.data);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -665,12 +668,18 @@ function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void 
         </div>
       )}
 
+      {/* Phase 5: Inspect Premium bundle expiry banner. Shows when the
+          year-of-Plus has < 30 days left and the homeowner hasn't
+          converted to a paid Plus subscription yet. */}
+      <BundleExpiryBanner allowance={allowance} onUpgrade={() => navigate('/membership')} />
+
       <HealthScoreHero loading={loading} score={healthScore} />
 
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: 12, marginBottom: 16,
       }}>
+        <DispatchBalanceTile allowance={allowance} />
         <MembershipStat
           label="My homies"
           value={String(activeVendors.length)}
@@ -923,5 +932,170 @@ function YourTeamPanel({
         </div>
       )}
     </section>
+  );
+}
+
+// \u2500\u2500 Dispatch balance tile \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+//
+// Shows the homeowner's current dispatch position. Three render states:
+//   - Unlimited (Premier OR active Inspect Premium bundle) \u2192 "Unlimited"
+//   - Plus with bank > 0 \u2192 "X of 12" with next-grant copy
+//   - Plus with bank == 0 (and out of pro bundle credits) \u2192 "0 of 12" + upgrade hint
+//
+// Tapping the tile is a no-op for now \u2014 dispatches are initiated from
+// the chat page or the Inspect tab. We could route to /quote on click
+// to make it a CTA, but that conflicts with users who want to view
+// allowance without intending to dispatch right now.
+
+function DispatchBalanceTile({ allowance }: { allowance: DispatchAllowanceState | null }) {
+  if (!allowance) {
+    return (
+      <div style={{
+        background: '#fff', borderRadius: 12, padding: 16,
+        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: '#9B9490',
+          textTransform: 'uppercase', letterSpacing: 0.6,
+        }}>
+          Dispatches
+        </div>
+        <div style={{
+          fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
+          color: D, margin: '6px 0 2px',
+        }}>
+          {'\u2026'}
+        </div>
+        <div style={{ fontSize: 12, color: '#6B6560' }}>Loading</div>
+      </div>
+    );
+  }
+
+  if (allowance.hasUnlimited) {
+    const sub = allowance.unlimitedUntil
+      ? `Through ${new Date(allowance.unlimitedUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+      : 'Premier \u2014 never counted';
+    return (
+      <div style={{
+        background: '#fff', borderRadius: 12, padding: 16,
+        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: '#9B9490',
+          textTransform: 'uppercase', letterSpacing: 0.6,
+        }}>
+          Dispatches
+        </div>
+        <div style={{
+          fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
+          color: G, margin: '6px 0 2px',
+        }}>
+          Unlimited
+        </div>
+        <div style={{ fontSize: 12, color: '#6B6560' }}>{sub}</div>
+      </div>
+    );
+  }
+
+  // Plus tier \u2014 show bank balance with cap.
+  const sub =
+    allowance.monthlyBank === 0
+      ? 'Refills 1st of next month'
+      : 'Up to 12 carry over';
+  const valueColor = allowance.monthlyBank === 0 ? '#9B9490' : D;
+
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 12, padding: 16,
+      border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
+    }}>
+      <div style={{
+        fontSize: 11, fontWeight: 700, color: '#9B9490',
+        textTransform: 'uppercase', letterSpacing: 0.6,
+      }}>
+        Dispatches
+      </div>
+      <div style={{
+        fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
+        color: valueColor, margin: '6px 0 2px',
+      }}>
+        {allowance.monthlyBank} <span style={{ fontSize: 14, color: '#9B9490', fontWeight: 500 }}>of 12</span>
+      </div>
+      <div style={{ fontSize: 12, color: '#6B6560' }}>{sub}</div>
+    </div>
+  );
+}
+
+// \u2500\u2500 Bundle expiry banner \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+//
+// Shows when an Inspect Premium bundle has < 30 days left so the
+// homeowner has a clear in-app prompt to convert to paid Plus before
+// dispatch reverts to pay-per-action. Mirrors the email reminders
+// fired by services/bundle-renewal-worker.ts.
+
+function BundleExpiryBanner({
+  allowance,
+  onUpgrade,
+}: {
+  allowance: DispatchAllowanceState | null;
+  onUpgrade: () => void;
+}) {
+  if (!allowance || allowance.membershipSource !== 'inspect_premium_bundle' || !allowance.unlimitedUntil) {
+    return null;
+  }
+  const expiresAt = new Date(allowance.unlimitedUntil);
+  const msLeft = expiresAt.getTime() - Date.now();
+  const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
+  if (daysLeft <= 0 || daysLeft > 30) return null;
+
+  const isUrgent = daysLeft <= 7;
+  const expiresLabel = expiresAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+
+  return (
+    <div
+      style={{
+        background: isUrgent ? 'linear-gradient(135deg, #FEF2F2 0%, #FFFFFF 100%)' : 'linear-gradient(135deg, #FFF7ED 0%, #FFFFFF 100%)',
+        border: `1px solid ${isUrgent ? '#FCA5A5' : `${O}33`}`,
+        borderRadius: 14,
+        padding: '14px 18px',
+        marginBottom: 16,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        flexWrap: 'wrap',
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+    >
+      <div style={{
+        width: 36, height: 36, borderRadius: '50%',
+        background: isUrgent ? '#FCA5A540' : `${O}1A`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, fontSize: 18,
+      }}>
+        {isUrgent ? '\u23f0' : '\u2728'}
+      </div>
+      <div style={{ flex: 1, minWidth: 220 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 2 }}>
+          {isUrgent
+            ? `Plus ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${expiresLabel})`
+            : `Plus ends ${expiresLabel} \u2014 ${daysLeft} days left`}
+        </div>
+        <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5 }}>
+          {isUrgent
+            ? 'Continue Plus to keep your Health Score, dispatch allowance, and vendor management active.'
+            : 'Your year of Plus came with your Premium inspection. Continue at $29/mo to keep all features active.'}
+        </div>
+      </div>
+      <button
+        onClick={onUpgrade}
+        style={{
+          padding: '9px 18px', borderRadius: 100, border: 'none',
+          background: O, color: '#fff', fontSize: 13, fontWeight: 700,
+          cursor: 'pointer', flexShrink: 0,
+        }}
+      >
+        Continue Plus
+      </button>
+    </div>
   );
 }
