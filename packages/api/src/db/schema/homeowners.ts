@@ -31,6 +31,16 @@ export const homeowners = pgTable('homeowners', {
    *  date (downgrade-at-period-end semantics). Null = no scheduled
    *  cancellation. */
   tierCancelsAt: timestamp('tier_cancels_at', { withTimezone: true }),
+  /** How the current paid tier was acquired:
+   *    'direct_subscription' — Stripe subscription via /membership
+   *    'inspect_premium_bundle' — bundled with an Inspect Premium tier
+   *  NULL for free homeowners. Drives the renewal flow + dispatch
+   *  allowance computation. */
+  membershipSource: text('membership_source'),
+  /** When a time-bound grant expires. Set for inspect_premium_bundle
+   *  homeowners (year-1 free Plus). Null for direct subscriptions —
+   *  those use Stripe's billing cycle directly. */
+  membershipExpiresAt: timestamp('membership_expires_at', { withTimezone: true }),
   emailVerified: boolean('email_verified').notNull().default(false),
   emailVerifyToken: text('email_verify_token'),
   smsOptIn: boolean('sms_opt_in').notNull().default(false),

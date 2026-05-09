@@ -33,3 +33,4 @@ export * from './support-tickets';
 export * from './homeowner-properties';
 export * from './recurring-vendors';
 export * from './home-health-scores';
+export * from './dispatch-allowance';

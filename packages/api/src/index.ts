@@ -25,6 +25,7 @@ import { startInspectionReminderWorker } from './services/inspection-reminder-wo
 import { startVendorScheduleWorker } from './services/vendor-schedule-worker';
 import { startVendorConfirmationReminderWorker } from './services/vendor-confirmation-reminder-worker';
 import { startHealthScoreWorker } from './services/health-score-worker';
+import { startDispatchMonthlyGrantWorker } from './services/dispatch-monthly-grant-worker';
 import type { JwtPayload } from './middleware/auth';
 
 const PORT = process.env.PORT ?? 3001;
@@ -185,6 +186,26 @@ async function start() {
     await db.execute(sql`ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS homeowner_reminder_sent_at timestamp with time zone`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS inspection_reports_payment_idx ON inspection_reports (payment_status)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS inspection_reports_reminder_idx ON inspection_reports (homeowner_emailed_at) WHERE homeowner_opened_at IS NULL AND homeowner_reminder_sent_at IS NULL`);
+
+    // Membership Phase 1, Session 8 — dispatch allowance ledger.
+    // Tracks every dispatch credit granted (Plus monthly tick, Inspect
+    // Pro/Premium purchases) and every dispatch consumed. Single source
+    // of truth across the inspect product, Homie Chat, and walkthroughs.
+    await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS membership_source text`);
+    await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS membership_expires_at timestamp with time zone`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS dispatch_allowance_ledger (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      homeowner_id uuid NOT NULL REFERENCES homeowners(id) ON DELETE CASCADE,
+      reason text NOT NULL,
+      delta integer NOT NULL,
+      source_id text,
+      expires_at timestamp with time zone,
+      notes text,
+      created_at timestamp with time zone NOT NULL DEFAULT now()
+    )`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS dispatch_ledger_homeowner_idx ON dispatch_allowance_ledger (homeowner_id)`);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS dispatch_ledger_dedup_uniq ON dispatch_allowance_ledger (homeowner_id, reason, source_id) WHERE source_id IS NOT NULL`);
+
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');
@@ -279,6 +300,7 @@ async function start() {
     startVendorScheduleWorker();
     startVendorConfirmationReminderWorker();
     startHealthScoreWorker();
+    startDispatchMonthlyGrantWorker();
   });
 }
 
