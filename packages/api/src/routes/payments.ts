@@ -86,6 +86,79 @@ router.post('/checkout', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/payments/use-allowance — Membership Phase 2
+//
+// Plus / Premier alternative to the Stripe checkout above. Consumes a
+// dispatch from the homeowner's allowance ledger and immediately fires
+// outreach for the job. Returns 402 if the homeowner has no allowance
+// available so the frontend can fall back to /checkout.
+//
+// All chat dispatches count as 1 against the bank regardless of tier
+// (standard / priority / emergency). Tier still affects how providers
+// are reached (voice for emergency, SMS for standard) — it's a routing
+// dial, not a billing dial in the allowance model.
+router.post('/use-allowance', async (req: Request, res: Response) => {
+  const { job_id } = req.body as { job_id?: string };
+  if (!job_id || !UUID_RE.test(job_id)) {
+    res.status(400).json({ data: null, error: 'job_id must be a valid UUID', meta: {} });
+    return;
+  }
+  try {
+    const [job] = await db
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.id, job_id), eq(jobs.homeownerId, req.homeownerId)))
+      .limit(1);
+    if (!job) {
+      res.status(404).json({ data: null, error: 'Job not found', meta: {} });
+      return;
+    }
+    if (job.paymentStatus === 'paid') {
+      res.status(409).json({ data: null, error: 'Job is already paid', meta: {} });
+      return;
+    }
+
+    const { consumeDispatch } = await import('../services/dispatch-allowance');
+    const result = await consumeDispatch({
+      homeownerId: req.homeownerId,
+      kind: 'item',
+      itemCount: 1,
+      sourceId: `job:${job.id}`,
+    });
+
+    if (!result.allowed) {
+      // No allowance — frontend should redirect to /payments/checkout.
+      res.status(402).json({
+        data: null,
+        error: 'No dispatch allowance available',
+        meta: { requiresPayment: true, amountCents: result.amountCents },
+      });
+      return;
+    }
+
+    await db.update(jobs).set({
+      paymentStatus: 'paid',
+      status: 'dispatching',
+    }).where(eq(jobs.id, job.id));
+
+    void dispatchJob(job.id);
+
+    logger.info(
+      { jobId: job.id, homeownerId: req.homeownerId, drewFrom: result.drewFrom },
+      '[payments/use-allowance] Job dispatched via allowance',
+    );
+
+    res.json({
+      data: { dispatched: true, drewFrom: result.drewFrom },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err, jobId: job_id }, '[POST /payments/use-allowance]');
+    res.status(500).json({ data: null, error: 'Failed to dispatch job', meta: {} });
+  }
+});
+
 // GET /api/v1/payments/status/:jobId
 router.get('/status/:jobId', async (req: Request, res: Response) => {
   const { jobId } = req.params;

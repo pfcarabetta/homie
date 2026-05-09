@@ -91,8 +91,33 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
             tierStartedAt: now,
             tierRenewsAt: renewsAt,
             tierCancelsAt: null,
+            membershipSource: 'direct_subscription',
           })
           .where(eq(homeowners.id, homeownerId));
+
+        // Phase 2: seed the dispatch allowance bank with this period's
+        // monthly grant so a brand-new Plus subscriber doesn't have to
+        // wait until the 1st of next month for their first 3 dispatches.
+        // Premier subscribers don't need a grant — they have unlimited
+        // via the tier flag, so grantMonthly() is a no-op for them.
+        if (tier === 'plus') {
+          try {
+            const { grantMonthly, periodKeyFor } = await import('../services/dispatch-allowance');
+            const result = await grantMonthly({
+              homeownerId,
+              periodKey: periodKeyFor(now),
+            });
+            if (result.inserted) {
+              logger.info(
+                { homeownerId, granted: result.amountGranted, period: periodKeyFor(now) },
+                '[Stripe webhook] Plus signup — dispatch allowance seeded',
+              );
+            }
+          } catch (grantErr) {
+            // Non-fatal — the monthly cron will catch up next tick.
+            logger.warn({ err: grantErr, homeownerId }, '[Stripe webhook] Failed to seed allowance on Plus signup');
+          }
+        }
         logger.info(
           { homeownerId, tier, subscriptionId },
           '[Stripe webhook] Homeowner membership activated',
@@ -123,6 +148,39 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
           parsingStatus: 'processing',
           updatedAt: new Date(),
         }).where(eq(inspectionReports.id, reportId));
+
+        // Phase 2: if the inspector picked Premium AND the report is
+        // already linked to a homeowner (rare at upload — usually the
+        // homeowner claims later), grant the year-of-Plus bundle now.
+        // The same hook fires from the homeowner-claim path below if
+        // the linkage happens after upload — calling grantInspectPremiumBundle
+        // is idempotent on the (homeowner_id, 'unlimited_grant', sourceId)
+        // partial unique index so a duplicate call is a no-op.
+        try {
+          const [reportRow] = await db
+            .select({
+              homeownerId: inspectionReports.homeownerId,
+              pricingTier: inspectionReports.pricingTier,
+            })
+            .from(inspectionReports)
+            .where(eq(inspectionReports.id, reportId))
+            .limit(1);
+          if (reportRow?.homeownerId && reportRow.pricingTier === 'premium') {
+            const { grantInspectPremiumBundle } = await import('../services/dispatch-allowance');
+            const grant = await grantInspectPremiumBundle({
+              homeownerId: reportRow.homeownerId,
+              sourceId: `inspect_premium:${reportId}`,
+            });
+            if (grant.inserted) {
+              logger.info(
+                { reportId, homeownerId: reportRow.homeownerId, expiresAt: grant.expiresAt },
+                '[Stripe webhook] Inspect Premium bundle activated — Plus year granted',
+              );
+            }
+          }
+        } catch (bundleErr) {
+          logger.warn({ err: bundleErr, reportId }, '[Stripe webhook] Inspect Premium bundle grant failed (non-fatal)');
+        }
 
         // The partner_referral_bonus is computed at read time — see
         // referralBonusCentsFor in services/pricing.ts. It's based on

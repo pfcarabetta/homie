@@ -2561,6 +2561,57 @@ router.post('/:token/checkout', async (req: Request, res: Response) => {
       return;
     }
 
+    // ── Allowance gate (Membership Phase 2) ───────────────────────────
+    // If the report is linked to a homeowner AND the homeowner has
+    // enough dispatch allowance to cover this checkout, skip Stripe
+    // entirely: mark items pending_dispatch, write the consume row to
+    // the ledger, and return { allowanceCovered: true } so the
+    // frontend can fire /dispatch directly without a session_id.
+    //
+    // Pricing fall-through still applies when there's no homeowner_id
+    // (anonymous client view) or no allowance available.
+    if (report.homeownerId) {
+      const { consumeDispatch } = await import('../services/dispatch-allowance');
+      // Stable source_id so a retry of the same checkout (browser
+      // refresh during the brief window between mark-pending and
+      // dispatch firing) doesn't double-debit. The (report_id, mode,
+      // sorted-item-ids) tuple is deterministic.
+      const sourceId = `inspect:${report.id}:${mode}:${itemsToDispatch.map((i) => i.id).sort().join(',')}`.slice(0, 200);
+      const consumeResult = await consumeDispatch({
+        homeownerId: report.homeownerId,
+        kind: mode === 'per_item' ? 'item' : 'bundle',
+        itemCount: itemsToDispatch.length,
+        sourceId,
+      });
+      if (consumeResult.allowed) {
+        // Mark items pending_dispatch so /dispatch can find them.
+        for (const item of itemsToDispatch) {
+          await db.update(inspectionReportItems).set({
+            dispatchStatus: 'pending_dispatch',
+            updatedAt: new Date(),
+          }).where(eq(inspectionReportItems.id, item.id));
+        }
+        logger.info(
+          { reportId: report.id, homeownerId: report.homeownerId, itemCount: itemsToDispatch.length, drewFrom: consumeResult.drewFrom },
+          '[inspect/checkout] Allowance covered dispatch — skipping Stripe',
+        );
+        res.json({
+          data: {
+            checkoutUrl: null,
+            allowanceCovered: true,
+            drewFrom: consumeResult.drewFrom,
+            itemCount: itemsToDispatch.length,
+          },
+          error: null,
+          meta: {},
+        });
+        return;
+      }
+      // No allowance → fall through to Stripe (with the original
+      // amountCents intact). consumeResult.requiresPayment confirms it,
+      // but we don't need it past here — pricing was already computed.
+    }
+
     // Create Stripe Checkout Session
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
       apiVersion: '2025-01-27.acacia' as Stripe.LatestApiVersion,
@@ -2629,6 +2680,30 @@ router.post('/:token/claim', async (req: Request, res: Response) => {
       homeownerId: homeowner_id,
       updatedAt: new Date(),
     }).where(eq(inspectionReports.id, report.id));
+
+    // Phase 2: if this is a Premium-tier report that was already paid
+    // for at upload, the bundle grant couldn't fire then because no
+    // homeowner_id was set. Now that a homeowner has claimed the
+    // report, fire the year-of-Plus grant. Idempotent via the
+    // (homeowner, reason, source_id) unique index — calling this when
+    // a non-premium report is claimed is also a no-op via the gate.
+    if (report.pricingTier === 'premium' && report.paymentStatus === 'paid') {
+      try {
+        const { grantInspectPremiumBundle } = await import('../services/dispatch-allowance');
+        const grant = await grantInspectPremiumBundle({
+          homeownerId: homeowner_id,
+          sourceId: `inspect_premium:${report.id}`,
+        });
+        if (grant.inserted) {
+          logger.info(
+            { reportId: report.id, homeownerId: homeowner_id, expiresAt: grant.expiresAt },
+            '[inspect/claim] Inspect Premium bundle activated on claim — Plus year granted',
+          );
+        }
+      } catch (bundleErr) {
+        logger.warn({ err: bundleErr, reportId: report.id }, '[inspect/claim] Premium bundle grant failed (non-fatal)');
+      }
+    }
 
     res.json({ data: { claimed: true }, error: null, meta: {} });
   } catch (err) {
