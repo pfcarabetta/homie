@@ -96,6 +96,37 @@ function renderDateSeparator(label: string) {
   );
 }
 
+// ── Quote source labels ────────────────────────────────────────────────────
+//
+// Every inspection-originated job's diagnosis gets `source: 'inspection_report'`
+// stamped server-side at dispatch time (account.ts + inspector.ts dispatch
+// endpoints). Smart-suggestion → /quote currently passes through with no
+// source set (treated as 'chat'). Future seasonal walkthroughs and vendor
+// visits will set their own source values. Adding a label here doesn't
+// require a backend change — just adds the chip to the existing field.
+
+interface SourceLabel { icon: string; label: string; color: string; bg: string }
+
+const JOB_SOURCE_LABELS: Record<string, SourceLabel> = {
+  inspection_report:    { icon: '🏠', label: 'from your inspection',    color: '#7C3AED', bg: '#F5F3FF' },
+  health_score_booster: { icon: '✨', label: 'from your Health Score',  color: '#0F766E', bg: '#CCFBF1' },
+  seasonal_walkthrough: { icon: '🍂', label: 'from your walkthrough',   color: '#C2410C', bg: '#FFF7ED' },
+  recurring_vendor:     { icon: '👋', label: 'from your homies',        color: '#1B9E77', bg: '#E1F5EE' },
+};
+
+/** Pull the chip metadata for a job. Returns the chat fallback when
+ *  the diagnosis has no source set (the default for direct /quote
+ *  submissions). Returns null when there's no diagnosis at all so we
+ *  can hide the chip rather than render a confusing default. */
+function jobSourceLabel(j: AccountJob): SourceLabel | null {
+  if (!j.diagnosis) return null;
+  const src = (j.diagnosis as { source?: string }).source;
+  if (src && JOB_SOURCE_LABELS[src]) return JOB_SOURCE_LABELS[src];
+  // No source set → chat is the default. Use a subdued color so it
+  // reads as "ambient" rather than competing with the inspection chip.
+  return { icon: '💬', label: 'from chat', color: '#6B6560', bg: '#F5F0EB' };
+}
+
 /* -- Profile Tab -- */
 function ProfileTab() {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
@@ -563,10 +594,28 @@ function QuotesTab() {
                       <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 16, color: D }}>{catLabel}</span>
                       <span style={{ background: sc.bg, color: sc.color, padding: '2px 8px', borderRadius: 100, fontSize: 10, fontWeight: 600 }}>{sc.label}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: '#9B9490', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 12, color: '#9B9490', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                       <span>{j.zip_code}</span>
                       <span>{new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                       <span style={{ textTransform: 'capitalize' }}>{j.tier}</span>
+                      {(() => {
+                        const src = jobSourceLabel(j);
+                        if (!src) return null;
+                        return (
+                          <span
+                            title={src.label}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              background: src.bg, color: src.color,
+                              padding: '2px 8px', borderRadius: 100,
+                              fontSize: 10, fontWeight: 600, lineHeight: 1.4,
+                            }}
+                          >
+                            <span aria-hidden>{src.icon}</span>
+                            {src.label}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
 
