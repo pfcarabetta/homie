@@ -37,6 +37,18 @@ interface HealthScoreCurrent {
   message?: string;
 }
 
+interface BoosterItem {
+  id: string;
+  reportId: string;
+  title: string;
+  severity: string;
+  category: string;
+  location: string | null;
+  costEstimateLow: number;
+  costEstimateHigh: number;
+  scoreImpact: number;
+}
+
 const BAND_COLOR: Record<string, string> = {
   excellent: '#1B9E77',
   good: '#E8632B',
@@ -601,10 +613,22 @@ function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void 
   const [vendors, setVendors] = useState<PortalVendor[]>([]);
   const [healthScore, setHealthScore] = useState<HealthScoreCurrent | null>(null);
   const [allowance, setAllowance] = useState<DispatchAllowanceState | null>(null);
+  const [itemsSummary, setItemsSummary] = useState<{ total: number; bySeverity: Record<string, number> } | null>(null);
+  const [boosters, setBoosters] = useState<BoosterItem[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const tier = homeowner?.membership_tier ?? 'free';
   const isPaying = tier === 'plus' || tier === 'premier';
+
+  function refreshInspectionData() {
+    Promise.all([
+      accountService.getOpenInspectionItemsSummary().catch(() => ({ data: null })),
+      accountService.getHealthScoreBoosters().catch(() => ({ data: { boosters: [] } })),
+    ]).then(([sRes, bRes]) => {
+      if (sRes.data) setItemsSummary(sRes.data);
+      if (bRes.data) setBoosters(bRes.data.boosters);
+    });
+  }
 
   useEffect(() => {
     if (!isPaying) {
@@ -614,17 +638,21 @@ function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void 
     let cancelled = false;
     (async () => {
       try {
-        const [pRes, vRes, hsRes, daRes] = await Promise.all([
+        const [pRes, vRes, hsRes, daRes, sRes, bRes] = await Promise.all([
           fetchAPI<{ properties: PortalProperty[] }>('/api/v1/account/properties').catch(() => ({ data: { properties: [] } })),
           fetchAPI<{ vendors: PortalVendor[] }>('/api/v1/account/vendors').catch(() => ({ data: { vendors: [] } })),
           fetchAPI<HealthScoreCurrent>('/api/v1/account/health-score/current').catch(() => ({ data: null })),
           accountService.getDispatchAllowance().catch(() => ({ data: null as DispatchAllowanceState | null })),
+          accountService.getOpenInspectionItemsSummary().catch(() => ({ data: null as { total: number; bySeverity: Record<string, number> } | null })),
+          accountService.getHealthScoreBoosters().catch(() => ({ data: { boosters: [] as BoosterItem[] } })),
         ]);
         if (cancelled) return;
         if (pRes.data) setProperties(pRes.data.properties);
         if (vRes.data) setVendors(vRes.data.vendors);
         if (hsRes.data) setHealthScore(hsRes.data);
         if (daRes.data) setAllowance(daRes.data);
+        if (sRes.data) setItemsSummary(sRes.data);
+        if (bRes.data) setBoosters(bRes.data.boosters);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -680,6 +708,7 @@ function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void 
         gap: 12, marginBottom: 16,
       }}>
         <DispatchBalanceTile allowance={allowance} />
+        <OpenItemsTile summary={itemsSummary} />
         <MembershipStat
           label="My homies"
           value={String(activeVendors.length)}
@@ -693,6 +722,16 @@ function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void 
           onClick={() => onNavigate('homies')}
         />
       </div>
+
+      {/* Phase B: Boost your Health Score card. Pulls the top items
+          by score impact and lets the homeowner dispatch with one
+          tap — the marquee tile that turns inspection data into
+          maintenance action. Hides itself when there are no open
+          items so it doesn't render as an empty box. */}
+      <BoostYourScoreCard
+        boosters={boosters}
+        onDispatched={refreshInspectionData}
+      />
 
       <YourTeamPanel
         loading={loading}
@@ -1097,5 +1136,249 @@ function BundleExpiryBanner({
         Continue Plus
       </button>
     </div>
+  );
+}
+
+// ── Open inspection items tile ────────────────────────────────────────
+//
+// Aggregate "things from your inspection still on the list" count. Click
+// routes to the homeowner-inspect Items tab so the homeowner can drill
+// in. Hides any breakdown when there are zero items so the empty state
+// reads as "you're current" rather than "0 of 0."
+
+const SEVERITY_COLOR: Record<string, string> = {
+  safety_hazard: '#DC2626',
+  urgent: '#EF9F27',
+  recommended: '#6B6560',
+  monitor: '#9B9490',
+};
+
+function OpenItemsTile({ summary }: { summary: { total: number; bySeverity: Record<string, number> } | null }) {
+  const navigate = useNavigate();
+
+  // Skeleton until the summary loads.
+  if (!summary) {
+    return (
+      <div style={{
+        background: '#fff', borderRadius: 12, padding: 16,
+        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: '#9B9490',
+          textTransform: 'uppercase', letterSpacing: 0.6,
+        }}>
+          Open items
+        </div>
+        <div style={{
+          fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
+          color: D, margin: '6px 0 2px',
+        }}>
+          {'…'}
+        </div>
+        <div style={{ fontSize: 12, color: '#6B6560' }}>Loading</div>
+      </div>
+    );
+  }
+
+  if (summary.total === 0) {
+    return (
+      <div style={{
+        background: '#fff', borderRadius: 12, padding: 16,
+        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: '#9B9490',
+          textTransform: 'uppercase', letterSpacing: 0.6,
+        }}>
+          Open items
+        </div>
+        <div style={{
+          fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
+          color: G, margin: '6px 0 2px',
+        }}>
+          All clear
+        </div>
+        <div style={{ fontSize: 12, color: '#6B6560' }}>Nothing waiting</div>
+      </div>
+    );
+  }
+
+  const urgent = (summary.bySeverity.safety_hazard ?? 0) + (summary.bySeverity.urgent ?? 0);
+  const recommended = summary.bySeverity.recommended ?? 0;
+
+  return (
+    <button
+      onClick={() => navigate('/inspect-portal?tab=items')}
+      style={{
+        background: '#fff', borderRadius: 12, padding: 16,
+        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
+        textAlign: 'left', cursor: 'pointer', display: 'block', width: '100%',
+        transition: 'transform 0.15s, box-shadow 0.15s',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.06)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
+      <div style={{
+        fontSize: 11, fontWeight: 700, color: '#9B9490',
+        textTransform: 'uppercase', letterSpacing: 0.6,
+      }}>
+        Open items
+      </div>
+      <div style={{
+        fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
+        color: urgent > 0 ? SEVERITY_COLOR.urgent : D, margin: '6px 0 2px',
+      }}>
+        {summary.total}
+      </div>
+      <div style={{ fontSize: 12, color: '#6B6560' }}>
+        {urgent > 0 && (
+          <span style={{ color: SEVERITY_COLOR.urgent, fontWeight: 600 }}>{urgent} urgent</span>
+        )}
+        {urgent > 0 && recommended > 0 && <span>{' · '}</span>}
+        {recommended > 0 && <span>{recommended} recommended</span>}
+        {urgent === 0 && recommended === 0 && <span>From your inspection</span>}
+      </div>
+    </button>
+  );
+}
+
+// ── Boost your Health Score card ──────────────────────────────────────
+//
+// Phase B marquee feature: top open inspection items ranked by score
+// impact, each with a one-tap dispatch. Tapping "Fix this" hits the
+// existing /reports/:reportId/dispatch endpoint with a single item_id,
+// which threads through the dispatch allowance ledger — Plus members
+// consume a credit, free members are blocked at the API level.
+//
+// Hides itself entirely when there are no boosters so the dashboard
+// doesn't render a "0 things to fix" empty box. Also hides if the
+// homeowner has no Plus tier (the boosters endpoint will return
+// items anyway, but the dispatch flow gates on tier).
+
+function BoostYourScoreCard({
+  boosters,
+  onDispatched,
+}: {
+  boosters: BoosterItem[] | null;
+  onDispatched: () => void;
+}) {
+  const [dispatchingId, setDispatchingId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!boosters || boosters.length === 0) return null;
+  const top = boosters.slice(0, 3);
+
+  async function dispatchItem(item: BoosterItem) {
+    setDispatchingId(item.id);
+    setError(null);
+    try {
+      await accountService.dispatchInspectionItem(item.reportId, item.id);
+      setConfirmId(item.id);
+      onDispatched();
+      // Clear the confirmation after a moment so the card refreshes
+      // to the next set of boosters cleanly.
+      setTimeout(() => setConfirmId(null), 2500);
+    } catch (err) {
+      setError((err as Error).message ?? 'Dispatch failed');
+    } finally {
+      setDispatchingId(null);
+    }
+  }
+
+  return (
+    <section style={{
+      background: '#fff', borderRadius: 14, border: `1px solid ${GRAY_LIGHT}`,
+      padding: 20, marginBottom: 16,
+    }}>
+      <header style={{ marginBottom: 14 }}>
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 700, color: D }}>
+          {'✨'} Boost your Health Score
+        </div>
+        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#6B6560', marginTop: 4 }}>
+          Fixing these inspection items will move your score the most.
+        </div>
+      </header>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {top.map((item) => {
+          const sevColor = SEVERITY_COLOR[item.severity] ?? '#6B6560';
+          const isDispatching = dispatchingId === item.id;
+          const isConfirmed = confirmId === item.id;
+          const lo = Math.round(item.costEstimateLow / 100);
+          const hi = Math.round(item.costEstimateHigh / 100);
+          const priceStr = lo > 0 && hi > 0 ? `~$${lo}–$${hi}` : null;
+          return (
+            <div
+              key={item.id}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 14px', borderRadius: 10,
+                background: '#F9F5F2',
+                opacity: isDispatching ? 0.6 : 1,
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              <div style={{
+                width: 6, height: 36, borderRadius: 3, background: sevColor, flexShrink: 0,
+              }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: D, lineHeight: 1.3 }}>
+                  {item.title}
+                </div>
+                <div style={{ fontSize: 12, color: '#6B6560', marginTop: 2 }}>
+                  <span style={{ textTransform: 'capitalize' }}>{item.category.replace(/_/g, ' ')}</span>
+                  {priceStr && <span>{' · '}{priceStr}</span>}
+                  <span>{' · '}+{item.scoreImpact} pts</span>
+                </div>
+              </div>
+              <button
+                onClick={() => dispatchItem(item)}
+                disabled={isDispatching || isConfirmed}
+                style={{
+                  flexShrink: 0, padding: '7px 14px', borderRadius: 100, border: 'none',
+                  background: isConfirmed ? G : O, color: '#fff',
+                  fontSize: 12, fontWeight: 700,
+                  cursor: isDispatching || isConfirmed ? 'default' : 'pointer',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                {isConfirmed ? '✓ Sent' : isDispatching ? 'Sending…' : 'Get quotes'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {error && (
+        <div style={{
+          marginTop: 10, padding: '10px 12px', borderRadius: 8,
+          background: '#FEE2E2', color: '#991B1B', fontSize: 12,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          {error}
+        </div>
+      )}
+
+      {boosters.length > 3 && (
+        <div style={{ marginTop: 12, textAlign: 'center' }}>
+          <a
+            href="/inspect-portal?tab=items"
+            style={{
+              fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600,
+              color: O, textDecoration: 'none',
+            }}
+          >
+            See all {boosters.length} open items {'→'}
+          </a>
+        </div>
+      )}
+    </section>
   );
 }

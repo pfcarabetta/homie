@@ -164,6 +164,57 @@ router.get('/factors', async (req: Request, res: Response) => {
   }
 });
 
+// ─── GET /open-items-summary ───────────────────────────────────────────────
+//
+// Counts of open (non-completed) inspection items across all the
+// homeowner's reports, broken down by severity. Drives the dashboard
+// "Open inspection items" stat tile.
+
+router.get('/open-items-summary', async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        severity: inspectionReportItems.severity,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(inspectionReportItems)
+      .innerJoin(inspectionReports, eq(inspectionReportItems.reportId, inspectionReports.id))
+      .where(
+        and(
+          eq(inspectionReports.homeownerId, req.homeownerId),
+          sql`${inspectionReportItems.dispatchStatus} != 'completed' OR ${inspectionReportItems.dispatchStatus} IS NULL`,
+          // Informational items aren't actionable — leave them out of
+          // the count so the tile reflects "things that need attention."
+          sql`${inspectionReportItems.severity} != 'informational'`,
+        ),
+      )
+      .groupBy(inspectionReportItems.severity);
+
+    const counts: Record<string, number> = {
+      safety_hazard: 0,
+      urgent: 0,
+      recommended: 0,
+      monitor: 0,
+    };
+    let total = 0;
+    for (const r of rows) {
+      counts[r.severity] = r.count;
+      total += r.count;
+    }
+    res.json({
+      data: {
+        total,
+        bySeverity: counts,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (err) {
+    logger.error({ err }, '[GET /account/health-score/open-items-summary]');
+    res.status(500).json({ data: null, error: 'Failed to load summary', meta: {} });
+  }
+});
+
 // ─── GET /boosters ─────────────────────────────────────────────────────────
 //
 // Top open inspection items sorted by score impact (urgent > recommended >
@@ -175,6 +226,7 @@ router.get('/boosters', async (req: Request, res: Response) => {
     const items = await db
       .select({
         id: inspectionReportItems.id,
+        reportId: inspectionReportItems.reportId,
         title: inspectionReportItems.title,
         severity: inspectionReportItems.severity,
         category: inspectionReportItems.category,

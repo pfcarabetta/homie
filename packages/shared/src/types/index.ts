@@ -268,6 +268,13 @@ export interface AccountBooking {
   job_category?: string | null;
   job_severity?: string | null;
   job_summary?: string | null;
+  /** Where the underlying job originated — 'inspection_report' |
+   *  'health_score_booster' | 'seasonal_walkthrough' | 'recurring_vendor'
+   *  | undefined (chat default). Drives the source chip on the Bookings tab. */
+  source?: string | null;
+  /** Set when source='inspection_report' — deep-links the booking back
+   *  to the originating inspection report in the inspect portal. */
+  inspection_report_id?: string | null;
   unread_messages?: number;
 }
 

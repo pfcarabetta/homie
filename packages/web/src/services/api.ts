@@ -710,6 +710,35 @@ export const accountService = {
   getCrossProducts: () => fetchAPI<CrossProductMemberships>('/api/v1/account/cross-products'),
   /** Phase 4: read the homeowner's current dispatch allowance. */
   getDispatchAllowance: () => fetchAPI<DispatchAllowanceState>('/api/v1/account/dispatch-allowance'),
+  /** Phase A: counts of open inspection items by severity, used by the
+   *  dashboard "Open inspection items" stat tile. */
+  getOpenInspectionItemsSummary: () =>
+    fetchAPI<{ total: number; bySeverity: Record<string, number> }>('/api/v1/account/health-score/open-items-summary'),
+  /** Phase B: top inspection items by score impact, used by the
+   *  dashboard "Boost your Health Score" card. Items include reportId
+   *  so the one-tap dispatch can route to the correct report endpoint. */
+  getHealthScoreBoosters: () =>
+    fetchAPI<{
+      boosters: Array<{
+        id: string;
+        reportId: string;
+        title: string;
+        severity: string;
+        category: string;
+        location: string | null;
+        costEstimateLow: number;
+        costEstimateHigh: number;
+        scoreImpact: number;
+      }>;
+    }>('/api/v1/account/health-score/boosters'),
+  /** Phase B: dispatch a single inspection item (one-tap from the
+   *  Boost your Score card). Mirrors inspectService.portalDispatch but
+   *  lives here for proximity to the booster fetch. */
+  dispatchInspectionItem: (reportId: string, itemId: string) =>
+    fetchAPI<{ dispatched: Array<{ itemId: string; jobId: string }>; totalDispatched: number }>(
+      `/api/v1/account/reports/${reportId}/dispatch`,
+      { method: 'POST', body: JSON.stringify({ item_ids: [itemId] }) },
+    ),
   updateProfile: (data: Partial<{ first_name: string; last_name: string; email: string; phone: string; zip_code: string; current_password: string; new_password: string; title: string; notify_email_quotes: boolean; notify_sms_quotes: boolean; notify_email_bookings: boolean; notify_sms_bookings: boolean }>) =>
     fetchAPI<AccountProfile>('/api/v1/account', { method: 'PATCH', body: JSON.stringify(data) }),
   getJobs: () => fetchAPI<{ jobs: AccountJob[] }>('/api/v1/account/jobs'),

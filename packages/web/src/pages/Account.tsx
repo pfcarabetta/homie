@@ -120,7 +120,19 @@ const JOB_SOURCE_LABELS: Record<string, SourceLabel> = {
  *  can hide the chip rather than render a confusing default. */
 function jobSourceLabel(j: AccountJob): SourceLabel | null {
   if (!j.diagnosis) return null;
-  const src = (j.diagnosis as { source?: string }).source;
+  return sourceLabelFor((j.diagnosis as { source?: string }).source);
+}
+
+/** Pull the chip metadata for a booking. Booking source lives on the
+ *  parent job's diagnosis and is denormalized onto the booking row by
+ *  the bookings endpoint, so the same map handles both. */
+function bookingSourceLabel(b: AccountBooking): SourceLabel | null {
+  // Always render a chip on bookings — there's always an underlying
+  // job, and the chat fallback applies cleanly when no source is set.
+  return sourceLabelFor(b.source ?? null);
+}
+
+function sourceLabelFor(src: string | null | undefined): SourceLabel {
   if (src && JOB_SOURCE_LABELS[src]) return JOB_SOURCE_LABELS[src];
   // No source set → chat is the default. Use a subdued color so it
   // reads as "ambient" rather than competing with the inspection chip.
@@ -1131,12 +1143,30 @@ function BookingCard({ booking, expanded, onToggle, onMarkedRead, onChanged }: {
             </svg>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#6B6560', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#6B6560', flexWrap: 'wrap', alignItems: 'center' }}>
           {booking.quoted_price && <span style={{ fontWeight: 600, color: O }}>{cleanPrice(booking.quoted_price)}</span>}
           {booking.scheduled && <span>&#128197; {booking.scheduled}</span>}
           {booking.job_category && (
             <span style={{ textTransform: 'capitalize' }}>{booking.job_category.replace(/_/g, ' ')}</span>
           )}
+          {(() => {
+            const src = bookingSourceLabel(booking);
+            if (!src) return null;
+            return (
+              <span
+                title={src.label}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: src.bg, color: src.color,
+                  padding: '2px 8px', borderRadius: 100,
+                  fontSize: 10, fontWeight: 600, lineHeight: 1.4,
+                }}
+              >
+                <span aria-hidden>{src.icon}</span>
+                {src.label}
+              </span>
+            );
+          })()}
         </div>
         <div style={{ fontSize: 12, color: '#9B9490', marginTop: 6 }}>{timeAgo(booking.confirmed_at)}</div>
       </button>
