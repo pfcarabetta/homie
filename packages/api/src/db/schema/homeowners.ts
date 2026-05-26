@@ -46,6 +46,11 @@ export const homeowners = pgTable('homeowners', {
   bundleRenewal30dSentAt: timestamp('bundle_renewal_30d_sent_at', { withTimezone: true }),
   /** When the 7-day-out renewal email was sent. Null = not yet sent. */
   bundleRenewal7dSentAt: timestamp('bundle_renewal_7d_sent_at', { withTimezone: true }),
+  /** Dashboard Next Step "Skip for now" tracking. Map of step-key →
+   *  ISO timestamp. Entries older than 24h are treated as expired by
+   *  the next-step prioritizer. Step keys are stable identifiers like
+   *  'inspection_item:UUID' or 'add_vendor'. */
+  skippedNextSteps: jsonb('skipped_next_steps').$type<Record<string, string>>(),
   emailVerified: boolean('email_verified').notNull().default(false),
   emailVerifyToken: text('email_verify_token'),
   smsOptIn: boolean('sms_opt_in').notNull().default(false),

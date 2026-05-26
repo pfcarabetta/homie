@@ -213,6 +213,10 @@ async function start() {
     await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS bundle_renewal_30d_sent_at timestamp with time zone`);
     await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS bundle_renewal_7d_sent_at timestamp with time zone`);
 
+    // Dashboard Direction A: skip tracking for the Next Step card.
+    // Map of step-key → ISO timestamp, expires after 24h in app logic.
+    await db.execute(sql`ALTER TABLE homeowners ADD COLUMN IF NOT EXISTS skipped_next_steps jsonb`);
+
     logger.info('Schema patches applied (pricing_tier + negotiation columns)');
   } catch (patchErr) {
     logger.warn({ err: patchErr }, 'Schema patch failed (non-fatal)');

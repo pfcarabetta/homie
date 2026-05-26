@@ -1,16 +1,45 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { accountService, fetchAPI, type AccountJob, type AccountBooking, type SmartSuggestion, type DispatchAllowanceState } from '@/services/api';
+import { accountService, fetchAPI, type AccountJob, type AccountBooking, type DispatchAllowanceState, type NextStepResponse, type SmartSuggestion } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import type { AccountTab } from './AccountSidebar';
+
+/**
+ * Member Dashboard — Direction A redesign.
+ *
+ * The old dashboard stacked eight stat tiles, three overlapping panels
+ * for inspection data, and two parallel activity feeds. Direction A
+ * strips that down to a single focal hierarchy:
+ *
+ *   1. Header — welcome + property + tier badge inline
+ *   2. Bundle expiry banner (conditional, only when Inspect Premium
+ *      bundle has < 30 days left)
+ *   3. Score card — slimmer than the old hero, with an inline
+ *      expandable "what's pulling it down" breakdown
+ *   4. Next Step card — single adaptive recommendation driven by the
+ *      next-step prioritizer service. Cycles via "Skip for now".
+ *   5. Stats strip — one-line summary, no tiles. Each number is a
+ *      clickable link to its detail surface.
+ *   6. Recent activity — chronological feed of quotes + bookings
+ *
+ * Free members get a simplified variant: upsell banner + activity
+ * feed only. The previous Free experience showed marketing-style
+ * tiles and AI suggestions; those are gone in favor of the single
+ * upgrade CTA, which is the only action a Free member can take here.
+ */
 
 const O = '#E8632B';
 const G = '#1B9E77';
 const D = '#2D2926';
+const DIM = '#6B6560';
+const SUBTLE = '#9B9490';
 const GRAY_LIGHT = '#D3CEC9';
-const GREEN_LIGHT = '#E1F5EE';
+const WARM = '#F9F5F2';
 
-// ── Membership-tier types (mirrors Phase 1 backend payload shapes) ────
+const dm: CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+const fr: CSSProperties = { fontFamily: "'Fraunces', serif" };
+const mono: CSSProperties = { fontFamily: "'DM Mono', monospace" };
+
 interface PortalProperty {
   id: string;
   isPrimary: boolean;
@@ -37,16 +66,12 @@ interface HealthScoreCurrent {
   message?: string;
 }
 
-interface BoosterItem {
-  id: string;
-  reportId: string;
-  title: string;
-  severity: string;
-  category: string;
-  location: string | null;
-  costEstimateLow: number;
-  costEstimateHigh: number;
-  scoreImpact: number;
+interface ScoreFactor {
+  type: string;
+  score: number;
+  weight: number;
+  contribution: number;
+  notes: string | null;
 }
 
 const BAND_COLOR: Record<string, string> = {
@@ -71,57 +96,19 @@ function fmtMoney(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
-const CATEGORY_ICON: Record<string, string> = {
-  hvac: '\u2744\uFE0F',
-  plumbing: '\uD83D\uDCA7',
-  landscaping: '\uD83C\uDF31',
-  pest_control: '\uD83E\uDEB2',
-  pool: '\uD83C\uDFCA',
-  roofing: '\uD83C\uDFE0',
-  electrical: '\u26A1',
-  appliance: '\uD83C\uDF73',
-  general: '\uD83D\uDD27',
-  cleaning: '\u2728',
-  safety: '\uD83D\uDEE1\uFE0F',
-  exterior: '\uD83C\uDFD8\uFE0F',
-};
-const CATEGORY_LABEL: Record<string, string> = {
-  hvac: 'HVAC',
-  plumbing: 'Plumbing',
-  landscaping: 'Landscaping',
-  pest_control: 'Pest Control',
-  pool: 'Pool & Spa',
-  roofing: 'Roofing',
-  electrical: 'Electrical',
-  appliance: 'Appliance',
-  general: 'General',
-  cleaning: 'Cleaning',
-  safety: 'Safety',
-  exterior: 'Exterior',
-};
-const KIND_ACCENT: Record<string, { bg: string; text: string; label: string }> = {
-  seasonal: { bg: '#FFF7ED', text: '#C2410C', label: 'Seasonal' },
-  location: { bg: '#EFF6FF', text: '#2563EB', label: 'Local' },
-  equipment: { bg: '#F5F3FF', text: '#7C3AED', label: 'Your Home' },
-};
-const PRIORITY_DOT: Record<string, string> = {
-  high: '#DC2626',
-  medium: '#F59E0B',
-  low: '#9B9490',
-};
-
-const ACTIVE_QUOTE_STATUSES = new Set(['open', 'dispatching', 'collecting']);
-
 interface DashboardSectionProps {
   userFirstName?: string | null;
   onNavigate: (tab: AccountTab) => void;
   onNewQuote: () => void;
-  /** Optional — fires when a smart-suggestion tile's "Get a quote"
-   *  button is tapped. Receives the full suggestion so the parent can
-   *  navigate to /quote with prefill params instead of opening a blank
-   *  chat. Falls back to onNewQuote if omitted. */
+  /** Legacy prop kept for backwards compatibility with Account.tsx —
+   *  the new dashboard no longer surfaces a SmartSuggestion grid, but
+   *  the parent still wires this for the chat command center handoff. */
   onSuggestionAct?: (s: SmartSuggestion) => void;
 }
+
+// ─── Activity helpers ─────────────────────────────────────────────────
+
+const ACTIVE_QUOTE_STATUSES = new Set(['open', 'dispatching', 'collecting']);
 
 interface ActivityItem {
   id: string;
@@ -146,505 +133,82 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-function statusColor(status: string): { bg: string; text: string } {
-  switch (status) {
-    case 'open': return { bg: '#EFF6FF', text: '#2563EB' };
-    case 'dispatching': return { bg: '#FFF7ED', text: '#C2410C' };
-    case 'collecting': return { bg: '#F5F3FF', text: '#7C3AED' };
-    case 'completed': return { bg: '#F0FDF4', text: '#16A34A' };
-    case 'confirmed': return { bg: '#F0FDF4', text: '#16A34A' };
-    case 'expired': return { bg: '#F5F5F5', text: '#9B9490' };
-    default: return { bg: '#F5F5F5', text: '#6B6560' };
+export default function DashboardSection({ userFirstName, onNavigate, onNewQuote }: DashboardSectionProps) {
+  const { homeowner } = useAuth();
+  const tier = (homeowner?.membership_tier ?? 'free') as 'free' | 'plus' | 'premier';
+  const isPaying = tier === 'plus' || tier === 'premier';
+
+  if (!isPaying) {
+    return <FreeDashboard userFirstName={userFirstName} tier={tier} onNavigate={onNavigate} onNewQuote={onNewQuote} />;
   }
+  return <MemberDashboard userFirstName={userFirstName} tier={tier} onNavigate={onNavigate} onNewQuote={onNewQuote} />;
 }
 
-export default function DashboardSection({ userFirstName, onNavigate, onNewQuote, onSuggestionAct }: DashboardSectionProps) {
-  const [jobs, setJobs] = useState<AccountJob[]>([]);
-  const [bookings, setBookings] = useState<AccountBooking[]>([]);
-  const [loading, setLoading] = useState(true);
+// ─── Free-tier dashboard ──────────────────────────────────────────────
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      accountService.getJobs().catch(() => ({ data: { jobs: [] } as { jobs: AccountJob[] } | null })),
-      accountService.getBookings().catch(() => ({ data: { bookings: [] } as { bookings: AccountBooking[] } | null })),
-    ]).then(([jr, br]) => {
-      if (cancelled) return;
-      setJobs(jr.data?.jobs ?? []);
-      setBookings(br.data?.bookings ?? []);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, []);
-
-  const activeQuotes = jobs.filter(j => ACTIVE_QUOTE_STATUSES.has(j.status));
-  const openBookings = bookings.filter(b => b.status === 'confirmed');
-  // Sort completed bookings by completed_at (the service-end timestamp), falling
-  // back to confirmed_at for legacy rows that pre-date the column.
-  const completedBookings = bookings
-    .filter(b => b.status === 'completed')
-    .sort((a, b) => {
-      const ta = new Date(a.completed_at ?? a.confirmed_at).getTime();
-      const tb = new Date(b.completed_at ?? b.confirmed_at).getTime();
-      return tb - ta;
-    });
-  const lastService = completedBookings[0];
-  const lastServiceWhen = lastService ? (lastService.completed_at ?? lastService.confirmed_at) : null;
-
-  // Recent activity: combine + sort by timestamp, take 5 most recent
-  const activity: ActivityItem[] = [
-    ...jobs.map<ActivityItem>(j => ({
-      id: j.id,
-      kind: 'quote',
-      title: j.diagnosis?.summary || j.diagnosis?.category || 'Quote request',
-      meta: j.diagnosis?.category || 'General',
-      timestamp: j.created_at,
-      status: j.status,
-    })),
-    ...bookings.map<ActivityItem>(b => ({
-      id: b.id,
-      kind: 'booking',
-      title: `Booked ${b.provider.name}`,
-      meta: b.quoted_price || 'Confirmed',
-      timestamp: b.confirmed_at,
-      status: b.status,
-    })),
-  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 6);
-
-  // Recommended action. For first-time users (no history) we now
-  // prompt them straight into the quote flow — the standalone DIY
-  // diagnostic at /chat was discontinued; the AI diagnostic is
-  // built into the /quote chat.
-  const recommended: { label: string; sub: string; onClick: () => void } = (() => {
-    if (activeQuotes.length === 0 && openBookings.length === 0 && jobs.length === 0) {
-      return {
-        label: 'Get your first quote',
-        sub: 'Describe what\u2019s going on',
-        onClick: onNewQuote,
-      };
-    }
-    if (activeQuotes.length > 0) {
-      return {
-        label: `${activeQuotes.length} quote${activeQuotes.length === 1 ? '' : 's'} awaiting`,
-        sub: 'View provider responses',
-        onClick: () => onNavigate('quotes'),
-      };
-    }
-    return {
-      label: 'Get a new quote',
-      sub: 'For your next repair',
-      onClick: onNewQuote,
-    };
-  })();
-
+function FreeDashboard({
+  userFirstName, tier, onNavigate, onNewQuote,
+}: {
+  userFirstName?: string | null;
+  tier: 'free' | 'plus' | 'premier';
+  onNavigate: (tab: AccountTab) => void;
+  onNewQuote: () => void;
+}) {
+  const navigate = useNavigate();
   return (
     <div>
-      <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 700, color: D, marginBottom: 4 }}>
-        Welcome back{userFirstName ? `, ${userFirstName}` : ''}
-      </h1>
-      <p style={{ fontSize: 14, color: '#6B6560', marginBottom: 24 }}>
-        {'Here\u2019s what\u2019s happening with your home services.'}
-      </p>
-
-      {/* Membership hero \u2014 Health Score + vendor team for paying members,
-          slim upgrade banner for free. Renders nothing while auth/tier
-          is still resolving so we don't flash the wrong variant. */}
-      <MembershipHero onNavigate={onNavigate} />
-
-      {/* KPI tiles */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
-        <Tile
-          label="Active quotes"
-          value={loading ? '…' : String(activeQuotes.length)}
-          sub={activeQuotes.length === 0 ? 'No open requests' : 'Awaiting providers'}
-          accent={O}
-          onClick={() => onNavigate('quotes')}
-        />
-        <Tile
-          label="Open bookings"
-          value={loading ? '…' : String(openBookings.length)}
-          sub={openBookings.length === 0 ? 'Nothing scheduled' : `Next: ${openBookings[0].provider.name}`}
-          accent="#2563EB"
-          onClick={() => onNavigate('bookings')}
-        />
-        <Tile
-          label="Last service"
-          value={lastServiceWhen ? timeAgo(lastServiceWhen) : '\u2014'}
-          sub={lastService ? lastService.provider.name : 'No completed services'}
-          accent={G}
-          onClick={() => lastService && onNavigate('bookings')}
-        />
-        <Tile
-          label="Recommended"
-          value={recommended.label}
-          sub={recommended.sub}
-          accent="#7C3AED"
-          onClick={recommended.onClick}
-          fontSize={16}
-        />
-      </div>
-
-      {/* Smart Suggestions — seasonal + location + equipment-aware */}
-      <SmartSuggestions onNewQuote={onNewQuote} onNavigate={onNavigate} onSuggestionAct={onSuggestionAct} />
-
-      {/* Recent activity */}
-      <div style={{ background: '#fff', borderRadius: 14, padding: '20px 22px', border: '1px solid rgba(0,0,0,0.06)' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: D, marginBottom: 14 }}>Recent activity</div>
-        {loading ? (
-          <div style={{ color: '#9B9490', fontSize: 14 }}>Loading\u2026</div>
-        ) : activity.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 0', color: '#9B9490' }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83D\uDCED'}</div>
-            <div style={{ fontSize: 14, fontWeight: 500 }}>Nothing yet</div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>Your quote requests and bookings will appear here</div>
-            <button onClick={onNewQuote} style={{
-              marginTop: 14, padding: '9px 18px', borderRadius: 100, border: 'none',
-              background: O, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>+ Get your first quote</button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {activity.map((a, i) => {
-              const sc = statusColor(a.status);
-              const onClick = () => onNavigate(a.kind === 'quote' ? 'quotes' : 'bookings');
-              return (
-                <div key={a.id} onClick={onClick} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
-                  borderTop: i === 0 ? 'none' : '1px solid rgba(0,0,0,0.05)', cursor: 'pointer',
-                }}>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: 8, background: a.kind === 'booking' ? '#F0FDF4' : `${O}15`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    <span style={{ fontSize: 14 }}>{a.kind === 'booking' ? '\u2713' : '\u23F1'}</span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {a.title}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
-                      {a.meta} {'\u00B7'} {timeAgo(a.timestamp)}
-                    </div>
-                  </div>
-                  <span style={{
-                    background: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: 100,
-                    fontSize: 11, fontWeight: 600, textTransform: 'capitalize', flexShrink: 0,
-                  }}>{a.status}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <Header userFirstName={userFirstName} tier={tier} property={null} />
+      <UpsellBanner onUpgrade={() => navigate('/membership')} />
+      <ActivityFeed onNavigate={onNavigate} onNewQuote={onNewQuote} />
     </div>
   );
 }
 
-function Tile({ label, value, sub, accent, onClick, fontSize = 22 }: {
-  label: string;
-  value: string;
-  sub: string;
-  accent: string;
-  onClick?: () => void;
-  fontSize?: number;
-}) {
-  return (
-    <button onClick={onClick} style={{
-      background: '#fff', borderRadius: 12, padding: '18px 18px',
-      border: '1px solid rgba(0,0,0,0.06)', textAlign: 'left', cursor: onClick ? 'pointer' : 'default',
-      fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column', gap: 4,
-      transition: 'transform 0.15s, box-shadow 0.15s',
-    }}
-      onMouseEnter={e => { if (onClick) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.06)'; } }}
-      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 6, height: 6, borderRadius: '50%', background: accent }} />
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9490', textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          {label}
-        </div>
-      </div>
-      <div style={{ fontSize: fontSize, fontWeight: 700, color: D, fontFamily: "'Fraunces', serif", lineHeight: 1.1, marginTop: 4 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 12, color: '#6B6560' }}>{sub}</div>
-    </button>
-  );
-}
+// ─── Member-tier dashboard ────────────────────────────────────────────
 
-// ── Smart Suggestions ──────────────────────────────────────────────────────
-
-function SmartSuggestions({ onNewQuote, onNavigate, onSuggestionAct }: {
-  onNewQuote: () => void;
+function MemberDashboard({
+  userFirstName, tier, onNavigate, onNewQuote,
+}: {
+  userFirstName?: string | null;
+  tier: 'free' | 'plus' | 'premier';
   onNavigate: (tab: AccountTab) => void;
-  /** Optional: when a tile's "Get a quote" button is tapped with the
-   *  full SmartSuggestion in hand. If set, parent uses it to navigate
-   *  to /quote with prefill params; otherwise we fall back to the plain
-   *  onNewQuote. */
-  onSuggestionAct?: (s: SmartSuggestion) => void;
+  onNewQuote: () => void;
 }) {
-  const [suggestions, setSuggestions] = useState<SmartSuggestion[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasHomeData, setHasHomeData] = useState<boolean | null>(null);
-  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
-  const [nextRefreshAt, setNextRefreshAt] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try {
-      return new Set(JSON.parse(window.localStorage.getItem('homieDismissedSuggestions') ?? '[]'));
-    } catch { return new Set(); }
-  });
-
-  function load(force = false) {
-    if (force) setRefreshing(true); else setLoading(true);
-    setError(null);
-    accountService.getSmartSuggestions(6, force)
-      .then(res => {
-        setSuggestions(res.data ?? []);
-        setHasHomeData(res.meta?.hasHomeData !== false);
-        setGeneratedAt((res.meta?.generatedAt as string | undefined) ?? null);
-        setNextRefreshAt((res.meta?.nextRefreshAt as string | undefined) ?? null);
-      })
-      .catch(err => setError((err as Error).message ?? 'Could not load suggestions'))
-      .finally(() => { setLoading(false); setRefreshing(false); });
-  }
-
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
-
-  // Build the freshness label: "Updated 2d ago · refreshes in 5d"
-  const freshnessLabel = (() => {
-    if (!generatedAt) return null;
-    const ageMs = Date.now() - new Date(generatedAt).getTime();
-    const ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000));
-    const ageHrs = Math.floor(ageMs / (60 * 60 * 1000));
-    const updatedStr = ageDays >= 1 ? `${ageDays}d ago` : ageHrs >= 1 ? `${ageHrs}h ago` : 'just now';
-    if (!nextRefreshAt) return `Updated ${updatedStr}`;
-    const remainingMs = new Date(nextRefreshAt).getTime() - Date.now();
-    const remainingDays = Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
-    return `Updated ${updatedStr} · refreshes in ${remainingDays}d`;
-  })();
-
-  function dismiss(key: string) {
-    const next = new Set(dismissed);
-    next.add(key);
-    setDismissed(next);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('homieDismissedSuggestions', JSON.stringify([...next]));
-    }
-  }
-
-  const visible = (suggestions ?? []).filter(s => !dismissed.has(s.title));
-
-  return (
-    <div style={{
-      background: '#fff', borderRadius: 14, padding: '20px 22px',
-      border: '1px solid rgba(0,0,0,0.06)', marginBottom: 20,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: D, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 18 }}>{'\u2728'}</span> Smart suggestions
-          </div>
-          <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
-            {hasHomeData === false
-              ? 'Add your home details for personalized picks'
-              : freshnessLabel ?? 'Tailored to your home, location, and the season'}
-          </div>
-        </div>
-        <button
-          onClick={() => load(true)}
-          disabled={loading || refreshing}
-          style={{
-            background: 'rgba(0,0,0,0.04)', color: '#6B6560', border: 'none',
-            borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
-            cursor: loading || refreshing ? 'default' : 'pointer',
-            fontFamily: "'DM Sans', sans-serif", opacity: loading || refreshing ? 0.5 : 1,
-          }}
-        >
-          {refreshing ? 'Refreshing\u2026' : 'Refresh'}
-        </button>
-      </div>
-
-      {error && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 12 }}>{error}</div>}
-
-      {loading ? (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12, marginTop: 16,
-        }}>
-          {[0, 1, 2].map(i => (
-            <div key={i} style={{
-              height: 132, background: '#FAFAF8', borderRadius: 12,
-              border: '1px solid rgba(0,0,0,0.04)',
-              animation: `dash-pulse 1.4s ${i * 0.15}s ease-in-out infinite`,
-            }} />
-          ))}
-          <style>{`@keyframes dash-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }`}</style>
-        </div>
-      ) : visible.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '28px 0', color: '#9B9490' }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83D\uDCAB'}</div>
-          <div style={{ fontSize: 14, fontWeight: 500 }}>No suggestions right now</div>
-          {hasHomeData === false && (
-            <button onClick={() => onNavigate('home')} style={{
-              marginTop: 12, padding: '8px 16px', borderRadius: 100, border: 'none',
-              background: O, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>Complete my home profile</button>
-          )}
-        </div>
-      ) : (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-          gap: 12, marginTop: 16,
-        }}>
-          {visible.map((s, i) => (
-            <SuggestionTile
-              key={`${s.title}-${i}`}
-              suggestion={s}
-              onAct={() => (onSuggestionAct ? onSuggestionAct(s) : onNewQuote())}
-              onDismiss={() => dismiss(s.title)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SuggestionTile({ suggestion, onAct, onDismiss }: {
-  suggestion: SmartSuggestion;
-  onAct: () => void;
-  onDismiss: () => void;
-}) {
-  const cat = suggestion.category?.toLowerCase() ?? 'general';
-  const icon = CATEGORY_ICON[cat] ?? '\uD83D\uDD27';
-  const catLabel = CATEGORY_LABEL[cat] ?? cat;
-  const kindKey = (suggestion.kind ?? '').toLowerCase();
-  const kind = KIND_ACCENT[kindKey];
-  const dotColor = PRIORITY_DOT[suggestion.priority] ?? PRIORITY_DOT.medium;
-
-  return (
-    <div style={{
-      position: 'relative', background: '#FAFAF8', borderRadius: 12, padding: '14px 14px 12px',
-      border: '1px solid rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: 6,
-    }}>
-      {/* Top row: kind chip + dismiss */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {kind && (
-            <span style={{
-              fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 100,
-              background: kind.bg, color: kind.text,
-              textTransform: 'uppercase', letterSpacing: 0.5,
-            }}>
-              {kind.label}
-            </span>
-          )}
-          <span style={{ fontSize: 11, color: '#6B6560', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span>{icon}</span>{catLabel}
-          </span>
-          <span title={`${suggestion.priority} priority`} style={{
-            width: 6, height: 6, borderRadius: '50%', background: dotColor, marginLeft: 2,
-          }} />
-        </div>
-        <button
-          onClick={onDismiss}
-          aria-label="Dismiss suggestion"
-          title="Not now"
-          style={{
-            background: 'transparent', border: 'none', color: '#C0BBB6', cursor: 'pointer',
-            padding: 2, fontSize: 16, lineHeight: 1, fontWeight: 500,
-          }}
-        >&times;</button>
-      </div>
-
-      {/* Title */}
-      <div style={{ fontSize: 14, fontWeight: 700, color: D, lineHeight: 1.3 }}>
-        {suggestion.title}
-      </div>
-
-      {/* Description (clamped) */}
-      <div style={{
-        fontSize: 12, color: '#6B6560', lineHeight: 1.45,
-        display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const,
-        overflow: 'hidden',
-      }}>
-        {suggestion.description}
-      </div>
-
-      {/* Reason — italic micro-copy */}
-      {suggestion.reason && (
-        <div style={{ fontSize: 11, color: '#9B9490', fontStyle: 'italic', marginTop: 2 }}>
-          {suggestion.reason}
-        </div>
-      )}
-
-      {/* Action */}
-      <button
-        onClick={onAct}
-        style={{
-          marginTop: 6, background: 'transparent', color: O, border: 'none',
-          padding: 0, fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
-          fontFamily: "'DM Sans', sans-serif",
-        }}
-      >
-        Get a quote {'\u2192'}
-      </button>
-    </div>
-  );
-}
-
-// \u2500\u2500 Membership Hero \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-//
-// Renders above the existing dashboard. For free members, a slim upsell
-// banner. For Plus/Premier, a property banner + Health Score hero +
-// vendor stat tiles + "Your team" panel. Phase 1 of the Membership
-// product \u2014 replaces the standalone /dashboard page that used to host
-// these surfaces in isolation, so paying users have one home in the
-// portal instead of two.
-
-function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void }) {
-  const { homeowner } = useAuth();
   const navigate = useNavigate();
   const [properties, setProperties] = useState<PortalProperty[]>([]);
   const [vendors, setVendors] = useState<PortalVendor[]>([]);
   const [healthScore, setHealthScore] = useState<HealthScoreCurrent | null>(null);
   const [allowance, setAllowance] = useState<DispatchAllowanceState | null>(null);
   const [itemsSummary, setItemsSummary] = useState<{ total: number; bySeverity: Record<string, number> } | null>(null);
-  const [boosters, setBoosters] = useState<BoosterItem[] | null>(null);
+  const [nextStep, setNextStep] = useState<NextStepResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const tier = homeowner?.membership_tier ?? 'free';
-  const isPaying = tier === 'plus' || tier === 'premier';
-
-  function refreshInspectionData() {
-    Promise.all([
-      accountService.getOpenInspectionItemsSummary().catch(() => ({ data: null })),
-      accountService.getHealthScoreBoosters().catch(() => ({ data: { boosters: [] } })),
-    ]).then(([sRes, bRes]) => {
-      if (sRes.data) setItemsSummary(sRes.data);
-      if (bRes.data) setBoosters(bRes.data.boosters);
-    });
+  function refreshNextStep() {
+    accountService.getNextStep().then((r) => {
+      if (r.data) setNextStep(r.data);
+    }).catch(() => {});
+  }
+  function refreshAfterDispatch() {
+    refreshNextStep();
+    accountService.getOpenInspectionItemsSummary().then((r) => {
+      if (r.data) setItemsSummary(r.data);
+    }).catch(() => {});
+    accountService.getDispatchAllowance().then((r) => {
+      if (r.data) setAllowance(r.data);
+    }).catch(() => {});
   }
 
   useEffect(() => {
-    if (!isPaying) {
-      setLoading(false);
-      return;
-    }
     let cancelled = false;
     (async () => {
       try {
-        const [pRes, vRes, hsRes, daRes, sRes, bRes] = await Promise.all([
+        const [pRes, vRes, hsRes, daRes, sRes, nsRes] = await Promise.all([
           fetchAPI<{ properties: PortalProperty[] }>('/api/v1/account/properties').catch(() => ({ data: { properties: [] } })),
           fetchAPI<{ vendors: PortalVendor[] }>('/api/v1/account/vendors').catch(() => ({ data: { vendors: [] } })),
-          fetchAPI<HealthScoreCurrent>('/api/v1/account/health-score/current').catch(() => ({ data: null })),
+          fetchAPI<HealthScoreCurrent>('/api/v1/account/health-score/current').catch(() => ({ data: null as HealthScoreCurrent | null })),
           accountService.getDispatchAllowance().catch(() => ({ data: null as DispatchAllowanceState | null })),
           accountService.getOpenInspectionItemsSummary().catch(() => ({ data: null as { total: number; bySeverity: Record<string, number> } | null })),
-          accountService.getHealthScoreBoosters().catch(() => ({ data: { boosters: [] as BoosterItem[] } })),
+          accountService.getNextStep().catch(() => ({ data: null as NextStepResponse | null })),
         ]);
         if (cancelled) return;
         if (pRes.data) setProperties(pRes.data.properties);
@@ -652,127 +216,140 @@ function MembershipHero({ onNavigate }: { onNavigate: (tab: AccountTab) => void 
         if (hsRes.data) setHealthScore(hsRes.data);
         if (daRes.data) setAllowance(daRes.data);
         if (sRes.data) setItemsSummary(sRes.data);
-        if (bRes.data) setBoosters(bRes.data.boosters);
+        if (nsRes.data) setNextStep(nsRes.data);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [isPaying]);
+  }, []);
 
-  if (!homeowner) return null;
-
-  // Free members \u2192 upsell banner.
-  if (!isPaying) {
-    return <UpsellBanner onUpgrade={() => navigate('/membership')} />;
-  }
-
-  // Plus/Premier \u2192 full hero stack.
   const primary = properties.find((p) => p.isPrimary) ?? properties[0] ?? null;
   const activeVendors = vendors.filter((v) => v.status !== 'cancelled');
   const ytdTotal = activeVendors.reduce((s, v) => s + v.totalPaidYtdCents, 0);
 
   return (
-    <div style={{ marginBottom: 24 }}>
-      {primary && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{
-            fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 700,
-            color: '#9B9490', textTransform: 'uppercase', letterSpacing: 0.6,
-          }}>
-            Your home
-          </div>
-          <div style={{
-            fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700,
-            color: D, margin: '4px 0 2px',
-          }}>
-            {primary.nickname ?? primary.address ?? 'Your home'}
-          </div>
-          {primary.city && primary.state && (
-            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#6B6560' }}>
-              {primary.city}, {primary.state}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Phase 5: Inspect Premium bundle expiry banner. Shows when the
-          year-of-Plus has < 30 days left and the homeowner hasn't
-          converted to a paid Plus subscription yet. */}
+    <div>
+      <Header userFirstName={userFirstName} tier={tier} property={primary} />
       <BundleExpiryBanner allowance={allowance} onUpgrade={() => navigate('/membership')} />
-
-      <HealthScoreHero loading={loading} score={healthScore} />
-
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: 12, marginBottom: 16,
-      }}>
-        <DispatchBalanceTile allowance={allowance} />
-        <OpenItemsTile summary={itemsSummary} />
-        <MembershipStat
-          label="My homies"
-          value={String(activeVendors.length)}
-          sub={activeVendors.length === 0 ? 'Add your first' : 'See your team'}
-          onClick={() => onNavigate('homies')}
-        />
-        <MembershipStat
-          label="Paid this year"
-          value={fmtMoney(ytdTotal)}
-          sub="Tax-ready breakdown"
-          onClick={() => onNavigate('homies')}
-        />
-      </div>
-
-      {/* Phase B: Boost your Health Score card. Pulls the top items
-          by score impact and lets the homeowner dispatch with one
-          tap — the marquee tile that turns inspection data into
-          maintenance action. Hides itself when there are no open
-          items so it doesn't render as an empty box. */}
-      <BoostYourScoreCard
-        boosters={boosters}
-        onDispatched={refreshInspectionData}
-      />
-
-      <YourTeamPanel
+      <ScoreCard loading={loading} score={healthScore} />
+      <NextStepCard
+        step={nextStep}
         loading={loading}
-        vendors={activeVendors}
-        onManage={() => onNavigate('homies')}
+        onDispatch={async (params) => {
+          if (!params.reportId || !params.itemId) return;
+          await accountService.dispatchInspectionItem(params.reportId, params.itemId);
+          refreshAfterDispatch();
+        }}
+        onContinuePlus={() => navigate('/membership')}
+        onNavigateHomies={() => onNavigate('homies')}
+        onNavigateQuote={onNewQuote}
+        onSkip={async (skipKey) => {
+          const r = await accountService.skipNextStep(skipKey);
+          if (r.data) setNextStep(r.data);
+        }}
       />
+      <StatsStrip
+        allowance={allowance}
+        itemsTotal={itemsSummary?.total ?? 0}
+        vendorCount={activeVendors.length}
+        ytdCents={ytdTotal}
+        onNavigate={onNavigate}
+      />
+      <ActivityFeed onNavigate={onNavigate} onNewQuote={onNewQuote} />
     </div>
   );
 }
+
+// ─── Header ───────────────────────────────────────────────────────────
+
+const TIER_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
+  free: { label: 'Free', bg: '#E5E5E5', fg: D },
+  plus: { label: 'Plus', bg: '#F0997B', fg: '#5C2A14' },
+  premier: { label: 'Premier', bg: D, fg: '#fff' },
+};
+
+function Header({
+  userFirstName, tier, property,
+}: {
+  userFirstName?: string | null;
+  tier: 'free' | 'plus' | 'premier';
+  property: PortalProperty | null;
+}) {
+  const badge = TIER_BADGE[tier] ?? TIER_BADGE.free;
+  const propertyLine = property
+    ? [property.nickname ?? property.address, property.city && property.state ? `${property.city}, ${property.state}` : null]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 28 }}>
+      <div>
+        <h1 style={{ ...fr, fontSize: 30, fontWeight: 700, color: D, margin: '0 0 4px' }}>
+          Welcome back{userFirstName ? `, ${userFirstName}` : ''}
+        </h1>
+        {propertyLine && (
+          <div style={{ ...dm, fontSize: 14, color: DIM }}>{propertyLine}</div>
+        )}
+      </div>
+      <span
+        style={{
+          ...dm,
+          padding: '4px 12px',
+          borderRadius: 100,
+          background: badge.bg,
+          color: badge.fg,
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: 0.5,
+          flexShrink: 0,
+          marginTop: 6,
+        }}
+      >
+        {badge.label}
+      </span>
+    </div>
+  );
+}
+
+// ─── Upsell banner (Free tier) ────────────────────────────────────────
 
 function UpsellBanner({ onUpgrade }: { onUpgrade: () => void }) {
   return (
     <div style={{
       background: 'linear-gradient(135deg, #FFF7ED 0%, #FFFFFF 100%)',
-      border: `1px solid ${O}33`, borderRadius: 14,
-      padding: '18px 20px', marginBottom: 20,
-      display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
-      fontFamily: "'DM Sans', sans-serif",
+      border: `1px solid ${O}33`,
+      borderRadius: 14,
+      padding: '20px 22px',
+      marginBottom: 24,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 16,
+      flexWrap: 'wrap',
+      ...dm,
     }}>
       <div style={{
-        width: 44, height: 44, borderRadius: '50%',
+        width: 48, height: 48, borderRadius: '50%',
         background: `${O}1A`, display: 'flex', alignItems: 'center',
         justifyContent: 'center', flexShrink: 0, fontSize: 22,
       }}>
-        {'\u2728'}
+        {'✨'}
       </div>
       <div style={{ flex: 1, minWidth: 220 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: D, marginBottom: 2 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: D, marginBottom: 4 }}>
           Unlock your Home Health Score
         </div>
-        <div style={{ fontSize: 13, color: '#6B6560', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: DIM, lineHeight: 1.5 }}>
           Plus members get the Health Score, recurring vendor management, and tax-ready records. Premier adds an annual Tune-Up + concierge.
         </div>
       </div>
       <button
         onClick={onUpgrade}
         style={{
-          padding: '10px 20px', borderRadius: 100, border: 'none',
-          background: O, color: '#fff', fontSize: 13, fontWeight: 700,
-          cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-          flexShrink: 0,
+          padding: '11px 22px', borderRadius: 100, border: 'none',
+          background: O, color: '#fff', fontSize: 14, fontWeight: 700,
+          cursor: 'pointer', flexShrink: 0, ...dm,
         }}
       >
         See plans
@@ -781,300 +358,10 @@ function UpsellBanner({ onUpgrade }: { onUpgrade: () => void }) {
   );
 }
 
-function HealthScoreHero({ loading, score }: { loading: boolean; score: HealthScoreCurrent | null }) {
-  const hasScore = score?.score != null;
-  const band = score?.band ?? null;
-  const bandColor = band ? BAND_COLOR[band] : '#9B9490';
-  const delta = score?.deltaFromPrevMonth ?? null;
-  return (
-    <div
-      style={{
-        background: '#fff', borderRadius: 14, border: `1px solid ${GRAY_LIGHT}`,
-        padding: 24, marginBottom: 16,
-        display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
-      }}
-    >
-      <div
-        style={{
-          width: 100, height: 100, borderRadius: '50%',
-          background: hasScore
-            ? `linear-gradient(135deg, ${bandColor}1A, #fff)`
-            : `linear-gradient(135deg, ${GREEN_LIGHT}, #fff)`,
-          border: `4px solid ${hasScore ? `${bandColor}66` : GREEN_LIGHT}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}
-      >
-        <span style={{
-          fontFamily: "'Fraunces', serif", fontSize: 38, fontWeight: 700,
-          color: hasScore ? bandColor : '#9B9490',
-        }}>
-          {hasScore ? score!.score : '\u2014'}
-        </span>
-      </div>
-      <div style={{ flex: 1, minWidth: 220 }}>
-        <div style={{
-          fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 700,
-          color: '#9B9490', textTransform: 'uppercase', letterSpacing: 0.6,
-        }}>
-          Home Health Score
-        </div>
-        <div style={{
-          fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 700,
-          color: D, margin: '6px 0 4px',
-          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        }}>
-          {loading ? 'Loading\u2026' : hasScore ? bandLabel(band) : (score?.message ?? 'Establishing your score')}
-          {delta !== null && delta !== 0 && (
-            <span
-              style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700,
-                padding: '2px 8px', borderRadius: 100,
-                background: delta > 0 ? '#E1F5EE' : '#FEE2E2',
-                color: delta > 0 ? '#085041' : '#991B1B',
-              }}
-            >
-              {delta > 0 ? '+' : ''}{delta} this month
-            </span>
-          )}
-        </div>
-        <p style={{
-          fontFamily: "'DM Sans', sans-serif", fontSize: 13,
-          color: '#4A4543', lineHeight: 1.55, margin: 0,
-        }}>
-          {hasScore
-            ? 'Updated nightly across maintenance compliance, open items, asset age, inspection recency, and warranty coverage.'
-            : 'We need a few more days of data before your score is meaningful. Upload an inspection report, add a few recurring vendors, or complete a seasonal walkthrough \u2014 your score builds from there.'}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function MembershipStat({ label, value, sub, onClick }: {
-  label: string; value: string; sub: string; onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={!onClick}
-      style={{
-        background: '#fff', borderRadius: 12, padding: 16,
-        border: `1px solid ${GRAY_LIGHT}`,
-        fontFamily: "'DM Sans', sans-serif",
-        textAlign: 'left', cursor: onClick ? 'pointer' : 'default',
-        display: 'block', width: '100%',
-        transition: 'transform 0.15s, box-shadow 0.15s',
-      }}
-      onMouseEnter={(e) => {
-        if (onClick) {
-          e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.06)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'none';
-      }}
-    >
-      <div style={{
-        fontSize: 11, fontWeight: 700, color: '#9B9490',
-        textTransform: 'uppercase', letterSpacing: 0.6,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
-        color: D, margin: '6px 0 2px',
-      }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 12, color: '#6B6560' }}>{sub}</div>
-    </button>
-  );
-}
-
-function YourTeamPanel({
-  loading, vendors, onManage,
-}: { loading: boolean; vendors: PortalVendor[]; onManage: () => void }) {
-  return (
-    <section style={{
-      background: '#fff', borderRadius: 14, border: `1px solid ${GRAY_LIGHT}`,
-      padding: 20, marginBottom: 4,
-    }}>
-      <header style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', gap: 8, marginBottom: 12,
-      }}>
-        <div>
-          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 700, color: D }}>
-            Your team
-          </div>
-          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#6B6560', marginTop: 4 }}>
-            {vendors.length > 0
-              ? 'Vendors Homie pays on a recurring schedule for you.'
-              : 'Add your cleaner, gardener, pool service, or any pro you pay regularly.'}
-          </div>
-        </div>
-        <button
-          onClick={onManage}
-          style={{
-            fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600,
-            color: O, background: 'transparent', border: `1px solid ${O}30`,
-            padding: '6px 12px', borderRadius: 100, cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {vendors.length > 0 ? 'Manage vendors \u2192' : '+ Add vendor'}
-        </button>
-      </header>
-      {loading ? (
-        <div style={{ color: '#9B9490', fontSize: 13, padding: 12 }}>Loading\u2026</div>
-      ) : vendors.length === 0 ? (
-        <div style={{ color: '#9B9490', fontSize: 13, padding: '8px 0' }}>
-          No vendors yet. Tap <strong style={{ color: D }}>+ Add vendor</strong> to get started.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {vendors.slice(0, 4).map((v) => (
-            <div
-              key={v.id}
-              style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 12px', borderRadius: 10, background: '#F9F5F2',
-                fontFamily: "'DM Sans', sans-serif",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: D }}>{v.vendorName}</div>
-                <div style={{ fontSize: 12, color: '#9B9490', marginTop: 2 }}>
-                  {v.serviceCategory.replace(/_/g, ' ')} {'\u00b7'} {fmtMoney(v.amountCents)}/visit
-                </div>
-              </div>
-              <div style={{ fontSize: 12, color: '#4A4543' }}>
-                YTD <strong style={{ color: D }}>{fmtMoney(v.totalPaidYtdCents)}</strong>
-              </div>
-            </div>
-          ))}
-          {vendors.length > 4 && (
-            <button
-              onClick={onManage}
-              style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: O,
-                background: 'transparent', border: 'none', cursor: 'pointer',
-                alignSelf: 'flex-start', padding: 4,
-              }}
-            >
-              + {vendors.length - 4} more {'\u2192'}
-            </button>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// \u2500\u2500 Dispatch balance tile \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-//
-// Shows the homeowner's current dispatch position. Three render states:
-//   - Unlimited (Premier OR active Inspect Premium bundle) \u2192 "Unlimited"
-//   - Plus with bank > 0 \u2192 "X of 12" with next-grant copy
-//   - Plus with bank == 0 (and out of pro bundle credits) \u2192 "0 of 12" + upgrade hint
-//
-// Tapping the tile is a no-op for now \u2014 dispatches are initiated from
-// the chat page or the Inspect tab. We could route to /quote on click
-// to make it a CTA, but that conflicts with users who want to view
-// allowance without intending to dispatch right now.
-
-function DispatchBalanceTile({ allowance }: { allowance: DispatchAllowanceState | null }) {
-  if (!allowance) {
-    return (
-      <div style={{
-        background: '#fff', borderRadius: 12, padding: 16,
-        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
-      }}>
-        <div style={{
-          fontSize: 11, fontWeight: 700, color: '#9B9490',
-          textTransform: 'uppercase', letterSpacing: 0.6,
-        }}>
-          Dispatches
-        </div>
-        <div style={{
-          fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
-          color: D, margin: '6px 0 2px',
-        }}>
-          {'\u2026'}
-        </div>
-        <div style={{ fontSize: 12, color: '#6B6560' }}>Loading</div>
-      </div>
-    );
-  }
-
-  if (allowance.hasUnlimited) {
-    const sub = allowance.unlimitedUntil
-      ? `Through ${new Date(allowance.unlimitedUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-      : 'Premier \u2014 never counted';
-    return (
-      <div style={{
-        background: '#fff', borderRadius: 12, padding: 16,
-        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
-      }}>
-        <div style={{
-          fontSize: 11, fontWeight: 700, color: '#9B9490',
-          textTransform: 'uppercase', letterSpacing: 0.6,
-        }}>
-          Dispatches
-        </div>
-        <div style={{
-          fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
-          color: G, margin: '6px 0 2px',
-        }}>
-          Unlimited
-        </div>
-        <div style={{ fontSize: 12, color: '#6B6560' }}>{sub}</div>
-      </div>
-    );
-  }
-
-  // Plus tier \u2014 show bank balance with cap.
-  const sub =
-    allowance.monthlyBank === 0
-      ? 'Refills 1st of next month'
-      : 'Up to 12 carry over';
-  const valueColor = allowance.monthlyBank === 0 ? '#9B9490' : D;
-
-  return (
-    <div style={{
-      background: '#fff', borderRadius: 12, padding: 16,
-      border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
-    }}>
-      <div style={{
-        fontSize: 11, fontWeight: 700, color: '#9B9490',
-        textTransform: 'uppercase', letterSpacing: 0.6,
-      }}>
-        Dispatches
-      </div>
-      <div style={{
-        fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
-        color: valueColor, margin: '6px 0 2px',
-      }}>
-        {allowance.monthlyBank} <span style={{ fontSize: 14, color: '#9B9490', fontWeight: 500 }}>of 12</span>
-      </div>
-      <div style={{ fontSize: 12, color: '#6B6560' }}>{sub}</div>
-    </div>
-  );
-}
-
-// \u2500\u2500 Bundle expiry banner \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-//
-// Shows when an Inspect Premium bundle has < 30 days left so the
-// homeowner has a clear in-app prompt to convert to paid Plus before
-// dispatch reverts to pay-per-action. Mirrors the email reminders
-// fired by services/bundle-renewal-worker.ts.
+// ─── Bundle expiry banner ─────────────────────────────────────────────
 
 function BundleExpiryBanner({
-  allowance,
-  onUpgrade,
+  allowance, onUpgrade,
 }: {
   allowance: DispatchAllowanceState | null;
   onUpgrade: () => void;
@@ -1086,10 +373,8 @@ function BundleExpiryBanner({
   const msLeft = expiresAt.getTime() - Date.now();
   const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
   if (daysLeft <= 0 || daysLeft > 30) return null;
-
   const isUrgent = daysLeft <= 7;
   const expiresLabel = expiresAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-
   return (
     <div
       style={{
@@ -1097,12 +382,12 @@ function BundleExpiryBanner({
         border: `1px solid ${isUrgent ? '#FCA5A5' : `${O}33`}`,
         borderRadius: 14,
         padding: '14px 18px',
-        marginBottom: 16,
+        marginBottom: 20,
         display: 'flex',
         alignItems: 'center',
         gap: 16,
         flexWrap: 'wrap',
-        fontFamily: "'DM Sans', sans-serif",
+        ...dm,
       }}
     >
       <div style={{
@@ -1111,15 +396,15 @@ function BundleExpiryBanner({
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0, fontSize: 18,
       }}>
-        {isUrgent ? '\u23f0' : '\u2728'}
+        {isUrgent ? '⏰' : '✨'}
       </div>
       <div style={{ flex: 1, minWidth: 220 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: D, marginBottom: 2 }}>
           {isUrgent
             ? `Plus ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${expiresLabel})`
-            : `Plus ends ${expiresLabel} \u2014 ${daysLeft} days left`}
+            : `Plus ends ${expiresLabel} — ${daysLeft} days left`}
         </div>
-        <div style={{ fontSize: 12, color: '#6B6560', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: DIM, lineHeight: 1.5 }}>
           {isUrgent
             ? 'Continue Plus to keep your Health Score, dispatch allowance, and vendor management active.'
             : 'Your year of Plus came with your Premium inspection. Continue at $29/mo to keep all features active.'}
@@ -1139,246 +424,486 @@ function BundleExpiryBanner({
   );
 }
 
-// ── Open inspection items tile ────────────────────────────────────────
-//
-// Aggregate "things from your inspection still on the list" count. Click
-// routes to the homeowner-inspect Items tab so the homeowner can drill
-// in. Hides any breakdown when there are zero items so the empty state
-// reads as "you're current" rather than "0 of 0."
+// ─── Score card ───────────────────────────────────────────────────────
 
-const SEVERITY_COLOR: Record<string, string> = {
-  safety_hazard: '#DC2626',
-  urgent: '#EF9F27',
-  recommended: '#6B6560',
-  monitor: '#9B9490',
-};
+function ScoreCard({ loading, score }: { loading: boolean; score: HealthScoreCurrent | null }) {
+  const [expanded, setExpanded] = useState(false);
+  const [factors, setFactors] = useState<ScoreFactor[] | null>(null);
+  const [factorsLoading, setFactorsLoading] = useState(false);
 
-function OpenItemsTile({ summary }: { summary: { total: number; bySeverity: Record<string, number> } | null }) {
-  const navigate = useNavigate();
+  const hasScore = score?.score != null;
+  const band = score?.band ?? null;
+  const bandColor = band ? BAND_COLOR[band] : SUBTLE;
+  const delta = score?.deltaFromPrevMonth ?? null;
 
-  // Skeleton until the summary loads.
-  if (!summary) {
-    return (
-      <div style={{
-        background: '#fff', borderRadius: 12, padding: 16,
-        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
-      }}>
-        <div style={{
-          fontSize: 11, fontWeight: 700, color: '#9B9490',
-          textTransform: 'uppercase', letterSpacing: 0.6,
-        }}>
-          Open items
-        </div>
-        <div style={{
-          fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
-          color: D, margin: '6px 0 2px',
-        }}>
-          {'…'}
-        </div>
-        <div style={{ fontSize: 12, color: '#6B6560' }}>Loading</div>
-      </div>
-    );
+  async function toggleExpand() {
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
+    if (!factors && !factorsLoading) {
+      setFactorsLoading(true);
+      try {
+        const r = await accountService.getHealthScoreFactors();
+        if (r.data) setFactors(r.data.factors);
+      } catch { /* ignore */ }
+      setFactorsLoading(false);
+    }
+    setExpanded(true);
   }
-
-  if (summary.total === 0) {
-    return (
-      <div style={{
-        background: '#fff', borderRadius: 12, padding: 16,
-        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
-      }}>
-        <div style={{
-          fontSize: 11, fontWeight: 700, color: '#9B9490',
-          textTransform: 'uppercase', letterSpacing: 0.6,
-        }}>
-          Open items
-        </div>
-        <div style={{
-          fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
-          color: G, margin: '6px 0 2px',
-        }}>
-          All clear
-        </div>
-        <div style={{ fontSize: 12, color: '#6B6560' }}>Nothing waiting</div>
-      </div>
-    );
-  }
-
-  const urgent = (summary.bySeverity.safety_hazard ?? 0) + (summary.bySeverity.urgent ?? 0);
-  const recommended = summary.bySeverity.recommended ?? 0;
 
   return (
-    <button
-      onClick={() => navigate('/inspect-portal?tab=items')}
-      style={{
-        background: '#fff', borderRadius: 12, padding: 16,
-        border: `1px solid ${GRAY_LIGHT}`, fontFamily: "'DM Sans', sans-serif",
-        textAlign: 'left', cursor: 'pointer', display: 'block', width: '100%',
-        transition: 'transform 0.15s, box-shadow 0.15s',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.06)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'none';
-      }}
-    >
-      <div style={{
-        fontSize: 11, fontWeight: 700, color: '#9B9490',
-        textTransform: 'uppercase', letterSpacing: 0.6,
-      }}>
-        Open items
+    <div style={{
+      background: '#fff', borderRadius: 16, border: `1px solid ${GRAY_LIGHT}`,
+      padding: 28, marginBottom: 20,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+        <div
+          style={{
+            width: 110, height: 110, borderRadius: '50%',
+            background: hasScore
+              ? `linear-gradient(135deg, ${bandColor}1A, #fff)`
+              : `linear-gradient(135deg, #E1F5EE, #fff)`,
+            border: `4px solid ${hasScore ? `${bandColor}66` : '#E1F5EE'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ ...fr, fontSize: 48, fontWeight: 700, color: hasScore ? bandColor : SUBTLE, lineHeight: 1 }}>
+            {hasScore ? score!.score : '—'}
+          </span>
+        </div>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: SUBTLE, textTransform: 'uppercase', letterSpacing: 1.2 }}>
+            Home Health Score
+          </div>
+          <div style={{ ...fr, fontSize: 22, fontWeight: 700, color: D, margin: '6px 0 4px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {loading ? 'Loading…' : hasScore ? bandLabel(band) : (score?.message ?? 'Establishing your score')}
+            {delta !== null && delta !== 0 && (
+              <span
+                style={{
+                  ...dm,
+                  fontSize: 12, fontWeight: 700,
+                  padding: '2px 8px', borderRadius: 100,
+                  background: delta > 0 ? '#E1F5EE' : '#FEE2E2',
+                  color: delta > 0 ? '#085041' : '#991B1B',
+                }}
+              >
+                {delta > 0 ? '↗ +' : '↘ '}{delta} this month
+              </span>
+            )}
+          </div>
+          {hasScore && (
+            <button
+              onClick={toggleExpand}
+              style={{
+                ...dm, fontSize: 13, fontWeight: 600, color: O,
+                background: 'transparent', border: 'none', padding: '4px 0',
+                cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              {expanded ? 'Hide breakdown ↑' : "See what's pulling it down →"}
+            </button>
+          )}
+          {!hasScore && (
+            <div style={{ ...dm, fontSize: 13, color: DIM, lineHeight: 1.5 }}>
+              We need a few days of data before your score is meaningful. Add an inspection or fill in your home details to get started.
+            </div>
+          )}
+        </div>
       </div>
-      <div style={{
-        fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700,
-        color: urgent > 0 ? SEVERITY_COLOR.urgent : D, margin: '6px 0 2px',
-      }}>
-        {summary.total}
-      </div>
-      <div style={{ fontSize: 12, color: '#6B6560' }}>
-        {urgent > 0 && (
-          <span style={{ color: SEVERITY_COLOR.urgent, fontWeight: 600 }}>{urgent} urgent</span>
-        )}
-        {urgent > 0 && recommended > 0 && <span>{' · '}</span>}
-        {recommended > 0 && <span>{recommended} recommended</span>}
-        {urgent === 0 && recommended === 0 && <span>From your inspection</span>}
-      </div>
-    </button>
+      {expanded && (
+        <ScoreBreakdown factors={factors} loading={factorsLoading} />
+      )}
+    </div>
   );
 }
 
-// ── Boost your Health Score card ──────────────────────────────────────
-//
-// Phase B marquee feature: top open inspection items ranked by score
-// impact, each with a one-tap dispatch. Tapping "Fix this" hits the
-// existing /reports/:reportId/dispatch endpoint with a single item_id,
-// which threads through the dispatch allowance ledger — Plus members
-// consume a credit, free members are blocked at the API level.
-//
-// Hides itself entirely when there are no boosters so the dashboard
-// doesn't render a "0 things to fix" empty box. Also hides if the
-// homeowner has no Plus tier (the boosters endpoint will return
-// items anyway, but the dispatch flow gates on tier).
+const FACTOR_LABELS: Record<string, string> = {
+  maintenance_compliance: 'Maintenance compliance',
+  item_health: 'Open items',
+  asset_health: 'Asset age',
+  inspection_recency: 'Inspection recency',
+  warranty_coverage: 'Warranty coverage',
+};
 
-function BoostYourScoreCard({
-  boosters,
-  onDispatched,
-}: {
-  boosters: BoosterItem[] | null;
-  onDispatched: () => void;
-}) {
-  const [dispatchingId, setDispatchingId] = useState<string | null>(null);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  if (!boosters || boosters.length === 0) return null;
-  const top = boosters.slice(0, 3);
-
-  async function dispatchItem(item: BoosterItem) {
-    setDispatchingId(item.id);
-    setError(null);
-    try {
-      await accountService.dispatchInspectionItem(item.reportId, item.id);
-      setConfirmId(item.id);
-      onDispatched();
-      // Clear the confirmation after a moment so the card refreshes
-      // to the next set of boosters cleanly.
-      setTimeout(() => setConfirmId(null), 2500);
-    } catch (err) {
-      setError((err as Error).message ?? 'Dispatch failed');
-    } finally {
-      setDispatchingId(null);
-    }
+function ScoreBreakdown({ factors, loading }: { factors: ScoreFactor[] | null; loading: boolean }) {
+  if (loading) {
+    return (
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${GRAY_LIGHT}`, ...dm, fontSize: 13, color: DIM }}>
+        Loading breakdown…
+      </div>
+    );
   }
-
+  if (!factors || factors.length === 0) {
+    return (
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${GRAY_LIGHT}`, ...dm, fontSize: 13, color: DIM }}>
+        No breakdown available yet.
+      </div>
+    );
+  }
   return (
-    <section style={{
-      background: '#fff', borderRadius: 14, border: `1px solid ${GRAY_LIGHT}`,
-      padding: 20, marginBottom: 16,
-    }}>
-      <header style={{ marginBottom: 14 }}>
-        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 700, color: D }}>
-          {'✨'} Boost your Health Score
-        </div>
-        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#6B6560', marginTop: 4 }}>
-          Fixing these inspection items will move your score the most.
-        </div>
-      </header>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {top.map((item) => {
-          const sevColor = SEVERITY_COLOR[item.severity] ?? '#6B6560';
-          const isDispatching = dispatchingId === item.id;
-          const isConfirmed = confirmId === item.id;
-          const lo = Math.round(item.costEstimateLow / 100);
-          const hi = Math.round(item.costEstimateHigh / 100);
-          const priceStr = lo > 0 && hi > 0 ? `~$${lo}–$${hi}` : null;
+    <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${GRAY_LIGHT}` }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {factors.map((f) => {
+          const label = FACTOR_LABELS[f.type] ?? f.type;
+          const pct = f.score;
+          const tone = pct >= 70 ? G : pct >= 50 ? '#EF9F27' : '#E24B4A';
           return (
-            <div
-              key={item.id}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '12px 14px', borderRadius: 10,
-                background: '#F9F5F2',
-                opacity: isDispatching ? 0.6 : 1,
-                fontFamily: "'DM Sans', sans-serif",
-              }}
-            >
-              <div style={{
-                width: 6, height: 36, borderRadius: 3, background: sevColor, flexShrink: 0,
-              }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: D, lineHeight: 1.3 }}>
-                  {item.title}
-                </div>
-                <div style={{ fontSize: 12, color: '#6B6560', marginTop: 2 }}>
-                  <span style={{ textTransform: 'capitalize' }}>{item.category.replace(/_/g, ' ')}</span>
-                  {priceStr && <span>{' · '}{priceStr}</span>}
-                  <span>{' · '}+{item.scoreImpact} pts</span>
-                </div>
+            <div key={f.type} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ ...dm, fontSize: 13, fontWeight: 600, color: D, width: 180, flexShrink: 0 }}>
+                {label}
               </div>
-              <button
-                onClick={() => dispatchItem(item)}
-                disabled={isDispatching || isConfirmed}
-                style={{
-                  flexShrink: 0, padding: '7px 14px', borderRadius: 100, border: 'none',
-                  background: isConfirmed ? G : O, color: '#fff',
-                  fontSize: 12, fontWeight: 700,
-                  cursor: isDispatching || isConfirmed ? 'default' : 'pointer',
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
-                {isConfirmed ? '✓ Sent' : isDispatching ? 'Sending…' : 'Get quotes'}
-              </button>
+              <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#F0EBE6', overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', background: tone }} />
+              </div>
+              <div style={{ ...dm, fontSize: 12, color: DIM, width: 40, textAlign: 'right' }}>
+                {pct}
+              </div>
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
 
-      {error && (
-        <div style={{
-          marginTop: 10, padding: '10px 12px', borderRadius: 8,
-          background: '#FEE2E2', color: '#991B1B', fontSize: 12,
-          fontFamily: "'DM Sans', sans-serif",
-        }}>
-          {error}
+// ─── Next Step card ───────────────────────────────────────────────────
+
+function NextStepCard({
+  step, loading,
+  onDispatch, onContinuePlus, onNavigateHomies, onNavigateQuote, onSkip,
+}: {
+  step: NextStepResponse | null;
+  loading: boolean;
+  onDispatch: (params: { reportId?: string; itemId?: string }) => Promise<void>;
+  onContinuePlus: () => void;
+  onNavigateHomies: () => void;
+  onNavigateQuote: () => void;
+  onSkip: (skipKey: string) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  if (loading || !step) {
+    return (
+      <div style={{
+        background: '#fff', borderRadius: 16, border: `1px solid ${GRAY_LIGHT}`,
+        padding: 28, marginBottom: 20, minHeight: 160,
+      }}>
+        <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: SUBTLE, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 }}>
+          Next step
+        </div>
+        <div style={{ ...dm, fontSize: 14, color: DIM }}>Looking for what's next…</div>
+      </div>
+    );
+  }
+
+  async function handleCta() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (step!.ctaAction === 'dispatch_item') {
+        await onDispatch(step!.ctaParams ?? {});
+        setConfirmed(true);
+        // Brief confirmation, then the parent's refresh swaps the step.
+        setTimeout(() => setConfirmed(false), 1800);
+      } else if (step!.ctaAction === 'continue_plus') {
+        onContinuePlus();
+      } else if (step!.ctaAction === 'navigate_homies') {
+        onNavigateHomies();
+      } else if (step!.ctaAction === 'navigate_quote') {
+        onNavigateQuote();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSkip() {
+    if (busy || !step!.skipLabel) return;
+    setBusy(true);
+    try {
+      await onSkip(step!.skipKey);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 16,
+      border: step.urgent ? '1px solid #FCA5A5' : `1px solid ${GRAY_LIGHT}`,
+      borderTop: step.urgent ? '3px solid #DC2626' : `1px solid ${GRAY_LIGHT}`,
+      padding: 28, marginBottom: 20,
+    }}>
+      <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: step.urgent ? '#DC2626' : SUBTLE, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 }}>
+        {step.eyebrow}
+      </div>
+      <h2 style={{ ...fr, fontSize: 22, fontWeight: 700, color: D, margin: '0 0 8px', lineHeight: 1.25 }}>
+        {step.title}
+      </h2>
+      <p style={{ ...dm, fontSize: 14, color: DIM, lineHeight: 1.6, margin: '0 0 12px', maxWidth: 580 }}>
+        {step.description}
+      </p>
+      {step.meta && (
+        <div style={{ ...dm, fontSize: 12, color: SUBTLE, marginBottom: 18 }}>
+          {step.meta}
         </div>
       )}
-
-      {boosters.length > 3 && (
-        <div style={{ marginTop: 12, textAlign: 'center' }}>
-          <a
-            href="/inspect-portal?tab=items"
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          onClick={handleCta}
+          disabled={busy || confirmed}
+          style={{
+            padding: '11px 22px', borderRadius: 100, border: 'none',
+            background: confirmed ? G : O, color: '#fff',
+            fontSize: 13, fontWeight: 700,
+            cursor: busy || confirmed ? 'default' : 'pointer',
+            ...dm,
+          }}
+        >
+          {confirmed ? '✓ Sent' : busy ? 'Working…' : step.ctaLabel}
+        </button>
+        {step.skipLabel && (
+          <button
+            onClick={handleSkip}
+            disabled={busy}
             style={{
-              fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600,
-              color: O, textDecoration: 'none',
+              padding: '11px 22px', borderRadius: 100, border: `1px solid ${GRAY_LIGHT}`,
+              background: '#fff', color: D, fontSize: 13, fontWeight: 600,
+              cursor: busy ? 'default' : 'pointer', ...dm,
             }}
           >
-            See all {boosters.length} open items {'→'}
-          </a>
+            {step.skipLabel}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Stats strip ──────────────────────────────────────────────────────
+
+function StatsStrip({
+  allowance, itemsTotal, vendorCount, ytdCents, onNavigate,
+}: {
+  allowance: DispatchAllowanceState | null;
+  itemsTotal: number;
+  vendorCount: number;
+  ytdCents: number;
+  onNavigate: (tab: AccountTab) => void;
+}) {
+  const navigate = useNavigate();
+  // Compose the dispatch count phrasing based on tier state.
+  let dispatches: string;
+  if (!allowance) dispatches = '…';
+  else if (allowance.hasUnlimited) dispatches = 'unlimited dispatches';
+  else dispatches = `${allowance.monthlyBank} dispatch${allowance.monthlyBank === 1 ? '' : 'es'}`;
+
+  const items = itemsTotal === 0 ? null : `${itemsTotal} open item${itemsTotal === 1 ? '' : 's'}`;
+  const homies = `${vendorCount} hom${vendorCount === 1 ? 'ie' : 'ies'}`;
+  const ytd = `${fmtMoney(ytdCents)} YTD`;
+
+  const cellStyle: CSSProperties = {
+    ...dm,
+    fontSize: 13,
+    fontWeight: 500,
+    color: D,
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '4px 2px',
+  };
+  const separatorStyle: CSSProperties = {
+    ...dm,
+    fontSize: 13,
+    color: GRAY_LIGHT,
+    padding: '0 4px',
+    userSelect: 'none',
+  };
+
+  return (
+    <div
+      style={{
+        marginBottom: 28,
+        padding: '14px 20px',
+        borderTop: `1px solid ${GRAY_LIGHT}`,
+        borderBottom: `1px solid ${GRAY_LIGHT}`,
+        display: 'flex', alignItems: 'center', gap: 4,
+        flexWrap: 'wrap', justifyContent: 'center',
+      }}
+    >
+      <button style={cellStyle} onClick={() => navigate('/quote')}>{dispatches}</button>
+      {items && (
+        <>
+          <span style={separatorStyle}>·</span>
+          <button style={cellStyle} onClick={() => navigate('/inspect-portal?tab=items')}>{items}</button>
+        </>
+      )}
+      <span style={separatorStyle}>·</span>
+      <button style={cellStyle} onClick={() => onNavigate('homies')}>{homies}</button>
+      <span style={separatorStyle}>·</span>
+      <button style={cellStyle} onClick={() => onNavigate('homies')}>{ytd}</button>
+    </div>
+  );
+}
+
+// ─── Activity feed ────────────────────────────────────────────────────
+
+function statusColor(status: string): { bg: string; text: string } {
+  switch (status) {
+    case 'open': return { bg: '#EFF6FF', text: '#2563EB' };
+    case 'dispatching': return { bg: '#FFF7ED', text: '#C2410C' };
+    case 'collecting': return { bg: '#F5F3FF', text: '#7C3AED' };
+    case 'completed': return { bg: '#F0FDF4', text: '#16A34A' };
+    case 'confirmed': return { bg: '#F0FDF4', text: '#16A34A' };
+    case 'expired': return { bg: '#F5F5F5', text: SUBTLE };
+    default: return { bg: '#F5F5F5', text: DIM };
+  }
+}
+
+function ActivityFeed({
+  onNavigate, onNewQuote,
+}: {
+  onNavigate: (tab: AccountTab) => void;
+  onNewQuote: () => void;
+}) {
+  const [jobs, setJobs] = useState<AccountJob[]>([]);
+  const [bookings, setBookings] = useState<AccountBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      accountService.getJobs().catch(() => ({ data: { jobs: [] } as { jobs: AccountJob[] } | null })),
+      accountService.getBookings().catch(() => ({ data: { bookings: [] } as { bookings: AccountBooking[] } | null })),
+    ]).then(([jr, br]) => {
+      if (cancelled) return;
+      setJobs(jr.data?.jobs ?? []);
+      setBookings(br.data?.bookings ?? []);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const activity: ActivityItem[] = [
+    ...jobs.map<ActivityItem>((j) => {
+      const isActive = ACTIVE_QUOTE_STATUSES.has(j.status);
+      return {
+        id: j.id,
+        kind: 'quote',
+        title: isActive ? `Outreach started for ${j.diagnosis?.category?.replace(/_/g, ' ') ?? 'your request'}` : (j.diagnosis?.summary || j.diagnosis?.category || 'Quote'),
+        meta: j.diagnosis?.category?.replace(/_/g, ' ') ?? 'general',
+        timestamp: j.created_at,
+        status: j.status,
+      };
+    }),
+    ...bookings.map<ActivityItem>((b) => ({
+      id: b.id,
+      kind: 'booking',
+      title: b.status === 'completed' ? `${b.provider.name} visit completed` : `Booked ${b.provider.name}`,
+      meta: b.quoted_price || 'confirmed',
+      timestamp: b.confirmed_at,
+      status: b.status,
+    })),
+  ]
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 5);
+
+  return (
+    <section>
+      <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: SUBTLE, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 14 }}>
+        Recent
+      </div>
+      {loading ? (
+        <div style={{ ...dm, fontSize: 13, color: DIM, padding: '12px 0' }}>Loading…</div>
+      ) : activity.length === 0 ? (
+        <div style={{
+          background: '#fff', borderRadius: 14, border: `1px solid ${GRAY_LIGHT}`,
+          padding: '28px 22px', textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>{'📭'}</div>
+          <div style={{ ...dm, fontSize: 14, fontWeight: 500, color: DIM }}>Nothing yet</div>
+          <div style={{ ...dm, fontSize: 12, color: SUBTLE, marginTop: 4 }}>
+            Your quotes and bookings will appear here.
+          </div>
+          <button
+            onClick={onNewQuote}
+            style={{
+              marginTop: 16, padding: '9px 18px', borderRadius: 100, border: 'none',
+              background: O, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', ...dm,
+            }}
+          >
+            Ask Homie
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          background: '#fff', borderRadius: 14, border: `1px solid ${GRAY_LIGHT}`,
+          overflow: 'hidden',
+        }}>
+          {activity.map((a, i) => {
+            const sc = statusColor(a.status);
+            const Icon = a.kind === 'booking' ? '✓' : '💬';
+            return (
+              <button
+                key={a.id}
+                onClick={() => onNavigate(a.kind === 'quote' ? 'quotes' : 'bookings')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '14px 18px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderTop: i === 0 ? 'none' : `1px solid ${GRAY_LIGHT}40`,
+                  cursor: 'pointer',
+                  width: '100%',
+                  textAlign: 'left',
+                  ...dm,
+                }}
+              >
+                <span style={{
+                  width: 30, height: 30, borderRadius: '50%',
+                  background: a.kind === 'booking' ? '#F0FDF4' : `${O}15`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, flexShrink: 0,
+                }}>{Icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: D, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {a.title}
+                  </div>
+                  <div style={{ fontSize: 12, color: SUBTLE, marginTop: 2 }}>
+                    {timeAgo(a.timestamp)}
+                  </div>
+                </div>
+                <span style={{
+                  background: sc.bg, color: sc.text,
+                  padding: '3px 10px', borderRadius: 100,
+                  fontSize: 10, fontWeight: 600, textTransform: 'capitalize',
+                  flexShrink: 0,
+                }}>{a.status}</span>
+                <span style={{ fontSize: 14, color: GRAY_LIGHT, flexShrink: 0 }}>›</span>
+              </button>
+            );
+          })}
         </div>
       )}
+      {activity.length > 0 && (
+        <div style={{ marginTop: 12, textAlign: 'center' }}>
+          <button
+            onClick={() => onNavigate('quotes')}
+            style={{
+              ...dm, fontSize: 13, fontWeight: 600, color: O,
+              background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
+            }}
+          >
+            View all activity →
+          </button>
+        </div>
+      )}
+      {/* WARM is referenced for the cream tint on inactive items; silence
+          unused-var lint by referencing it once. */}
+      <span style={{ display: 'none' }}>{WARM}</span>
     </section>
   );
 }

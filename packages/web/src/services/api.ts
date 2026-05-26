@@ -705,6 +705,29 @@ export interface DispatchAllowanceState {
   membershipSource: string | null;
 }
 
+/** Dashboard Direction A — adaptive Next Step shape returned by
+ *  GET /api/v1/account/dashboard/next-step. Mirrors the backend
+ *  NextStep type in services/next-step.ts. */
+export interface NextStepResponse {
+  kind:
+    | 'safety_hazard_item'
+    | 'urgent_item'
+    | 'recommended_item'
+    | 'bundle_expiry'
+    | 'add_vendor'
+    | 'all_clear';
+  skipKey: string;
+  urgent: boolean;
+  eyebrow: string;
+  title: string;
+  description: string;
+  ctaLabel: string;
+  ctaAction: 'dispatch_item' | 'continue_plus' | 'navigate_homies' | 'navigate_quote';
+  ctaParams?: { reportId?: string; itemId?: string };
+  skipLabel: string | null;
+  meta?: string;
+}
+
 export const accountService = {
   getProfile: () => fetchAPI<AccountProfile>('/api/v1/account'),
   getCrossProducts: () => fetchAPI<CrossProductMemberships>('/api/v1/account/cross-products'),
@@ -739,6 +762,27 @@ export const accountService = {
       `/api/v1/account/reports/${reportId}/dispatch`,
       { method: 'POST', body: JSON.stringify({ item_ids: [itemId] }) },
     ),
+  /** Dashboard Direction A: current adaptive Next Step. */
+  getNextStep: () => fetchAPI<NextStepResponse>('/api/v1/account/dashboard/next-step'),
+  /** Dashboard Direction A: skip the current step for 24h and return
+   *  the next one in the same response (no extra round-trip). */
+  skipNextStep: (skipKey: string) =>
+    fetchAPI<NextStepResponse>('/api/v1/account/dashboard/next-step/skip', {
+      method: 'POST',
+      body: JSON.stringify({ skip_key: skipKey }),
+    }),
+  /** Dashboard Direction A: per-factor Health Score breakdown for the
+   *  inline expandable panel under the score card. */
+  getHealthScoreFactors: () =>
+    fetchAPI<{
+      factors: Array<{
+        type: string;
+        score: number;
+        weight: number;
+        contribution: number;
+        notes: string | null;
+      }>;
+    }>('/api/v1/account/health-score/factors'),
   updateProfile: (data: Partial<{ first_name: string; last_name: string; email: string; phone: string; zip_code: string; current_password: string; new_password: string; title: string; notify_email_quotes: boolean; notify_sms_quotes: boolean; notify_email_bookings: boolean; notify_sms_bookings: boolean }>) =>
     fetchAPI<AccountProfile>('/api/v1/account', { method: 'PATCH', body: JSON.stringify(data) }),
   getJobs: () => fetchAPI<{ jobs: AccountJob[] }>('/api/v1/account/jobs'),
