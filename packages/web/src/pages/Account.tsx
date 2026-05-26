@@ -10,6 +10,7 @@ import AccountLayout from './account/AccountLayout';
 import AccountSidebar, { type AccountTab } from './account/AccountSidebar';
 import DashboardSection from './account/DashboardSection';
 import HomiesSection from './account/HomiesSection';
+import MyHomeInventoryView, { type InventoryItem } from './account/MyHomeInventoryView';
 import QuoteTabsBar from '@/components/QuoteTabsBar';
 import { useQuoteTabs } from '@/hooks/useQuoteTabs';
 
@@ -1971,6 +1972,32 @@ function MyHomeTab() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Inventory redesign: sub-tab toggle. 'inventory' is the visual catalog
+  // (Phase 1 of My Home IQ redesign); 'details' is the existing form that
+  // backs AI diagnostics. Both live under the same My Home IQ sidebar tab.
+  const [subTab, setSubTab] = useState<'inventory' | 'details'>('inventory');
+
+  /** Tapping an inventory item jumps to the matching Home Details
+   *  section so the homeowner can edit brand/model/age. Phase 2 will
+   *  add an in-place item editor and remove this hop. */
+  function handleSelectItem(item: InventoryItem) {
+    const sectionMap: Record<string, string> = {
+      appliances: 'appliances',
+      hvac: 'hvac',
+      electrical: 'electrical',
+      pool_spa: 'poolSpa',
+      exterior: 'exterior',
+      security: 'access',
+    };
+    let section: string | undefined;
+    if (item.id === 'waterHeater') section = 'waterHeater';
+    else if (item.category === 'plumbing') section = 'plumbing';
+    else section = sectionMap[item.category];
+    if (section) {
+      setOpenSections((prev) => new Set([...prev, section!]));
+    }
+    setSubTab('details');
+  }
 
   useEffect(() => {
     accountService.getHome().then(res => {
@@ -2053,6 +2080,45 @@ function MyHomeTab() {
 
   return (
     <div>
+      {/* Sub-tabs — Inventory (visual catalog) vs Home details (form) */}
+      <div style={{
+        display: 'flex', gap: 4, marginBottom: 20,
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
+      }}>
+        {(['inventory', 'details'] as const).map((t) => {
+          const isActive = subTab === t;
+          const label = t === 'inventory' ? 'Inventory' : 'Home details';
+          return (
+            <button
+              key={t}
+              onClick={() => setSubTab(t)}
+              style={{
+                padding: '10px 16px',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: isActive ? `2px solid ${O}` : '2px solid transparent',
+                color: isActive ? O : '#6B6560',
+                fontSize: 14, fontWeight: isActive ? 700 : 500,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: 'pointer',
+                marginBottom: -1,
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {subTab === 'inventory' && (
+        <MyHomeInventoryView
+          details={details}
+          onGoToHomeDetails={() => setSubTab('details')}
+          onSelectItem={handleSelectItem}
+        />
+      )}
+
+      {subTab === 'details' && (<>
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 10, marginBottom: 16, fontSize: 14,
@@ -2328,6 +2394,7 @@ function MyHomeTab() {
         background: O, color: 'white', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1,
         fontFamily: "'DM Sans', sans-serif", width: '100%',
       }}>{saving ? 'Saving...' : 'Save Home Details'}</button>
+      </>)}
     </div>
   );
 }
